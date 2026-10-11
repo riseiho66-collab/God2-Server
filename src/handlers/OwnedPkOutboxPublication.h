@@ -85,6 +85,7 @@ public:
     void control_native(Session& session,const std::string& current_profile,
                         const RecoveredBattleCommand::ControlRequest& request){
         check_thread();const auto binding=caller_binding(session);
+        reject_resolver_reentry(*binding);
         const auto viewer=by_session_.at(session.id()).viewer;
         const auto phase=rooms_.round(binding->ticket.id());
         rooms_.control_native(binding->ticket.id(),caller(*binding,viewer),phase.revision(),current_profile,request);
@@ -93,10 +94,101 @@ public:
                        const RecoveredPkCommandSelection::Policy& policy,
                        std::span<const RecoveredWorldRecords::Record> records){
         check_thread();const auto binding=caller_binding(session);
+        reject_resolver_reentry(*binding);
         const auto viewer=by_session_.at(session.id()).viewer;
         const auto phase=rooms_.round(binding->ticket.id());
         rooms_.submit_native(binding->ticket.id(),caller(*binding,viewer),phase.battle_revision(),
                              phase.grant_epoch(),current_profile,policy,records);
+    }
+
+    // CUSTOM-0118 one complete native frame, never a TCP-read prefix. Only
+    // immutable server coefficients are supplied; native input cannot supply
+    // a Policy header, source, MP cost, skill map, room or grant epoch.
+    struct BasicParameters {
+        std::uint32_t power_percent,defense_percent;
+        std::uint32_t critical_chance_bp,critical_multiplier_percent;
+    };
+    enum class NativeBatch {Idle,ControlStored,BasicStored};
+    std::optional<NativeBatch> dispatch_native_basic(Session& session,const std::string& current_profile,
+            const std::optional<BasicParameters>& server_basic,
+            std::span<const RecoveredWorldRecords::Record> records){
+        check_thread();
+        const std::string profile=current_profile;
+        const auto basic=server_basic; // No caller alias survives a later observer.
+        const auto indexed=by_session_.find(session.id());
+        if(indexed==by_session_.end())return {}; // Unbound: existing owner handles it.
+        // An indexed but pending/failed/wrong Session MUST reject, not fall
+        // through a diagnostic handler as if it had never owned a PK room.
+        const auto binding=caller_binding(session);
+        reject_resolver_reentry(*binding);
+        if(profile!=binding->ticket.input().profile_readset_sha256)
+            throw DatabaseError("PK frame lacks the separately current server profile binding");
+        const RecoveredBattleCommand::ControlRequest* control=nullptr;
+        const RecoveredBattleCommand::BasicAttackRequest* attack=nullptr;
+        if(records.empty())throw DatabaseError("PK empty input is not an owned native frame");
+        for(const auto& record:records){
+            if(std::holds_alternative<RecoveredWorldRecords::Tick>(record))continue;
+            if(const auto* value=std::get_if<RecoveredBattleCommand::ControlRequest>(&record)){
+                if(control||attack)throw DatabaseError("PK frame mixes or repeats owned operations");
+                control=value;
+            }else if(const auto* value=std::get_if<RecoveredBattleCommand::BasicAttackRequest>(&record)){
+                if(attack||control)throw DatabaseError("PK frame mixes or repeats owned operations");
+                attack=value;
+            }else throw DatabaseError("PK basic frame contains an unsupported operation");
+        }
+        // Entire span classified BEFORE any durable phase/intent mutation.
+        // Ticks provide no grant, resolution, pump or remote receipt authority.
+        if(!control&&!attack)return NativeBatch::Idle;
+        const auto viewer=indexed->second.viewer;
+        const auto phase=rooms_.round(binding->ticket.id());
+        if(control){
+            rooms_.control_native(binding->ticket.id(),caller(*binding,viewer),phase.revision(),profile,*control);
+            return NativeBatch::ControlStored;
+        }
+        if(!basic||basic->power_percent>10000||basic->defense_percent>100||
+           basic->critical_chance_bp>10000||basic->critical_multiplier_percent<100||
+           basic->critical_multiplier_percent>1000)
+            throw DatabaseError("PK basic frame requires explicit bounded server coefficients");
+        RecoveredPkCommandSelection::Policy policy{0,0,
+            binding->ticket.input().entry.command_contexts()[viewer],
+            BattleAction{0,{},false,basic->power_percent,basic->defense_percent,0,
+                basic->critical_chance_bp,basic->critical_multiplier_percent},{}};
+        rooms_.submit_native(binding->ticket.id(),caller(*binding,viewer),phase.battle_revision(),
+                             phase.grant_epoch(),profile,policy,records);
+        return NativeBatch::BasicStored; // No implicit resolver or inline send.
+    }
+
+    // CUSTOM-0118 explicit owner resolution joins the privately bound pair to
+    // CUSTOM-0117 fresh basic results. Actual Lua Rule/order/next masks remain
+    // supplied, never initial-mask/target/arrival-order guesses. No auto-pump.
+    void resolve_collected_basic(Session& session,const std::array<std::uint8_t,2>& server_order,
+            const OwnedPkRound::Masks& next_control_masks,const Battle::Rule& supplied_rule){
+        check_thread();
+        const auto order=server_order;const auto masks=next_control_masks;
+        const auto rule=supplied_rule;
+        const auto binding=caller_binding(session);
+        reject_resolver_reentry(*binding);
+        if(!rule||!resolution_transport_current(*binding))
+            throw DatabaseError("PK resolver requires both private Written peers with cleared publication");
+        const auto before=rooms_.inspect(binding->ticket.id());
+        const auto phase=rooms_.round(binding->ticket.id()).document();
+        if(!before)throw DatabaseError("PK resolver lost its actual shared Battle");
+        binding->resolving=true;binding->resolver_reentered=false;
+        struct End {Binding& value;~End(){value.resolving=false;}}end{*binding};
+        try{
+            const auto source_current=[&]{
+                return !binding->resolver_reentered&&resolution_transport_current(*binding)&&
+                    rooms_.inspect(binding->ticket.id())==before&&
+                    rooms_.round(binding->ticket.id()).document()==phase;
+            };
+            const Battle::Rule checked_rule=[&](const CombatRuleInput& input){
+                if(!source_current())throw DatabaseError("PK resolver authority changed before pure Rule");
+                const auto result=rule(input);
+                if(!source_current())throw DatabaseError("PK resolver authority changed during pure Rule");
+                return result;
+            };
+            rooms_.resolve_collected_basic(binding->ticket.id(),order,masks,checked_rule);
+        }catch(...){fail(*binding);throw;}
     }
 
     // Explicit game-owner pump only. Entry callbacks and output completion
@@ -107,6 +199,7 @@ public:
         check_thread();const auto at=bindings_.find(room);
         if(at==bindings_.end())throw DatabaseError("PK output room is not privately bound");
         const auto binding=at->second;
+        reject_resolver_reentry(*binding);
         if(binding->failed)throw DatabaseError("PK output owner retained after failure");
         if(binding->pumping)return;
         binding->pumping=true;
@@ -173,7 +266,7 @@ private:
         std::array<std::shared_ptr<Session>,2> sessions;
         std::array<Session::NativePkEntryHold,2> holds;
         std::array<std::shared_ptr<Flight>,2> flights;
-        bool failed=false,pumping=false;
+        bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
                 std::array<Session::NativePkEntryHold,2> entries)
             :ticket(std::move(value)),sessions(std::move(peers)),holds(std::move(entries)){}
@@ -201,6 +294,18 @@ private:
         const auto room=room_for(session);
         if(!room)throw DatabaseError("PK input lacks this Session's accepted private entry");
         return bindings_.at(*room);
+    }
+    static void reject_resolver_reentry(Binding& binding){
+        if(binding.resolving){
+            binding.resolver_reentered=true;
+            throw DatabaseError("PK pure resolver reentered its input/output owner");
+        }
+    }
+    bool resolution_transport_current(const Binding& binding)const noexcept{
+        return written_current(binding,0)&&written_current(binding,1)&&
+            !binding.flights[0]&&!binding.flights[1]&&!binding.pumping&&
+            !binding.sessions[0]->native_battle_skill_publication_pending()&&
+            !binding.sessions[1]->native_battle_skill_publication_pending();
     }
     static OwnedPkRoomState::NativeCaller caller(const Binding& binding,std::uint8_t viewer){
         const auto& p=peer(binding.ticket,viewer);

@@ -3095,3 +3095,14 @@ TW C2S候選156／世界parser74（局部來源50／控制11／未接13），S2C
 C++既有1檔修改、新增1檔，限定freshbasic source1；mixed261→262、CUSTOM114→115、groups26不變。新opcode0、新完整雙向路徑0；TW C2S156／世界parser74（限定來源50／控制11／未接13），S2C252（fixed230／variable22）、回覆48／推播11／gated4；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW未掛載關聯38／去重34、CN93／71不變；CN歷史C2S156／S2C階段opcode280／length253屬不同範圍。全遊戲分母及完成率未知。
 
 尚缺Application／Lua完整owner派送、技能fresh83、later grants及實際control masks、terminal存檔／89／世界返回／重連。現有legacy signed16 loss仍failclosed，不能代替TW/CN/web64位擴充；完整目標與凍結功能保留。webv74僅metadata pending，沒有ACK或來源credit。PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment。
+
+
+## 第280輪：私有PK整批輸入派送與明確雙方結算橋接
+
+CUSTOM0118在既有OwnedPkOutboxPublication加入complete-frame preflight：Tick-only、單一0B加Ticks、單一basic1加Ticks；空批、混合、重複、skills/action2或其他操作整批在durable寫入前拒絕。實際private Session／Written hold／Ticket推導room、viewer、context及目前phase，未綁定才回空；已indexed但錯誤／pending／failed不得落入diagnostic。分開現行server profile仍是必填且須等於Ticket retained digest，不能把retained equality冒稱current issuer。BasicParameters只含明確有界數值，不接受caller header／source／MP／skill map。既有own outbox／own grant submitted guard保持。
+
+顯式resolve bridge接279freshbasic83/88及原子雙方settle，必須兩Written／pending清空／無Flights或pump，copy order／next masks／pure Rule，Rule前後檢查actual Battle snapshot與完整round document；同binding reentry poison及失敗close雙方保留durable狀態。無inline pump，不拿Tick作ACK或grant。native worker只重讀3段681B舊263證據，0新PE範圍，不聲稱原服mixed frame排程或full35完成。
+
+Application pk_rooms仍null，本輪未掛載。現有真正initialization registry保留；下一步需實際current profile／Fight archive／seed／coefficients／order／next masks／Lua owner及合法idle output scheduling，later grant／terminal89／saved settlement／world return／reconnect仍缺。不加dummy factory/default來灌正式進度。
+
+既有C++1檔修改、新增0；限定adapter1，mixed262→263、CUSTOM115→116、groups26不變；新opcode0、新完整雙向路徑0。TW C2S156、世界parser74（限定來源50／控制11／未接13）；S2C252（fixed230／variable22）、回覆48／推播11／gated4不變；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW未掛載chains3、bindings38／去重34；CN chains35、bindings93／71不變。CN歷史C2S156／S2C階段opcode280／length253屬不同範圍。分母及百分比未知。webv75 metadata pending，無ACK／integration credit。完整TW/CN/web／shared64及凍結功能保留；PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment。
