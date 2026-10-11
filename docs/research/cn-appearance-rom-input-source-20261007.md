@@ -1,0 +1,25 @@
+# CN appearance selected ROM input source, 20261007
+
+PHASE1 only: pinned CN582f269535f86e95fcd77946821adf79a30d1bd33f21d566cf48c36fd221b3c8 file/PE reads, pure file decompression and source integration. No C++ codec/resource-loader/native/API/browser/server/DB/build/test execution or deployment. Levels unchanged.
+
+## Native selection differs from the generic CSV reader
+
+004197E0 checks slot WORD<512, copies the supplied filename and appends literal Z only if the fourth byte from its end is a dot. Thus `.rom` probes `.romZ`, whereas supplied `.romz` probes the exact path. A failed open or non05/16 header takes the original filename plain-file branch00419110. A valid05/16 header uses0045A1D0 memory decompression then00418830. Existing read_cn_preferred_resource describes0045B270 and retains its old body; it no longer claims to universally implement004197E0. New read_cn_rom_resource provides the exact qualified filename/probe/fallback selection. Missing/unreadable original files remain errors, never native success or a different resource.
+
+The native declaration/allocator expression is `(declared+3)&0x3fffffff`; this is recorded as native allocation arithmetic, not a reason to change decoded lengths or widen buffers.0045A1D0 and0045A060 use the same native05/16 token/ring logic and compare produced length at EOF. Memory decoder writes beyond the declaration before comparing; new source retains bounded decode_cn_resource and never reproduces unchecked writes. DrvDoll's prior declared-length discrepancy stays open and unchanged.
+
+TSV/decompiler entry004197E0 reports593 bytes; current primary ASM shows its plain branch and epilogue extend to00419A6C ret8 (end00419A6F),655 bytes from004197E0. New additive receipt preserves that original metadata entry and separately captures the extended bounded primary return window. Old sealed593-byte envelopes are not rewritten, and this window does not claim all exceptional/unwind/allocator behavior is closed.
+
+## Actual full input lineage and file data
+
+CnAppearanceRowSelection now owns the exact full parsed normal2A or ordinary6F SourceRecord variant as well as the actual immutable CSV profile/rows. CnAppearanceRomInputs consumes that private-constructed selection and reads four original part paths in slot order plus the optional nonempty actual driver path, using the ROM-specific selector and existing CnRomAsset metadata parser. Each result owns selected path/encoded bytes and immutable decoded ROM record/action/image metadata. Equal filenames are not coalesced: native cached handles belong to HeroDoll rows, and bank/load order matters for native ACTINDEX/command10 references.
+
+CnSceneAssets exposes two normal-initial/ordinary-remote ROM input preparation edges through its existing row source methods. It still excludes nonzero alternate keys, retains auxiliary_resource_prepared=false and does not modify packets. Blank actual driver filenames remain absent driver input, not a default model. Any unsupported/malformed ROM metadata remains an explicit error, not replacement graphics or gameplay permission.
+
+The saved resource samples are selected from actual CSV rows for file-format research, not constructed characters or authentic actor appearances: first four HeroDoll row filenames and first two nonempty driver filenames. Every sample keeps its original CSV row ordinal/source line/reference, candidate/actual selected path, encoded/decoded hashes and bounded section metadata. IGSROM02/ACTINDEX/PALETTE1/image/ACT_DATA/ACT_STEP/ACT_POOL/ACTBLOCK/FILE_END bytes are retained. No C++ parser is executed to produce these receipts, and no sample is declared an authenticated2A/6F/acceptance input.
+
+## Remaining native runtime and authoritative gaps
+
+00418830/00419110 register actual native ROM slots and ACTINDEX, decode images/palettes/FLC, allocate ACT headers and raw steps/frames, then00417620 rewrites command10 cross-ROM references. That rewriting depends on the actual already loaded512-slot bank, current slot, IDs and0041B590 action lookup. Neither resource filenames nor a CSV ordinal authorize inventing those slots/IDs/order. Existing CnRomAsset metadata does not claim native palette/image decoding, ACTINDEX bank allocation, command rewriting, action execution or rendering. Caller must still bind the actual source profile/revision/world/connection and full native state/phase/rules before output.
+
+Authoritative equipment-to-input, complete native6F issuer/observer policies, ROM/cache/counter/current bank/ACT/later lifecycle, auxiliary/alternate validity/fallback, formal Application/native/WS providers/hosting and all gameplay/numeric/denominator work remain open. New ROM file selector1/immutable full-input-to-ROM-source1/two preparation edges are source increments only; new opcode/phase binding/owner chain/complete gameplay route0. Common tables/levels/fonts/text/credentials/saves/frozen features are unchanged. Web peer results are retained as frontend-only, not server/native acceptance.

@@ -1,0 +1,17 @@
+# 第222輪：台服入場寫入前接上共用角色占用來源
+
+本輪實際修改3份既有C++來源，新增0份C++來源；來源串接段由211增至212，新增完整雙向玩法路線0。台服與全遊戲完整路線分母、完成百分比仍未知，不能將212段或opcode盤點當成完成率。
+
+`SharedTaiwanWorldEntrySource` 的原生選角路徑現在要求傳入與實際角色儲存來源相同的 `SharedWorldPresence`。`SharedTaiwanNativeWorldHostPlan` 傳入實際共用Host的同一Presence，並由Entry持有；未選用原生角色來源的既有路徑維持原本配置。
+
+Entry在讀取共同角色根、存檔位置與地圖前後檢查完整角色ID的既有占用紀錄。這個Current同時包住第一次外部原生供應、完整2A Prepare，以及既有issuer的Prepared、BeforeWrite與BeforeCommit邊界，因此已占用的角色不會先執行入場資料供應與寫入，再等較晚的生命週期準備才拒絕。
+
+檢查沿用現有服務端規則：尚未ready的Prepared、活躍與尚未由原世代Lease釋放的紀錄都算占用，同session也沒有例外。不會因儲存根變更而刪掉紀錄，不會取得、接管或釋放Lease。實際Session仍在同一game callback中依序選角、取得Entry、設定character_id、呼叫原生命週期prepared；其供應來源契約要求同步且不泵事件。此處是使用前的純讀取檢查，沒有新增入場CAS、Issued一次性消耗、跨G重播權限或網路回覆原子性。
+
+同Presence下的CN/TW Lease可以共同排除相同角色；不同角色的actor_handle碰撞仍由既有較後方presence.prepare拒絕。本輪沒有宣稱擋完全部admission衝突，也沒有完成所有CN入口。完整原生opaque/resource/status issuer、實際Main選用、場景回覆與其他玩法仍OPEN。原生40位元組2A、共用ID與原生actor欄位規則不變。
+
+兩個靜態帳本工具新增可選的外部完整封存方式：新catalog的完整輸入、原生來源與大型輸出仍保留全部原始位元組，local manifest逐檔記錄絕對位置、大小與SHA256；不是用收據取代原件。Report只接受所屬封存區內、唯一完整pin且與當前ledger逐位元組相同的來源。舊catalog與歷史封存不改動。
+
+盤點維持TW觀察156個C2S值；世界S2C表252個有效項（230固定、22變長）；戰鬥表110項（9特別分派、101預設），83動作23項、86 selector7項。這些是不同階段與分派層級，不能相加成全遊戲封包總數。CN保留156個C2S值與280個階段S2C項。尚有13個TW來源缺口類別；新增完整路線0，部署及原生驗收0。
+
+僅做來源串接、靜態來源閱讀與檔案封存盤點；未建置、未執行測試、原生客戶端、codec、遊戲、API、資料庫、SQL、遷移或部署。維持台服完整串接100%之前持續工作的使用者指示，CN/web與存檔、認證、聊天、IME、頭像、字體及文字轉換保持既有範圍。

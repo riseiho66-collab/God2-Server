@@ -1,0 +1,333 @@
+{
+  "design": "CUSTOM-0058",
+  "image": "C:\\Users\\risei\\Desktop\\God2\\God2-Server\\artifacts\\capture_work\\host-20260918-1430\\output\\native-master-01-stable.bin",
+  "sha256": "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+  "signatures": [
+    {
+      "kind": "hook",
+      "address": "0x432a20",
+      "name": "renderer_present_direct_COM_and_screen_paths",
+      "preserved_bytes": "568bf1e8d80efdff",
+      "width": 8,
+      "thiscall_stack_pop": 0,
+      "instructions": [
+        "push esi",
+        "mov esi, ecx",
+        "call 0x403900"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x524820",
+      "name": "bull150_generic_skill_tick",
+      "preserved_bytes": "83ec14535556",
+      "width": 6,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "sub esp, 0x14",
+        "push ebx",
+        "push ebp",
+        "push esi"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x53ca50",
+      "name": "final_screen_present_bull150_whole_ui_shake",
+      "preserved_bytes": "83ec505356",
+      "width": 5,
+      "thiscall_stack_pop": 12,
+      "instructions": [
+        "sub esp, 0x50",
+        "push ebx",
+        "push esi"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x4327a0",
+      "name": "battle_background_capture",
+      "preserved_bytes": "568bf16a00",
+      "width": 5,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "push esi",
+        "mov esi, ecx",
+        "push 0"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x432810",
+      "name": "battle_background_restore_before_draw",
+      "preserved_bytes": "53568bf157",
+      "width": 5,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "push ebx",
+        "push esi",
+        "mov esi, ecx",
+        "push edi"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x53dd40",
+      "name": "DD_screen_rebuild_generation",
+      "preserved_bytes": "81ec04010000",
+      "width": 6,
+      "thiscall_stack_pop": 16,
+      "instructions": [
+        "sub esp, 0x104"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x41c360",
+      "name": "native_ACT_step_parent_scope",
+      "preserved_bytes": "83ec185355",
+      "width": 5,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "sub esp, 0x18",
+        "push ebx",
+        "push ebp"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x41b9c0",
+      "name": "native_ACT_independent_emit",
+      "preserved_bytes": "515355568b742414",
+      "width": 8,
+      "thiscall_stack_pop": 40,
+      "instructions": [
+        "push ecx",
+        "push ebx",
+        "push ebp",
+        "push esi",
+        "mov esi, dword ptr [esp + 0x14]"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x41b330",
+      "name": "native_ACT_release_ownership",
+      "preserved_bytes": "538bd95556",
+      "width": 5,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "push ebx",
+        "mov ebx, ecx",
+        "push ebp",
+        "push esi"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x426ab0",
+      "name": "before_native_display_traversal",
+      "preserved_bytes": "538b5c2408",
+      "width": 5,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "push ebx",
+        "mov ebx, dword ptr [esp + 8]"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x518e50",
+      "name": "custom_target_submit_guard",
+      "preserved_bytes": "83ec10538a5c2418",
+      "width": 8,
+      "thiscall_stack_pop": 16,
+      "instructions": [
+        "sub esp, 0x10",
+        "push ebx",
+        "mov bl, byte ptr [esp + 0x18]"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x5154e0",
+      "name": "custom_target_setup",
+      "preserved_bytes": "515355568bf1",
+      "width": 6,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "push ecx",
+        "push ebx",
+        "push ebp",
+        "push esi",
+        "mov esi, ecx"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x513080",
+      "name": "custom_target_input",
+      "preserved_bytes": "83ec2055568bf1",
+      "width": 7,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "sub esp, 0x20",
+        "push ebp",
+        "push esi",
+        "mov esi, ecx"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x516ae0",
+      "name": "skill_resource_preload",
+      "preserved_bytes": "81ec34010000",
+      "width": 6,
+      "thiscall_stack_pop": 4,
+      "instructions": [
+        "sub esp, 0x134"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x52c520",
+      "name": "skill_result",
+      "preserved_bytes": "8b44240c83ec08",
+      "width": 7,
+      "thiscall_stack_pop": 20,
+      "instructions": [
+        "mov eax, dword ptr [esp + 0xc]",
+        "sub esp, 8"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x529020",
+      "name": "battle_frame",
+      "preserved_bytes": "83ec0c8b442414",
+      "width": 7,
+      "thiscall_stack_pop": 8,
+      "instructions": [
+        "sub esp, 0xc",
+        "mov eax, dword ptr [esp + 0x14]"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x51fc40",
+      "name": "battle_reset",
+      "preserved_bytes": "83ec10538bd9",
+      "width": 6,
+      "thiscall_stack_pop": 0,
+      "instructions": [
+        "sub esp, 0x10",
+        "push ebx",
+        "mov ebx, ecx"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "hook",
+      "address": "0x427400",
+      "name": "display_reset",
+      "preserved_bytes": "51535657894c240c",
+      "width": 8,
+      "thiscall_stack_pop": 0,
+      "instructions": [
+        "push ecx",
+        "push ebx",
+        "push esi",
+        "push edi",
+        "mov dword ptr [esp + 0xc], ecx"
+      ],
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x426b30",
+      "name": "native_single_display_entry_damage_overlay",
+      "thiscall_stack_pop": 16,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x5156a0",
+      "name": "current_skill_definition",
+      "thiscall_stack_pop": 4,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x518e50",
+      "name": "native_selection_submit",
+      "thiscall_stack_pop": 16,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x512620",
+      "name": "native_selection_cancel_to_attack",
+      "thiscall_stack_pop": 0,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x511e10",
+      "name": "native_target_highlights",
+      "thiscall_stack_pop": 12,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x425b60",
+      "name": "display_allocate",
+      "thiscall_stack_pop": 0,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x425dc0",
+      "name": "display_initialize",
+      "thiscall_stack_pop": 32,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x426a30",
+      "name": "display_release",
+      "thiscall_stack_pop": 4,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x426e80",
+      "name": "display_position",
+      "thiscall_stack_pop": 12,
+      "passed": true
+    },
+    {
+      "kind": "api",
+      "address": "0x426cf0",
+      "name": "display_depth",
+      "thiscall_stack_pop": 8,
+      "passed": true
+    }
+  ],
+  "live_acceptance": false
+}

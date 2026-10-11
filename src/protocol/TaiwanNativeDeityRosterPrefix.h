@@ -1,0 +1,182 @@
+#pragma once
+
+#include "protocol/TaiwanNativePrimarySkillList.h"
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace god2 {
+// Expected DATA-PREFIX replay for the qualified normal468120 reset and actual
+// ordered restoration records. The caller supplies that real source epoch;
+// this pure API cannot prove remote execution, issuance, ownership or a grant.
+// S30 resource/name and refresh helpers, S31 pre/post selection helpers and
+// S34 diagnostic/page/refresh helpers remain opaque. Their transitive effects
+// are NOT projected here. Complete input bytes remain owned separately below.
+class TaiwanNativeDeityRosterPrefix final {
+public:
+    using Row=TaiwanNativePrimarySkillList::RosterSkillRow;
+    static constexpr std::size_t row_capacity=16,skill_capacity=100;
+    static constexpr char historical_catalog_sha256[]=
+        "7676acd93f164d071f7681a3fe74de94d65892759dbf2e69e3c0f748423d2f51";
+
+    static std::optional<TaiwanNativeDeityRosterPrefix> from_reset_and_records(
+            std::span<const std::vector<std::uint8_t>> actual_batches,
+            std::span<const NativeSkillRecord> owned_definitions) {
+        TaiwanNativeDeityRosterPrefix next;
+        for(const auto& definition:owned_definitions) {
+            if(!valid_definition(definition))return std::nullopt;
+            if(!next.catalog_records_.empty() && definition.source!=next.catalog_records_.front().source)
+                return std::nullopt;
+            const auto old=std::find_if(next.catalog_records_.begin(),next.catalog_records_.end(),
+                [&](const auto& r){return same_identity(r,definition);});
+            if(old!=next.catalog_records_.end()) {
+                if(*old!=definition)return std::nullopt;
+            } else next.catalog_records_.push_back(definition);
+        }
+        // This is a projection of actual468120 writes, not constructor-default
+        // evidence. Native pointers are represented by full owned nullable rows.
+        for(auto& row:next.rows_) {
+            row.row_key=0;row.learned_count=0;row.learned_flags.fill(0);
+            row.learned_definitions.resize(skill_capacity);
+            row.auxiliary_count=0;row.auxiliary_definitions.resize(skill_capacity);
+        }
+        next.actual_batches_.assign(actual_batches.begin(),actual_batches.end());
+        for(const auto& batch:next.actual_batches_) {
+            // Existing restoration emits whole records in native frame-sized
+            // logical batches. A record crossing a boundary is unsupported.
+            if(batch.size()>2560)return std::nullopt;
+            for(std::size_t at=0;at<batch.size();) {
+                const auto size=record_size(batch[at]);
+                if(!size || *size>batch.size()-at)return std::nullopt;
+                const auto record=std::span<const std::uint8_t>(batch).subspan(at,*size);
+                switch(record[0]) {
+                case 0x30:if(!next.apply30(record))return std::nullopt;break;
+                case 0x31:next.apply31(record);break;
+                case 0x34:if(!next.apply34(record))return std::nullopt;break;
+                default:break; // Known pet records: exact full bytes retained.
+                }
+                at+=*size;
+            }
+        }
+        return next;
+    }
+
+    const std::array<Row,row_capacity>& rows() const noexcept {return rows_;}
+    std::uint8_t roster_count() const noexcept {return roster_count_;}
+    std::int8_t selected_row() const noexcept {return selected_row_;}
+    const std::vector<NativeSkillRecord>& catalog_records() const noexcept {return catalog_records_;}
+    const std::vector<std::vector<std::uint8_t>>& actual_batches() const noexcept {return actual_batches_;}
+private:
+    TaiwanNativeDeityRosterPrefix()=default;
+    std::array<Row,row_capacity> rows_;
+    std::uint8_t roster_count_=0;
+    std::int8_t selected_row_=-1;
+    std::vector<NativeSkillRecord> catalog_records_;
+    std::vector<std::vector<std::uint8_t>> actual_batches_;
+
+    static std::optional<std::size_t> record_size(std::uint8_t opcode) noexcept {
+        switch(opcode) {
+        case 0x30:return 19;case 0x31:return 29;case 0x34:return 4;
+        case 0x41:return 5;case 0x3b:return 25;case 0xfb:return 73;case 0xe3:return 53;
+        default:return std::nullopt;
+        }
+    }
+    static int signed_byte(std::uint8_t value) noexcept {
+        return value<128?int(value):int(value)-256;
+    }
+    static bool text(const std::string& value) noexcept {
+        return !value.empty() && value.find('\0')==std::string::npos;
+    }
+    static bool sha(const std::string& value) noexcept {
+        return value.size()==64 && std::all_of(value.begin(),value.end(),[](unsigned char c){
+            return (c>='0' && c<='9') || (c>='a' && c<='f');});
+    }
+    static bool same_identity(const NativeSkillRecord& a,const NativeSkillRecord& b) noexcept {
+        return a.kind==b.kind && a.definition_id==b.definition_id;
+    }
+    static bool valid_definition(const NativeSkillRecord& r) noexcept {
+        static constexpr std::array<std::int64_t,4> bank_counts{121,129,87,111};
+        const auto& s=r.source;
+        // This is explicitly the historical448 material profile. Current453
+        // filesystem evidence is a different epoch, never a refreshed baseline.
+        // These are metadata/geometry checks; actual raw SHA recomputation and
+        // full catalog Current/readset equality remain the real caller's duty.
+        return s.dataset_id==NativeSkillCatalog::current_dataset_id && s.row_count==448 &&
+            s.native_image_sha256==TaiwanNativeSkillCommand::image_sha256 &&
+            s.source_sha256==historical_catalog_sha256 && s.decoded_sha256==historical_catalog_sha256 &&
+            text(s.source_path) && text(s.source_section) && text(s.loader_rva) && text(s.lookup_rva) &&
+            r.kind>=0 && r.kind<4 && r.definition_id>=1 &&
+            r.definition_id<=bank_counts[std::size_t(r.kind)] && r.source_record_index>=0 &&
+            r.source_record_index<s.row_count && sha(r.record_sha256) && r.raw_record.size()==110 &&
+            r.raw_record[0]==r.definition_id && r.raw_record[1]==r.kind &&
+            r.source_offset==8+r.kind*0x6e04+(r.definition_id-1)*110;
+    }
+    bool apply30(std::span<const std::uint8_t> record) {
+        const int raw=signed_byte(record[1]);
+        const auto key=std::uint16_t(raw<0?-raw:raw);
+        // Native skips the whole record before staging/duplicate reset at16.
+        if(!key || roster_count_>=row_capacity)return true;
+        auto& staged=rows_[roster_count_];staged.row_key=key;
+        if(key>=100) {
+            // Owned safe name subset: do not follow the native NUL scan past
+            // the16 supplied name bytes into the flag/another logical record.
+            if(std::find(record.begin()+2,record.begin()+18,0)==record.begin()+18)return false;
+            if(record[18]==1) {
+                for(std::size_t i=0;i<roster_count_;++i) {
+                    if(rows_[i].row_key!=key)continue;
+                    rows_[i].learned_count=0;
+                    return true; // Staged inactive key and all tails persist.
+                }
+            }
+        }
+        ++roster_count_;
+        if(raw<0)selected_row_=std::int8_t(roster_count_-1);
+        return true;
+    }
+    void apply31(std::span<const std::uint8_t> record) noexcept {
+        const auto key=signed_byte(record[1]);
+        for(std::size_t i=0;i<roster_count_;++i) {
+            if(int(rows_[i].row_key)!=key)continue;
+            //4AA2BB/C7 write this actual first physical row and index, with
+            // opaque helpers before/after. Status bytes remain in batches;
+            // this model exposes only the expected row/skill data prefix.
+            selected_row_=std::int8_t(i);break;
+        }
+    }
+    bool apply34(std::span<const std::uint8_t> record) {
+        const auto definition=std::find_if(catalog_records_.begin(),catalog_records_.end(),
+            [&](const auto& r){return r.kind==record[2] && r.definition_id==record[3];});
+        // Explicit owned source subset even for an ignored/missing subject;
+        // unknown definitions never become guessed native pointers.
+        if(definition==catalog_records_.end())return false;
+        for(std::size_t i=0;i<roster_count_;++i) {
+            auto& row=rows_[i];
+            if(row.row_key!=record[1] || row.learned_count>=skill_capacity)continue;
+            bool duplicate=false;
+            for(std::size_t j=0;j<row.learned_count;++j) {
+                const auto& old=row.learned_definitions[j];
+                if(!old)return false; // Native would dereference this pointer.
+                if(!same_identity(*old,*definition))continue;
+                if(*old!=*definition)return false;
+                duplicate=true;break;
+            }
+            if(duplicate)continue; // Diagnostic boundary; no invented append.
+            const auto at=std::size_t(row.learned_count);
+            row.learned_flags[at]=0;row.learned_definitions[at]=*definition;
+            ++row.learned_count;
+            // Only append reaches4A9750. Preserve inactive auxiliary tails;
+            // copy flags&2 in physical order, retaining nulls/duplicates.
+            auto rebuilt=TaiwanNativePrimarySkillList::rebuild_roster_auxiliary(row,definition->source);
+            if(!rebuilt)return false;
+            row=std::move(*rebuilt);
+        }
+        return true;
+    }
+};
+}

@@ -1,0 +1,34 @@
+{
+  "artifact_id": "fb72296cab5950b74d8f7c98155145f7c5f58749c3011adb0540325b60749dd1",
+  "captures": [],
+  "classification": "Research / Partial Compatibility",
+  "coverage": {
+    "runtime_captures": 0,
+    "total_real_fields": null,
+    "total_real_packets": null,
+    "verified_fields": 0,
+    "verified_packets": 0,
+    "verified_runtime_gates": 0
+  },
+  "current_gate": "02",
+  "function_candidates": [],
+  "highest_runtime_acceptance": "L1 ARTIFACT_VERIFIED",
+  "review_audit": {
+    "artifact_id": "fb72296cab5950b74d8f7c98155145f7c5f58749c3011adb0540325b60749dd1",
+    "authority": "LOCAL_HUMAN_REVIEW_POLICY_NOT_CRYPTOGRAPHIC_IDENTITY",
+    "certificates": [],
+    "gates": {
+      "G02": "BLOCKED",
+      "G03": "BLOCKED",
+      "G04": "BLOCKED",
+      "G04.5": "BLOCKED"
+    },
+    "highest_acceptance": "L1 ARTIFACT_VERIFIED",
+    "next_external_evidence": "Controlled runtime capture and independent human review; no AI promotion.",
+    "next_gate": "G02",
+    "reviews": [],
+    "scope_limit": "No G05/network-root or protocol compatibility certificate issuer yet."
+  },
+  "single_external_evidence": "A controlled runtime capture bundle with native trace and mapped/unpacked images, followed by independent review.",
+  "status": "BLOCKED"
+}

@@ -1,0 +1,55 @@
+005193AC  8b4c2414                 mov ecx, dword ptr [esp + 0x14]
+005193B0  85c9                     test ecx, ecx
+005193B2  0f8505050000             jne 0x5198bd
+005193B8  8b4d10                   mov ecx, dword ptr [ebp + 0x10]
+005193BB  6a02                     push 2
+005193BD  e88ea2efff               call 0x413650
+005193C2  8bf0                     mov esi, eax
+005193C4  8a0e                     mov cl, byte ptr [esi]
+005193C6  8bc1                     mov eax, ecx
+005193C8  25ff000000               and eax, 0xff
+005193CD  3dfb000000               cmp eax, 0xfb
+005193D2  0f87c9040000             ja 0x5198a1
+005193D8  33d2                     xor edx, edx
+005193DA  8a90049a5100             mov dl, byte ptr [eax + 0x519a04]
+005193E0  ff249508995100           jmp dword ptr [edx*4 + 0x519908]
+005193E7  33d2                     xor edx, edx
+005193E9  8d442418                 lea eax, [esp + 0x18]
+005193ED  8a5609                   mov dl, byte ptr [esi + 9]
+005193F0  8d4e0d                   lea ecx, [esi + 0xd]
+005193F3  50                       push eax
+005193F4  51                       push ecx
+005193F5  c1ea07                   shr edx, 7
+005193F8  52                       push edx
+005193F9  e802610100               call 0x52f500
+005193FE  8b4d20                   mov ecx, dword ptr [ebp + 0x20]
+00519401  83c40c                   add esp, 0xc
+00519404  50                       push eax
+00519405  e836a7f6ff               call 0x483b40
+0051940A  e992040000               jmp 0x5198a1
+0051940F  8d7e0d                   lea edi, [esi + 0xd]
+00519412  83c9ff                   or ecx, 0xffffffff
+00519415  33c0                     xor eax, eax
+00519417  c744241001000000         mov dword ptr [esp + 0x10], 1
+0051941F  f2ae                     repne scasb al, byte ptr es:[edi]
+00519421  f7d1                     not ecx
+00519423  2bf9                     sub edi, ecx
+00519425  8bc1                     mov eax, ecx
+00519427  8bf7                     mov esi, edi
+00519429  8bfb                     mov edi, ebx
+0051942B  c1e902                   shr ecx, 2
+0051942E  f3a5                     rep movsd dword ptr es:[edi], dword ptr [esi]
+00519430  8bc8                     mov ecx, eax
+00519432  83e103                   and ecx, 3
+00519435  f3a4                     rep movsb byte ptr es:[edi], byte ptr [esi]
+00519437  e965040000               jmp 0x5198a1
+0051943C  8b4d20                   mov ecx, dword ptr [ebp + 0x20]
+0051943F  46                       inc esi
+00519440  56                       push esi
+00519441  e8bab9f6ff               call 0x484e00
+00519446  e956040000               jmp 0x5198a1
+0051944B  8b                       .byte 0x8b
+0051944C  3d                       .byte 0x3d
+0051944D  84                       .byte 0x84
+0051944E  8b                       .byte 0x8b
+0051944F  5b                       pop ebx

@@ -1,0 +1,15 @@
+# Native launcher bilingual local login check (2026-09-24)
+
+The player helper was rebuilt from `Launcher-src/launcher-native/src/Support/God2LauncherSupport.cpp` without changing its v1.0.0 file version. The installed `God2LauncherSupport.exe` retains embedded RCDATA endpoint 902 (`127.0.0.1:2592`). It now removes `cpp-launch.error.txt` at the start and successful end of each launch, so a previous language-switch failure is not mistaken for a new failure. The real in-use EXE guard remains and reports the action in the selected Chinese language.
+
+On a private Windows desktop, the installed helper switched the same unpacked-client-derived `God2.exe` to zh-TW and zh-CN in sequence. Both launches returned 0 and opened an 800x600 game window. The zh-CN client was then driven through the local login, server, channel, and character selection without screenshots or changing the input desktop. Its TCP connection moved from local port 2592 to character port 62616 while the game window remained alive. This establishes connection and selection flow, not full world gameplay.
+
+The server stayed listening on 2592 and 62616. The owner's previous `test` login attempts at 15:18 and 15:29 reached recovered authentication and logged `existing_account_password_mismatch account_id=2`. The service did not reject those attempts because of Windows or selected client language. The existing account password and saved characters were left intact.
+
+The final installed selection is zh-CN, matching `config/user.settings` and `God2Launcher.player.settings.xml`. `cpp-launch.error.txt` is absent after successful launches. Verification artifacts are `artifacts/runs/launcher-local-check-20260924/{tw-result,cn-result,cn-world-result}.json`. The prior helper is backed up beside the installed one as `God2LauncherSupport.exe.before-language-message`.
+
+## Existing test account password repair
+
+The owner confirmed the intended credentials `test / test` and `test1 / test1`. The stored PBKDF2 hashes for account IDs 2 and 4 did not verify those passwords. Before each targeted update, a consistent SQLite online backup was saved under `artifacts/runs/launcher-local-check-20260924/` as `accounts-before-test-password-fix.db` and `accounts-before-test1-password-fix.db`. Only the two `accounts.password_hash` fields were replaced with fresh salted PBKDF2-SHA256 hashes for the owner-confirmed passwords. Both existing characters remained bound to their original account IDs, and `PRAGMA quick_check` returned `ok`.
+
+Original-client private-desktop probes subsequently reached the local character port 62616 after login and character selection for zh-CN `test / test`, zh-CN `test1 / test1`, and zh-TW `test / test`. The evidence files are `test-login-result.json`, `test1-login-result.json`, and `tw-test-login-result.json` in the same run directory. The selected language and client EXE were restored to zh-CN afterward. These probes establish the login/selection network path; they do not certify all later world gameplay.

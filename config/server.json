@@ -1,0 +1,9 @@
+{
+  "server": {"name": "GOD2 Rebuild Server", "host": "127.0.0.1", "port": 7000, "max_sessions": 1000, "worker_threads": 4},
+  "protocol": {"name": "GOD2", "mode": "placeholder", "packet_header": "uint16_length_uint16_opcode", "encryption": "none", "compression": "none", "packet_dump": true},
+  "database": {"type": "sqlite", "path": "god2.db", "future_backends": ["mysql", "mariadb"]},
+  "lua": {"bootstrap": "scripts/bootstrap.lua", "script_root": "scripts", "hot_reload": true},
+  "text": {"dictionary_root": "resources/opencc"},
+  "logging": {"level": "debug", "file": "logs/server.log"},
+  "development": {"mock_login": true}
+}

@@ -1,0 +1,29 @@
+# 第214輪：台服原生角色清單來源與實際寫入完成
+
+使用者2026-10-10恢復工作，要求台服完整來源串接100%才停止；撤銷上一輪收尾暫停，目標保持active。本輪修改6個既有C++來源檔，新增0個C++檔，來源串接段203→204，新增完整雙向玩法路徑0。台服完整方向／階段／狀態／變體分母仍未知，百分比null。未建置、測試、執行原生、codec、runtime、DB／SQL或部署。
+
+## 本輪實際接線
+
+原生native_list不再只交出裸frame78。SharedTaiwanNativeCharacterListSource建立不可變純資料delivery：實際session／account、只增不重用的source sequence、完整frame78與該Session實際A6觀察。sequence是服務端準備識別，不放進原生wire，沒有自造跨socket nonce或grant。完整snapshot、roots、Target及Scope留在game owner的pending map，使用實際host session capacity限制數量；每Session只允許一筆pending，sequence overflow明確拒絕。
+
+新增current及complete來源callback，和list／select一起穿過實際SharedTaiwanNativeWorldHostPlan Owner及Application WorldLifecycleVault。Session只持可撤銷的弱facade；real callback與借用資料庫來源留在game owner。所有constructor／factory配對條件都要求完整來源，沒有缺callback時默認成功。既有legacy list／select與未啟用native來源的行為保持原分支。
+
+Session將同一個完整response buffer以held Write加入佇列；Write只含不可變純資料識別，不持real game callback。接著post到game執行同一pending的完整Current／Qualify，再回strand核對同一delivery pointer、held項目、buffer pointer與完整frame bytes才解除held。來源拒絕、關閉或幾何不符會走同一次取消。
+
+實際async_write成功回呼再次核對同一Write／buffer／delivery。只有這條成功路徑才以written=true排回game；失敗、timeout、關閉或清除佇列則以false完成。active_native_list在排程前清除，避免同筆完成重送。game_busy及讀取暫停保留到game完成處理，讓Session正常關閉能等待實際來源清理。complete先移除pending再呼叫外部Current／Qualify，即使來源拋例外也不積累已消耗項目；duplicate不能發布或移除另一筆。
+
+只有實際socket成功加上game完整來源重新核對成功，才在原Session發布private atomic不可變寫入記錄。沒有public setter，保留完整原生frame與A6來源觀察。這是伺服器本地寫入與來源核對記錄，並不是客戶端已處理的ACK、角色權限或獨立world連線的授權。
+
+## 時間與原生資料界限
+
+Current在解除held前及寫入完成後執行；game回strand至async_write期間其他game工作仍可能改變來源。後置Current可以拒絕發布失效記錄，不能撤回已寫出的bytes，因此本輪沒有宣稱「wire寫出瞬間與SQLite來源完全原子」。實際queue/source發行原子性與取消所有在途bytes仍是後續工作。
+
+靜態原生子代理重新核對10段保留code span，935 bytes／250 instruction sites，新增原生覆蓋及opcode均0。14C50的C2S1A為logical38／body37／outer41，兩段16-byte輸入來自憑證緩衝區而非07角色名字；各末BYTE強制NUL。實際低3bit token0..7經此producer投影為0..3保留、4..7變0，與connect路由lookup不同；body尾端3 bytes沒有完整producer明確寫入，不能填造語意。
+
+原生客戶端state18／1A會修改本地清單backing的token及路由／資源欄位，不能把後來記憶體值冒稱原始S07 issuer。原始logical75／body74、row stride36及另外selected40的外部suffix繼續分開。L登入連線與G世界連線需要獨立認證；複製A6或帳號ID不形成其來源鏈路。以上都是資格邊界，沒有增加完整玩法路徑。
+
+## 尚未接通
+
+獨立world Select仍需實際issued-list LinkSource：同帳號／build／目的地／source epoch及新socket認證來源，不能選取該帳號最新或第一筆清單當作權限。本輪immutable記錄提供可引用的原來源，沒有自動跨socket傳送、重用登入授權或推定所有token變體。完整raw07權威issuer、post-create來源與列表重發、配置／resource／visibility、full2A／initial scene／5D／Main正式選用仍開放。
+
+TW盤點C2S156；world S2C252（fixed230／variable22）；battle S2C110，83 actions23及86 selectors7。CN C2S156，S2C phase rows280（account6／world206／battle68）。上述不是完整雙向玩法總數。台服其餘13組玩法、數值64位全路徑、stack99及全狀態／變體／延後分派仍待接通；保留共用資料表、CN／web、存檔、認證、聊天、IME、字體與轉換。全部來源串接後再集中全面測試與修復。

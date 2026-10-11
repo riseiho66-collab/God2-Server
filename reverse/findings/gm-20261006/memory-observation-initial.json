@@ -1,0 +1,518 @@
+{
+  "method": "ReadProcessMemory on own isolated pre-login client; no memory writes, UI input, desktop switch, packet injection or login.",
+  "executable": "C:\\Users\\risei\\Desktop\\God2\\God2\\God2.exe",
+  "client_sha256": "c5d8f79baa36879851703ac05d2b5caddf44a907677f7de114f568eeaf14f575",
+  "snapshots": [
+    {
+      "seconds": 3,
+      "exit_code": 259,
+      "code_samples": [
+        {
+          "va": "0x4968e0",
+          "bytes": 169,
+          "readable": true,
+          "sha256": "5bbdec515f298d340726309da779f11b185ae77be9dad20f9b0f70c291fe0846",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x590168",
+          "bytes": 12,
+          "readable": true,
+          "sha256": "074c777793c8c344c5d64c45c173731591f2772b2590757cad99f3c34d0c1106",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x46925c",
+          "bytes": 80,
+          "readable": true,
+          "sha256": "d3114831bd530acfaadae8098f03d7b9067de526fee29cabbce55e05b36171fc",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x484ae0",
+          "bytes": 797,
+          "readable": true,
+          "sha256": "e81e604d468ad3f9f50873871cce7d5539ba3c40473bf29cbfbf949129191150",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x4c00a6",
+          "bytes": 245,
+          "readable": true,
+          "sha256": "aa76d246d98cd6fe81a1e799136f0954a600466196554217245145d20f4cffdb",
+          "matches_current_pe": true
+        }
+      ],
+      "catalog_header_candidate": {
+        "owner": "0x5e053c",
+        "header_hex": "480f3a069e070000"
+      },
+      "catalog_candidates": {
+        "pointer": "0x63a0f48",
+        "count": 1950,
+        "entries": [
+          {
+            "id": 1,
+            "entry_va": "0x63a0f48",
+            "category": 0,
+            "record_hex": "00000000504367010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x1674350",
+                "text_hex": "a6f8aa41beb9a853a6b3a65ec0b3a141b373bd75a4a4c25fa143",
+                "text": "伺服器沒有回應，連線中斷。"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 44,
+            "entry_va": "0x63a11f8",
+            "category": 1,
+            "record_hex": "01000000105b6701f05a6701d05a6701",
+            "variants": [
+              {
+                "pointer": "0x1675b10",
+                "text_hex": "a741b14e20257320bdf0a558a6f8aa41beb9a143",
+                "text": "你將 %s 踢出伺服器。"
+              },
+              {
+                "pointer": "0x1675af0",
+                "text_hex": "a741b351474dbdf0a558a6f8aa41beb9a143",
+                "text": "你被GM踢出伺服器。"
+              },
+              {
+                "pointer": "0x1675ad0",
+                "text_hex": "257320b351474dbdf0a558a6f8aa41beb9a143",
+                "text": "%s 被GM踢出伺服器。"
+              }
+            ]
+          },
+          {
+            "id": 45,
+            "entry_va": "0x63a1208",
+            "category": 1,
+            "record_hex": "01000000b05a67010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x1675ab0",
+                "text_hex": "b854a8a5a4a4a141bdd0b8f2474dc170b5b8a143",
+                "text": "禁言中，請跟GM聯絡。"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 188,
+            "entry_va": "0x63a1af8",
+            "category": 0,
+            "record_hex": "00000000e06067010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x16760e0",
+                "text_hex": "b56ea44abff9bb7e3a20b162b8b9b0b1a4eea8cfa5ce21a6b3b0ddc344bdd0aca2abc8aa41b14dbd7521",
+                "text": "登入錯誤: 帳號停止使用!有問題請洽客服專線!"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 807,
+            "entry_va": "0x63a41a8",
+            "category": 1,
+            "record_hex": "0100000010d067010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x167d010",
+                "text_hex": "a8fab16fafaba5505b25735d",
+                "text": "取得神仙[%s]"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          }
+        ]
+      },
+      "gm_text_containers": [],
+      "scan_bytes": 194846720,
+      "readable_regions": 655
+    },
+    {
+      "seconds": 9,
+      "exit_code": 259,
+      "code_samples": [
+        {
+          "va": "0x4968e0",
+          "bytes": 169,
+          "readable": true,
+          "sha256": "5bbdec515f298d340726309da779f11b185ae77be9dad20f9b0f70c291fe0846",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x590168",
+          "bytes": 12,
+          "readable": true,
+          "sha256": "074c777793c8c344c5d64c45c173731591f2772b2590757cad99f3c34d0c1106",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x46925c",
+          "bytes": 80,
+          "readable": true,
+          "sha256": "d3114831bd530acfaadae8098f03d7b9067de526fee29cabbce55e05b36171fc",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x484ae0",
+          "bytes": 797,
+          "readable": true,
+          "sha256": "e81e604d468ad3f9f50873871cce7d5539ba3c40473bf29cbfbf949129191150",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x4c00a6",
+          "bytes": 245,
+          "readable": true,
+          "sha256": "aa76d246d98cd6fe81a1e799136f0954a600466196554217245145d20f4cffdb",
+          "matches_current_pe": true
+        }
+      ],
+      "catalog_header_candidate": {
+        "owner": "0x5e053c",
+        "header_hex": "480f3a069e070000"
+      },
+      "catalog_candidates": {
+        "pointer": "0x63a0f48",
+        "count": 1950,
+        "entries": [
+          {
+            "id": 1,
+            "entry_va": "0x63a0f48",
+            "category": 0,
+            "record_hex": "00000000504367010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x1674350",
+                "text_hex": "a6f8aa41beb9a853a6b3a65ec0b3a141b373bd75a4a4c25fa143",
+                "text": "伺服器沒有回應，連線中斷。"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 44,
+            "entry_va": "0x63a11f8",
+            "category": 1,
+            "record_hex": "01000000105b6701f05a6701d05a6701",
+            "variants": [
+              {
+                "pointer": "0x1675b10",
+                "text_hex": "a741b14e20257320bdf0a558a6f8aa41beb9a143",
+                "text": "你將 %s 踢出伺服器。"
+              },
+              {
+                "pointer": "0x1675af0",
+                "text_hex": "a741b351474dbdf0a558a6f8aa41beb9a143",
+                "text": "你被GM踢出伺服器。"
+              },
+              {
+                "pointer": "0x1675ad0",
+                "text_hex": "257320b351474dbdf0a558a6f8aa41beb9a143",
+                "text": "%s 被GM踢出伺服器。"
+              }
+            ]
+          },
+          {
+            "id": 45,
+            "entry_va": "0x63a1208",
+            "category": 1,
+            "record_hex": "01000000b05a67010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x1675ab0",
+                "text_hex": "b854a8a5a4a4a141bdd0b8f2474dc170b5b8a143",
+                "text": "禁言中，請跟GM聯絡。"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 188,
+            "entry_va": "0x63a1af8",
+            "category": 0,
+            "record_hex": "00000000e06067010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x16760e0",
+                "text_hex": "b56ea44abff9bb7e3a20b162b8b9b0b1a4eea8cfa5ce21a6b3b0ddc344bdd0aca2abc8aa41b14dbd7521",
+                "text": "登入錯誤: 帳號停止使用!有問題請洽客服專線!"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 807,
+            "entry_va": "0x63a41a8",
+            "category": 1,
+            "record_hex": "0100000010d067010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x167d010",
+                "text_hex": "a8fab16fafaba5505b25735d",
+                "text": "取得神仙[%s]"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          }
+        ]
+      },
+      "gm_text_containers": [],
+      "scan_bytes": 238170112,
+      "readable_regions": 676
+    },
+    {
+      "seconds": 18,
+      "exit_code": 259,
+      "code_samples": [
+        {
+          "va": "0x4968e0",
+          "bytes": 169,
+          "readable": true,
+          "sha256": "5bbdec515f298d340726309da779f11b185ae77be9dad20f9b0f70c291fe0846",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x590168",
+          "bytes": 12,
+          "readable": true,
+          "sha256": "074c777793c8c344c5d64c45c173731591f2772b2590757cad99f3c34d0c1106",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x46925c",
+          "bytes": 80,
+          "readable": true,
+          "sha256": "d3114831bd530acfaadae8098f03d7b9067de526fee29cabbce55e05b36171fc",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x484ae0",
+          "bytes": 797,
+          "readable": true,
+          "sha256": "e81e604d468ad3f9f50873871cce7d5539ba3c40473bf29cbfbf949129191150",
+          "matches_current_pe": true
+        },
+        {
+          "va": "0x4c00a6",
+          "bytes": 245,
+          "readable": true,
+          "sha256": "aa76d246d98cd6fe81a1e799136f0954a600466196554217245145d20f4cffdb",
+          "matches_current_pe": true
+        }
+      ],
+      "catalog_header_candidate": {
+        "owner": "0x5e053c",
+        "header_hex": "480f3a069e070000"
+      },
+      "catalog_candidates": {
+        "pointer": "0x63a0f48",
+        "count": 1950,
+        "entries": [
+          {
+            "id": 1,
+            "entry_va": "0x63a0f48",
+            "category": 0,
+            "record_hex": "00000000504367010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x1674350",
+                "text_hex": "a6f8aa41beb9a853a6b3a65ec0b3a141b373bd75a4a4c25fa143",
+                "text": "伺服器沒有回應，連線中斷。"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 44,
+            "entry_va": "0x63a11f8",
+            "category": 1,
+            "record_hex": "01000000105b6701f05a6701d05a6701",
+            "variants": [
+              {
+                "pointer": "0x1675b10",
+                "text_hex": "a741b14e20257320bdf0a558a6f8aa41beb9a143",
+                "text": "你將 %s 踢出伺服器。"
+              },
+              {
+                "pointer": "0x1675af0",
+                "text_hex": "a741b351474dbdf0a558a6f8aa41beb9a143",
+                "text": "你被GM踢出伺服器。"
+              },
+              {
+                "pointer": "0x1675ad0",
+                "text_hex": "257320b351474dbdf0a558a6f8aa41beb9a143",
+                "text": "%s 被GM踢出伺服器。"
+              }
+            ]
+          },
+          {
+            "id": 45,
+            "entry_va": "0x63a1208",
+            "category": 1,
+            "record_hex": "01000000b05a67010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x1675ab0",
+                "text_hex": "b854a8a5a4a4a141bdd0b8f2474dc170b5b8a143",
+                "text": "禁言中，請跟GM聯絡。"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 188,
+            "entry_va": "0x63a1af8",
+            "category": 0,
+            "record_hex": "00000000e06067010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x16760e0",
+                "text_hex": "b56ea44abff9bb7e3a20b162b8b9b0b1a4eea8cfa5ce21a6b3b0ddc344bdd0aca2abc8aa41b14dbd7521",
+                "text": "登入錯誤: 帳號停止使用!有問題請洽客服專線!"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          },
+          {
+            "id": 807,
+            "entry_va": "0x63a41a8",
+            "category": 1,
+            "record_hex": "0100000010d067010000000000000000",
+            "variants": [
+              {
+                "pointer": "0x167d010",
+                "text_hex": "a8fab16fafaba5505b25735d",
+                "text": "取得神仙[%s]"
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              },
+              {
+                "pointer": "0x0",
+                "text_hex": null,
+                "text": ""
+              }
+            ]
+          }
+        ]
+      },
+      "gm_text_containers": [],
+      "scan_bytes": 238170112,
+      "readable_regions": 675
+    }
+  ],
+  "pid": 20052,
+  "private_desktop": "God2GMResearch-19080",
+  "owned_client_closed": true,
+  "client_file_unchanged": true
+}

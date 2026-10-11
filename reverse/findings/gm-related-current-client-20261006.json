@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-06",
+  "status": "STATIC_NATIVE_FINDINGS; no live transaction performed",
+  "clientPath": "C:\\Users\\risei\\Desktop\\God2\\God2\\God2.exe",
+  "clientSha256": "c5d8f79baa36879851703ac05d2b5caddf44a907677f7de114f568eeaf14f575",
+  "imageBase": "0x400000",
+  "findings": [
+    {
+      "direction": "S2C",
+      "logicalOpcode": "0x19",
+      "worldTableVa": "0x46b638",
+      "caseVa": "0x46925c",
+      "expectedCaseVa": "0x46925c",
+      "callVa": "0x469280",
+      "handlerVa": "0x483b40",
+      "receiveSizeQueryLeafVa": "0x401318",
+      "logicalBytes": "variable; uint16 little-endian total length at logical offset 1",
+      "evidence": {
+        "startVa": "0x46925c",
+        "endVaExclusive": "0x469285",
+        "bytesHex": "33d28d8424000b00008a53098d4b0d5051c1ea0752e88a620c0083c40c8d8d6c2f7f0a50e8bba80100",
+        "sha256": "c134a5ada36ee0217990d1fa7e1faac1f27e2bdf3066eee1b01abc09d954730d"
+      }
+    },
+    {
+      "direction": "S2C",
+      "logicalOpcode": "0x20",
+      "worldTableVa": "0x46b654",
+      "caseVa": "0x46928a",
+      "expectedCaseVa": "0x46928a",
+      "callVa": "0x469294",
+      "handlerVa": "0x483a80",
+      "receiveSizeQueryLeafVa": "0x401318",
+      "logicalBytes": "variable; uint16 little-endian total length at logical offset 1",
+      "evidence": {
+        "startVa": "0x46928a",
+        "endVaExclusive": "0x469299",
+        "bytesHex": "83c30d8d8d6c2f7f0a53e8e7a70100",
+        "sha256": "2f99920d295ed6a2540de33ef75001f17dd4873420d55c22c370355151704ec4"
+      }
+    },
+    {
+      "direction": "S2C",
+      "logicalOpcode": "0x2",
+      "worldTableVa": "0x46b5dc",
+      "caseVa": "0x46929e",
+      "expectedCaseVa": "0x46929e",
+      "callVa": "0x4692a6",
+      "handlerVa": "0x484e00",
+      "receiveSizeQueryLeafVa": "0x401234",
+      "logicalBytes": 23,
+      "evidence": {
+        "startVa": "0x46929e",
+        "endVaExclusive": "0x4692ab",
+        "bytesHex": "438d8d6c2f7f0a53e855bb0100",
+        "sha256": "a78325fd67df6260ee19f01c5a21d5d597c6da844ad3144051ec1a05b165d31e"
+      }
+    }
+  ],
+  "interpretation": {
+    "0x19": "Text at logical +13; bit 7 of logical byte +9 selects the conversion path at 0x52F500. Result passes to 0x483B40, binds owner+0x232F6C text and opens owner+0x232DE4 GMNotice window. Other fields not fully recovered.",
+    "0x20": "Text at logical +13 passes through 0x483A80 to 0x483B40 and opens the same GMNotice window; also updates owner+0x232F68. Other fields not fully recovered.",
+    "0x02": "23-byte total record. Payload begins at logical +1; payload uint16 +0 selects native message catalog entry; payload byte +20 uses low 7 bits to select one of 3 variants. Display category comes from catalog entry, not directly from payload. Category 0 opens GMNotice; category 1/2 calls chat presentation 4/5. Other fields not fully recovered."
+  },
+  "gmUiProvenance": {
+    "builderVa": "0x483bd0",
+    "asset": "Data3/Flow/ChannelSwitch.ROMZ",
+    "resourceActions": [
+      "2010 GMNotice_BGOpen",
+      "2020 GMNotice_BGClose"
+    ],
+    "existingSource": "C:/Users/risei/Desktop/God2/God2/output/web-prototype/tools/probe_native_gm_notice_source.py"
+  },
+  "handlerEvidence": [
+    {
+      "startVa": "0x483a80",
+      "endVaExclusive": "0x483aa6",
+      "bytesHex": "8b442404568bf150e8b30000008b8ebc2e2300c786682f230001000000e81e1a01005ec20400",
+      "sha256": "c7f89e218da326de52e0a825303cdb462d69fa6aedb34f50c3d9385380c11ed0"
+    },
+    {
+      "startVa": "0x483b40",
+      "endVaExclusive": "0x483ba8",
+      "bytesHex": "81ec000400008d442400568bf18b8c24080400006a0050518bcee8112affff6a008d54240868000000ff528d8e6c2f2300e80aba0800668b86e42d23008d8e70210e0050e8973f08008bcee8e0fc03008bcee8298806008bcee8b21004005e81c400040000c20400",
+      "sha256": "6ac722c6662fc8116ef2a89d1ba011a7969eb639c7b7b76b7a4b419341941ec1"
+    },
+    {
+      "startVa": "0x484e00",
+      "endVaExclusive": "0x484ecf",
+      "bytesHex": "8b44240481ec040200006681382703568bf1750ac786ac2e2300010000008d4c24048d5424085152508bcee8b0fcffff85c00f848d0000008b44240425ff00000083e80074404874204875798d4424088bce5068ff80ff006a05e8a18fffff5e81c404020000c204008d4c24085168ff80ff006a048bcee8848fffff5e81c404020000c204006a008d54240c68000000ff528d8e6c2f2300e8e3a60800668b86e42d23008d8e70210e0050e8702c08008bcee8b9e903008bcee8027506008bcee88bfd03005e81c404020000c20400",
+      "sha256": "2b534807ad77e60aaebf0db3275f72da190f071ae9f878ebb9e2984566a31a18"
+    },
+    {
+      "startVa": "0x484ae0",
+      "endVaExclusive": "0x484cfd",
+      "bytesHex": "8b44240881ec00020000538b9c24080200005556c60000668b336685f6578be90f86da0100008a4b1480e17f80f9030f83cb0100008a1540465b00b91f00000033c08dbc24910000008894249000000088542410f3ab66abaab91f00000033c08d7c2411f3ab8b8d70ff0c0066abaa0fbf91642c0b008bc625ffff00003bc20f8f7b0100006685f60f86720100008b89602c0b00c1e0048d4401f085c00f845d0100008b8c241c0200008a1088118a4b1483e17f8d5424108b7c880483c9ff33c0f2aef7d12bf98bc18bf78bfac1e902f3a58bc883e10366813ba804f3a40f85b30000008a1540465b00b91f00000033c08dbc24110100008894241001000088942490010000f3ab66abaab91f00000033c08dbc2491010000f3ab66abaa668b43026685c074498b8d70ff0c0050e84d4efdff85c0741983c0088d8c2410010000506848e0580051e8ca2e0c0083c40c8a4b048d430484c97416508d9424940100006848e0580052e8aa2e0c0083c40c8d8424100100008d8c2490010000508b84241c0200008d542414515250e8852e0c0083c410eb69668b43026685c074238b8d70ff0c0050e8d44dfdff85c0743383c0088d8c2490000000506848e0580051eb188a4b048d430484c97416508d9424940000006848e0580052e8372e0c0083c40c8b9424180200008d8424900000008d4c2410505152e81a2e0c0083c40c8b8c241802000033c05f5e8a115d84d20f95c05b81c400020000c20c00",
+      "sha256": "14456cf2e7344ad1d0caba1b64bce27dc8e9b564365a394ee96174285ef82348"
+    }
+  ],
+  "serverFindings": {
+    "src/handlers/DebugHandler.cpp": "register_debug_handlers is empty; no GM opcode registered here.",
+    "src/scripting/LuaEngine.h": "call_gm_command host API exists; host must authorize admin.",
+    "scripts/gm/gm_commands.lua": "reload_scripts sample only logs request; loaded by fixture_bootstrap in GOD2_FIXTURE_MODE.",
+    "callSites": "Search of src found API definition/declaration, but no production caller to call_gm_command."
+  },
+  "limits": [
+    "GMNotice is a shared client display route, not proof of GM account privilege.",
+    "No confirmed C2S administrative operation opcode or GM permission flag found in this search.",
+    "Static source/disassembly research only; no server restart, account changes, binary changes, packet injection or tests.",
+    "Full payload schemas and live client acceptance remain unverified."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "bitmap_header_bytes": 24,
+  "format": 3,
+  "palette_words": 256,
+  "pixels": "8bit-uncompressed",
+  "original_function": "00424880",
+  "dispatcher": "00425700 case3 routes to00424880 when row_table pointer+16 is null",
+  "adapted_only": [
+    "SetRect"
+  ],
+  "cases": [
+    {
+      "x": 2,
+      "y": 2,
+      "original_blitter_exact": true,
+      "stack_balanced": true
+    },
+    {
+      "x": -1,
+      "y": -1,
+      "original_blitter_exact": true,
+      "stack_balanced": true
+    },
+    {
+      "x": 7,
+      "y": 7,
+      "original_blitter_exact": true,
+      "stack_balanced": true
+    }
+  ],
+  "live_acceptance": false
+}

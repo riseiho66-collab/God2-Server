@@ -1,0 +1,18 @@
+{
+  "artifact_id": "fb72296cab5950b74d8f7c98155145f7c5f58749c3011adb0540325b60749dd1",
+  "captures": [],
+  "classification": "Research / Partial Compatibility",
+  "coverage": {
+    "runtime_captures": 0,
+    "total_real_fields": null,
+    "total_real_packets": null,
+    "verified_fields": 0,
+    "verified_packets": 0,
+    "verified_runtime_gates": 0
+  },
+  "current_gate": "02",
+  "function_candidates": [],
+  "highest_runtime_acceptance": "L1 ARTIFACT_VERIFIED",
+  "single_external_evidence": "A controlled runtime capture bundle with native trace and mapped/unpacked images, followed by independent review.",
+  "status": "BLOCKED"
+}

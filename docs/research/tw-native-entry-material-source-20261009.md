@@ -1,0 +1,19 @@
+# 第209輪：台服完整2A入場資料來源
+
+本輪新增5個C++來源檔、修改5個既有C++來源檔，接入完整入場原始資料的共用儲存介面、SQLite同連線讀寫來源，以及台服儲存資料至既有世界入口Source的橋接。這是部分來源串接，新增完整雙向遊戲通路0條；台服完整通路分母及完成百分比仍未知。
+
+`NativeWorldEntrySnapshot`保留完整共同角色root（ID/帳號/slot/profile/created_at/name_codepage/streamer_privilege）、存檔位置與位置revision、原始封包、客戶端build SHA、source SHA/source_record及實際revision。`character_native_world_entries`按帳號、角色、build及record_kind共用儲存，屬版本化delivery witness；沒有另建兩套遊戲角色表。舊witness允許讀取以供精確CAS替換，讀取本身不宣稱角色與位置仍current。
+
+SQLite writer在同一帳號/角色connection自有交易內比較完整expected tuple，實際角色及位置需與next一致；Prepared、BeforeWrite、BeforeCommit要求真實issuer。每次observer前後均追查共同root/位置及material tuple，BeforeCommit對照staged next。重入即使被observer攔截也使外層不能commit。revision及原始資料由實際issuer提供，不自行產生初始1、遞增值或預設native資料。此輪只寫SQL/C++來源，沒有開啟資料庫或執行SQL。
+
+`SharedTaiwanWorldEntrySource::Scope`現在包含完整selected root。`SharedTaiwanStoredWorldEntrySource`從同源storage取出精確40-byte零seed原始frame，要求build、完整角色、位置revision及map一致，再交給必要的真實Qualify；返回的Current重讀相同完整tuple，並保留原生未知位元。repositories/catalog為明確借用，所有Source/Native/Current必須在實際database被銷毀前排空；shared closure只擁有snapshot及guard，沒有假稱其擁有資料庫。
+
+新schema有獨立明確fresh installer來源，不變更既有NativeDeliverySnapshotSchema v1，不進入default migrate/login/Main，缺schema不被視為空成功。新的來源檔依既有src glob納入來源集合，本輪没有建置。真實issuer、全部欄位的共同狀態來源、場景初始資料、queue/publication生命週期、5D移動Authority及Main正式SourceFactory仍OPEN；此輪沒有啟用正式服務。
+
+原生子代理依保留的149c1b45… native master追完2A正常initializer的1904 bytes與575條靜態指令，包含32-byte switch資料；這些是既有原生證據的重新定點分析，新增opcode與新增native coverage均0。2A為37-byte logical、36-byte body、40-byte standalone wire。B8..11未在限定initializer獨立讀取，不能稱全遊戲unused；B26..27是DWORD load的高WORD，可能進入scene helper參數，不能清零。appearance/status/resource及transform資格仍需實際issuer，不能以歷史body換ID代填。
+
+原生master目前由既有consumer-experiment/inputs/native-image.bin原地全檔雜湊；歷史capture_work的原始master路徑缺失，保持原紀錄及此缺失，沒有恢復歷史樹或偷換原基準。149c master、6bf75e歷史audit、99cde6字體恢復installed EXE各自保留身分。原生子代理在root修改前讀取的Entry Source兩檔精確對照before209，與最終root版本分開記錄。
+
+盤點沿用：TW C2S觀察opcode156；WORLD S2C長度表有效252（fixed230/variable22），BATTLE S2C110（special9/default101），83 action23、86 selector7。WORLD parser65、已審來源42；42/65只代表該parser審阅範圍。CN C2S156、S2C phase280。這些opcode數不能加總充當完整遊戲通路分母。部分source segment198→199；全遊戲與TW完成率均null。
+
+下一段優先追查完整2A真實產生器、外部name/role/resource/status輸入及實際Scene初始material，接入SourceFactory與Main時必須有真實scene/movement/lifecycle，不能以always-true callback補洞。繼續台服全部来源串接至實際100%再停止，保留CN/web共用成果。全面測試、驗證與大修依使用者順序留待全部串接後。

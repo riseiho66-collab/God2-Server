@@ -1,0 +1,971 @@
+#include "protocol/OpcodeDispatcher.h"
+#include "net/Session.h"
+#include "handlers/RecoveredWorldService.h"
+#include "handlers/RecoveredVisibility.h"
+#include "handlers/RecoveredPlayerPresence.h"
+#include "protocol/DiagnosticRemoteActor.h"
+#include "handlers/RecoveredBattleService.h"
+#include "scripting/LuaEngine.h"
+#include "protocol/RecoveredSeedExchange.h"
+#include "protocol/RecoveredPostSeed.h"
+#include "protocol/RecoveredCharacterBootstrap.h"
+#include "protocol/RecoveredCharacterCreateResult.h"
+#include "protocol/RecoveredWorldStateCandidate.h"
+#include <algorithm>
+#include <chrono>
+#include <stdexcept>
+#include <string>
+#include <fstream>
+#include <charconv>
+#include <nlohmann/json.hpp>
+
+namespace {
+using namespace god2;
+void require(bool value,const char* message) { if(!value) throw std::runtime_error(message); }
+
+// Synthetic peer and handlers exercise the real Session socket/state machine.
+// Test identities/coordinates are not recovered character attributes.
+struct RecoveredSessionPeer {
+    using WorldHandler=std::function<std::optional<std::vector<std::uint8_t>>(
+        Session&,std::span<const RecoveredWorldRecords::Record>)>;
+    asio::io_context io;
+    asio::ip::tcp::acceptor acceptor{io,{asio::ip::address_v4::loopback(),0}};
+    asio::ip::tcp::socket peer{io};
+    std::shared_ptr<Session> session;
+    unsigned ready_calls=0,movement_calls=0,selection_calls=0,world_calls=0;
+    static constexpr std::uint64_t account=7,character=0x1234;
+    std::uint64_t selected_character=character;
+    RecoveredWorldEntry::Frame world_frame;
+
+    explicit RecoveredSessionPeer(bool movement,WorldHandler world={},
+        std::uint64_t selected=character,std::uint64_t session_id=2):selected_character(selected),
+        world_frame(RecoveredWorldEntry::wire(selected)) {
+        peer.connect(acceptor.local_endpoint());
+        auto socket=acceptor.accept();
+        Session::RecoveredCharacterHandlers handlers;
+        handlers.list=[](std::uint64_t) { return std::array<std::uint8_t,78>{}; };
+        handlers.create=[this](std::uint64_t owner,const RecoveredCharacterCreate& request) {
+            require(owner==account && request.payload[0]=='T',"Create lost account/profile");
+            return selected_character;
+        };
+        handlers.select_existing=[this](std::uint64_t owner,std::uint8_t token) {
+            require(owner==account && token==0,"Selection lost account/token");
+            ++selection_calls;return selected_character;
+        };
+        handlers.select_created=[this](std::uint64_t owner,std::uint64_t id,std::uint8_t token) {
+            require(owner==account && id==selected_character && token==0,"Created selection lost ownership");
+            ++selection_calls;return selected_character;
+        };
+        handlers.created_slot=[this](std::uint64_t owner,std::uint64_t id) -> std::uint8_t {
+            require(owner==account && id==selected_character,"Slot lookup lost committed ownership");
+            return 0;
+        };
+        handlers.world_entry=[this](std::uint64_t,std::uint64_t owner,std::uint64_t id) {
+            require(owner==account && id==selected_character,"World entry lost ownership");
+            return world_frame;
+        };
+        if(movement || world) {
+            handlers.world_ready=[this](Session& s) {
+                require(s.account_id==account && s.character_id==selected_character,"World-ready lost binding");
+                ++ready_calls;
+            };
+        }
+        if(movement) {
+            handlers.movement=[this](Session& s,std::span<const RecoveredMovement::Request> requests) {
+                require(ready_calls==1 && s.character_id==selected_character,"Movement preceded world-ready");
+                require(requests.size()==1 && requests[0].x==18 && requests[0].y==14 &&
+                        requests[0].sequence==3,"Movement request changed");
+                ++movement_calls;
+                const auto ack=RecoveredMovement::ack(requests[0].sequence);
+                return std::vector<std::uint8_t>(ack.begin(),ack.end());
+            };
+        }
+        if(world) {
+            handlers.world_records=[this,world=std::move(world)](
+                    Session& s,std::span<const RecoveredWorldRecords::Record> records) {
+                require(ready_calls==1 && s.account_id==account && s.character_id==selected_character,
+                        "World records preceded authenticated character/world binding");
+                ++world_calls;
+                return world(s,records);
+            };
+        }
+        session=std::make_shared<Session>(std::move(socket),io.get_executor(),session_id,false,
+            Session::PacketHandler{},Session::DisconnectHandler{},ProtocolMode::God2CharacterConnection,
+            [](const RecoveredC2S0002::Parsed& request) {
+                require(request.logical[0]==0,"Character connection login opcode changed");
+                return account;
+            },std::move(handlers));
+        peer.non_blocking(true);
+        session->start();
+    }
+    ~RecoveredSessionPeer() {
+        asio::error_code ignored;
+        peer.close(ignored);
+        session->close();
+        io.restart();io.run_for(std::chrono::milliseconds(20));
+    }
+    void pump() { io.restart();io.run_for(std::chrono::milliseconds(5)); }
+    void send(std::span<const std::uint8_t> bytes) {
+        // These bounded test frames fit the loopback send buffer.
+        peer.non_blocking(false);
+        asio::write(peer,asio::buffer(bytes.data(),bytes.size()));
+        peer.non_blocking(true);
+    }
+    void expect(std::span<const std::uint8_t> expected) {
+        std::vector<std::uint8_t> actual(expected.size());
+        std::size_t received=0;
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        while(received<actual.size() && std::chrono::steady_clock::now()<deadline) {
+            pump();
+            asio::error_code error;
+            received+=peer.read_some(asio::buffer(actual.data()+received,actual.size()-received),error);
+            require(!error || error==asio::error::would_block || error==asio::error::try_again,
+                    "Session closed before expected reply");
+        }
+        require(received==expected.size() && std::equal(actual.begin(),actual.end(),expected.begin()),
+                "Recovered session deterministic reply changed");
+    }
+    void silent() {
+        // Pump both executors before checking: queued writes must get a chance to run.
+        for(unsigned i=0;i<10;++i) {
+            pump();
+            std::array<std::uint8_t,256> bytes{};
+            asio::error_code error;
+            const auto count=peer.read_some(asio::buffer(bytes),error);
+            require(count==0 && (error==asio::error::would_block || error==asio::error::try_again),
+                    "Recovered session injected unsolicited bytes or closed");
+        }
+    }
+    void closed() {
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        while(session->state()!=SessionState::Disconnected && std::chrono::steady_clock::now()<deadline) pump();
+        require(session->state()==SessionState::Disconnected,"Invalid/repeated tail did not fail closed");
+        std::array<std::uint8_t,256> bytes{};
+        asio::error_code error;
+        const auto count=peer.read_some(asio::buffer(bytes),error);
+        require(count==0 && (error==asio::error::eof || error==asio::error::connection_reset),
+                "Rejected tail emitted unsolicited bytes");
+    }
+    void authenticate(bool created) {
+        expect(RecoveredSeedExchange::hello());
+        send(RecoveredSeedExchange::response);
+        expect(RecoveredPostSeed::frame(0xf6));
+        RecoveredC2S0002::Payload credentials{};credentials[167]=0xc8;
+        send(RecoveredC2S0002::encode(credentials));
+        expect(RecoveredCharacterBootstrap::candidate());
+        require(session->state()==SessionState::Authenticated,"Recovered login disabled");
+        if(created) {
+            std::array<std::uint8_t,45> request{};
+            request[0]=0x1b;request[1]='T';request[41]=4;
+            send(RecoveredWorldFrame::encode(request));
+            expect(RecoveredCharacterCreateResult::committed_success());
+        }
+    }
+    void select(bool created) {
+        authenticate(created);
+        std::array<std::uint8_t,38> request{};request[0]=0x1a;request[34]=4;
+        auto selection=RecoveredWorldFrame::encode(request);
+        if(created) {
+            auto prefix=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x18,1});
+            prefix.insert(prefix.end(),selection.begin(),selection.end());
+            selection=std::move(prefix);
+        }
+        send(selection);
+        expect(RecoveredCharacterCreateResult::committed_success());
+        expect(world_frame);
+        require(session->state()==SessionState::CharacterSelected && selection_calls==1 &&
+                session->account_id==account && session->character_id==selected_character,"Selection binding changed");
+        silent();
+    }
+    static std::vector<std::uint8_t> tail(std::uint16_t id=character) {
+        return RecoveredWorldFrame::encode(std::array<std::uint8_t,9>{0x1f,0,0x23,0,0x1c,
+            static_cast<std::uint8_t>(id),static_cast<std::uint8_t>(id>>8),1,0});
+    }
+};
+
+void recovered_character_idle_tick_transport() {
+    const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
+    require(tick==std::vector<std::uint8_t>({5,0,0x2d,0x2d,0x22}),
+            "Native character idle tick wire changed");
+    std::array<std::uint8_t,38> request{};request[0]=0x1a;request[34]=4;
+    const auto selection=RecoveredWorldFrame::encode(request);
+    {
+        RecoveredSessionPeer peer(true);peer.authenticate(false);
+        peer.send(std::span(tick).first(2));peer.silent();
+        peer.send(std::span(tick).subspan(2));peer.silent();
+        peer.send(selection);
+        peer.expect(RecoveredCharacterCreateResult::committed_success());peer.expect(peer.world_frame);
+        require(peer.selection_calls==1 && peer.session->state()==SessionState::CharacterSelected,
+                "Delayed character selection lost binding after idle tick");
+        peer.send(RecoveredSessionPeer::tail());peer.silent();
+        require(peer.ready_calls==1,"Delayed selection lost world initializer");
+    }
+    {
+        RecoveredSessionPeer peer(true);peer.authenticate(false);
+        std::vector<std::uint8_t> together=tick;
+        together.insert(together.end(),tick.begin(),tick.end());
+        together.insert(together.end(),selection.begin(),selection.end());
+        peer.send(together);
+        peer.expect(RecoveredCharacterCreateResult::committed_success());peer.expect(peer.world_frame);
+        require(peer.selection_calls==1,"Coalesced ticks and selection selected more than once");
+    }
+    for(bool checksum_bad:{false,true}) {
+        RecoveredSessionPeer peer(true);peer.authenticate(false);
+        auto bad=checksum_bad?tick:RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x31,0});
+        if(checksum_bad) bad.back()^=1;
+        peer.send(bad);peer.closed();
+        require(peer.selection_calls==0,"Invalid character idle tick selected a character");
+    }
+}
+
+void recovered_world_push_transport() {
+    const std::vector<std::uint8_t> remove{0x73,7,0,0,0};
+    {
+        RecoveredSessionPeer peer(true);peer.select(false);
+        peer.session->send_world_records(remove);
+        peer.closed();
+        require(peer.ready_calls==0,"World push bypassed initialization tail");
+    }
+    {
+        RecoveredSessionPeer first(true),second(true);
+        first.select(false);second.select(false);
+        first.send(RecoveredSessionPeer::tail());first.silent();
+        second.send(RecoveredSessionPeer::tail());second.silent();
+        auto next=remove;next[1]=8;
+        first.session->send_world_records(remove);
+        first.session->send_world_records(next);
+        first.expect(RecoveredWorldFrame::encode(remove));
+        first.expect(RecoveredWorldFrame::encode(next));
+        second.silent();
+        second.session->send_world_records(next);
+        second.expect(RecoveredWorldFrame::encode(next));
+        first.silent();
+        first.send(RecoveredMovement::encode({18,14,3,0}));
+        first.expect(RecoveredMovement::ack(3));
+        require(first.movement_calls==1,"World push broke subsequent movement handling");
+        first.session->close();first.closed();
+        first.session->send_world_records(remove);first.pump();
+        second.silent();
+    }
+    for(const auto size:{std::size_t{0},RecoveredWorldFrame::max_logical_size+1}) {
+        RecoveredSessionPeer peer(true);peer.select(false);
+        peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->send_world_records(std::vector<std::uint8_t>(size,0x73));
+        peer.closed();
+    }
+}
+
+void recovered_visibility_transport() {
+    RecoveredSessionPeer first(true,{},7,101),second(true,{},8,102),outside(true,{},9,103);
+    std::array<std::uint8_t,40> outside_profile{};
+    outside.world_frame=RecoveredWorldEntry::wire(9,outside_profile,17,13,2,4,2);
+    const std::array peers{&first,&second,&outside};
+    for(auto* peer:peers) {
+        peer->select(false);
+        peer->send(RecoveredSessionPeer::tail(static_cast<std::uint16_t>(peer->selected_character)));
+        peer->silent();
+    }
+    RecoveredVisibility registry;
+    const auto presence=[](RecoveredSessionPeer& peer) {
+        const auto spawn=RecoveredRemoteActor::parse_logical(DiagnosticRemoteActor::logical(0,0)).value();
+        const auto remove=RecoveredRemoteActorRemove::parse_logical(DiagnosticRemoteActor::logical(2,0)).value();
+        std::array<std::uint8_t,40> profile{};
+        profile[0]=static_cast<std::uint8_t>('A'+peer.selected_character);
+        profile[29]=1;profile[31]=1;
+        return RecoveredPlayerPresence::from_world_entry(peer.session->id(),peer.session->account_id,
+            peer.session->character_id,peer.world_frame,profile,spawn,remove);
+    };
+    const auto deliver=[&](std::vector<RecoveredVisibility::Delivery> deliveries) {
+        for(auto& delivery:deliveries) {
+            const auto found=std::find_if(peers.begin(),peers.end(),[&](const auto* peer) {
+                return peer->session->id()==delivery.recipient;
+            });
+            require(found!=peers.end(),"Visibility routed to unknown session");
+            (*found)->session->send_world_records(std::move(delivery.logical));
+        }
+    };
+    const auto a=presence(first),b=presence(second),c=presence(outside);
+    deliver(registry.enter(a));deliver(registry.enter(c));
+    for(auto* peer:peers) peer->silent();
+    deliver(registry.enter(b));
+    first.expect(RecoveredWorldFrame::encode(RecoveredRemoteActor::encode_logical(b.spawn)));
+    second.expect(RecoveredWorldFrame::encode(RecoveredRemoteActor::encode_logical(a.spawn)));
+    for(auto* peer:peers) peer->silent();
+    auto logical=DiagnosticRemoteActor::logical(1,0);
+    logical[9]=18;
+    const auto outward=RecoveredRemoteActorMove::parse_logical(logical).value();
+    logical[9]=17;logical[10]=13<<3;
+    const auto back=RecoveredRemoteActorMove::parse_logical(logical).value();
+    const std::array path{outward,back};
+    deliver(registry.move_batch(first.session->id(),first.session->account_id,
+        first.session->character_id,{2,15},path));
+    for(const auto& step:path)
+        second.expect(RecoveredWorldFrame::encode(RecoveredRemoteActorMove::encode_logical(step)));
+    for(auto* peer:peers) peer->silent();
+    for(const bool active:{true,false,true}) {
+        deliver(registry.set_fight_title(first.session->id(),first.session->account_id,
+            first.session->character_id,{2,15},active));
+        auto expected=RecoveredRemoteActorMove::encode_logical(back);
+        expected[5]=static_cast<std::uint8_t>(active);
+        second.expect(RecoveredWorldFrame::encode(expected));
+        for(auto* peer:peers) peer->silent();
+        deliver(registry.set_fight_title(first.session->id(),first.session->account_id,
+            first.session->character_id,{2,15},active));
+        for(auto* peer:peers) peer->silent();
+    }
+    first.session->close();first.closed();
+    // The test invokes disconnect cleanup explicitly; Application wiring is separate.
+    deliver(registry.leave(first.session->id()));
+    second.expect(RecoveredWorldFrame::encode(RecoveredRemoteActorRemove::encode_logical(a.departure)));
+    deliver(registry.leave(first.session->id()));
+    second.silent();outside.silent();
+    require(!registry.contains(first.session->id()) && registry.size()==2,
+        "Disconnected visibility membership survived cleanup");
+}
+
+void recovered_runtime_without_scalar_replay() {
+    for(bool created:{false,true}) for(bool movement:{false,true}) {
+        RecoveredSessionPeer peer(movement);
+        peer.select(created);
+        const auto tail=RecoveredSessionPeer::tail();
+        const auto move=RecoveredMovement::encode({18,14,3,0});
+        if(created && movement) {
+            auto combined=tail;
+            combined.insert(combined.end(),move.begin(),move.end());
+            peer.send(combined);
+            peer.expect(RecoveredMovement::ack(3));
+        } else {
+            // No response for a partial checksum, nor for the completed tail.
+            peer.send(std::span(tail).first(tail.size()-1));
+            peer.silent();
+            require(peer.ready_calls==0,"Incomplete tail advanced state");
+            peer.send(std::span(tail).last(1));
+            peer.silent();
+            if(movement) { peer.send(move);peer.expect(RecoveredMovement::ack(3)); }
+        }
+        peer.silent();
+        require(peer.session->state()==SessionState::CharacterSelected,"Tail invented InWorld state");
+        require(peer.ready_calls==(movement?1u:0u) && peer.movement_calls==(movement?1u:0u),
+                "World-ready/movement continuation changed");
+        peer.send(tail);peer.closed();
+    }
+    for(bool bad_checksum:{false,true}) {
+        RecoveredSessionPeer peer(true);peer.select(false);
+        auto tail=RecoveredSessionPeer::tail();
+        if(bad_checksum) tail.back()^=1;
+        else tail=RecoveredWorldFrame::encode(std::array<std::uint8_t,9>{0x1f,0,0x23,0,0x1c,0x35,0x12,1,0});
+        peer.send(tail);peer.closed();
+        require(peer.ready_calls==0 && peer.movement_calls==0,"Invalid tail reached world handlers");
+    }
+}
+
+void recovered_world_service_transport() {
+    unsigned moves=0;
+    RecoveredWorldService service([&](Session& session, auto requests) {
+        require(session.state()==SessionState::CharacterSelected,
+                "Routing invented a world state transition");
+        require(requests.size()==1 && requests[0].x==18 && requests[0].y==14,
+                "Service lost decoded movement");
+        ++moves;
+        const auto ack=RecoveredMovement::ack(requests[0].sequence);
+        return std::vector<std::uint8_t>(ack.begin(),ack.end());
+    });
+    RecoveredSessionPeer peer(false,[&](Session& session,auto records) {
+        return service.handle(session,records);
+    });
+    peer.select(false);
+    auto joined=RecoveredSessionPeer::tail();
+    const auto move=RecoveredMovement::encode({18,14,3,0});
+    joined.insert(joined.end(),move.begin(),move.end());
+    peer.send(joined);peer.expect(RecoveredMovement::ack(3));peer.silent();
+    require(moves==1 && peer.ready_calls==1,"Tail/movement service bridge failed");
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0}));
+    peer.silent();
+    const std::array<std::uint8_t,12> invalid{
+        0x2e,18,0,14,0,3,0,0x86,0,0,0,0};
+    peer.send(RecoveredWorldFrame::encode(invalid));peer.closed();
+    require(moves==1,"Rejected service batch committed movement prefix");
+}
+
+void recovered_world_record_routing() {
+    using Records=RecoveredWorldRecords;
+    // A synthetic policy supplies responses solely to test the actual socket
+    // route. These responses establish no original item or quest operation.
+    const auto ack=RecoveredMovement::ack(3);
+    const std::vector<std::uint8_t> reply(ack.begin(),ack.end());
+    const std::array<std::uint8_t,26> logical{
+        0x85,0x34,0x12,2,0,0x9a,0xa5,
+        0x30,0,
+        0x25,0x78,0x56,0xff,0x81,
+        0x2e,18,0,14,0,3,0xfe,
+        0x86,0xef,0xbe,0,0x10};
+    const auto wire=RecoveredWorldFrame::encode(logical);
+    const auto check=[](std::span<const Records::Record> records) {
+        require(records.size()==5,"World record count changed");
+        require(std::holds_alternative<RecoveredQuestAction::Request>(records[0]) &&
+                std::holds_alternative<Records::Tick>(records[1]) &&
+                std::holds_alternative<RecoveredInventoryItemRequest::Request>(records[2]) &&
+                std::holds_alternative<RecoveredMovement::Request>(records[3]) &&
+                std::holds_alternative<RecoveredQuestClose::Request>(records[4]),
+                "World records reordered or reinterpreted");
+        const auto& item=std::get<RecoveredInventoryItemRequest::Request>(records[2]);
+        const auto& quest=std::get<RecoveredQuestAction::Request>(records[0]);
+        require(quest.request_word==0x1234 && quest.reply_word==2 &&
+                quest.context_byte==0x9a && quest.opaque_tail==0xa5,
+                "Quest action lost opaque fields");
+        require(item.client_item_id==0x5678 && item.raw_slot==0xff && item.raw_tail==0x81,
+                "Item request lost raw fields");
+        const auto& move=std::get<RecoveredMovement::Request>(records[3]);
+        require(move.x==18 && move.y==14 && move.sequence==3 && move.opaque_tail==0xfe,
+                "Movement request lost raw fields");
+        const auto& close=std::get<RecoveredQuestClose::Request>(records[4]);
+        require(close.source_low_word==0xbeef && close.this_high_word==0x1000,
+                "Close request lost source/pointer residue");
+    };
+    for(std::size_t split=1;split<wire.size();++split) {
+        RecoveredSessionPeer peer(false,[&](Session&,auto records) {
+            check(records);return std::optional(reply);
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.send(std::span(wire).first(split));peer.silent();
+        require(peer.world_calls==0,"Partial world envelope dispatched");
+        peer.send(std::span(wire).subspan(split));peer.expect(reply);
+        require(peer.world_calls==1 && peer.movement_calls==0,"Wrong world handler selected");
+        peer.silent();
+    }
+    {
+        RecoveredSessionPeer peer(false,[&](Session&,auto records) {
+            check(records);auto response=reply;
+            response.insert(response.end(),reply.begin(),reply.end());
+            return std::optional(response);
+        });
+        peer.select(true);
+        auto combined=RecoveredSessionPeer::tail();
+        combined.insert(combined.end(),wire.begin(),wire.end());
+        peer.send(combined);peer.expect(reply);peer.expect(reply);
+        require(peer.world_calls==1,"Coalesced tail consumed world records");
+        peer.silent();
+    }
+    {
+        std::size_t handled=0;
+        RecoveredSessionPeer peer(false,[&](Session&,auto records) {
+            require(records.size()%5==0,"Coalesced frame split a logical record");
+            std::vector<std::uint8_t> response;
+            for(std::size_t at=0;at<records.size();at+=5) {
+                check(records.subspan(at,5));++handled;
+                response.insert(response.end(),reply.begin(),reply.end());
+            }
+            return std::optional(response);
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        auto combined=wire;combined.insert(combined.end(),wire.begin(),wire.end());
+        peer.send(combined);peer.expect(reply);peer.expect(reply);peer.silent();
+        require(handled==2 && peer.world_calls==2,
+                "Independent coalesced world frames were merged into one policy transaction");
+    }
+    {
+        // TCP grouping must not turn two complete native frames into a mixed
+        // policy request. A single logical frame still retains its own batch.
+        RecoveredSessionPeer peer(false,[](Session&,auto records)
+                ->std::optional<std::vector<std::uint8_t>> {
+            if(records.size()!=1) return std::nullopt;
+            if(std::holds_alternative<RecoveredMovement::Request>(records[0])) {
+                const auto ack=RecoveredMovement::ack(3);
+                return std::vector<std::uint8_t>(ack.begin(),ack.end());
+            }
+            if(std::holds_alternative<RecoveredChat::Request>(records[0]))
+                return std::vector<std::uint8_t>{};
+            return std::nullopt;
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        const auto move=RecoveredMovement::encode({18,14,3,0});
+        const std::array<std::uint8_t,9> chat{0x2f,9,0,0,0,0,0,'A',0};
+        const auto message=RecoveredWorldFrame::encode(chat);
+        std::vector<std::uint8_t> combined(move.begin(),move.end());
+        combined.insert(combined.end(),message.begin(),message.end());
+        peer.send(combined);peer.expect(RecoveredMovement::ack(3));peer.silent();
+        require(peer.world_calls==2,"Independent movement/chat frames did not reach separate policies");
+    }
+    {
+        RecoveredSessionPeer peer(false,[](Session&,auto records) {
+            require(records.size()==1 && std::holds_alternative<Records::Tick>(records[0]),
+                    "Typed handler lost exact tick");
+            return std::optional(std::vector<std::uint8_t>{});
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
+        peer.send(tick);peer.silent();peer.send(tick);peer.silent();
+        require(peer.world_calls==2,"Empty accepted response stopped reads");
+    }
+    for(unsigned bad=0;bad<7;++bad) {
+        RecoveredSessionPeer peer(false,[&](Session& session,auto records)
+                ->std::optional<std::vector<std::uint8_t>> {
+            check(records);
+            if(bad==0) return std::nullopt;
+            if(bad==1) throw std::runtime_error("Synthetic policy rejection");
+            if(bad==2) return std::vector<std::uint8_t>{1};
+            if(bad==3) { auto corrupt=reply;corrupt.back()^=1;return corrupt; }
+            if(bad==4) { auto truncated=reply;truncated.push_back(5);return truncated; }
+            if(bad==5) return std::vector<std::uint8_t>(1024*1024+1);
+            session.close();return reply;
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.send(wire);peer.closed();
+        require(peer.world_calls==1,"Policy rejection did not reach exactly one handler");
+    }
+    for(unsigned bad=0;bad<4;++bad) {
+        RecoveredSessionPeer peer(false,[&](Session&,auto) { return std::optional(reply); });
+        peer.select(false);
+        if(bad!=0) { peer.send(RecoveredSessionPeer::tail());peer.silent(); }
+        auto invalid=wire;
+        if(bad==1) invalid.back()^=1;
+        if(bad==2) {
+            auto suffix=std::vector<std::uint8_t>(logical.begin(),logical.end());
+            suffix.push_back(0x85); // A valid prefix must not reach game code.
+            invalid=RecoveredWorldFrame::encode(suffix);
+        }
+        if(bad==3) invalid=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,1});
+        peer.send(invalid);peer.closed();
+        require(peer.world_calls==0,"Invalid or pre-tail record reached game code");
+    }
+    for(const auto opcode:std::array<std::uint8_t,3>{0x25,0x85,0x86}) {
+        RecoveredSessionPeer peer(true);peer.select(false);
+        peer.send(RecoveredSessionPeer::tail());peer.silent();
+        std::vector<std::uint8_t> mixed{0x2e,18,0,14,0,3,0};
+        mixed.push_back(opcode);mixed.resize(mixed.size()+(opcode==0x85?6:4),0);
+        peer.send(RecoveredWorldFrame::encode(mixed));peer.closed();
+        require(peer.movement_calls==0,"Unhandled suffix partially committed movement");
+    }
+    bool rejected=false;
+    try { RecoveredSessionPeer peer(true,[&](Session&,auto) { return std::optional(reply); }); }
+    catch(const std::invalid_argument&) { rejected=true; }
+    require(rejected,"Ambiguous world handler configuration accepted");
+}
+
+void diagnostic_scalar_codec_unchanged() {
+    // Pinned from the pre-retirement C++ encoder, not a source corpus read.
+    const std::string expected=
+        "900028f4c9fdfd191bfffd3333fdfdccccfdba03b3d61f2e519e1213d7a79f0f7264"
+        "bef9621d93f67639a5010db5e2e03294e356dde7729bc0ae490913591d18cb05db8c"
+        "dff232ed04ef5138bce5f2d4cbdf97c7c930df2ab4d883da0ce40d7172c77d75a2"
+        "02bde9323adb4d6f172fa69445ac10116b9eb85174a5e997bf390ec57a9f8ef9cbc"
+        "e46e47b630539fe9680";
+    const auto wire=RecoveredWorldStateCandidate::wire();
+    std::string hex;
+    constexpr char digits[]="0123456789abcdef";
+    for(auto byte:wire) { hex+=digits[byte>>4];hex+=digits[byte&15]; }
+    require(hex==expected,"Diagnostic scalar fixture bytes changed");
+    const auto logical=RecoveredWorldFrame::decode(wire);
+    require(logical && std::equal(logical->begin(),logical->end(),
+            RecoveredWorldStateCandidate::historical_logical.begin(),RecoveredWorldStateCandidate::historical_logical.end()),
+            "Diagnostic scalar fixture decode/checksum changed");
+}
+
+void recovered_battle_transport(std::uint8_t action) {
+    using Attack=RecoveredBattleCommand::BasicAttackRequest;
+    // Synthetic participant state and results test transport only. No formula,
+    // native encounter setup or automatic transition to InBattle is implied.
+    std::array<std::uint8_t,17> command{
+        0x35,13,action,1,0xa5,1,0,0,0x20,0x78,0x56,0x34,0x12,0xff,0x80,0x86,0x35};
+    const bool skill=action==3 || action==0x83;
+    if(skill) { command[8]=0;command[13]=7;command[14]=command[15]=command[16]=0; }
+    const auto wire=RecoveredWorldFrame::encode(command);
+    const auto reply=RecoveredWorldFrame::encode(std::array<std::uint8_t,17>{
+        0x86,3,13,0x34,0x12,2,0,0,0,0xa5,0x80,0,0xff,0x35,3,4,5});
+    const auto check=[action](std::span<const RecoveredWorldRecords::Record> records) {
+        require(records.size()==1,"Battle command count changed");
+        if(action==3 || action==0x83) {
+            const auto* request=std::get_if<RecoveredSkillCommand::Record>(&records[0]);
+            require(request && request->actor_position==13 && request->side_flag==1 &&
+                    request->unwritten_byte3==0xa5 && request->target_masks[0]==1 &&
+                    request->target_masks[1]==0 && request->context_storage==0x12345678 &&
+                    request->selection_id_byte==7 && request->continuation==(action==0x83),
+                    "Skill record changed or aliased in transport");
+            return;
+        }
+        require(action==1 ? std::holds_alternative<Attack>(records[0]) :
+                std::holds_alternative<RecoveredBattleCommand::ControlRequest>(records[0]),
+                "Battle command reached the wrong typed route");
+        const auto& request=action==1 ? std::get<Attack>(records[0]) :
+            std::get<RecoveredBattleCommand::ControlRequest>(records[0]).fields;
+        require(request.actor_position==13 && request.side_flag==1 &&
+                request.unwritten_byte3==0xa5 && request.target_masks[0]==1 &&
+                request.target_masks[1]==0x2000 && request.context_storage==0x12345678 &&
+                request.unwritten_parameter==0x358680ff,"Attack bytes changed in transport");
+    };
+    for(std::size_t split=1;split<wire.size();++split) {
+        RecoveredSessionPeer peer(false,[&](Session& session,auto records) {
+            require(session.state()==SessionState::InBattle,"Attack lost game-owned battle state");
+            check(records);return std::optional(reply);
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        peer.send(std::span(wire).first(split));peer.silent();
+        require(peer.world_calls==0,"Fragmented attack reached game policy");
+        peer.send(std::span(wire).subspan(split));peer.expect(reply);peer.silent();
+        require(peer.world_calls==1,"Attack callback count changed");
+    }
+    for(const auto state:{SessionState::Connected,SessionState::Handshaked,
+            SessionState::Authenticated,SessionState::CharacterSelected,SessionState::InWorld}) {
+        RecoveredSessionPeer peer(false,[&](Session&,auto) { return std::optional(reply); });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(state);
+        // A structurally valid movement prefix cannot commit before rejected combat.
+        std::vector<std::uint8_t> mixed{0x2e,18,0,14,0,3,0};
+        mixed.insert(mixed.end(),command.begin(),command.end());
+        peer.send(RecoveredWorldFrame::encode(mixed));peer.closed();
+        require(peer.world_calls==0,"Attack outside InBattle reached policy");
+    }
+    {
+        unsigned handled=0;
+        RecoveredSessionPeer peer(false,[&](Session&,auto records) {
+            std::vector<std::uint8_t> output;
+            for(std::size_t i=0;i<records.size();++i) {
+                check(records.subspan(i,1));++handled;
+                output.insert(output.end(),reply.begin(),reply.end());
+            }
+            return std::optional(output);
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        auto coalesced=wire;coalesced.insert(coalesced.end(),wire.begin(),wire.end());
+        peer.send(coalesced);peer.expect(reply);peer.expect(reply);peer.silent();
+        require(handled==2,"Coalesced attacks were lost");
+    }
+    for(unsigned bad=0;bad<4;++bad) {
+        RecoveredSessionPeer peer(false,[&](Session&,auto records)
+                ->std::optional<std::vector<std::uint8_t>> {
+            check(records);
+            if(bad==2) return std::nullopt;
+            if(bad==3) throw std::runtime_error("Unproven combat policy");
+            return reply;
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        auto input=wire;
+        if(bad==0) input.back()^=1;
+        if(bad==1) {
+            auto invalid=command;invalid[2]=0x7f; // Unsupported action is not a skill.
+            input=RecoveredWorldFrame::encode(invalid);
+        }
+        peer.send(input);peer.closed();
+        require(peer.world_calls==(bad<2?0u:1u),"Attack rejection order changed");
+    }
+    {
+        RecoveredSessionPeer peer(true);peer.select(false);
+        peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        peer.send(wire);peer.closed();
+        require(peer.movement_calls==0,"Movement-only Application consumed an attack");
+    }
+    {
+        RecoveredSessionPeer peer(false,[&](Session&,auto) { return std::optional(reply); });
+        peer.select(false);peer.session->set_state(SessionState::InBattle);
+        peer.send(wire);peer.closed();
+        require(peer.world_calls==0,"InBattle bypassed authenticated world-tail gate");
+    }
+}
+
+void recovered_skill_sequence_transport() {
+    const std::array<std::uint8_t,17> first{
+        0x35,13,0x83,1,0xa5,1,0,0,0,0x78,0x56,0x34,0x12,7,0,0,0};
+    auto last=first;last[2]=3;last[4]=0x5a;last[5]=2;
+    const auto prefix=RecoveredWorldFrame::encode(first);
+    const auto suffix=RecoveredWorldFrame::encode(last);
+    auto check=[](Session&,std::span<const RecoveredWorldRecords::Record> records) {
+        require(records.size()>=2 && records.size()<=14,"Incomplete skill escaped staging");
+        for(std::size_t i=0;i<records.size();++i) {
+            const auto* item=std::get_if<RecoveredSkillCommand::Record>(&records[i]);
+            require(item && item->continuation==(i+1<records.size()) &&
+                    item->actor_position==13 && item->selection_id_byte==7,
+                    "Assembled skill fields changed");
+        }
+        return std::optional(std::vector<std::uint8_t>{});
+    };
+    for(std::size_t split=1;split<prefix.size()+suffix.size();++split) {
+        RecoveredSessionPeer peer(false,check);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        auto joined=prefix;joined.insert(joined.end(),suffix.begin(),suffix.end());
+        peer.send(std::span(joined).first(split));peer.silent();
+        require(peer.world_calls==0,"Incomplete skill sequence reached policy");
+        peer.send(std::span(joined).subspan(split));peer.silent();
+        require(peer.world_calls==1,"Complete skill sequence was not delivered once");
+    }
+    for(unsigned malformed=0;malformed<3;++malformed) {
+        RecoveredSessionPeer peer(false,check);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        peer.send(prefix);peer.silent();
+        require(peer.world_calls==0,"Pending skill prefix reached policy");
+        auto invalid=suffix;
+        if(malformed==0) invalid.back()^=1;
+        else if(malformed==1) { invalid[0]=4;invalid[1]=0; }
+        else invalid=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0xff,0});
+        peer.send(invalid);peer.closed();
+        require(peer.world_calls==0,"Malformed suffix committed pending skill");
+    }
+    for(unsigned bad=0;bad<8;++bad) {
+        RecoveredSessionPeer peer(false,check);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        std::vector<std::uint8_t> staged{0x2e,18,0,14,0,3,0};
+        if(bad==7) staged.insert(staged.begin(),last.begin(),last.end());
+        staged.insert(staged.end(),first.begin(),first.end());
+        peer.send(RecoveredWorldFrame::encode(staged));peer.silent();
+        require(peer.world_calls==0,"Continuation reached policy");
+        auto changed=last;
+        if(bad<4) changed[std::array<unsigned,4>{1,3,9,13}[bad]]^=1;
+        if(bad==4) { peer.session->set_state(SessionState::InWorld); }
+        if(bad==5) { // Other commands cannot interrupt a pending cast.
+            peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0}));
+        } else if(bad==6) {
+            std::vector<std::uint8_t> overflow;
+            for(unsigned i=0;i<13;++i) overflow.insert(overflow.end(),first.begin(),first.end());
+            peer.send(RecoveredWorldFrame::encode(overflow));
+        } else if(bad==7) {
+            peer.io.restart();peer.io.run_for(std::chrono::milliseconds(3000));
+            peer.send(prefix);peer.silent();
+            peer.io.restart();peer.io.run_for(std::chrono::milliseconds(2100));
+        } else peer.send(RecoveredWorldFrame::encode(changed));
+        peer.closed();require(peer.world_calls==0,"Invalid pending sequence committed");
+    }
+    {
+        RecoveredSessionPeer peer(false,check);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.session->set_state(SessionState::InBattle);
+        std::vector<std::uint8_t> maximum;
+        for(unsigned i=0;i<13;++i) maximum.insert(maximum.end(),first.begin(),first.end());
+        maximum.insert(maximum.end(),last.begin(),last.end());
+        peer.send(RecoveredWorldFrame::encode(maximum));peer.silent();
+        require(peer.world_calls==1,"Native maximum sequence rejected");
+        peer.send(prefix);peer.silent();
+        require(peer.world_calls==1,"Previous sequence contaminated next staging");
+        peer.send(suffix);peer.silent();
+        require(peer.world_calls==2,"Second sequence lost");
+    }
+}
+}
+
+void test_session_state() {
+    using namespace god2;
+    if(!state_allows(Opcode::C2S_LoginRequest,SessionState::Connected) || !state_allows(Opcode::C2S_LoginRequest,SessionState::Handshaked)) throw std::runtime_error("Login state");
+    if(state_allows(Opcode::C2S_PlayerMove,SessionState::Connected) || state_allows(Opcode::C2S_EnterWorld,SessionState::Authenticated)) throw std::runtime_error("Invalid state accepted");
+    if(!state_allows(Opcode::C2S_PlayerMove,SessionState::InWorld) || !state_allows(Opcode::C2S_BattleAction,SessionState::InBattle)) throw std::runtime_error("World state");
+    for(auto s:{SessionState::Connected,SessionState::Handshaked,SessionState::Authenticated,SessionState::CharacterSelected,SessionState::InWorld,SessionState::InBattle})
+        if(!state_allows(Opcode::C2S_Heartbeat,s)) throw std::runtime_error("Heartbeat state");
+    if(state_allows(Opcode::C2S_Heartbeat,SessionState::Disconnected)) throw std::runtime_error("Disconnected heartbeat");
+    diagnostic_scalar_codec_unchanged();
+    for(std::uint8_t reason:{0,1,2}) {
+        RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {
+            return std::vector<std::uint8_t>{};
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{2,reason}));
+        peer.expect(RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
+        peer.closed();
+        require(peer.world_calls==0,"Native logout invoked gameplay callback");
+    }
+    {
+        RecoveredSessionPeer peer(false);
+        peer.expect(RecoveredSeedExchange::hello());
+        peer.send(RecoveredSeedExchange::response);
+        peer.expect(RecoveredPostSeed::frame(0xf6));
+        RecoveredC2S0002::Payload credentials{};credentials[167]=0xc8;
+        peer.send(RecoveredC2S0002::encode(credentials));
+        peer.expect(RecoveredCharacterBootstrap::candidate());
+        std::array<std::uint8_t,45> create{};create[0]=0x17;create[1]='T';create[41]=4;
+        peer.send(RecoveredWorldFrame::encode(create));
+        peer.expect(RecoveredCharacterCreateResult::committed_success());
+        auto request=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x18,1});
+        peer.send(std::span(request).first(4));peer.silent();
+        peer.send(std::span(request).subspan(4));
+        peer.expect(RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{0x18,0,0}));
+        require(peer.selection_calls==0 && peer.session->character_id==0 &&
+                peer.session->state()==SessionState::Authenticated,"Slot ack prematurely selected character");
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{2,0}));
+        peer.expect(RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
+        peer.closed();
+    }
+    recovered_runtime_without_scalar_replay();
+    recovered_character_idle_tick_transport();
+    recovered_world_push_transport();
+    recovered_visibility_transport();
+    recovered_world_service_transport();
+    recovered_world_record_routing();
+    recovered_battle_transport(1);
+    recovered_battle_transport(0x0b);
+    recovered_battle_transport(3);
+}
+
+void test_session_skill_sequence() { recovered_skill_sequence_transport(); }
+
+void test_session_battle_service() {
+    using namespace god2;
+    LuaEngine lua(std::filesystem::path(GOD2_SOURCE_DIR)/"scripts",false);
+    require(lua.initialize(),"Battle TCP Lua initialization failed");
+    RecoveredBattleService battles([&](const CombatRuleInput& input){return lua.combat_damage(input);});
+    RecoveredWorldService world({},[&](Session& session,auto records){return battles.handle(session,records);});
+    RecoveredSessionPeer peer(false,[&](Session& session,auto records){return world.handle(session,records);});
+    peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+    // Explicit test-only admission: does not claim the original client's battle
+    // bootstrap or native turn handshake is implemented by Application.
+    peer.session->set_state(SessionState::InBattle);
+    const std::array<BattleActor,3> actors{{
+        {0,RecoveredSessionPeer::character,100,100,20,20,31,40,8,10},
+        {14,0,100,100,0,0,20,25,13,6},
+        {15,0,100,100,0,0,20,25,13,6}}};
+    const BattleAction basic{0,{},false,100,100,0,0,150};
+    auto skill=basic;skill.magical=true;skill.mp_cost=8;
+    RecoveredBattleService::Policy policy{2,1,0,0x1234,basic,{{5,skill}}};
+    const auto vital=[](unsigned kind,unsigned position,unsigned maximum,unsigned current) {
+        std::array<std::uint8_t,17> bytes{0x86,static_cast<std::uint8_t>(kind),
+            static_cast<std::uint8_t>(position)};
+        for(unsigned i=0;i<4;++i) {
+            bytes[5+i]=static_cast<std::uint8_t>(maximum>>(8*i));
+            bytes[9+i]=static_cast<std::uint8_t>(current>>(8*i));
+        }
+        return bytes;
+    };
+    unsigned encoded=0;
+    battles.bind(*peer.session,Battle(17,actors,123),policy,
+        [&](const BattleSnapshot& state,const BattleActionResult& result) {
+            ++encoded;
+            std::vector<std::uint8_t> logical;
+            for(const auto& hit:result.hits) {
+                const auto& actor=*state.actors[hit.target];
+                const auto bytes=vital(0,hit.target,actor.max_hp,actor.hp);
+                logical.insert(logical.end(),bytes.begin(),bytes.end());
+            }
+            const auto& source=*state.actors[result.source];
+            const auto mp=vital(1,result.source,source.max_mp,source.mp);
+            logical.insert(logical.end(),mp.begin(),mp.end());
+            return RecoveredWorldFrame::encode(logical);
+        });
+    const std::array<std::uint8_t,17> first{
+        0x35,2,0x83,1,0,0,0,1,0,0x34,0x12,0,0,5,0,0,0};
+    auto last=first;last[2]=3;last[7]=2;
+    const auto prefix=RecoveredWorldFrame::encode(first);
+    peer.send(std::span(prefix).first(prefix.size()-1));peer.silent();
+    require(battles.inspect(peer.session->id()).revision==1 && encoded==0,"Partial wire committed");
+    peer.send(std::span(prefix).last(1));peer.silent();
+    require(battles.inspect(peer.session->id()).revision==1 && encoded==0,"Partial skill committed");
+    peer.send(RecoveredWorldFrame::encode(last));
+    std::vector<std::uint8_t> expected;
+    for(const auto& bytes:{vital(0,14,100,66),vital(0,15,100,66),vital(1,0,20,12)})
+        expected.insert(expected.end(),bytes.begin(),bytes.end());
+    peer.expect(RecoveredWorldFrame::encode(expected));peer.silent();
+    const auto& state=battles.inspect(peer.session->id());
+    require(encoded==1 && state.revision==2 && state.actors[0]->mp==12 &&
+        state.actors[14]->hp==66 && state.actors[15]->hp==66,"TCP skill transaction changed");
+    auto corrupted=RecoveredWorldFrame::encode(last);corrupted.back()^=1;
+    peer.send(corrupted);peer.closed();
+    require(encoded==1 && battles.inspect(peer.session->id()).revision==2,
+            "Corrupt incoming frame changed battle");
+    battles.remove(peer.session->id());
+
+    // Captured native stack body, replayed by a synthetic TCP peer. The opcode
+    // was inferred at the disconnected native callsite, not captured on wire.
+    std::ifstream capture(std::filesystem::path(GOD2_SOURCE_DIR)/
+        "artifacts/runs/offline-battle-action-20260920-02/offline-result.json");
+    require(capture.good(),"Missing native action evidence");
+    const auto evidence=nlohmann::json::parse(capture);
+    require(evidence.at("result")=="NATIVE_DISCONNECTED_ACTION_RETURNED",
+            "Native action evidence did not complete");
+    const auto hex=evidence.at("action_probe").at("logical_hex").get<std::string>();
+    require(hex.size()==34,"Native action evidence length changed");
+    std::vector<std::uint8_t> captured;
+    for(std::size_t i=0;i<hex.size();i+=2) {
+        unsigned value=0;
+        const auto parsed=std::from_chars(hex.data()+i,hex.data()+i+2,value,16);
+        require(parsed.ec==std::errc{} && parsed.ptr==hex.data()+i+2,"Invalid capture hex");
+        captured.push_back(static_cast<std::uint8_t>(value));
+    }
+    RecoveredSessionPeer native_peer(false,[&](Session& session,auto records){return world.handle(session,records);});
+    native_peer.select(false);native_peer.send(RecoveredSessionPeer::tail());native_peer.silent();
+    native_peer.session->set_state(SessionState::InBattle); // Explicit test-only admission.
+    auto native_policy=policy;
+    native_policy.client_actor=0;native_policy.client_side=0;native_policy.context=0;
+    unsigned native_encoded=0;
+    battles.bind(*native_peer.session,Battle(18,actors,123),native_policy,
+        [&](const BattleSnapshot& state,const BattleActionResult& result) {
+            ++native_encoded;
+            require(result.hits.size()==1 && result.hits[0].target==14,"Native replay targets changed");
+            const auto& target=*state.actors[14];
+            return RecoveredWorldFrame::encode(vital(0,14,target.max_hp,target.hp));
+        });
+    const auto native_wire=RecoveredWorldFrame::encode(captured);
+    native_peer.send(std::span(native_wire).first(native_wire.size()-1));native_peer.silent();
+    require(native_encoded==0 && battles.inspect(native_peer.session->id()).actors[14]->hp==100,
+            "Fragmented native replay committed early");
+    native_peer.send(std::span(native_wire).last(1));
+    native_peer.expect(RecoveredWorldFrame::encode(vital(0,14,100,82)));native_peer.silent();
+    const auto& native_state=battles.inspect(native_peer.session->id());
+    require(native_encoded==1 && native_state.revision==2 && native_state.actors[14]->hp==82 &&
+            native_state.actors[0]->mp==20,"Native replay transaction changed");
+    battles.remove(native_peer.session->id());
+    // Current limitation: resource rejection is still fatal at the Session boundary.
+    // Keep real TCP evidence distinct from the in-process admission recovery test.
+    for(const auto available:{0u,5u,7u}) {
+        RecoveredSessionPeer low_peer(false,[&](Session& session,auto records){return world.handle(session,records);});
+        low_peer.select(false);low_peer.send(RecoveredSessionPeer::tail());low_peer.silent();
+        low_peer.session->set_state(SessionState::InBattle);
+        auto low_actors=actors;low_actors[0].mp=available;
+        unsigned rejected_encoded=0;
+        battles.bind(*low_peer.session,Battle(30+available,low_actors,123),policy,
+            [&](const BattleSnapshot&,const BattleActionResult&) {
+                ++rejected_encoded;
+                return RecoveredWorldFrame::encode(vital(1,0,20,0));
+            });
+        auto cast=first;cast[2]=3;
+        const auto low_wire=RecoveredWorldFrame::encode(cast);
+        low_peer.send(std::span(low_wire).first(low_wire.size()-1));low_peer.silent();
+        require(low_peer.world_calls==0,"Incomplete low-MP frame reached game policy");
+        low_peer.send(std::span(low_wire).last(1));low_peer.closed();
+        const auto& unchanged=battles.inspect(low_peer.session->id());
+        require(low_peer.world_calls==1 && rejected_encoded==0 && unchanged.revision==1 &&
+                unchanged.actors[0]->mp==available && unchanged.actors[0]->hp==100 &&
+                unchanged.actors[14]->hp==100 && unchanged.actors[15]->hp==100,
+                "TCP resource rejection mutated battle or emitted a fabricated reply");
+        battles.remove(low_peer.session->id());
+    }
+    // Explicit response candidate: TCP liveness is not native-client regrant proof.
+    for(const auto available:{0u,5u,7u}) {
+        RecoveredSessionPeer retry_peer(false,[&](Session& session,auto records){return world.handle(session,records);});
+        retry_peer.select(false);retry_peer.send(RecoveredSessionPeer::tail());retry_peer.silent();
+        retry_peer.session->set_state(SessionState::InBattle);
+        auto low_actors=actors;low_actors[0].mp=available;
+        auto recover=policy;recover.diagnostic_single_action=true;
+        unsigned refusals=0,successes=0;
+        const auto mp=vital(1,0,20,available);
+        std::vector<std::uint8_t> refusal_logical(mp.begin(),mp.end());
+        std::array<std::uint8_t,17> grant{0x86,5,0,1,2};
+        refusal_logical.insert(refusal_logical.end(),grant.begin(),grant.end());
+        const auto refused_wire=RecoveredWorldFrame::encode(refusal_logical);
+        recover.diagnostic_mp_refusal=[&](const BattleSnapshot& snapshot,const BattleAction& action,
+                                         const InsufficientBattleMp& refusal) {
+            ++refusals;
+            require(snapshot.revision==1 && snapshot.actors[0]->mp==available && action.source==0 &&
+                    action.targets==std::vector<std::uint8_t>{14} && refusal.required==8 &&
+                    refusal.available==available,"Resource reply received mutated or foreign state");
+            return refused_wire;
+        };
+        battles.bind(*retry_peer.session,Battle(50+available,low_actors,123),recover,
+            [&](const BattleSnapshot& snapshot,const BattleActionResult&) {
+                ++successes;
+                return RecoveredWorldFrame::encode(vital(0,14,100,snapshot.actors[14]->hp));
+            });
+        auto cast=first;cast[2]=3;
+        retry_peer.send(RecoveredWorldFrame::encode(cast));retry_peer.expect(refused_wire);retry_peer.silent();
+        require(refusals==1 && successes==0 && battles.inspect(retry_peer.session->id()).revision==1 &&
+                !battles.diagnostic_round_ready(*retry_peer.session),"Resource reply consumed a turn");
+        auto fallback=cast;fallback[2]=1;
+        retry_peer.send(RecoveredWorldFrame::encode(fallback));
+        retry_peer.expect(RecoveredWorldFrame::encode(vital(0,14,100,82)));retry_peer.silent();
+        const auto& after=battles.inspect(retry_peer.session->id());
+        require(retry_peer.world_calls==2 && successes==1 && refusals==1 && after.revision==2 &&
+                after.actors[0]->mp==available && after.actors[14]->hp==82,
+                "Same-connection fallback after resource refusal failed");
+        battles.remove(retry_peer.session->id());
+    }
+}

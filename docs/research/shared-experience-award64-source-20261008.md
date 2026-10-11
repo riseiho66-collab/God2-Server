@@ -1,0 +1,13 @@
+# 共用戰鬥經驗值獎勵入口64位元
+
+第156輪，PHASE1原始碼接線；未建置、測試、執行遊戲或SQL／DB、部署。
+
+累計CharacterExperience.total／BattleSettlement.total_experience及SQLite欄位原本已有64位元，但共用settle_battle、settle_checkpoint與實際settle_battle_impl的獎勵參數仍是uint32。本輪把這些實際入口、virtual契約、config資料欄位及原生diagnostic呈現邊界的輸入同步改為uint64。保留CUSTOM-0012診斷獎勵／存檔來源，不把它升格成CN原生怪物EXP或生產獎勵規則。
+
+新ExtendedExperienceAmount只定義SQLite／既有Lua integer path可表示的非負signed64值，INT64_MAX是表示範圍，不是使用者已選定的EXP玩法上限；不得套用仙幣99999999999。Factory先確認saved／earned各自可表示，再使用max-saved比較，最後加法；不會因wide award>INT64_MAX使unsigned減法underflow或total wrap。沒有implicit narrowing。
+
+Actual settlement在canonical JSON／replay之前拒絕不可表示的獎勵，累計使用同一checked helper，明確signed64綁定既有integer欄位。保留完整原outcome／progression／checkpoint request及versions1／2／3、numeric JSON與exact request comparison；舊uint32值仍寫相同十進位數字是來源推論，未執行JSON或重播測試。CAS、reservation、owner、loss不給award、角色／資源／checkpoint原子交易與COMMIT前讀回來源保留。沒有改schema、匯入資料或刷新歷史receipt。
+
+Application的實際progression callback也改用同一checked accumulation，既有Lua signed64輸入與CUSTOM曲線保留，native等級及門檻未改。Development config仍保留原0預設、persisted terminal permit與signed32 display界限，沒有開啟診斷功能或放寬資格。原TW diagnostic opcode89／logical57 producer接收uint64，先reject高於原signed32呈現界限，通過後才explicitcast寫offset5的四bytes；opaque zeros／CUSTOM標籤、長度、opcode及其餘bytes未改。這不是extended native wire；TW／CN／web的擴充協定、客戶端欄位與顯示仍待完整接線，不能以拒絕wide值冒稱數值擴充完成。
+
+既有test fake只機械調整override參數以符合新的virtual interface，沒有增加或執行測試。原生客戶端EXE、帳號／存檔、聊天／IME／認證／頭像／字體及文字轉換保留。本輪是實際共用award／transaction／canonical replay的來源增量，packet／phase／完整雙向route增量0，全遊戲分母／完成數／百分比仍未知。

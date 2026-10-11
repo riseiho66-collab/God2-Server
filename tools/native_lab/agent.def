@@ -1,0 +1,5 @@
+LIBRARY God2LabAgent
+EXPORTS
+    God2LabInitialize
+    God2LabStatus
+    God2LabGetState

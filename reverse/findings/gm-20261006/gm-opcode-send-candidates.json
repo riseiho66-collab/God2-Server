@@ -1,0 +1,193 @@
+{
+  "method": "Candidates only: direct E8 -> queue append 4132E0 and nearby push immediates; argument role and control flow require manual tracing.",
+  "candidates": [
+    {
+      "call_va": "0x472865",
+      "instructions": [
+        "00472849 or al, 0x3c",
+        "0047284b add dh, byte ptr [ebp + 0x1c]",
+        "0047284e mov al, byte ptr [esp + 0xc]",
+        "00472852 lea ecx, [esp + 7]",
+        "00472856 push 1",
+        "00472858 push ecx",
+        "00472859 mov ecx, dword ptr [esi + 0x86874]",
+        "0047285f push 0x7d",
+        "00472861 mov byte ptr [esp + 0x13], al",
+        "00472865 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x4973d9",
+      "instructions": [
+        "004973bd mov dword ptr [eax + ebp*2 + 8], esi",
+        "004973c1 add byte ptr [esi - 0x77], ah",
+        "004973c4 inc esp",
+        "004973c5 and al, 0",
+        "004973c7 lea eax, [esp]",
+        "004973cb push 8",
+        "004973cd push eax",
+        "004973ce push 0x7e",
+        "004973d0 mov dword ptr [esp + 0x10], edx",
+        "004973d4 mov byte ptr [esp + 0xe], 0",
+        "004973d9 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x497499",
+      "instructions": [
+        "0049747d mov dword ptr [eax + ebp*2 + 8], esi",
+        "00497481 add byte ptr [esi - 0x77], ah",
+        "00497484 inc esp",
+        "00497485 and al, 0",
+        "00497487 lea eax, [esp]",
+        "0049748b push 8",
+        "0049748d push eax",
+        "0049748e push 0x7e",
+        "00497490 mov dword ptr [esp + 0x10], edx",
+        "00497494 mov byte ptr [esp + 0xe], 1",
+        "00497499 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x497592",
+      "instructions": [
+        "00497576 and al, 0",
+        "00497578 lea eax, [esp]",
+        "0049757c mov byte ptr [esp + 4], dl",
+        "00497580 mov dl, byte ptr [esp + 0x10]",
+        "00497584 push 8",
+        "00497586 push eax",
+        "00497587 push 0x7f",
+        "00497589 mov byte ptr [esp + 0x12], 1",
+        "0049758e mov byte ptr [esp + 0x11], dl",
+        "00497592 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x497677",
+      "instructions": [
+        "0049765b and al, 5",
+        "0049765d lea edx, [esp]",
+        "00497661 mov byte ptr [esp + 4], al",
+        "00497665 mov al, byte ptr [esp + 0x14]",
+        "00497669 push 8",
+        "0049766b push edx",
+        "0049766c push 0x7f",
+        "0049766e mov byte ptr [esp + 0xe], 0",
+        "00497673 mov byte ptr [esp + 0x12], al",
+        "00497677 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x497771",
+      "instructions": [
+        "00497755 mov dl, byte ptr [eax + 3]",
+        "00497758 mov byte ptr [esp + 8], dl",
+        "0049775c mov dl, byte ptr [eax + 4]",
+        "0049775f mov al, byte ptr [eax + 5]",
+        "00497762 mov byte ptr [esp + 9], dl",
+        "00497766 lea edx, [esp + 4]",
+        "0049776a mov byte ptr [esp + 0xa], al",
+        "0049776e push edx",
+        "0049776f push 0x7f",
+        "00497771 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x497826",
+      "instructions": [
+        "0049780a and al, 5",
+        "0049780c lea edx, [esp]",
+        "00497810 mov byte ptr [esp + 4], al",
+        "00497814 mov al, byte ptr [esp + 0x14]",
+        "00497818 push 8",
+        "0049781a push edx",
+        "0049781b push 0x7f",
+        "0049781d mov byte ptr [esp + 0xe], 1",
+        "00497822 mov byte ptr [esp + 0x12], al",
+        "00497826 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x4978f0",
+      "instructions": [
+        "004978d4 mov dl, byte ptr [eax + 3]",
+        "004978d7 mov byte ptr [esp + 8], dl",
+        "004978db mov dl, byte ptr [eax + 4]",
+        "004978de mov al, byte ptr [eax + 5]",
+        "004978e1 mov byte ptr [esp + 9], dl",
+        "004978e5 lea edx, [esp + 4]",
+        "004978e9 mov byte ptr [esp + 0xa], al",
+        "004978ed push edx",
+        "004978ee push 0x7f",
+        "004978f0 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x49790a",
+      "instructions": [
+        "004978ee push 0x7f",
+        "004978f0 call 0x4132e0",
+        "004978f5 add esp, 8",
+        "004978f8 ret 4",
+        "004978fb mov eax, dword ptr [esp + 0xc]",
+        "004978ff mov ecx, dword ptr [ecx + 0x86874]",
+        "00497905 push 6",
+        "00497907 push eax",
+        "00497908 push 0x64",
+        "0049790a call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x4ec4b5",
+      "instructions": [
+        "004ec499 nop ",
+        "004ec49a nop ",
+        "004ec49b nop ",
+        "004ec49c nop ",
+        "004ec49d nop ",
+        "004ec49e nop ",
+        "004ec49f nop ",
+        "004ec4a0 push ecx",
+        "004ec4a1 mov ecx, dword ptr [ecx + 0x86874]",
+        "004ec4a7 lea eax, [esp + 3]",
+        "004ec4ab push 1",
+        "004ec4ad push eax",
+        "004ec4ae push 0x7c",
+        "004ec4b0 mov byte ptr [esp + 0xf], 0",
+        "004ec4b5 call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x4f316d",
+      "instructions": [
+        "004f3151 push esi",
+        "004f3152 mov esi, ecx",
+        "004f3154 lea ecx, [esp + 7]",
+        "004f3158 push 1",
+        "004f315a mov al, byte ptr [esi + 0xb6b4]",
+        "004f3160 push ecx",
+        "004f3161 mov ecx, dword ptr [esi + 0x86874]",
+        "004f3167 push 0x7c",
+        "004f3169 mov byte ptr [esp + 0x13], al",
+        "004f316d call 0x4132e0"
+      ]
+    },
+    {
+      "call_va": "0x4ff273",
+      "instructions": [
+        "004ff257 inc eax",
+        "004ff258 cmp eax, edi",
+        "004ff25a jl 0x4ff248",
+        "004ff25c mov byte ptr [esp + 0xf], dl",
+        "004ff260 pop ebx",
+        "004ff261 mov ecx, dword ptr [esi + 0x86874]",
+        "004ff267 lea eax, [esp + 0xb]",
+        "004ff26b push 1",
+        "004ff26d push eax",
+        "004ff26e push 0x81",
+        "004ff273 call 0x4132e0"
+      ]
+    }
+  ]
+}

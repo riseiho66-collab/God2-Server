@@ -1,0 +1,11 @@
+# Concurrent Traditional and Simplified clients, 2026-09-24
+
+The native C++ player helper previously rebuilt the single unpacked-client-derived `God2.exe` in place. A running copy in the other language prevented the write and produced a language-switch error. The helper now leaves an active primary image untouched and builds a second image from the verified `God2.unpacked.exe` beside it: `God2.zh-CN.exe` or `God2.zh-TW.exe`. Each image has its own Locale Emulator profile. The ordinary solo path remains `God2.exe`; no packed executable is used. If a running image itself needs an incompatible update, the helper still refuses to overwrite that active file.
+
+The native player's update guard now checks both language images as well as `God2.exe`. The helper and player were rebuilt and installed with their embedded player resources 902 and 901 preserved. Both file versions remain 1.0.0.0.
+
+`artifacts/runs/launcher-local-check-20260924/dual-language-result.json` verifies zh-TW primary plus zh-CN alternate. `dual-language-reverse-result.json` verifies zh-CN primary plus zh-TW alternate. Both runs used the current client through the native helper on a private Windows desktop; neither switched the owner's input desktop or used screenshots. In each order, two separate game windows and processes existed simultaneously. The two owner-confirmed test accounts each connected to local login port 2592, selected a character, then each held a TCP connection to character port 62616 concurrently. The sidecar closed only its own two game processes after each run.
+
+The private UI probe caused four unintended town steps for account 2 in the persistent test save. After confirming no game sessions were connected, only that character's position row was restored from the SQLite online backup taken before the probe: area 2, scene 4, (79,80), revision 56. A second online backup preserves the pre-restore state. All accounts and characters remained present and SQLite `quick_check` returned `ok`.
+
+The owner's selected zh-TW language and primary `God2.exe` were restored after the reverse-order run. This verifies concurrent startup, login and character connections. It does not certify every later gameplay system or independent display settings while both clients run; those remain separate packet/playability work.

@@ -1,0 +1,24 @@
+0046925C  33d2                     xor edx, edx
+0046925E  8d8424000b0000           lea eax, [esp + 0xb00]
+00469265  8a5309                   mov dl, byte ptr [ebx + 9]
+00469268  8d4b0d                   lea ecx, [ebx + 0xd]
+0046926B  50                       push eax
+0046926C  51                       push ecx
+0046926D  c1ea07                   shr edx, 7
+00469270  52                       push edx
+00469271  e88a620c00               call 0x52f500
+00469276  83c40c                   add esp, 0xc
+00469279  8d8d6c2f7f0a             lea ecx, [ebp + 0xa7f2f6c]
+0046927F  50                       push eax
+00469280  e8bba80100               call 0x483b40
+00469285  e98d220000               jmp 0x46b517
+0046928A  83c30d                   add ebx, 0xd
+0046928D  8d8d6c2f7f0a             lea ecx, [ebp + 0xa7f2f6c]
+00469293  53                       push ebx
+00469294  e8e7a70100               call 0x483a80
+00469299  e979220000               jmp 0x46b517
+0046929E  43                       inc ebx
+0046929F  8d8d6c2f7f0a             lea ecx, [ebp + 0xa7f2f6c]
+004692A5  53                       push ebx
+004692A6  e855bb0100               call 0x484e00
+004692AB  e967220000               jmp 0x46b517

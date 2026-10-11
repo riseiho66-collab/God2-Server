@@ -1,0 +1,71 @@
+{
+  "direction": "S2C -> local external Windows GM Tools FS2 window",
+  "world_table_va": "0x46b5d4",
+  "dispatch_va": "0x46ad6d",
+  "helper_va": "0x46b9d0",
+  "message": "WM_COPYDATA (0x4a)",
+  "find_window_name": "GM Tools FS2",
+  "copydata_layout": "DWORD dwData=opcode; DWORD cbData=payload bytes; DWORD lpData=logical+1",
+  "records": [
+    {
+      "opcode": "0x7b",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 41,
+      "ipc_case_va": "0x46ba00",
+      "ipc_case_bytes_hex": "c74424007b000000c744240428000000eb74"
+    },
+    {
+      "opcode": "0x7c",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 29,
+      "ipc_case_va": "0x46ba12",
+      "ipc_case_bytes_hex": "c74424007c000000eb62c74424007d000000"
+    },
+    {
+      "opcode": "0x7d",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 25,
+      "ipc_case_va": "0x46ba1c",
+      "ipc_case_bytes_hex": "c74424007d000000c744240418000000eb58"
+    },
+    {
+      "opcode": "0x7e",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 25,
+      "ipc_case_va": "0x46ba2e",
+      "ipc_case_bytes_hex": "c74424007e000000c744240418000000eb46"
+    },
+    {
+      "opcode": "0x7f",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 17,
+      "ipc_case_va": "0x46ba40",
+      "ipc_case_bytes_hex": "c74424007f000000c744240410000000eb34"
+    },
+    {
+      "opcode": "0x80",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 25,
+      "ipc_case_va": "0x46ba52",
+      "ipc_case_bytes_hex": "c744240080000000c744240418000000eb22"
+    },
+    {
+      "opcode": "0x81",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 261,
+      "ipc_case_va": "0x46ba64",
+      "ipc_case_bytes_hex": "c744240081000000c744240404010000eb10"
+    },
+    {
+      "opcode": "0xf6",
+      "world_case_va": "0x46ad6d",
+      "total_logical_bytes": 29,
+      "ipc_case_va": "0x46ba76",
+      "ipc_case_bytes_hex": "c7442400f6000000c74424041c0000008b44"
+    }
+  ],
+  "limits": [
+    "Payload meanings not recovered from external GM Tools binary.",
+    "Finding forwarder does not prove GM authorization or external utility availability."
+  ]
+}

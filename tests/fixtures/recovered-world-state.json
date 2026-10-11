@@ -1,0 +1,17 @@
+{
+  "status": "HISTORICAL_CANDIDATE_NOT_CHARACTER_TRUTH",
+  "provenance_fixture": "recovered-world-entry.json",
+  "source_frame_offset": 473,
+  "source_frame_size": 752,
+  "source_frame_sha256": "32cea8e0a2765036c4dd495179abfd045baaa51a2dfefbb0fe8f33d00ff171ef",
+  "decoded_record_offset": 2,
+  "logical_hex": "2bcc0000001c02000036000000cf0000008c1f83092c0500000008000000020000000100000000000000040000000000000000000000000000000f000000000000000600000012000000050000002500000024cc00000036000000cc00000036000000391c020000cf0000001c020000cf00000022020000001e002700140015008c1f0000cc00000036000000",
+  "logical_sha256": "e1a39822563136271f9e36d82edcc24e112586784db736dc6221f74763cd9cc0",
+  "records": [
+    {"opcode": 43, "length": 21, "dispatch_rva": "0x69eb0"},
+    {"opcode": 44, "length": 61, "dispatch_rva": "0x69ede"},
+    {"opcode": 36, "length": 17, "dispatch_rva": "0x69f4d"},
+    {"opcode": 57, "length": 17, "dispatch_rva": "0x6a003"},
+    {"opcode": 34, "length": 25, "dispatch_rva": "0x69ef0"}
+  ]
+}

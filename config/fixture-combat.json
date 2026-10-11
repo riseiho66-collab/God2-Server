@@ -1,0 +1,8 @@
+{
+  "server": {"name": "GOD2 CUSTOM TEST COMBAT - NOT NATIVE", "host": "127.0.0.1", "port": 17070, "max_sessions": 16, "worker_threads": 2},
+  "protocol": {"name": "CUSTOM_TEST_NOT_NATIVE", "mode": "placeholder", "packet_header": "uint16_length_uint16_opcode", "encryption": "none", "compression": "none", "packet_dump": false},
+  "database": {"type": "sqlite", "path": "artifacts/fixture-combat/fixture-combat.sqlite"},
+  "lua": {"bootstrap": "scripts/bootstrap.lua", "script_root": "scripts", "hot_reload": false},
+  "logging": {"level": "info", "file": "artifacts/fixture-combat/server.log"},
+  "development": {"mock_login": true, "fixture_battle": true}
+}

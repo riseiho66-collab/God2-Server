@@ -1,0 +1,15 @@
+# 第235輪：台服選中物品接入完整原生定義觀察
+
+本輪新增1個C++來源檔、修改9個C++來源檔，將實際owned物品的原生別名鍵，接到同一共用SQLite連線的完整武器／防具定義，再交給既有必要Action。新增1段局部資料串接，完整雙向玩法路線新增0；完整台服分母與完成百分比仍未知。沒有建置、測試、native／codec／遊戲／DB／SQL執行、遷移或部署。
+
+同149c parser已證：source14..21的最低bit分別生成metadata11A各bit，source22..25生成11B低四bit，高四bit保留原值。2不是true，3最低bit才是1；不能用「非0」代替。11A bit04是本地C28發送條件，11B bit01是3B數量相加條件，均不是服務端裝備權利或共用99堆疊規則。實際鍵由token0建立lookup，metadataDWORD0取自token5，不是物品ID；重複鍵的原生後寫覆蓋與family第一匹配分開記錄。本輪5個有界切片383 bytes／126處指令，另保留parser1344 bytes／393處指令；不宣稱全歷史新增覆蓋。
+
+`NativeItemDefinitionObservation` 保存完整396 bytes、原CP950定義行、family、獨立native key、來源位置與完整catalog指紋。其資格明確是mapped149c parser對歷史70a4 encoded／75c3 decoded來源的定義觀察，外層6bf／c5d8客戶端驗收保持歷史。當前encoded素材ef297不同，這輪保存原件但未解碼，也未冒稱重新取得當前decoded75c3或遺失的兩份records cache。preROM group/action不能當最後外觀、戰鬥屬性或裝卸權限。
+
+新的`observe_native_definition`直接使用共用custody repository的私有實際連線，擁有單一讀取交易；拒絕借用交易、寫入／issuer期間重入、TEMP同名影子，以及正式main缺表時借ATTACH來源。兩個完整catalog分別通過既有全指紋後才選唯一key；任一缺席、沒有匹配或雙匹配均不猜family、不補定義。既有catalog公開讀法與存檔保持不變，僅讓同一repository讀完整已資格資料。
+
+顯式`create_with_definitions`將這個owned完整值附到私有Selection；變更之前Current重讀定義和完整custody，前後核對實際ready lease／Session。`instance.definition_key`仍是獨立共用ID，沒有宣稱它等於native key，也沒有把acquisition receipt或alias source誤作定義來源。Host的`with_owned_item_definition_requests`接到真正同Context C28→Selection→必要Action；回覆factory也須顯式選相同definitions模式。原有無定義模式保持可用，Main未自行啟用。
+
+本輪另修正晚發現的第234輪來源物件複製缺口：`SharedTaiwanOwnedInventoryReplySource`現在禁止copy／move，避免複製一次性consumed狀態；共享同一Source仍維持一次取用。完整Component bytes仍是可複製的資料，不冒稱不能複製封包。第234輪原件與封存未重寫，其當輪有界審閱結論不當成永久無缺陷的保證。Selection reader亦禁止copy／move並在實際presence observer之後重核Session本地狀態。
+
+真正common definition對應、目前資源全bank資格、物品取得、裝卸條件／目的格、Lua規則、完整next issuer、能力結算、pending完成、item→DA與完整有序回覆仍待串接。維持TW優先100%停止條件，保留CN／網頁、共用表、64位數值、仙幣99999999999、99堆疊、原生字體／繁簡轉換及凍結功能。

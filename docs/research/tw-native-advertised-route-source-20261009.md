@@ -1,0 +1,17 @@
+# 第213輪：TW實際送出的選服清單與選服輸入來源
+
+本輪新增1個C++來源檔、修改4個既有C++來源檔。累計來源串接段202→203；新增完整雙向玩法路徑0。台服完整方向／階段／狀態／變體分母尚未釐清，完成百分比仍為未知。台服完整來源串接仍是優先目標；使用者最新要求「這輪結束停止工作」，因此本輪收尾後暫停，等待明確恢復。本輪沒有建置、測試、原生執行、編解碼執行、資料庫操作或部署。
+
+Session現在只在原生角色清單來源明確啟用時，將實際加入socket寫入佇列的伺服器清單bytes、session及候選來源種類保存在不可變物件中。實際async_write成功回呼核對同一個佇列元素、完整bytes與session後才記錄。這個記錄表示伺服器已完成該次socket寫入，不表示客戶端已處理，也不等同可登入權限。舊有封包與預設路由行為保留。
+
+實際A6選服請求於strand解析後，將同一筆已完成寫入的清單記錄連同擁有的解析值捕捉到game回呼。既有認證、帳號、狀態及一次性發布條件仍成立；game不直接讀取strand的可變欄位。不可變選服記錄再交給原生角色來源Scope與實際Target／Current／Qualify，讓資格供應者可以核對選服輸入和同一次送出的原始清單。
+
+新增RecoveredTaiwanServerAdvertisement保留04完整body DWORD、實際ordinal與mask WORD；依來源順序覆蓋重複ordinal。已釘定原生長度為04／06 logical5、05 logical9。解析僅沿用既有zero-seed／feedback0／uncompressed封包profile；05／06完整原始bytes仍在不可變清單中，沒有捏造目的地或資源ID。64個04儲存ordinal與1MiB傳輸記憶體預算分開；後者不是原生容量。
+
+原生Main+8C是04接收目的地，Main+8E+14*g WORD是接收mask；第一個選擇器記錄實際物理ordinal，和顯示壓縮ordinal不同。第二個選擇器還受獨立配置count、mask與指標來源約束。這些事實不能直接變成帳號權限或任意group／server映射，不能將普通顯示迴圈0..7當成所有A6輸入的完整界限。UI helper內部保持未追查。
+
+角色List要求同一筆選服記錄及可解析清單。Select對「存在選服記錄但清單損壞」明確拒絕，與獨立world socket沒有account選服記錄的情況區分。Current保留既有完整root／snapshot／session／account核對，並檢查不可變清單的來源session。原生目標資格、候選清單的正式來源、配置／指標供應者、權利與時間點仍由實際Target.Current／Qualify提供；沒有預設成功或假的跨socket授權。
+
+靜態原生子代理保留23個既有code span、939 bytes、267 instruction sites，另外55 bytes分派資料與12 bytes長度指標；新增全域原生覆蓋0。另一子代理檢查before、candidate及最終5個來源檔；其指出的損壞清單與來源缺席混淆已在實際Select來源修正。封存只證明本輪靜態來源及檔案版本，並非遊戲驗收。
+
+台服封包盤點沿用C2S156、world S2C252、battle S2C110；陸服C2S156、分階段S2C280。不能相加成完整玩法分母。仍須接入正式已發布清單／選服epoch、跨socket與queue-current原子性、完整native07角色清單issuer、full2A世界入口與Main實際選用來源，接續其餘台服權威玩法及擴充數值／物品堆疊。清單候選Origin不提升成原生正式權限。

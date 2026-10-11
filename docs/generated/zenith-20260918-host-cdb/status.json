@@ -1,0 +1,103 @@
+{
+  "artifact_id": "fb72296cab5950b74d8f7c98155145f7c5f58749c3011adb0540325b60749dd1",
+  "captures": [
+    {
+      "artifact_id": "fb72296cab5950b74d8f7c98155145f7c5f58749c3011adb0540325b60749dd1",
+      "capture_id": "6e1ed0632ab7559cb8d21871f59a43ab75fb2157dda9b58fab4242dabccdfbde",
+      "classification": "Research / Partial Compatibility",
+      "gates": {
+        "iat": {
+          "blockers": [
+            "Missing import_resolved evidence",
+            "Prerequisite oep blocked"
+          ],
+          "evidence_ids": [],
+          "status": "BLOCKED",
+          "verified": false
+        },
+        "network": {
+          "blockers": [
+            "Missing socket send/receive observations",
+            "Prerequisite quality blocked"
+          ],
+          "evidence_ids": [],
+          "status": "BLOCKED",
+          "verified": false
+        },
+        "oep": {
+          "blockers": [
+            "Missing oep_candidate evidence"
+          ],
+          "evidence_ids": [],
+          "status": "BLOCKED",
+          "verified": false
+        },
+        "quality": {
+          "blockers": [
+            "Missing analysis_probe evidence",
+            "Prerequisite iat blocked"
+          ],
+          "evidence_ids": [],
+          "status": "BLOCKED",
+          "verified": false
+        },
+        "unpack": {
+          "blockers": [],
+          "evidence_ids": [
+            "event-1"
+          ],
+          "status": "READY_FOR_REVIEW",
+          "verified": false
+        }
+      },
+      "note": "Readiness checks consistency only; native trace, tool provenance and execution semantics require independent review.",
+      "trust": "UNREVIEWED"
+    }
+  ],
+  "classification": "Research / Partial Compatibility",
+  "coverage": {
+    "runtime_captures": 1,
+    "total_real_fields": null,
+    "total_real_packets": null,
+    "verified_fields": 0,
+    "verified_packets": 0,
+    "verified_runtime_gates": 0
+  },
+  "current_gate": "02",
+  "function_candidates": [
+    {
+      "capture": "6e1ed0632ab7559cb8d21871f59a43ab75fb2157dda9b58fab4242dabccdfbde",
+      "code_sha256": "0196b1a6b8e4852fb3ea4eb86ed4455b3c213c86097a247fb4aea51bc733ac22",
+      "confidence": "HYPOTHESIS",
+      "id": "FUNC-7772e283b58b4243a782fd3a76ab6014",
+      "rva": 3153921
+    },
+    {
+      "capture": "6e1ed0632ab7559cb8d21871f59a43ab75fb2157dda9b58fab4242dabccdfbde",
+      "code_sha256": "ba6cc905fe137b69e2077b9777366d8f5a351ed5e37428e45a363964f7b178ed",
+      "confidence": "HYPOTHESIS",
+      "id": "FUNC-8b003513e37843f795da2e916837122f",
+      "rva": 1352680
+    }
+  ],
+  "highest_runtime_acceptance": "L1 ARTIFACT_VERIFIED",
+  "review_audit": {
+    "artifact_id": "fb72296cab5950b74d8f7c98155145f7c5f58749c3011adb0540325b60749dd1",
+    "authority": "LOCAL_HUMAN_REVIEW_POLICY_NOT_CRYPTOGRAPHIC_IDENTITY",
+    "certificates": [],
+    "counter_evidence": [],
+    "gates": {
+      "G02": "BLOCKED",
+      "G03": "BLOCKED",
+      "G04": "BLOCKED",
+      "G04.5": "BLOCKED"
+    },
+    "highest_acceptance": "L1 ARTIFACT_VERIFIED",
+    "next_external_evidence": "Controlled runtime capture and independent human review; no AI promotion.",
+    "next_gate": "G02",
+    "reviews": [],
+    "scope_limit": "No G05/network-root or protocol compatibility certificate issuer yet."
+  },
+  "single_external_evidence": "A controlled runtime capture bundle with native trace and mapped/unpacked images, followed by independent review.",
+  "status": "BLOCKED"
+}

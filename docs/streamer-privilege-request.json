@@ -1,0 +1,68 @@
+{
+  "authority": "EXPLICIT_OWNER_REQUEST_2026-09-27",
+  "design_id": "CUSTOM-0054",
+  "column": "recovered_characters.streamer_privilege",
+  "values": {
+    "0": "ordinary",
+    "1": "YouTube",
+    "2": "Facebook",
+    "3": "TikTok"
+  },
+  "requested_assignments": [
+    {
+      "exact_character_name": "test",
+      "value": 1
+    },
+    {
+      "exact_character_name": "test1",
+      "value": 2
+    },
+    {
+      "exact_character_name": "test2",
+      "value": 3
+    }
+  ],
+  "assets": {
+    "1": "C:/Users/risei/Desktop/雜物/youtube.png",
+    "2": "C:/Users/risei/Desktop/雜物/facebook.png",
+    "3": "C:/Users/risei/Desktop/雜物/tiktok-fixed.png"
+  },
+  "badge_size": [
+    16,
+    16
+  ],
+  "badge_gap": 3,
+  "badge_placements": [
+    "before chat sender name",
+    "before overhead role name"
+  ],
+  "deployment_status": "DEPLOYED: both language processes, initial own badge, mutual scene badges, 3/0 updates, actual 700/400 font weights verified; client-only release",
+  "runtime_authority": "database value by character ID; names above only select the initial owner-requested assignments",
+  "styles": {
+    "1": {
+      "message_rgb": "FF4040",
+      "outline_rgb": "404040",
+      "font_weight": 700
+    },
+    "2": {
+      "message_rgb": "087BF3",
+      "outline_rgb": "404040",
+      "font_weight": 700
+    },
+    "3": {
+      "message_rgb": "FFC000",
+      "outline_rgb": "404040",
+      "font_weight": 700
+    }
+  },
+  "outline_width": 1,
+  "outline_scope": "privileged chat message only; names and bubbles retain native styling",
+  "blue_sample_source": "Facebook vector badge base fill #087BF3",
+  "release": "artifacts/releases/streamer-vector-natural-fonts-20260927-02",
+  "vector_assets": {
+    "1": "../Launcher-src/launcher-native/src/Support/StreamerAssets/Vector/youtube-badge.svg",
+    "2": "../Launcher-src/launcher-native/src/Support/StreamerAssets/Vector/facebook-badge.svg",
+    "3": "../Launcher-src/launcher-native/src/Support/StreamerAssets/Vector/tiktok-badge.svg"
+  },
+  "client_sha256": "9be38ef858bc9c63b6f296cae4a8e601ddcfaf614700e725c4bec44065b53336"
+}

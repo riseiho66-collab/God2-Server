@@ -1,0 +1,8 @@
+{
+  "server": {"name": "GOD2 Recovered Character Persistence Lab", "host": "127.0.0.1", "port": 2592, "max_sessions": 1, "worker_threads": 1},
+  "protocol": {"name": "GOD2", "mode": "god2_legacy_character_list_candidate", "allow_unverified_legacy": true, "packet_header": "uint16_length_seed_checksum", "encryption": "seed_fixture", "compression": "none", "packet_dump": false},
+  "database": {"type": "sqlite", "path": "artifacts/recovered-accounts.db"},
+  "lua": {"bootstrap": "scripts/bootstrap.lua", "script_root": "scripts", "hot_reload": false},
+  "logging": {"level": "debug", "file": "logs/recovered-characters.log"},
+  "development": {"mock_login": false, "recovered_account_auth": true, "local_account_registration": true, "recovered_character_creation": true}
+}

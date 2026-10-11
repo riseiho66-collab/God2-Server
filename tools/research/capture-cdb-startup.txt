@@ -1,0 +1,16 @@
+r @$t0 = poi(@$peb+8)
+.printf "GOD2_INITIAL pid=%x tid=%x base=%p pc=%p time=%x\n", @$tpid, @$tid, @$t0, @eip, @$dbgtime
+lm m God2
+.writemem C:\Output\cdb-initial-mapped.bin @$t0 L307000
+ba e 1 @$exentry
+g
+.printf "GOD2_PACKER_ENTRY pid=%x tid=%x base=%p pc=%p time=%x\n", @$tpid, @$tid, @$t0, @eip, @$dbgtime
+u @eip L30
+.writemem C:\Output\cdb-packer-entry-mapped.bin @$t0 L307000
+bc *
+ba e 1 (@$t0+14a3e8)
+g
+.printf "GOD2_CANDIDATE_STOP pid=%x tid=%x base=%p pc=%p time=%x\n", @$tpid, @$tid, @$t0, @eip, @$dbgtime
+u @eip L30
+.writemem C:\Output\cdb-candidate-mapped.bin @$t0 L307000
+q

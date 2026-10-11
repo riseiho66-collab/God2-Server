@@ -1,0 +1,8 @@
+{
+  "server": {"name": "GOD2 Unverified Legacy Character List Lab", "host": "127.0.0.1", "port": 2592, "max_sessions": 1, "worker_threads": 1},
+  "protocol": {"name": "GOD2", "mode": "god2_legacy_character_list_candidate", "allow_unverified_legacy": true, "packet_header": "uint16_length_seed_checksum", "encryption": "seed_fixture", "compression": "none", "packet_dump": false},
+  "database": {"type": "sqlite", "path": "artifacts/legacy-character-list-candidate.db"},
+  "lua": {"bootstrap": "scripts/bootstrap.lua", "script_root": "scripts", "hot_reload": false},
+  "logging": {"level": "debug", "file": "logs/legacy-character-list-candidate.log"},
+  "development": {"mock_login": false}
+}

@@ -1,0 +1,31 @@
+# 第215輪：台服完整選角輸入與已發角色清單來源對應
+
+本輪修改8個既有C++來源檔，新增0個C++檔。來源串接段204→205，新增完整雙向玩法路徑0。目標保持active、台服完整來源串接100%才停止；完整分母與百分比仍未知。前一輪有實際6個C++來源修改，屬progress，並非等待或僅改計畫。本輪依要求未build／test／原生／codec／runtime／DB／SQL／deployment執行。
+
+## 已寫入實際呼叫路徑
+
+RecoveredPostCreateSelect新增Selection，保留完整raw41、logical38及實際存在時的raw5 prefix。既有selection_token_from_frame保留原接受條件與token介面；legacy分支仍走原token路徑。native Session將實際解析值擁有地捕捉到game工作，再沿Application弱vault facade及同一Host Owner交給native_select，沒有從外部名字或角色資料重造請求。兩段憑證資料與opaque tail保留在私有請求，不記錄其值。
+
+Session在真正原生選角分派前，一次發布session／account／完整輸入／pending_created_character的不可變觀察；僅實際解析呼叫路徑能設定，沒有public setter。Source重新解析raw41並核對logical38與prefix，再核對同一Session私有觀察、獨立已認證帳號、未選角狀態、created完整ID、closing與來源reader。在呼叫外部LinkSource之前即要求上述條件，不接受僅自行填寫的Selection.logical。
+
+上輪的實際async_write成功路徑現在另發布一筆純socket-written觀察，與後置來源合格的觀察分開。只有同一個已成功寫出的Write／buffer／delivery能設定它；後置Current失敗時仍能如實表示本地寫入曾完成。Source complete(true)必須核對這個私有exact pointer才能繼續，不能單靠公開callback的written=true建立發行來源。
+
+Source在真實寫入與完整Current通過後建立private constructor、禁止copy的Issued票證。票證保留完整原snapshot、完整共同roots、delivery及issuer Scope；只弱引用該Source identity，沒有DB／Session強引用或Target.current callback，外部保存不延長資料庫生命。票證起初dormant，交給必需的Publish來源；只有Publish接受、重新完整Current／Qualify仍通過且沒有供應者捕捉reentry時，最後才activate。拒絕、拋例外或失效留下的票證永遠未啟用。
+
+選角必須由實際LinkSource取得已發票證及必需的Link.current。Source拒絕未啟用、來自另一個Source owner、不同帳號或不存在的票證；用新連線自己的Scope與Target讀取真正目前快照，再核對整個snapshot tuple與全部roots是否和已發原件完全相同。issuer Scope另保留在票證，沒有把登入連線的A6偽裝成世界連線的A6，也沒有用新連線重跑舊L Target.current冒稱同一來源。
+
+真正token→完整共同角色ID仍受Qualify、created ID、Link.current及前後完整Current限制。StoredSources::ListSources新增必需的Publish／LinkSource，透過現有create_from_stored_entry交給同一個game Source。沒有帳號最新／第一筆清單fallback、缺來源時成功或重新定義token為共同slot。
+
+## 原生分支與明確邊界
+
+靜態原生子代理保留8段既有code span，531 bytes／173 instruction sites，新增全域原生覆蓋與opcode0。既有角色state14可直接BA00→14C50送1A，該有界caller沒有C18。創角成功D26E分支才先BE80送18再BA00送1A；18值是low8(原WORD+1)，不是07 token或角色ordinal。這兩個原生輸入域保持分開，不把postcreate prefix套到所有選角。
+
+1A的body37包含兩段各16 bytes憑證投影、body32 token、body33 literal4與末尾3個未明確寫入的原生stack bytes。logical38／outer41不能混稱；opaque tail不填零、不當作權限key。原始row W19低3bit、後來客戶端本地backing修改與1A clamp並不等價；實際producer對0..3保留、4..7投影0。目前來源只保留既有不alias且≤3的subset，其餘變體仍須真實供應者接入。
+
+Issued是來源證明，不是一次性角色admission／parallel-G鎖或防重播CAS。本輪沒有新增這些結算／租約語義。Publish與Link的完整bounded handoff owner、實際認證／目的地／native projection供應者仍待建立；介面與真實caller接線不等於已有Main正式選用或全部跨連線選角完成。postcreate不能靠舊07重造新角色issuer或隨意補列表重發。held-release Current與寫入後Current依然不等同wire emission瞬間原子，後置拒絕不能撤回已發bytes。
+
+## 盤點與接續
+
+台服C2S156；world S2C252（230 fixed／22 variable）；battle S2C110，83 actions23／86 selectors7。陸服C2S156；S2C phase rows280（account6／world206／battle68）。這些盤點數不代表完整雙向玩法分母，不能轉成遊戲完成百分比。
+
+下一步把實際已發票證交接owner與新G選角來源接入，再接原生raw07 issuer、創角後完整來源、full2A／初始scene／5D／Main及其餘台服玩法；保留共用資料表、CN／web、帳號存檔、聊天、IME、認證、原生字體及文字轉換。全方向／狀態／變體與deferred分母、數值64位全路徑及stack99仍開放。全部來源串接完成後再全面測試、驗證與修復。

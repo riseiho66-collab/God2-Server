@@ -1,0 +1,8 @@
+{
+  "server": {"name": "GOD2 Post Selection Lab", "host": "127.0.0.1", "port": 2592, "max_sessions": 1, "worker_threads": 1},
+  "protocol": {"name": "GOD2", "mode": "god2_post_server_select", "packet_header": "uint16_length_seed_checksum", "encryption": "seed_fixture", "compression": "none", "packet_dump": false},
+  "database": {"type": "sqlite", "path": "artifacts/recovered-seed.db"},
+  "lua": {"bootstrap": "scripts/bootstrap.lua", "script_root": "scripts", "hot_reload": false},
+  "logging": {"level": "debug", "file": "logs/recovered-post-server-select.log"},
+  "development": {"mock_login": false}
+}

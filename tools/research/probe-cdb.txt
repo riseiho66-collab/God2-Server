@@ -1,0 +1,3 @@
+.printf "GOD2_PROBE pid=%x tid=%x pc=%p\n", @$tpid, @$tid, @eip
+.echo GOD2_X86_DEBUG_PROBE_OK
+q

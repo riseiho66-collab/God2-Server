@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.24)
+project(god2_locale_probe C)
+add_executable(locale-probe main.c)
+if(MSVC)
+  target_link_options(locale-probe PRIVATE /MANIFEST:NO)
+endif()

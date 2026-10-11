@@ -1,0 +1,43 @@
+GM 封包與記憶體反推：第一輪結果（2026-10-06）
+
+已定位原生 GM 工具通道：S2C 7B/7C/7D/7E/7F/80/81/F6，共8個。
+它們經世界 dispatcher 46AD6D ->46B9D0，使用 FindWindowA 查找 GM Tools FS2，透過 SendMessageA / WM_COPYDATA(0x4A)轉交。
+COPYDATA: dwData=opcode；cbData=payload bytes；lpData=logical+1。這是接收後轉交外部工具，尚不能還原外部工具的伺服器權限判定。
+
+封包       logical總bytes / 轉交payload bytes
+0x7b        41 / 40
+0x7c        29 / 28
+0x7d        25 / 24
+0x7e        25 / 24
+0x7f        17 / 16
+0x80        25 / 24
+0x81       261 / 260
+0xf6        29 / 28
+
+GM 公告接收：19、20通往GMNotice；02依SystemMessage的category決定公告或chat4/chat5。
+02格式：opcode1+messageID2+itemID2+text16+variant1+opaque1=23 bytes。text由C字串流程讀取，需要NUL；variant低7bits選三種文字之一，並非權限。
+
+實際記憶體觀測：啟動自有程序於隔離桌面，無登入或輸入操作；取得1950筆SystemMessage的載入表。
+14個選取ID的種類與文字bytes在三個時點均符合現用資源；5段程式碼也在三個時點符合EXE。
+以下GM相關訊息均已在實際載入記憶體中讀到：
+44: 你將 %s 踢出伺服器。 / 你被GM踢出伺服器。 / %s 被GM踢出伺服器。
+45: 禁言中，請跟GM聯絡。
+188: 登入錯誤: 帳號停止使用!有問題請洽客服專線!
+380: gm公告
+862: 非法使用GM工具
+1011: GM設定時間限制失敗
+1012: GM設定時間延長%s分鐘
+1081: 『%s』已被禁言。
+1082: 您已被GM禁言。
+1230: 禁言通知
+1231: 您已被禁言，禁言解除時間為 %s 年 %s 月 %s 日 %s 時 %s 分。
+1307: GM即將於%s開始拍賣%s，請想要購買的人準備到拍賣系統參加競標！
+
+額外線索：
+4968E0有以$gmsoft01 %s包裝文字並經C2S2F送出的函式；上限為使用者文字244 bytes。尚未找到它的實際操作入口或當前可達呼叫鏈，不可宣稱已啟用。
+gm_sysmsg / gm_deliver / gm_mart / gm_newarena / gm_draw_system是原生郵件寄件者比對標籤，不可直接當作聊天GM指令。
+GMNotice的六行文字容器未出現在本次登入前記憶體觀測中；世界階段權限和狀態仍未取得。
+
+尚未解出：GM登入/權限欄位、8個工具封包的內部參數、踢人/禁言/生物品/改等級等C2S操作、外部GM工具的解析程式與GMsoft01入口。
+未修改遊戲記憶體、帳號存檔、客戶端EXE或正式伺服器；隔離程序已結束。未進行送包測試，亦未宣稱GM後台操作或正式服務已完成。
+完整地址、字節、SHA256、來源與記憶體讀取結果見同資料夾summary.json及各證據檔。
