@@ -4913,6 +4913,36 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Replace return-only blanket rejection with actual common original-name authority while preserving all normal guards and full-source gaps.",
   "replacement": "Complete actual directed model/resources/alltexts/selection supplier, paired transport/visibility/durable release/recovery and later comprehensive native acceptance."
+},
+{
+  "id": "CUSTOM-0135",
+  "name": "Same-DB private TW return stored secondary text source",
+  "authority": "TW_CUSTOM_PRIVATE_RETURN_ACTUAL_COMMON_SECONDARY_ROW_PROJECTION_NOT_FULL_ACTOR_ISSUER",
+  "implementation": [
+    "src/cn/world/SharedActorVisibility.cpp",
+    "src/cn/world/SharedActorVisibility.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/game/OwnedTaiwanPkReturnRoleTextSource.h"
+  ],
+  "native_gap": "Native field/consumer and2Dthirdtext upstream are qualified; fullactor/thirdtext/resource/selection and finalreturn remain incomplete.",
+  "rules": {
+    "actual_source": "Concrete shared SqliteDatabase PK backend factory injects exact private factory-only sameDB SqliteRoleTextRepository owner into configured scene; actualsecondaccepted→driver/Lua/Publication→Visibility consumes it. No new generic row callback.",
+    "ownership": "Exactpresence/lease/thread, complete StoredRoleText bytes/UTF8/page/revision; opaque sharedidentity prevents owner-addressABA; caught reentry permanently poisons source. Borrowed database/repository must outlive backend and receipts.",
+    "missing": "Absent row rejects. Saved empty with positive revision is distinct. CUSTOM0056 storage/provenance and frozen ordinary blank-on-failure policy remain unchanged.",
+    "projection": "Unchangedbit25 chooses sourcepage; strict whole-row projector and unchangedNativePeerRoleTextCodec qualify actual receiver profile/page/conversion capacity. Only logical45..60 changed, other65bytes preserved; everycanonical/staged/ordered copy consistent.",
+    "final_cut": "All scene/name/profile/pose observers precede one final concrete allrow read snapshot with TEMP/main checks and whole-row equality; then pure registry/Session fence. Sameconnection callbackDML rejected. No receiptrefresh.",
+    "scope": "No sends/modelmerge/state/liveData/markerremove/unlock/readresume/App/schemawrite or nativeacceptance. Supplier still owns fullunknownfield/resource/thirdtext/directedaudience.",
+    "native": "Seven boundedselectedspans930B286sites+8dataB recover existing2D17B writer to savedaggregate+0x96; not newopcode or originalguildstorage proof."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Consume actual common secondary storage in existing private return source instead of fabricated absentempty or an unfed row-reader seam.",
+  "replacement": "Complete actual current fullactor/resources/alltext/selection, paired output/normal/durable release/recovery and later comprehensive native acceptance."
 }
 ]
 }

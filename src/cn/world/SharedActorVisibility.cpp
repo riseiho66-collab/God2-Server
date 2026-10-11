@@ -1,6 +1,9 @@
 #include "cn/world/SharedActorVisibility.h"
 #include "cn/world/SharedInitialScene.h"
 #include "game/SharedNativeActorNameSource.h"
+#include "game/OwnedTaiwanPkReturnRoleTextSource.h"
+#include "protocol/RecoveredRemoteRoleText.h"
+#include "text/NativePeerRoleTextCodec.h"
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
@@ -61,6 +64,8 @@ struct SharedActorVisibility::TaiwanPkReturnPlan::State {
     // CUSTOM-0134 every ordered copy is allocated before actual name readers.
     struct RecordSlot {std::size_t member,side,index;};
     std::map<Key,std::vector<RecordSlot>> record_slots;
+    // CUSTOM-0135 canonical map order, one complete saved row per directed edge.
+    std::vector<OwnedTaiwanPkReturnRoleTextSource::Observation> role_rows;
     bool poisoned=false;
 };
 void SharedActorVisibility::reject_taiwan_return_reentry()const {
@@ -148,6 +153,10 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         // Empty scenes still qualify BOTH exact saved participant poses.
         for(std::size_t i=0;i<2;++i)
             if(presence_->saved_position(state->leases[i])!=std::optional{state->positions[i]}||!valid())return false;
+        const auto role_source=state->scene.role_text_source;
+        if(role_source&&(!role_source->owns_presence(presence_)||!valid()||
+           (check==TaiwanReturnCheck::Prepare?!state->role_rows.empty():state->role_rows.size()!=state->actors.size())))return false;
+        std::size_t role_index=0;
         for(auto& [key,actor]:state->actors){
             if(presence_->saved_position(actor.source)!=std::optional{actor.source_position}||!valid()||
                presence_->saved_position(actor.recipient)!=std::optional{actor.recipient_position}||!valid()||
@@ -190,10 +199,50 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                     }
                 }else if(!issuer->current(actor.source,actor.recipient,Native{actor.native})||!valid())return false;
             }
+            // CUSTOM-0135 actual common secondary text, never the legacy
+            // blank-on-failure projector or a caller-supplied row callback.
+            if(role_source){
+                if(check==TaiwanReturnCheck::Prepare){
+                    auto observed=role_source->observe(actor.source);
+                    if(!observed||!valid())return false;
+                    state->role_rows.emplace_back(std::move(*observed));
+                }else if(!role_source->current(state->role_rows.at(role_index))||!valid())return false;
+                const auto& saved=state->role_rows.at(role_index++).row();
+                const auto source_page=RecoveredRemoteRoleText::source_codepage(actor.native.spawn);
+                // Both actual531C10 operands and the explicit receiving page
+                // must agree; Session language/protocol alone supplies neither.
+                const bool receiver_simplified=raw.actual_global_word_d8==4&&raw.actual_global_word_da==2;
+                if((raw.wire_codepage==936)!=receiver_simplified)return false;
+                const auto text=SqliteRoleTextRepository::project(saved,source_page);
+                if(!text)return false;
+                const auto end=std::find(text->begin(),text->end(),0);
+                const std::string_view bytes(reinterpret_cast<const char*>(text->data()),
+                    static_cast<std::size_t>(end-text->begin()));
+                if(!NativePeerRoleTextCodec::project(bytes,source_page,raw.wire_codepage))return false;
+                const auto projected=RecoveredRemoteRoleText::with_source_text(actor.native.spawn,*text);
+                if(!projected||!valid())return false;
+                const auto before=RecoveredRemoteActor::encode_logical(actor.native.spawn);
+                const auto after=RecoveredRemoteActor::encode_logical(*projected);
+                if(check==TaiwanReturnCheck::Retained){if(before!=after)return false;}
+                else{
+                    for(std::size_t offset=0;offset<before.size();++offset)
+                        if((offset<45||offset>=61)&&before[offset]!=after[offset])return false;
+                    actor.native.spawn=*projected;
+                    std::get<Taiwan>(state->staged.at(key).native).spawn=*projected;
+                    for(const auto& slot:state->record_slots.at(key)){
+                        auto& records=slot.side==0?state->incoming_records[slot.member]:state->outgoing_records[slot.member];
+                        auto& record=records.at(slot.index);
+                        for(std::size_t offset=45;offset<61;++offset)record[offset]=after[offset];
+                    }
+                }
+            }
         }
         // The full supplier requalifies ordered selection/entire current after
         // all position/resource/native-name observers. Final fence is pure.
         if(!state->scene.current(check)||!valid())return false;
+        // All rows in ONE final read snapshot after every external scene,
+        // name, profile and presence observer. No callbacks after this cut.
+        if(role_source&&(!role_source->stored_current(state->role_rows)||!valid()))return false;
         return valid();
     }catch(...){state->poisoned=true;return false;}
 }
@@ -243,7 +292,8 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
                actor.native.movement.identity()!=actor.source.actor_handle||
                actor.native.spawn.x()!=actor.source_position.x||actor.native.spawn.y()!=actor.source_position.y||
                actor.native.movement.x()!=actor.source_position.x||actor.native.movement.y()!=actor.source_position.y)return {};
-            // Complete supplied actor/resource/text2/text3 remains mandatory.
+            // Complete supplied actor/resources/text3 remains mandatory.
+            // Text2 is replaced only by the factory-owned actual saved source.
             // Optional common stored first-name source is qualified privately
             // only after all nodes and ordered copies have been allocated.
             const auto record=RecoveredRemoteActor::encode_logical(actor.native.spawn);
@@ -279,6 +329,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
         Binding binding(identity_,actor.source,actor.recipient,generation_+state->staged.size()+1);
         state->staged.emplace(key,Entry{binding,actor.source_position,Native{actor.native}});
     }
+    if(state->scene.role_text_source)state->role_rows.reserve(state->actors.size());
     if(!taiwan_pk_return_read(state,TaiwanReturnCheck::Prepare))return {};
     return TaiwanPkReturnPlan(std::move(state));
 }

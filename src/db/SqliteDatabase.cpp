@@ -15,6 +15,7 @@
 #include "db/SqliteMigrationManager.h"
 #include "db/SqliteSupport.h"
 #include "db/NativeDeliverySnapshotSchema.h"
+#include "game/OwnedTaiwanPkReturnRoleTextSource.h"
 #include <utility>
 namespace god2 {
 struct SqliteDatabase::Impl {
@@ -478,12 +479,26 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     // CUSTOM-0133 one actual callable in the shared resolver bundle. A
     // configured source is mandatory at return; stop never produces empties.
     OwnedTaiwanPkRoomBackend::ReturnSceneSource return_source;
-    if(resolvers->return_scene)return_source=[resolvers](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
+    if(resolvers->return_scene){
+        // CUSTOM-0135 this exact shared factory supplies the concrete row owner;
+        // callers still own full actor/resource/selection and third text.
+        auto role_text_source=std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>(
+            new OwnedTaiwanPkReturnRoleTextSource(impl_->connection.get(),*impl_->role_text,presence));
+        return_source=[resolvers,role_text_source](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
             ->std::optional<cn::SharedActorVisibility::TaiwanReturnScene>{
         if(resolvers->stopped)return {};
         auto value=resolvers->return_scene(request);
-        return resolvers->stopped?std::nullopt:std::move(value);
-    };
+        if(resolvers->stopped||!value||!value->current||
+           (value->role_text_source&&value->role_text_source!=role_text_source))return {};
+        value->role_text_source=role_text_source;
+        const auto current=value->current;
+        value->current=[resolvers,current](cn::SharedActorVisibility::TaiwanReturnCheck check){
+            if(resolvers->stopped)return false;
+            const bool accepted=current(check);return accepted&&!resolvers->stopped;
+        };
+        return value;
+        };
+    }
     auto driver=std::make_unique<OwnedTaiwanPkBasicDriver>(std::move(game),*rooms,lua,parameters,order,retry,
         std::move(return_source));
     // CUSTOM-0130 capture actual owners BEFORE argument evaluation can move

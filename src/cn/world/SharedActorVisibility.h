@@ -15,7 +15,7 @@
 #include <variant>
 #include <vector>
 
-namespace god2 {class SharedNativeActorNameSource;}
+namespace god2 {class SharedNativeActorNameSource;class OwnedTaiwanPkReturnRoleTextSource;}
 namespace god2::cn {
 class SharedInitialScene;
 class SharedInitialAppearanceSource;
@@ -288,10 +288,12 @@ public:
         const std::array<Session::NativePkEntryHold,2>&,std::uint8_t viewer)const;
     // CUSTOM-0133 private paired return preallocation, never a WORLD permit.
     // Supplier owns the COMPLETE current ordered scene, resources and native
-    // text2/text3. CUSTOM-0134 optionally projects text1 from the actual common
-    // stored original using this presence's selected NameSource and canonical
-    // receiver_text. Without common_name_source, supplier owns ALL THREE native
-    // texts. Old bindings/DA projections cannot supply a full actor.
+    // text3. CUSTOM-0135 factory-owned role_text_source projects stored text2;
+    // without it the supplier still owns text2. CUSTOM-0134 projects text1
+    // from the actual common stored original using this presence's selected
+    // NameSource and canonical
+    // receiver_text. Without common_name_source, supplier owns native text1.
+    // Old bindings/DA projections cannot supply a full actor.
     struct TaiwanReturnQualification {
         std::uint64_t revision;
         // Pure actual issuer: full record/resource/text/selection provenance.
@@ -313,11 +315,16 @@ public:
         // Mandatory pure full readset: exact complete ordered sets (including
         // deliberate empties), every source/recipient common root/saved pose,
         // qualification revision/resource availability and receiver_text
-        // profile/native text2/text3 and actual stored original text1 when a
-        // common_name_source is selected; otherwise all three supplied native
-        // texts. Requalifies ALL of them together,
+        // profile/native text3. Supplier owns text1 unless common_name_source
+        // supplies it; it owns text2 unless role_text_source supplies it.
+        // Actual common name projection remains in this full readset.
+        // Concrete text2 rows are separately requalified in one final snapshot.
+        // Requalifies ALL supplier-owned inputs together,
         // after per-edge observers. No yield/mutation/send/event pumping.
         std::function<bool(TaiwanReturnCheck)> current;
+        // CUSTOM-0135 only the concrete same-DB factory can create this owner.
+        // It retains complete saved rows; missing never means saved empty.
+        std::shared_ptr<god2::OwnedTaiwanPkReturnRoleTextSource> role_text_source;
     };
     class TaiwanPkReturnPlan {
     public:
