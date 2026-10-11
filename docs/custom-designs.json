@@ -4466,6 +4466,35 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Close actual explicit archive file input dependency of existing pinned Fight catalog and concrete preparation factory without decoding assets or inventing defaults.",
   "replacement": "Compose complete actual Application ownership/policies and qualify native producers/consumer acceptance before release."
+},
+{
+  "id": "CUSTOM-0121",
+  "name": "Fresh privately qualified later primary TW PK grants",
+  "authority": "TW_CUSTOM_OPT_IN_SOURCE_NOT_ORIGINAL_NATIVE_PRODUCER_OR_FULL_HOST",
+  "implementation": [
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/game/OwnedTaiwanPkLaterGrantSource.h",
+    "src/handlers/OwnedPkRoomState.h"
+  ],
+  "native_gap": "Original later86/5 producer/label rules, dynamic next0B masks, full native readiness and whole Application owner remain open.",
+  "rules": {
+    "source": "Actual RoomState original Ticket and Battle checkpoint enter explicit Repository overload; original Ticket-only overload retains later rejection; round1 unchanged/outsideGrants empty.",
+    "qualification": "Explicit checkpoint overload rejects TEMP substitutes and requires13 main tables before any round lookup in every phase, then compares full durable checkpoint/RNG/id/revision to actual runtime. Reuse private full active-profile same-transaction issuer/private graph/sameDB/readset/TEMPshadow/main-table/schema/member-lock/saved-owner/fullcheckpoint-RNG/frozen-actor/round qualification. No prebattle Current/stored_current or mutable stat refresh.",
+    "fresh": "Only Repository can prepare complete new17B86/5, active LegacyCustom two living canonical0/14 controllers, Grants with matching revision/nonzero epoch and round2..INT32MAX. No supplied raw template or initial raw promotion.",
+    "display": "BYTE3=1/BYTE4=0/WORD5=(round-1)%999 little endian, display001..999 repeating. Canonical raw2/7..16 zero is explicit bounded CUSTOM policy. Primary does not clear secondary. Label is not timer/88counter/epoch/targetmask/original formula.",
+    "publication": "Deterministic bytes within current epoch/viewer retain exact existing OutboxPublication before/fullwrite row and typedepoch checks; only own completed grant permits own input and Ready requires both grants+intents. No inline pump/resend/schema/activation.",
+    "phase": "Static source/accounting only. No build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Connect later grants to actual private runtime and durable state instead of removing the guard or reusing initial templates.",
+  "replacement": "Recover original producers and close actual App/Lua/control-mask/output/terminal/recovery owners before final native acceptance/release."
 }
 ]
 }

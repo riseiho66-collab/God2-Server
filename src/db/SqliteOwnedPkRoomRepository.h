@@ -160,6 +160,9 @@ public:
     void submit_intent(const Ticket&,const OwnedPkRound& expected,std::uint8_t viewer,
                        OwnedPkRound::Intent);
     std::vector<GrantDelivery> pending_grants(const Ticket&);
+    // CUSTOM-0121 later grants require the actual runtime owner's checkpoint.
+    // Original overload remains initial-only; no legacy/raw ticket promotion.
+    std::vector<GrantDelivery> pending_grants(const Ticket&,const BattleCheckpoint& actual);
     void grant_submitted(const Ticket&,std::uint64_t epoch,std::uint8_t viewer);
     void abandon(const Ticket&)noexcept; // reserved only; IDs always retained
     bool occupied(std::uint64_t account,std::uint64_t character);
@@ -177,6 +180,8 @@ private:
     void require_ticket(const Ticket&,const char* state);
     void enqueue(const Ticket&,std::uint64_t revision,const Replies&);
     OwnedPkRound read_round(const Ticket&); // inside existing read/write transaction
+    std::string require_active_owned_profile_in_scope(const Ticket&,const BattleCheckpoint&);
+    std::vector<GrantDelivery> pending_grants_in_scope(const Ticket&,const BattleCheckpoint*);
     void store_round(const Ticket&,const OwnedPkRound& expected,const OwnedPkRound& next);
 };
 }

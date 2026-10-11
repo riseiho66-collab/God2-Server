@@ -3128,3 +3128,17 @@ CUSTOM0120新增TaiwanNativeFightCatalog::from_archive_file，copy明示filesyst
 C++3既有檔修改／新增0，限定fileprovider source1；mixed264→265、CUSTOM117→118、groups26不變；新opcode0／完整雙向路徑0。TW C2S156／worldparser74（限定來源50／控制11／未接13），S2C252（230fixed／22variable）／reply48／push11／gated4不變；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW chains3／bindings38去重34，CN chains35／bindings93去重71不變；CN歷史C2S156／S2C階段opcode280／length253獨立範圍。分母／百分比null。
 
 仍缺actualseed／coefficients／order／nextmasks／Lua／idleoutput／latergrants／skills／terminal89／savedsettle／worldreturn／reconnect的完整Appowner。完整TW/CN/web／shared64與凍結功能保留；webv70..75 pending無新ACK／credit；PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy。
+
+
+## 第283輪：實際房間快照產生後續主要授權
+
+CUSTOM0121由RoomState實際Ticket／Battle checkpoint接Repository明示overload，同transaction沿用完整activeprofile issuer／privategraph／sameDB／readset／main+TEMP／schema／memberlocks／savedowner／fullRNGcheckpoint／frozenactor／round資格，再由private freshsource產生17B86/5。舊Ticket-only後續拒絕、round1原來源、非Grants空結果皆保留；不重用初次raw、不讀prebattle Current/stored_current、不刷新戰鬥屬性。
+
+限定active LegacyCustom／round2..INT32MAX／兩個活著canonicalcontroller／currentGrants+epoch。BYTE3=1／BYTE4=0，WORD5=(round-1)%999僅CUSTOM三位數顯示，非timer／88counter／epoch／mask或原服公式；raw2/7..16 canonical0範圍保留。既有exactbytes+typedepoch before/fullwrite及ownGrant輸入閘門不變。無inlinepump／resend／Apphost。
+
+Retained5159BC..515A59再讀釐清513080收到Battle+490，非已證44C列表；helperbody不在合格span，51398D僅raw disp32候選非instructionstart，不算maskwriter／新nativecoverage。動態next0B masks／actualseed／coefficients／order／Lua／idleoutput／skills／terminal89／savedsettle／worldreturn／recovery仍缺。
+
+C++既有3改／新增1，限定latergrant source1；mixed265→266、CUSTOM118→119、groups26不變；新opcode0／完整雙向路徑0。TW C2S156／worldparser74（限定來源50／控制11／未接13），S2C252（230fixed／22variable）／reply48／push11／gated4，battle110／specialized9／86selector7／case6／83action23／projection2均不變。TW chains3／bindings38去重34、CN chains35／bindings93去重71不變；CN歷史C2S156／S2Cphaseopcode280／length253獨立範圍。全路徑分母／百分比null。TW/CN/web/shared64、凍結功能保留，webv70..76 pending無新ACK；PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy。
+
+
+第283輪靜態審查補強：新actualcheckpoint overload在任何phase的第一個round／owner lookup之前拒絕TEMP替代與檢查13個main tables，並全phase比對完整durablecheckpoint/RNG/id/revision，避免偽造round1降級跳過later資格。舊Ticket-only初次介面保持原行為；terminal空結果及legacyinitial不要求完整ownedgraph，後續grant仍必須完整private資格。候選1／初次帳本與報告保留，候選2為最終來源；REVIEW283-01以來源修補，無執行測試。

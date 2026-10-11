@@ -1,6 +1,7 @@
 #include "db/SqliteOwnedPkRoomRepository.h"
 #include "db/SqliteSupport.h"
 #include "game/BattleCheckpointCodec.h"
+#include "game/OwnedTaiwanPkLaterGrantSource.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -22,6 +23,17 @@ struct RecoveryRead {
     ~RecoveryRead(){if(!finished)sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}
     void commit(){sqlite_detail::execute(db,"COMMIT");finished=true;}
 };
+void require_owned_main_sources(sqlite3* db){
+    // Unqualified legacy readers must not be redirected to TEMP substitutes.
+    constexpr const char* names="('owned_pk_room_feature','owned_pk_rooms','owned_pk_room_members','owned_pk_room_outbox','owned_pk_round_feature','owned_pk_room_rounds','accounts','recovered_characters','recovered_positions','character_role_snapshots','character_resources','battle_reservations','battle_settlements')";
+    const auto shadow_sql=std::string("SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ")+names+" OR tbl_name COLLATE NOCASE IN "+names;
+    Statement shadows(db,shadow_sql.c_str());
+    if(shadows.row())throw DatabaseError("PK active profile TEMP source shadow rejected");
+    const auto table_sql=std::string("SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ")+names;
+    Statement tables(db,table_sql.c_str());
+    if(!tables.row()||tables.integer(0)!=13||tables.row())
+        throw DatabaseError("PK active profile requires its exact main source tables");
+}
 std::string owned_combat_profile_digest(std::string_view readset){
     auto value=Json::parse(readset);
     value.erase("profile_readset_sha256"); // No recursive/self-supplied hash input.
@@ -597,6 +609,15 @@ bool SqliteOwnedPkRoomRepository::current(const Ticket& ticket){
 }
 std::string SqliteOwnedPkRoomRepository::require_active_owned_profile(
         const Ticket& ticket,const BattleCheckpoint& supplied_expected){
+    const auto expected=supplied_expected;
+    RecoveryRead scope(db_);
+    auto digest=require_active_owned_profile_in_scope(ticket,expected);
+    scope.commit();
+    return digest;
+}
+std::string SqliteOwnedPkRoomRepository::require_active_owned_profile_in_scope(
+        const Ticket& ticket,const BattleCheckpoint& supplied_expected){
+    if(sqlite3_get_autocommit(db_))throw DatabaseError("PK active profile requires an existing snapshot scope");
     // CUSTOM-0119 active combat keeps its admitted stat/text/appearance
     // readset. RESERVED stored_current/live world Current must NOT run here.
     const auto expected=supplied_expected;
@@ -617,17 +638,9 @@ std::string SqliteOwnedPkRoomRepository::require_active_owned_profile(
     validate(input); // Complete retained graph and internally recomputed digest.
     if(readset(input)!=ticket.readset_)
         throw DatabaseError("PK active profile retained readset changed");
-    RecoveryRead scope(db_);
     // Existing readers use unqualified names: bind them to the real main
     // tables and reject TEMP substitutes before any owner/round lookup.
-    constexpr const char* names="('owned_pk_room_feature','owned_pk_rooms','owned_pk_room_members','owned_pk_room_outbox','owned_pk_round_feature','owned_pk_room_rounds','accounts','recovered_characters','recovered_positions','character_role_snapshots','character_resources','battle_reservations','battle_settlements')";
-    const auto shadow_sql=std::string("SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ")+names+" OR tbl_name COLLATE NOCASE IN "+names;
-    Statement shadows(db_,shadow_sql.c_str());
-    if(shadows.row())throw DatabaseError("PK active profile TEMP source shadow rejected");
-    const auto table_sql=std::string("SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ")+names;
-    Statement tables(db_,table_sql.c_str());
-    if(!tables.row()||tables.integer(0)!=13||tables.row())
-        throw DatabaseError("PK active profile requires its exact main source tables");
+    require_owned_main_sources(db_);
     require_round_schema(db_); // Read-only own DDL/version checks, no install.
     require_ticket(ticket,"active");
     Statement members(db_,"SELECT COUNT(*) FROM main.owned_pk_room_members WHERE room=?");
@@ -651,7 +664,6 @@ std::string SqliteOwnedPkRoomRepository::require_active_owned_profile(
     if(phase.battle_revision()!=checkpoint.snapshot.revision||
        phase.phase()==OwnedPkRound::Phase::Terminal)
         throw DatabaseError("PK active profile round does not match its active checkpoint");
-    scope.commit();
     return input.profile_readset_sha256; // Qualified frozen binding, not a lease.
 }
 SqliteOwnedPkRoomRepository::RuntimeClaim SqliteOwnedPkRoomRepository::claim_runtime(const Ticket& ticket){
@@ -933,12 +945,42 @@ void SqliteOwnedPkRoomRepository::submit_intent(const Ticket& ticket,const Owned
     store_round(ticket,expected,next);tx.commit();
 }
 std::vector<SqliteOwnedPkRoomRepository::GrantDelivery> SqliteOwnedPkRoomRepository::pending_grants(const Ticket& ticket){
-    Transaction tx(db_);const auto phase=read_round(ticket);std::vector<GrantDelivery> result;
-    if(phase.phase()==OwnedPkRound::Phase::Grants&&phase.round()!=1)
-        throw DatabaseError("PK later-round raw grant/counter authority remains unqualified");
+    return pending_grants_in_scope(ticket,nullptr);
+}
+std::vector<SqliteOwnedPkRoomRepository::GrantDelivery> SqliteOwnedPkRoomRepository::pending_grants(
+        const Ticket& ticket,const BattleCheckpoint& supplied_actual){
+    const auto actual=supplied_actual;
+    return pending_grants_in_scope(ticket,&actual);
+}
+std::vector<SqliteOwnedPkRoomRepository::GrantDelivery> SqliteOwnedPkRoomRepository::pending_grants_in_scope(
+        const Ticket& ticket,const BattleCheckpoint* actual){
+    Transaction tx(db_);
+    // The explicit checkpoint overload guards its namespace BEFORE the first
+    // unqualified round/owner lookup, even if a shadow would claim round1.
+    // Preserve the historical Ticket-only path's existing initial semantics.
+    if(actual)require_owned_main_sources(db_);
+    const auto phase=read_round(ticket);std::vector<GrantDelivery> result;
+    if(actual){
+        Statement room(db_,"SELECT checkpoint,revision FROM main.owned_pk_rooms WHERE id=?");
+        room.bind_id(1,ticket.id());
+        if(!room.row()||BattleCheckpointCodec::decode(room.text(0))!=*actual||
+           actual->snapshot.id!=ticket.id()||actual->snapshot.revision!=phase.battle_revision()||
+           actual->snapshot.revision!=room.number<std::uint64_t>(1)||room.row())
+            throw DatabaseError("PK grant source differs from its actual runtime checkpoint");
+    }
+    std::optional<std::array<RecoveredBattlePlayerGrant::Bytes,2>> fresh;
+    if(phase.phase()==OwnedPkRound::Phase::Grants&&phase.round()!=1){
+        if(!actual)throw DatabaseError("PK later-round raw grant/counter authority remains unqualified");
+        // The same full active qualification as the room's input dispatcher,
+        // inside THIS transaction: original issuer/private graph, exact main
+        // schema/readset/member locks, full RNG/checkpoint and frozen actors.
+        // No prebattle Current/stored_current refresh or caller raw template.
+        (void)require_active_owned_profile_in_scope(ticket,*actual);
+        fresh=OwnedTaiwanPkLaterGrantSource::prepare(ticket,actual->snapshot,phase);
+    }
     if(phase.phase()==OwnedPkRound::Phase::Grants)for(std::uint8_t i=0;i<2;++i)if(!phase.grant_submissions()[i]){
         const auto& p=i==0?ticket.input().pair.challenger:ticket.input().pair.recipient;
-        const auto& raw=ticket.input().entry.grants()[i];
+        const auto& raw=fresh?(*fresh)[i]:ticket.input().entry.grants()[i];
         // Separate typed grant epoch: never reuse checkpoint revision as an
         // enqueue receipt or call ordinary outbox submitted for a grant.
         result.push_back({ticket.id(),phase.grant_epoch(),p.session,p.world_generation,

@@ -142,7 +142,8 @@ public:
     // Typed grant epoch is separate from checkpoint/outbox revision; exact-live
     // enqueue callback MUST call grant_submitted, not ordinary submitted.
     std::vector<Repository::GrantDelivery> pending_grants(std::uint64_t room){
-        return repository_.pending_grants(find(room).ticket);
+        const auto& current=find(room);
+        return repository_.pending_grants(current.ticket,current.battle.checkpoint());
     }
     void grant_submitted(std::uint64_t room,std::uint64_t epoch,std::uint8_t viewer){
         repository_.grant_submitted(find(room).ticket,epoch,viewer);
