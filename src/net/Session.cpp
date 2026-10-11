@@ -148,6 +148,7 @@ struct Session::NativePkEntryHold::Data {
     const std::thread::id thread=std::this_thread::get_id();
     const asio::any_io_executor game;
     const NativePkEntryRequest request;
+    const SessionState prebattle_phase;
     const NormalWorldInitialization initialization;
     const std::shared_ptr<const void> common;
     const std::shared_ptr<const WorldDeliveryIdentity> battle_identity;
@@ -157,10 +158,10 @@ struct Session::NativePkEntryHold::Data {
     std::atomic<bool> held_notified{false},completing{false},clean_abort{false};
     std::atomic<bool> written_accepted{false}; // Only actual game completion may set true.
     Data(std::weak_ptr<Session> s,std::uint64_t id,asio::any_io_executor executor,
-         NativePkEntryRequest r,NormalWorldInitialization init,std::shared_ptr<const void> c,
+         NativePkEntryRequest r,SessionState phase,NormalWorldInitialization init,std::shared_ptr<const void> c,
          std::shared_ptr<const WorldDeliveryIdentity> identity,
          std::shared_ptr<std::vector<std::uint8_t>> bytes,std::weak_ptr<NativePkEntryOwner> owner)
-        :session(std::move(s)),session_id(id),game(std::move(executor)),request(std::move(r)),
+        :session(std::move(s)),session_id(id),game(std::move(executor)),request(std::move(r)),prebattle_phase(phase),
          initialization(std::move(init)),common(std::move(c)),battle_identity(std::move(identity)),
          frame(std::move(bytes)),source(std::move(owner)){}
 };
@@ -634,7 +635,8 @@ struct Session::Impl {
         const auto common=common_world_identity.load();
         return common && common->account==r.account && common->character==r.character &&
             common->generation==r.common_generation &&
-            owner.state()==(committed?SessionState::InBattle:SessionState::InWorld) &&
+            (data->prebattle_phase==SessionState::CharacterSelected || data->prebattle_phase==SessionState::InWorld) &&
+            owner.state()==(committed?SessionState::InBattle:data->prebattle_phase) &&
             owner.battle_generation()==r.prebattle_generation+(committed?1u:0u);
     }
     bool native_pk_written_transport_current(const std::shared_ptr<NativePkEntryHold::Data>& data)const {
@@ -686,7 +688,7 @@ struct Session::Impl {
                 if(!s.native_pk_pending.compare_exchange_strong(expected,{}))return;
                 s.native_pk_timer.cancel();s.native_pk_reservation.reset();
                 const bool clean=data->clean_abort.load() && !s.closing && !s.close_requested.load() &&
-                    self->state()==SessionState::InWorld &&
+                    self->state()==data->prebattle_phase &&
                     self->battle_generation()==data->request.prebattle_generation;
                 if(!clean && (!written || !accepted || s.closing || s.close_requested.load())) {
                     s.fail("Native PK entry completion rejected; durable recovery may be required");return;
@@ -2519,8 +2521,13 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
        impl_->common_ready_thread==std::thread::id{})
         throw std::logic_error("Native PK entry requires the actual async common game owner");
     const NormalWorldInitialization initialization(data);
-    if(!normal_world_initialization_current_on_game(initialization) || !initialization.entry_written() ||
-       source.expired() || closing() || state()!=SessionState::InWorld ||
+    if(!normal_world_initialization_current_on_game(initialization) || !initialization.entry_written())
+        throw std::invalid_argument("Native PK entry lacks actual Written private initialization");
+    // CUSTOM-0116 capture the actual qualified phase; no request scalar or
+    // synthetic InWorld transition can select or later widen this hold.
+    const auto prebattle_phase=state();
+    if(source.expired() || closing() ||
+       (prebattle_phase!=SessionState::CharacterSelected && prebattle_phase!=SessionState::InWorld) ||
        impl_->mode!=ProtocolMode::God2CharacterConnection || !recovered_world_ready() ||
        !request.account || !request.character || !request.common_generation || !request.world_generation ||
        request.account!=account_id || request.character!=character_id ||
@@ -2566,7 +2573,7 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     auto identity=std::make_shared<const WorldDeliveryIdentity>(WorldDeliveryIdentity{
         request.account,request.character,request.world_generation,request.prebattle_generation+1});
     auto pending=std::make_shared<NativePkEntryHold::Data>(shared_from_this(),id(),impl_->game,
-        std::move(request),initialization,common,std::move(identity),frame,std::move(source));
+        std::move(request),prebattle_phase,initialization,common,std::move(identity),frame,std::move(source));
     auto budget=impl_->budget;std::shared_ptr<Reservation> reservation;
     {
         std::lock_guard lock(budget->mutex);

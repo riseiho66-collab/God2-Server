@@ -71,6 +71,9 @@ private:
         std::shared_ptr<SharedWorldPresence> presence;
         std::weak_ptr<Session> session;
         Session::NormalWorldInitialization initialization;
+        // CUSTOM-0116 exact actual prebattle phase, private to this live source.
+        // Normal native bootstrap retains CharacterSelected; never promote it.
+        const SessionState prebattle_phase;
         SqliteOwnedEquipmentTransaction::Committed committed;
         const std::thread::id thread=std::this_thread::get_id();
         bool reading=false,reentered=false;
@@ -107,7 +110,7 @@ private:
                 const auto peer=session.lock();
                 if(reentered||!peer||!peer->normal_world_initialization_current_on_game(initialization)||
                    !initialization.entry_written())return false;
-                if(peer->closing()||peer->state()!=SessionState::InWorld||peer->id()!=m.lease.session||
+                if(peer->closing()||peer->state()!=prebattle_phase||peer->id()!=m.lease.session||
                    peer->account_id!=m.lease.account||peer->character_id!=m.lease.character||
                    peer->battle_generation()!=m.battle_generation||
                    initialization.entry_frame()!=m.entry_frame||initialization.entry_logical()!=m.entry_logical||
@@ -155,8 +158,11 @@ inline std::optional<OwnedTaiwanPkAppearanceSource::Observation> OwnedTaiwanPkAp
     const auto peer=session.lock();
     if(!peer||!peer->normal_world_initialization_current_on_game(initialization)||
        !initialization.entry_written())return {};
+    // Capture only after the actual private game-owner receipt qualifies reads.
+    const auto prebattle_phase=peer->state();
+    if(prebattle_phase!=SessionState::CharacterSelected&&prebattle_phase!=SessionState::InWorld)return {};
     if(!joint||!presence||!joint->owns_sources(accounts,characters)||!worlds.owns_sources(accounts,characters)||
-       !presence->owns_repository(characters)||peer->closing()||peer->state()!=SessionState::InWorld||
+       !presence->owns_repository(characters)||peer->closing()||peer->state()!=prebattle_phase||
        peer->id()!=lease.session||peer->account_id!=lease.account||peer->character_id!=lease.character)return {};
     const auto& equipment=committed.equipment().snapshot();
     const auto& inventory=committed.inventory().snapshot();
@@ -189,7 +195,7 @@ inline std::optional<OwnedTaiwanPkAppearanceSource::Observation> OwnedTaiwanPkAp
         inventory,equipment,frame,initialization.entry_logical(),initialization.accepted_tail(),
         initialization.config_flag(),*appearance});
     auto state=std::make_shared<State>(State{std::move(joint),accounts,characters,worlds,std::move(presence),
-        std::move(session),std::move(initialization),std::move(committed)});
+        std::move(session),std::move(initialization),prebattle_phase,std::move(committed)});
     if(!state->current(*material))return {};
     return Observation(std::move(state),std::move(material));
 }

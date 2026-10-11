@@ -98,7 +98,8 @@ public:
         const auto attempt=find(reservation);
         if(!complete||!attempt||!current(reservation))return false;
         // All allocations/encodings and future delivery identities are staged
-        // while both exact Sessions remain InWorld and private sources current.
+        // while both exact Sessions retain their captured qualified prebattle
+        // phase (CharacterSelected or InWorld) and private sources current.
         attempt->completion=std::move(complete);attempt->stage=Stage::Preparing;
         try {
             for(std::size_t i=0;i<2;++i){

@@ -61,6 +61,7 @@ public:
         const std::array<Peer,2> peers{pair.challenger,pair.recipient};
         std::array<std::shared_ptr<Session>,2> sessions;
         std::array<std::optional<Session::NormalWorldInitialization>,2> initializations;
+        std::array<SessionState,2> prebattle_phases;
         std::array<std::optional<SharedWorldPresence::Lease>,2> leases;
         for(std::size_t i=0;i<2;++i){
             sessions[i]=callback([&]{return sessions_(peers[i].session);});
@@ -69,14 +70,18 @@ public:
             // Check real private receipt BEFORE mutable Session identity fields.
             if(!open()||!initializations[i]||
                !sessions[i]->normal_world_initialization_current_on_game(*initializations[i])||
-               !initializations[i]->entry_written()||!session_current(sessions[i],*initializations[i],peers[i]))return {};
+               !initializations[i]->entry_written())return {};
+            // CUSTOM-0116 capture once after private game-owner qualification.
+            // Rechecks require this exact phase, not either allowed phase anew.
+            prebattle_phases[i]=sessions[i]->state();
+            if(!session_current(sessions[i],*initializations[i],peers[i],prebattle_phases[i]))return {};
             leases[i]=presence_->ready_lease(peers[i].session,peers[i].account,peers[i].character);
             if(!leases[i]||!lease_current(*leases[i],peers[i]))return {};
         }
         const auto local=[&]{
             if(!open()||!sessions[0]->same_native_pk_game_executor(*sessions[1]))return false;
             for(std::size_t i=0;i<2;++i)
-                if(!session_current(sessions[i],*initializations[i],peers[i])||
+                if(!session_current(sessions[i],*initializations[i],peers[i],prebattle_phases[i])||
                    !lease_current(*leases[i],peers[i]))return false;
             return open();
         };
@@ -159,10 +164,12 @@ private:
             !a.blocked&&!b.blocked&&a.position.area==b.position.area&&a.position.scene==b.position.scene;
     }
     bool session_current(const std::shared_ptr<Session>& session,
-            const Session::NormalWorldInitialization& initialization,const Peer& peer)const{
+            const Session::NormalWorldInitialization& initialization,const Peer& peer,
+            SessionState prebattle_phase)const{
         if(!open()||!session||!session->normal_world_initialization_current_on_game(initialization)||
            !initialization.entry_written())return false;
-        return !session->closing()&&session->state()==SessionState::InWorld&&session->id()==peer.session&&
+        return (prebattle_phase==SessionState::CharacterSelected||prebattle_phase==SessionState::InWorld)&&
+            !session->closing()&&session->state()==prebattle_phase&&session->id()==peer.session&&
             session->account_id==peer.account&&session->character_id==peer.character&&
             session->battle_generation()==peer.battle_generation;
     }

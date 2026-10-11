@@ -3073,3 +3073,14 @@ CUSTOM0115新增 opt-in outbox owner：同一 live Room 的原 Ticket incarnatio
 本輪既有C++修改5份／新增1份，CUSTOM112→113、mixed259→260、groups26不變；新增限定publication來源1、新opcode0、新完整雙向路徑0。TW C2S候選156／世界parser74（局部來源50／控制11／未接13），S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9，86selector7／case6，83action23／projection2；TW來源關聯38／去重34、CN93／71不變。全遊戲總量與完成率未知。
 
 Application仍未安裝；完整Lua turn／skills／fresh projection、later grants／counter、terminal saved settlement／89／fresh generation worldreturn／reconnect／restart私有憑證仍待接。原生無epoch nonce，不能證明未接收TCP舊bytes不存在。保留TW／CN／web、共用64位數值與凍結功能；未build／compiler／test／runtime／native／VM／codec／gameDBSQL／migrate／activate／deploy。GitHub／Discord通知分開記錄。
+
+
+## 第278輪：正常 CharacterSelected 入場接到 PK 私有準備狀態
+
+CUSTOM0116修正已存在的來源阻塞：正常原生bootstrap有意保留CharacterSelected，既有private normal初始化Current允許CharacterSelected或InWorld，但PK外觀／準備／Session hold硬性要求InWorld。現於真正game-owner初始化proof通過後捕捉每位玩家實際合法phase，Appearance私有State及Preparation局部binding各次Current／callback fence都比對原phase；Session私有Data的Preparing／Held／cleanabort沿用同一exactphase，只有既有commit轉InBattle並battle generation+1。取消不製造InWorld，也不實作terminal世界回復。
+
+C++既有5檔修改，其中3檔行為、2檔註解；新增C++0。Material／Request／歷史durable readset／schema／原生封包不變；無callerphase或publicphasegetter。mixed260→261、CUSTOM113→114、groups26不變；新增限定phase來源1，新opcode0，新完整雙向路徑0。這是條件式PK來源可達性修補，Application仍未安裝，不能稱正常玩家已可實際PK。
+
+TW C2S候選156／世界parser74（局部來源50／控制11／未接13），S2C252（fixed230／variable22），回覆48／推播11／gated4；battle110／specialized9、86selector7／case6、83action23／projection2；TW來源關聯38／去重34、CN93／71不變。CN歷史觀察C2S156／S2C階段opcode280／length253屬不同範圍。全遊戲路徑總數及完成率未知，不把50／74當遊戲百分比。
+
+尚缺完整Application派送、同一權威Lua回合／技能、fresh83 opaque／group及88counter／raw118、latergrant／controlmask、terminal存檔／89／世界回復／重連。原生來源審查另更正：PK撤出移除visibility incidence，仍保留ready lease；這不自動授權技能，也不能拿失去presence當拒用理由。phase equality不是事件歷史／ABA證明。保留TW／CN／web／共用64位及凍結功能，未build／compiler／tests／runtime／native／VM／codec／gameDBSQL／migration／activation／deploy。

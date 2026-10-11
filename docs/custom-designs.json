@@ -4317,6 +4317,39 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Consume actual retained durable grant/result rows through exact accepted-entry private Session proofs and full local-write callbacks, without broadening the legacy skill sender or pretending queue intention is completion.",
   "replacement": "Replace custom scheduling only with build-matched original evidence; install genuine Application owners and complete all remaining source/lifecycle paths before comprehensive testing and activation."
+},
+{
+  "id": "CUSTOM-0116",
+  "name": "Exact private prebattle phase capture for qualified Taiwan PK admission",
+  "authority": "CUSTOM_OPT_IN_PRIVATE_SESSION_LIFECYCLE_NOT_NATIVE_WIRE_OR_GLOBAL_WORLD_PROMOTION",
+  "implementation": [
+    "src/net/Session.h",
+    "src/net/Session.cpp",
+    "src/game/OwnedTaiwanPkAppearanceSource.h",
+    "src/handlers/OwnedTaiwanPkEntryPreparation.h",
+    "src/handlers/OwnedPkEntryAdmission.h"
+  ],
+  "native_image": "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+  "native_gap": "This is an actual C++ lifecycle prerequisite correction. Original ordinary PK hosting, fresh action/result/counter suppliers, learned skills/Lua, later grants and terminal return remain open. Readonly source-audit receipts do not qualify new native wire or execution.",
+  "rules": {
+    "phase_source": "Actual normal Taiwan bootstrap retains CharacterSelected; existing genuine private NormalWorldInitialization current_on_game accepts CharacterSelected or InWorld. No inferred first-movement promotion or global set_state(InWorld). Require actual private current and Written before reading/capturing mutable Session phase.",
+    "capture": "Capture actual allowed CharacterSelected OR InWorld once per peer. Appearance stores const phase privately in State, Preparation stores local per-view snapshot, and private Session EntryData stores const prebattle_phase. No public request enum/getter or caller-selected phase. Two peers may have different allowed phases.",
+    "current": "Before activation/commit and during Preparing/Held, require exact captured phase, same actual Session/game executor/private initialization/common identity, account/character/lease generations and existing current source fences. A phase switch is rejection, not silent broadening. No changes to Material, durable readset, schema, wire or shared-generation namespaces.",
+    "commit_abort": "Only existing successful private commit after durable room activation transitions to InBattle and increments battle generation once. Committed/Released/Written proof remains exact InBattle plus generation+1. Clean precommit abort requires original captured phase and generation, without manufactured state transition or world promotion.",
+    "preservation": "Existing queue/input-prefix/ACK staging, held write budget/deadline, private source proofs, old skill sender and normal bootstrap remain unchanged. Session.h and Admission edits are comments only; behavior changes are confined to Session.cpp, Appearance and Preparation.",
+    "audit_erratum": "Readonly native/source audit supplement supersedes primary inference that PK visibility departure removes common presence qualification: exact ready lease/common identity is retained. Presence alone neither proves nor disproves skill issuer qualification. Frozen historical receipts remain unchanged.",
+    "scope": "One bounded prebattle lifecycle prerequisite, no Application installation, new opcode, complete route or whole-game percentage. Existing opt-in composition remains inactive by default. Lua resolution hosting, fresh83/88 templates/counters, later grants, terminal return and full recovery remain separate.",
+    "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment. Frozen saves/auth/chat/IME/fonts/conversion/clients/CN/web/shared64 scope retained."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Remove unreachable InWorld-only assumption from qualified ordinary Taiwan PK admission while preserving each actual private prebattle state until commit.",
+  "replacement": "Replace custom lifecycle policy only with build-matched original evidence; finish actual Application ownership and all remaining source/lifecycle routes before comprehensive testing and activation."
 }
 ]
 }
