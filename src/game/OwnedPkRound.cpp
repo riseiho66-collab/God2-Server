@@ -103,12 +103,18 @@ bool OwnedPkRound::results_issued_notification(const BattleSnapshot& actual){
     if(!next.results_issued_impl(actual.revision,bounds,actual.state==BattleState::Finished))return false;
     *this=std::move(next);return true;
 }
+bool OwnedPkRound::issue_terminal_notification(){
+    if(terminal_notification_||phase_!=Phase::Terminal||!result_notification_bounds_)return false;
+    auto next=*this;next.terminal_notification_=true;next.bump();next.validate();*this=std::move(next);return true;
+}
 bool OwnedPkRound::results_issued_impl(std::uint64_t next_revision,Masks masks,bool terminal){
     if(phase_!=Phase::Ready||next_revision<=battle_revision_||next_revision-battle_revision_>2||!masks_valid(masks))return false;
     auto next=*this;next.battle_revision_=next_revision;next.expected_masks_=masks;next.controls_={false,false};
     next.phase_=terminal?Phase::Terminal:Phase::ResultsControl;next.bump();next.validate();*this=std::move(next);return true;
 }
 void OwnedPkRound::validate()const{
+    if(terminal_notification_&&(phase_!=Phase::Terminal||!result_notification_bounds_))
+        throw std::invalid_argument("PK terminal notification cannot authorize an active/legacy cycle");
     if(!revision_||revision_>max_revision||!battle_revision_||battle_revision_>max_revision||!round_||round_>max_revision||
        grant_epoch_>revision_||!masks_valid(expected_masks_))throw std::invalid_argument("PK round header bounds");
     for(const auto& h:headers_)if(h.actor!=0||h.side!=0)throw std::invalid_argument("PK primary owned slot0 header required");
@@ -211,17 +217,25 @@ std::string OwnedPkRound::document()const{
             observations.push_back(observed?Json(*observed):Json(nullptr));
         result["result_notification_observations"]=std::move(observations);
     }
+    if(terminal_notification_){
+        result["version"]=4;result["design_id"]="CUSTOM-0126";
+        result["terminal_notification"]="CUSTOM-0126-no-message-selector4";
+    }
     return result.dump();
 }
 OwnedPkRound OwnedPkRound::from_document(std::string_view text){
     if(text.empty()||text.size()>32768)throw std::invalid_argument("PK round document size");
     const auto j=Json::parse(text,[](int depth,Json::parse_event_t,Json&){if(depth>7)throw std::invalid_argument("PK round document depth");return true;});
     if(!j.is_object())throw std::invalid_argument("PK round schema");
-    const bool result_notification=j.size()==17&&j.at("version")==3&&j.at("design_id")=="CUSTOM-0122";
+    const bool terminal_notification=j.size()==18&&j.at("version")==4&&j.at("design_id")=="CUSTOM-0126"&&
+        j.at("terminal_notification")=="CUSTOM-0126-no-message-selector4";
+    const bool result_notification=terminal_notification||
+        (j.size()==17&&j.at("version")==3&&j.at("design_id")=="CUSTOM-0122");
     const bool notification=result_notification||(j.size()==14&&j.at("version")==2&&j.at("design_id")=="CUSTOM-0104");
     if(!notification&&(j.size()!=12||j.at("version")!=1||j.at("design_id")!="CUSTOM-0086"))
         throw std::invalid_argument("PK round schema");
     OwnedPkRound result;
+    result.terminal_notification_=terminal_notification;
     if(notification){
         const auto& bounds=j.at("initial_notification_bounds");
         const auto& observations=j.at("initial_notification_observations");

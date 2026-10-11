@@ -4617,6 +4617,40 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Consume the real preparation/admission/scheduled basic owner chain with one issuer and explicit lifetime, rather than independent caller-supplied components.",
   "replacement": "Complete actual Application/invitation drain/terminal return/recovery/native policy sources and eventual full-client acceptance before production promotion."
+},
+{
+  "id": "CUSTOM-0126",
+  "name": "Owned TW final PK result no-message terminal notification",
+  "authority": "TW_CUSTOM_OPT_IN_PRIVATE_FINISHED_SOURCE_NOT_ORIGINAL_AWARD_OR_WORLD_RETURN",
+  "implementation": [
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/game/OwnedPkRound.cpp",
+    "src/game/OwnedPkRound.h",
+    "src/game/OwnedTaiwanPkTerminalSource.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedPkRoomState.h",
+    "src/net/Session.cpp",
+    "src/protocol/RecoveredTaiwanPkTerminalNotification.h"
+  ],
+  "native_gap": "Original PK selector/awards, opaque child/globalalias effects, exact299/300 text, manager2E0 writer/full WORLD return and saved settlement are not recovered.",
+  "rules": {
+    "wire": "Current full518BF0 unsignedDWORDselector49>3 has no other direct payload reads or explicit packet-pointer forwarding in the top body. Opaque children/callee-saved EBP/global aliases remain open. Explicit CUSTOM selector4, other52 payload bytes zero; not original padding, native PK rule or zero rewards. Generic lossless89 parser remains unchanged.",
+    "source": "Only actual RoomState/repository can invoke private source from original Ticket + actual Finished legacy-CUSTOM Battle + matching Terminal v4 round/full owned entry sources. Exact actor0/14/characters/controllers/HP/winner/revision. Repository independently retains private issuer/sameDB/main source tables/readset/canonical checkpoint graph.",
+    "transaction": "RoomState appends57-byte89 after final88 in BOTH actual result buffers. Same existing checkpoint/roundCAS/pairedoutbox transaction, no new Battle revision/outboxnamespace/independent89 receipt. v4 terminal-only metadata/policy with one additional round revision; Stored v1/v2/v3 codecs and legacy exact-mask APIs retained; notification resolver now selects v4 and appends the tail on Finished.",
+    "rederive": "settle/read_round validate exact scalar83/[ownMP86]/targetHP86/final88/canonical89 grammar and private terminal tail. Publication rederives actual current Finished tail before write and accepted fullwrite; exact pending-row/Session/private Written/current/checkpoint checks remain.",
+    "transport": "Session accepted-entry writer permits only canonical89 after supported scalar result groups/final88, never standalone/arbitrary89. Existing bounded queue/ACKprefix/staged hold/identity/fullwrite owner barriers. NativeFIFO conditionally defers83/88/89; manager10s timeout means no all-animation/nativeACK/consumption guarantee.",
+    "limits": "No persistent resources/XP/economy writes, release/memberlock cleanup, return HP/revival defaults, WORLD state, ticket rehydration or Application install. Both locks/terminal rows stay retained; actual original owner equality remains intact.",
+    "phase": "Static source/instruction/byte accounting only; no build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Connect actual privately owned Finished output through durable pair/current publication/accepted-entry transport using bounded native consumer evidence, preserving all unresolved economic/return authorities.",
+  "replacement": "Recover native original terminal producer/award/return semantics; complete atomic saved settlement/return/recovery/hosting and full-client acceptance in final phase before production promotion."
 }
 ]
 }

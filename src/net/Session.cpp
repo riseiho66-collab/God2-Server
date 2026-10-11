@@ -22,6 +22,7 @@
 #include "protocol/RecoveredBattleAttackPresentation.h"
 #include "protocol/RecoveredBattleVitals.h"
 #include "protocol/RecoveredBattleVitalsBatch.h"
+#include "protocol/RecoveredTaiwanPkTerminalNotification.h"
 #include <asio/bind_cancellation_slot.hpp>
 #include <asio/cancellation_signal.hpp>
 #include <spdlog/spdlog.h>
@@ -2671,15 +2672,20 @@ void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSk
        impl_->common_ready_thread!=std::this_thread::get_id() || !common)
         throw std::invalid_argument("Native PK output recipient identity mismatch");
     const auto records=RecoveredTaiwanServerRecords::read(delivery->logical);
+    // CUSTOM-0126 only a canonical final89 after the final88 may use this
+    // accepted-entry writer. No arbitrary experience record/standalone89.
+    const bool terminal=records&&records->size()>=4&&records->back().opcode==0x89&&
+        RecoveredTaiwanPkTerminalNotification::matches(records->back().bytes);
     bool valid=false;
     if(records && records->size()==1 && records->front().opcode==0x86 &&
        RecoveredBattlePlayerGrant::parse(records->front().bytes))valid=true;
-    else if(records && records->size()>=3 && records->back().opcode==0x88 &&
-            RecoveredBattleVitalsBatch::parse_logical(records->back().bytes)){
+    else if(records && records->size()>=3 &&
+            (*records)[records->size()-1-(terminal?1:0)].opcode==0x88 &&
+            RecoveredBattleVitalsBatch::parse_logical((*records)[records->size()-1-(terminal?1:0)].bytes)){
         // Current RecoveredPkActionProjection: one/two scalar action groups,
         // each [own MP?],83,matching target HP; one final friendly bulk.
         std::size_t at=0;unsigned groups=0,seen=0;valid=true;
-        const auto end=records->size()-1;
+        const auto end=records->size()-1-(terminal?1:0);
         while(at<end){
             bool own_mp=false;
             if((*records)[at].opcode==0x86){

@@ -2,6 +2,7 @@
 #include "db/SqliteSupport.h"
 #include "game/BattleCheckpointCodec.h"
 #include "game/OwnedTaiwanPkLaterGrantSource.h"
+#include "game/OwnedTaiwanPkTerminalSource.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -842,12 +843,21 @@ void SqliteOwnedPkRoomRepository::settle(const Ticket& ticket,const BattleCheckp
     auto derived=expected_round;
     const bool advanced=next_round.result_notification_bounds()?derived.results_issued_notification(next.snapshot):
         derived.results_issued(next.snapshot.revision,next_round.masks(),next.snapshot.state==BattleState::Finished);
+    if(advanced&&next_round.terminal_notification()&&!derived.issue_terminal_notification())
+        throw DatabaseError("PK terminal notification policy did not derive from the owned result phase");
     if(!advanced||derived.document()!=next_round.document())
         throw DatabaseError("PK result phase did not derive from both collected intents");
     checkpoint_owned_pair(ticket.input(),expected,next);
     // Reject malformed/corrupt outcome and RNG before durable publication.
     (void)Battle::restore(expected);(void)Battle::restore(next);
     replies_valid(replies);
+    if(next_round.terminal_notification()){
+        const auto terminal=OwnedTaiwanPkTerminalSource::prepare(ticket,next.snapshot,next_round);
+        for(const auto& reply:replies)
+            if(!RecoveredTaiwanPkTerminalNotification::matches_result_sequence(reply)||
+               !std::equal(terminal.begin(),terminal.end(),reply.end()-terminal.size()))
+                throw DatabaseError("PK terminal notification is not the privately derived final outbox tail");
+    }
     const auto before=BattleCheckpointCodec::encode(expected),after=BattleCheckpointCodec::encode(next);
     Transaction tx(db_);require_ticket(ticket,"active");
     // Explicit v3 upgrade must qualify the complete original private graph
@@ -874,7 +884,8 @@ void SqliteOwnedPkRoomRepository::settle(const Ticket& ticket,const BattleCheckp
     room.bind_id(4,ticket.id());room.bind_id(5,expected.snapshot.revision);room.bind(6,before);
     room.done();changed(db_);
     enqueue(ticket,next.snapshot.revision,replies);tx.commit();
-    // Terminal stays locked and needs original89/re-entry/saved-resource policy.
+    // Terminal stays locked. CUSTOM-0126 only appends its qualified no-message
+    // notification; saved-resource/re-entry/original award policies remain open.
 }
 NativeSkillRecord SqliteOwnedPkRoomRepository::scalar_definition(std::uint16_t key){
     const auto kind=key>>8,id=key&0xff;
@@ -939,7 +950,11 @@ OwnedPkRound SqliteOwnedPkRoomRepository::read_round(const Ticket& ticket){
                 throw DatabaseError("PK active notification roster contains a defeated participant");
         // These are current-cycle observations, independent of permanent
         // first-entry receipts. A fast viewer needs only ITS full result write.
-        Statement rows(db_,"SELECT viewer,submitted FROM main.owned_pk_room_outbox WHERE room=? AND revision=?");
+        // v4 also binds BOTH retained rows to the private terminal source.
+        // A JSON policy marker alone cannot qualify arbitrary89/prefix bytes.
+        const auto terminal=result.terminal_notification()?
+            std::optional{OwnedTaiwanPkTerminalSource::prepare(ticket,checkpoint.snapshot,result)}:std::nullopt;
+        Statement rows(db_,"SELECT viewer,submitted,logical FROM main.owned_pk_room_outbox WHERE room=? AND revision=?");
         rows.bind_id(1,ticket.id());rows.bind_id(2,result.result_notification_battle_revision());
         std::array<bool,2> seen{};
         while(rows.row()){
@@ -947,6 +962,12 @@ OwnedPkRound SqliteOwnedPkRoomRepository::read_round(const Ticket& ticket){
             if(viewer>1||seen[viewer]||(submitted!=0&&submitted!=1)||
                (result.result_notification_observations()[viewer]&&submitted!=1))
                 throw DatabaseError("PK notification receipt precedes its own result submission");
+            if(terminal){
+                const auto logical=rows.blob(2,1,RecoveredWorldFrame::max_logical_size);
+                if(!RecoveredTaiwanPkTerminalNotification::matches_result_sequence(logical)||
+                   !std::equal(terminal->begin(),terminal->end(),logical.end()-terminal->size()))
+                    throw DatabaseError("PK retained terminal row differs from its private result policy");
+            }
             seen[viewer]=true;
         }
         if(!seen[0]||!seen[1])throw DatabaseError("PK result notification cycle lacks both result rows");

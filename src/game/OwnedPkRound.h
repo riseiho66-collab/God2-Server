@@ -27,6 +27,7 @@ public:
     std::uint64_t battle_revision()const noexcept{return battle_revision_;}
     std::uint64_t round()const noexcept{return round_;}
     std::uint64_t grant_epoch()const noexcept{return grant_epoch_;}
+    bool terminal_notification()const noexcept{return terminal_notification_;}
     const std::array<Header,2>& headers()const noexcept{return headers_;}
     const Masks& masks()const noexcept{return expected_masks_;}
     const std::optional<Masks>& initial_notification_bounds()const noexcept{return notification_bounds_;}
@@ -46,6 +47,10 @@ public:
     // from the actual post-settlement two-player roster, not native targets.
     // Original exact-mask API cannot downgrade an opted-in v3 cycle.
     bool results_issued_notification(const BattleSnapshot& actual_next);
+    // CUSTOM-0126 opt-in v4 terminal-only wire policy. Stored v1/v2/v3 codecs
+    // and legacy exact-mask APIs remain exact. Notification resolution now
+    // selects v4 on Finished; this neither saves nor releases a room.
+    bool issue_terminal_notification();
     std::string document()const;
     static OwnedPkRound from_document(std::string_view);
     static bool masks_valid(const Masks&)noexcept;
@@ -62,6 +67,7 @@ private:
     std::uint64_t result_notification_battle_revision_{};
     std::array<bool,2> controls_{},grant_submissions_{};
     std::array<std::optional<Intent>,2> intents_{};
+    bool terminal_notification_=false;
     void bump();
     bool results_issued_impl(std::uint64_t,Masks,bool);
     void validate()const;

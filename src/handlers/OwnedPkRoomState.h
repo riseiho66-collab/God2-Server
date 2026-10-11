@@ -3,6 +3,7 @@
 #include "handlers/RecoveredPkCommandSelection.h"
 #include "protocol/RecoveredPkActionProjection.h"
 #include "game/OwnedTaiwanPkBasicResultSource.h"
+#include "game/OwnedTaiwanPkTerminalSource.h"
 #include <map>
 #include <type_traits>
 namespace god2 {
@@ -226,11 +227,27 @@ private:
                                       after.snapshot.state==BattleState::Finished);
         if(!advanced)
             throw DatabaseError("PK paired result phase could not advance");
+        if(notifications&&after.snapshot.state==BattleState::Finished){
+            if(!following.issue_terminal_notification())
+                throw DatabaseError("PK terminal notification phase could not advance");
+            const auto terminal=OwnedTaiwanPkTerminalSource::prepare(current.ticket,after.snapshot,following);
+            // Native FIFO holds88/89 behind the current83 group and stops its
+            // consume visit at88. Append89 after final88 in the SAME durable
+            // pair, not an invented Battle revision/independent receipt stage.
+            for(auto& reply:replies)reply.insert(reply.end(),terminal.begin(),terminal.end());
+        }
         repository_.settle(current.ticket,before,after,prior,following,replies);
         static_assert(std::is_nothrow_move_assignable_v<Battle>);
         current.battle=std::move(staged);
     }
 public:
+    bool terminal_notification_current(std::uint64_t room,std::span<const std::uint8_t> bytes){
+        auto& current=find(room);const auto phase=repository_.round(current.ticket);
+        if(!phase.terminal_notification())return false;
+        const auto expected=OwnedTaiwanPkTerminalSource::prepare(current.ticket,current.battle.inspect(),phase);
+        return RecoveredTaiwanPkTerminalNotification::matches_result_sequence(bytes)&&
+            std::equal(expected.begin(),expected.end(),bytes.end()-expected.size());
+    }
     std::vector<Repository::Delivery> pending(std::uint64_t room){
         return repository_.pending(find(room).ticket);
     }

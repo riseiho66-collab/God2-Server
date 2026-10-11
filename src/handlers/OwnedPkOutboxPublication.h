@@ -392,6 +392,8 @@ private:
         const auto checkpoint=rooms_.inspect(binding.ticket.id());
         if(!checkpoint)return false;
         const auto phase=rooms_.round(binding.ticket.id());
+        if(!flight.grant&&phase.terminal_notification()&&
+           !rooms_.terminal_notification_current(binding.ticket.id(),flight.delivery->logical))return false;
         if(phase.battle_revision()!=checkpoint->revision ||
            (flight.grant?phase.grant_epoch()!=flight.key:checkpoint->revision!=flight.key))return false;
         const auto& p=peer(binding.ticket,flight.viewer);
