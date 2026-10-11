@@ -382,6 +382,10 @@ std::unique_ptr<SqliteOwnedPkRoomRepository> SqliteDatabase::make_owned_pk_room_
     SqliteOwnedPkRoomRepository::require_schema(raw);
     return std::make_unique<SqliteOwnedPkRoomRepository>(raw);
 }
+void SqliteDatabase::install_owned_pk_terminal_resource_schema(){
+    if(!migrated_)throw DatabaseError("Migrate before explicit PK terminal resource extension");
+    SqliteOwnedPkRoomRepository::install_terminal_resource_schema(impl_->connection.get());
+}
 std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan_pk_entry_preparation(
     SqliteOwnedPkRoomRepository& rooms,std::shared_ptr<SharedWorldPresence> presence,
     TaiwanNativeFightCatalog catalog,OwnedTaiwanPkEntryPreparation::Sessions sessions,
@@ -432,6 +436,9 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
        !game||!sessions||!initializations||!peers||!seed||archive_path.empty())
         throw DatabaseError("TW PK backend requires actual common sources and explicit resolver owners");
     OwnedTaiwanPkRoomBackend::require_policy(parameters,order,retry);
+    // This owned basic backend now consumes terminal saved resources. Require
+    // its explicit extension before archive I/O; never install/migrate here.
+    SqliteOwnedPkRoomRepository::require_terminal_resource_schema(impl_->connection.get());
     const auto path=archive_path; // Stable explicit path, no default/current-directory substitution.
     auto resolvers=std::make_shared<OwnedTaiwanPkRoomBackend::Resolvers>(
         OwnedTaiwanPkRoomBackend::Resolvers{std::move(sessions),std::move(initializations),

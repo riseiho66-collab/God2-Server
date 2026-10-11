@@ -257,6 +257,14 @@ public:
     // Finished rooms/owner locks are retained. No generic clear(), loss of a
     // peer, simulated89 or re-login is an authorized settlement/recovery.
 private:
+    friend class OwnedPkOutboxPublication;
+    // CUSTOM-0127 only the exact Publication's two live fullwrite observations
+    // consume this seam. It supplies this actual runtime-owned checkpoint;
+    // native input/public submitted flags cannot request a resource save.
+    void commit_terminal_resources(std::uint64_t room,const Replies& actually_written){
+        const auto& current=find(room);
+        repository_.commit_terminal_resources(current.ticket,current.battle.checkpoint(),actually_written);
+    }
     struct Room {Ticket ticket;Battle battle;Repository::RuntimeClaim claim;};
     using Rooms=std::map<std::uint64_t,Room>;
     Repository& repository_;

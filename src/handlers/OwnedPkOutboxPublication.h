@@ -342,6 +342,10 @@ private:
         std::array<std::shared_ptr<Session>,2> sessions;
         std::array<Session::NativePkEntryHold,2> holds;
         std::array<std::shared_ptr<Flight>,2> flights;
+        // CUSTOM-0127 actual immutable deliveries accepted by fullwrite in
+        // THIS original binding. Durable submitted flags never mint these.
+        std::array<Session::NativeBattleSkill,2> terminal_written;
+        std::array<std::uint64_t,2> terminal_written_revision{};
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
                 std::array<Session::NativePkEntryHold,2> entries)
@@ -436,7 +440,24 @@ private:
             // ONLY actual exact full local async_write crosses this boundary.
             // Typed epoch and checkpoint revision can never acknowledge each other.
             if(flight.grant)rooms_.grant_submitted(binding->ticket.id(),flight.key,flight.viewer);
-            else rooms_.submitted(binding->ticket.id(),flight.key,flight.viewer);
+            else {
+                rooms_.submitted(binding->ticket.id(),flight.key,flight.viewer);
+                if(rooms_.terminal_notification_current(binding->ticket.id(),value->logical)){
+                    binding->terminal_written[flight.viewer]=value;
+                    binding->terminal_written_revision[flight.viewer]=flight.key;
+                    if(binding->terminal_written[0]&&binding->terminal_written[1]){
+                        for(std::uint8_t viewer=0;viewer<2;++viewer)
+                            if(binding->terminal_written_revision[viewer]!=flight.key||
+                               !written_current(*binding,viewer)||
+                               binding->sessions[viewer]->native_battle_skill_written()!=binding->terminal_written[viewer])
+                                throw DatabaseError("PK terminal resource save lost its exact two fullwrite observations");
+                        // Current callback still owns a pending token. Do not
+                        // require pending-clear or auto-pump/re-enter Session.
+                        rooms_.commit_terminal_resources(binding->ticket.id(),
+                            {binding->terminal_written[0]->logical,binding->terminal_written[1]->logical});
+                    }
+                }
+            }
             binding->flights[flight.viewer].reset();
             return true; // No auto-pump while Session's pending token is alive.
         }catch(...){fail(*binding);return false;}
@@ -446,7 +467,8 @@ private:
         binding.failed=true;
         for(const auto& session:binding.sessions)try{session->close();}catch(...){}
         // Active room, locks, rows and submitted flags stay retained. No
-        // abandon, resource settlement, resend/reset or synthetic world return.
+        // abandon, implicit resource retry, resend/reset or synthetic world
+        // return. A prior explicit terminal resource COMMIT stays durable.
     }
 };
 }

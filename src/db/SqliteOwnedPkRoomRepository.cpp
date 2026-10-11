@@ -170,6 +170,15 @@ CREATE TABLE IF NOT EXISTS owned_pk_room_rounds (
  room INTEGER PRIMARY KEY REFERENCES owned_pk_rooms(id),
  revision INTEGER NOT NULL CHECK(revision>0), document TEXT NOT NULL);
 )SQL";
+constexpr const char* terminal_resource_schema=R"SQL(
+CREATE TABLE IF NOT EXISTS owned_pk_terminal_resource_feature (
+ singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+ version INTEGER NOT NULL CHECK(version=1), design_id TEXT NOT NULL CHECK(design_id='CUSTOM-0127'));
+CREATE TABLE IF NOT EXISTS owned_pk_terminal_resources (
+ room INTEGER PRIMARY KEY REFERENCES owned_pk_rooms(id),
+ document TEXT NOT NULL CHECK(length(document)>0),
+ design_id TEXT NOT NULL CHECK(design_id='CUSTOM-0127'));
+)SQL";
 std::string definition_document(const NativeSkillRecord& r){
     const auto& s=r.source;
     return Json{{"source",Json::array({s.dataset_id,s.source_path,s.source_sha256,s.decoded_sha256,
@@ -264,6 +273,24 @@ void SqliteOwnedPkRoomRepository::install_round_schema(sqlite3* db){
     sqlite_detail::execute(db,round_schema);
     sqlite_detail::execute(db,"INSERT OR IGNORE INTO owned_pk_round_feature(singleton,version,design_id) VALUES(1,1,'CUSTOM-0086')");
     require_round_schema(db);tx.commit();
+}
+void SqliteOwnedPkRoomRepository::require_terminal_resource_schema(sqlite3* db){
+    require_owned_main_sources(db);require_round_schema(db);
+    Statement shadows(db,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('owned_pk_terminal_resource_feature','owned_pk_terminal_resources') OR tbl_name COLLATE NOCASE IN ('owned_pk_terminal_resource_feature','owned_pk_terminal_resources')");
+    if(shadows.row())throw DatabaseError("PK terminal resource TEMP namespace rejected");
+    Statement triggers(db,"SELECT 1 FROM main.sqlite_master WHERE type='trigger' AND tbl_name COLLATE NOCASE='character_resources'");
+    if(triggers.row())throw DatabaseError("Unexpected PK terminal resource storage trigger");
+    for(const auto* name:{"owned_pk_terminal_resource_feature","owned_pk_terminal_resources"})
+        require_ddl(db,terminal_resource_schema,name);
+    Statement q(db,"SELECT version,design_id FROM main.owned_pk_terminal_resource_feature WHERE singleton=1");
+    if(!q.row()||q.integer(0)!=1||q.text(1)!="CUSTOM-0127"||q.row())
+        throw DatabaseError("PK terminal resource feature version mismatch");
+}
+void SqliteOwnedPkRoomRepository::install_terminal_resource_schema(sqlite3* db){
+    Transaction tx(db);require_round_schema(db);
+    sqlite_detail::execute(db,terminal_resource_schema);
+    sqlite_detail::execute(db,"INSERT OR IGNORE INTO main.owned_pk_terminal_resource_feature(singleton,version,design_id) VALUES(1,1,'CUSTOM-0127')");
+    require_terminal_resource_schema(db);tx.commit();
 }
 void SqliteOwnedPkRoomRepository::validate(const Input& in){
     const auto& a=in.pair.challenger;const auto& b=in.pair.recipient;
@@ -539,6 +566,144 @@ bool SqliteOwnedPkRoomRepository::owners_current(const Input& in){
     }
     return true;
 }
+std::optional<std::string> SqliteOwnedPkRoomRepository::terminal_resource_ledger(const Ticket& ticket){
+    // Historical schemas stay readable with their original exact resources.
+    // Partial/redirected extension tables never grant a settled-owner bypass.
+    Statement shadows(db_,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('owned_pk_terminal_resource_feature','owned_pk_terminal_resources') OR tbl_name COLLATE NOCASE IN ('owned_pk_terminal_resource_feature','owned_pk_terminal_resources')");
+    if(shadows.row())throw DatabaseError("PK terminal resource TEMP namespace rejected");
+    Statement tables(db_,"SELECT count(*) FROM main.sqlite_master WHERE name COLLATE NOCASE IN ('owned_pk_terminal_resource_feature','owned_pk_terminal_resources')");
+    if(!tables.row())throw DatabaseError("PK terminal resource namespace unreadable");
+    if(tables.integer(0)==0)return std::nullopt;
+    require_terminal_resource_schema(db_);
+    Statement row(db_,"SELECT document,design_id FROM main.owned_pk_terminal_resources WHERE room=?");
+    row.bind_id(1,ticket.id());if(!row.row())return std::nullopt;
+    if(row.text(1)!="CUSTOM-0127")throw DatabaseError("PK terminal resource provenance mismatch");
+    auto document=row.text(0);if(row.row())throw DatabaseError("PK duplicate terminal resource ledger");
+    return document;
+}
+SqliteOwnedPkRoomRepository::TerminalResources
+SqliteOwnedPkRoomRepository::terminal_resources_in_scope(const Ticket& ticket,const BattleCheckpoint* actual){
+    // No require_ticket/read_round here: the Finished owner guard calls this
+    // before deciding whether current rows must equal original or saved ones.
+    if(sqlite3_get_autocommit(db_))throw DatabaseError("PK terminal resources require an existing snapshot");
+    require_terminal_resource_schema(db_);
+    const auto& input=ticket.input();const auto& entry=input.entry;
+    if(!issuer_||ticket.issuer_!=issuer_||!input.combat_sources||!entry.owned_appearances()||
+       !entry.owned_players()||!entry.owned_vitals()||!entry.owned_initial_grants()||
+       !entry.owned_initial_contexts()||!entry.waiting_control())
+        throw DatabaseError("PK terminal resources require original complete private input");
+    for(std::size_t i=0;i<2;++i)
+        if(!(*input.combat_sources)[i].uses_connection(db_)||!(*entry.owned_appearances())[i].uses_connection(db_)||
+           !(*entry.owned_players())[i].uses_connection(db_)||!(*entry.owned_vitals())[i].uses_connection(db_)||
+           !(*entry.owned_initial_grants())[i].uses_connection(db_)||!(*entry.owned_initial_contexts())[i].uses_connection(db_))
+            throw DatabaseError("PK terminal resource source connection changed");
+    validate(input);
+    if(readset(input)!=ticket.readset_)throw DatabaseError("PK terminal resource private readset changed");
+    Statement room(db_,"SELECT state,readset,checkpoint,revision,design_id FROM main.owned_pk_rooms WHERE id=?");
+    room.bind_id(1,ticket.id());
+    if(!room.row()||room.text(0)!="finished"||room.text(1)!=ticket.readset_||room.text(4)!="CUSTOM-0086")
+        throw DatabaseError("PK terminal resource room binding mismatch");
+    const auto checkpoint_text=room.text(2);const auto checkpoint=BattleCheckpointCodec::decode(checkpoint_text);
+    if(checkpoint.snapshot.id!=ticket.id()||checkpoint.snapshot.revision!=room.number<std::uint64_t>(3)||
+       checkpoint.snapshot.state!=BattleState::Finished||BattleCheckpointCodec::encode(checkpoint)!=checkpoint_text||
+       (actual&&checkpoint!=*actual)||room.row())
+        throw DatabaseError("PK terminal resources differ from actual Finished checkpoint");
+    (void)Battle::restore(checkpoint);
+    checkpoint_owned_pair(input,Battle(ticket.id(),input.actors,input.seed).checkpoint(),checkpoint);
+    Statement rounds(db_,"SELECT revision,document FROM main.owned_pk_room_rounds WHERE room=?");
+    rounds.bind_id(1,ticket.id());if(!rounds.row())throw DatabaseError("PK terminal resource round missing");
+    const auto phase_text=rounds.text(1);const auto phase=OwnedPkRound::from_document(phase_text);
+    const auto& contexts=entry.command_contexts();
+    if(phase.revision()!=rounds.number<std::uint64_t>(0)||!phase.terminal_notification()||
+       phase.headers()!=std::array{OwnedPkRound::Header{0,0,contexts[0]},OwnedPkRound::Header{0,0,contexts[1]}}||
+       phase.initial_notification_bounds()!=entry.initial_notification_bounds()||rounds.row())
+        throw DatabaseError("PK terminal resource round/private input mismatch");
+    const auto terminal=OwnedTaiwanPkTerminalSource::prepare(ticket,checkpoint.snapshot,phase);
+    Statement count(db_,"SELECT count(*) FROM main.owned_pk_room_members WHERE room=?");count.bind_id(1,ticket.id());
+    if(!count.row()||count.integer(0)!=2||count.row())throw DatabaseError("PK terminal resources require both member locks");
+    Json members=Json::array(),before=Json::array(),after=Json::array();
+    TerminalResources result{input.resources,{},{},true};
+    for(std::size_t i=0;i<2;++i){
+        const auto& p=i==0?input.pair.challenger:input.pair.recipient;
+        Statement member(db_,"SELECT account,character,session,world_generation,battle_generation FROM main.owned_pk_room_members WHERE room=? AND viewer=?");
+        member.bind_id(1,ticket.id());member.bind_id(2,i);
+        if(!member.row()||member.number<std::uint64_t>(0)!=p.account||member.number<std::uint64_t>(1)!=p.character||
+           member.number<std::uint64_t>(2)!=p.session||member.number<std::uint64_t>(3)!=p.world_generation||
+           member.number<std::uint64_t>(4)!=p.battle_generation||member.row())
+            throw DatabaseError("PK terminal resource member lock changed");
+        members.push_back(Json::array({i,p.account,p.character,p.session,p.world_generation,p.battle_generation}));
+        const auto& actor=*checkpoint.snapshot.actors[14*i];const auto& original=input.resources[i];
+        if(!original.revision||original.revision>=static_cast<std::uint64_t>(INT64_MAX)||
+           actor.max_hp!=original.max_hp||actor.max_mp!=original.max_mp||actor.mp>std::numeric_limits<std::uint32_t>::max())
+            throw DatabaseError("PK terminal resource projection/revision exhausted");
+        auto& saved=result.after[i];saved.hp=actor.hp;saved.mp=static_cast<std::uint32_t>(actor.mp);++saved.revision;
+        if(!saved.valid_health()||saved.mp>saved.max_mp)throw DatabaseError("PK terminal resources outside exact stored domain");
+        before.push_back(Json::array({original.hp,original.max_hp,original.mp,original.max_mp,original.revision,original.design_id}));
+        after.push_back(Json::array({saved.hp,saved.max_hp,saved.mp,saved.max_mp,saved.revision,saved.design_id}));
+    }
+    Statement rows(db_,"SELECT viewer,logical,submitted FROM main.owned_pk_room_outbox WHERE room=? AND revision=? ORDER BY viewer");
+    rows.bind_id(1,ticket.id());rows.bind_id(2,checkpoint.snapshot.revision);Json outputs=Json::array();std::size_t viewer=0;
+    while(rows.row()){
+        const auto bytes=rows.blob(1,1,RecoveredWorldFrame::max_logical_size);const auto submitted=rows.integer(2);
+        if(viewer>=2||rows.number<std::uint8_t>(0)!=viewer||(submitted!=0&&submitted!=1)||
+           !RecoveredTaiwanPkTerminalNotification::matches_result_sequence(bytes)||
+           !std::equal(terminal.begin(),terminal.end(),bytes.end()-terminal.size()))
+            throw DatabaseError("PK terminal resource final output mismatch");
+        result.outputs[viewer].assign(bytes.begin(),bytes.end());
+        outputs.push_back(Json::array({viewer,result.outputs[viewer],1}));
+        result.both_submitted=result.both_submitted&&submitted==1;++viewer;
+    }
+    if(viewer!=2)throw DatabaseError("PK terminal resources require both exact final rows");
+    if(result.both_submitted){
+        Statement pending(db_,"SELECT 1 FROM main.owned_pk_room_outbox WHERE room=? AND submitted=0");pending.bind_id(1,ticket.id());
+        if(pending.row())throw DatabaseError("PK terminal resources have an older pending output");
+    }
+    result.document=Json{{"version",1},{"design_id","CUSTOM-0127"},{"room",ticket.id()},
+        {"profile",input.profile_readset_sha256},{"original_readset",ticket.readset_},{"checkpoint",checkpoint_text},
+        {"round",phase_text},{"members",members},{"before",before},{"after",after},{"final_outputs",outputs},
+        {"scope","HP-MP-only;XP-awards-return-revival-unresolved;locks-retained"}}.dump();
+    return result;
+}
+bool SqliteOwnedPkRoomRepository::finished_owners_current(const Ticket& ticket){
+    const auto ledger=terminal_resource_ledger(ticket);
+    if(!ledger)return owners_current(ticket.input());
+    const auto material=terminal_resources_in_scope(ticket);
+    if(!material.both_submitted||*ledger!=material.document)return false;
+    const auto& input=ticket.input();
+    for(std::size_t i=0;i<2;++i){
+        const auto& p=i==0?input.pair.challenger:input.pair.recipient;
+        if(owners_.load_resources(p.account,p.character)!=std::optional{material.after[i]}||
+           owners_.load_role(p.account,p.character)!=std::optional{input.roles[i]}||
+           owners_.load_position(p.account,p.character)!=std::optional{p.position}||
+           owners_.owned_pending_battle(p.account,p.character))return false;
+    }
+    return true;
+}
+void SqliteOwnedPkRoomRepository::commit_terminal_resources(const Ticket& ticket,const BattleCheckpoint& actual,
+                                                           const Replies& actually_written){
+    Transaction tx(db_);require_ticket(ticket,"finished");
+    const auto material=terminal_resources_in_scope(ticket,&actual);
+    if(!material.both_submitted||material.outputs!=actually_written)
+        throw DatabaseError("PK terminal resource save differs from both actual final fullwrites");
+    if(const auto ledger=terminal_resource_ledger(ticket)){
+        if(*ledger!=material.document)throw DatabaseError("PK terminal resource retry differs");
+        tx.commit();return; // Exact original private source/current after rows; no second increment.
+    }
+    for(std::size_t i=0;i<2;++i){
+        const auto& p=i==0?ticket.input().pair.challenger:ticket.input().pair.recipient;
+        const auto& before=ticket.input().resources[i];const auto& after=material.after[i];
+        Statement write(db_,"UPDATE main.character_resources SET hp=?,mp=?,revision=? WHERE character_id=? AND hp=? AND max_hp=? AND mp=? AND max_mp=? AND revision=? AND design_id=?");
+        write.bind_id(1,after.hp);write.bind_id(2,after.mp);write.bind_id(3,after.revision);write.bind_id(4,p.character);
+        write.bind_id(5,before.hp);write.bind_id(6,before.max_hp);write.bind_id(7,before.mp);write.bind_id(8,before.max_mp);
+        write.bind_id(9,before.revision);write.bind(10,before.design_id);write.done();changed(db_);
+        if(owners_.load_resources(p.account,p.character)!=std::optional{after})
+            throw DatabaseError("PK terminal resource exact readback mismatch");
+    }
+    Statement ledger(db_,"INSERT INTO main.owned_pk_terminal_resources(room,document,design_id) VALUES(?,?,'CUSTOM-0127')");
+    ledger.bind_id(1,ticket.id());ledger.bind(2,material.document);ledger.done();changed(db_);
+    require_ticket(ticket,"finished"); // Both staged rows + complete ledger/unchanged locks before COMMIT.
+    tx.commit();
+}
 bool SqliteOwnedPkRoomRepository::occupied(std::uint64_t account,std::uint64_t character){
     // Owner lookup applies even if the independent feature has no row.
     (void)owners_.load_resources(account,character);
@@ -592,7 +757,8 @@ void SqliteOwnedPkRoomRepository::require_ticket(const Ticket& ticket,const char
         throw DatabaseError("PK reserved combat source rows changed");
     Statement q(db_,"SELECT state,readset,design_id FROM owned_pk_rooms WHERE id=?");q.bind_id(1,ticket.id());
     if(!q.row()||q.text(0)!=state||q.text(1)!=ticket.readset_||q.text(2)!="CUSTOM-0086"||
-       !owners_current(ticket.input()))throw DatabaseError("PK stale room ticket/owner readset");
+       !(std::string_view(state)=="finished"?finished_owners_current(ticket):owners_current(ticket.input())))
+        throw DatabaseError("PK stale room ticket/owner readset");
     for(std::size_t i=0;i<2;++i){
         const auto& p=i==0?ticket.input().pair.challenger:ticket.input().pair.recipient;
         Statement m(db_,"SELECT account,character,session,world_generation,battle_generation FROM owned_pk_room_members WHERE room=? AND viewer=?");
@@ -745,14 +911,15 @@ SqliteOwnedPkRoomRepository::RetainedRecovery SqliteOwnedPkRoomRepository::recov
         if((received||needs_both)&&!latest_submitted[viewer])
             throw DatabaseError("PK retained round control precedes own outbox submission");
     }
-    RetainedRecovery result(ticket,std::move(checkpoint),std::move(phase),std::move(outboxes));
+    auto terminal_resources=state=="finished"?terminal_resource_ledger(ticket):std::nullopt;
+    RetainedRecovery result(ticket,std::move(checkpoint),std::move(phase),std::move(outboxes),std::move(terminal_resources));
     scope.commit();return result;
 }
 bool SqliteOwnedPkRoomRepository::retained_recovery_current(const RetainedRecovery& snapshot){
     try{
         const auto now=recover_retained(snapshot.ticket_);
         if(now.checkpoint_!=snapshot.checkpoint_||now.round_.document()!=snapshot.round_.document()||
-           now.outboxes_.size()!=snapshot.outboxes_.size())return false;
+           now.outboxes_.size()!=snapshot.outboxes_.size()||now.terminal_resources_!=snapshot.terminal_resources_)return false;
         for(std::size_t i=0;i<now.outboxes_.size();++i){
             const auto& a=now.outboxes_[i];const auto& b=snapshot.outboxes_[i];
             if(a.submitted!=b.submitted||a.delivery.room!=b.delivery.room||a.delivery.revision!=b.delivery.revision||

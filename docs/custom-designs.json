@@ -4651,6 +4651,40 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Connect actual privately owned Finished output through durable pair/current publication/accepted-entry transport using bounded native consumer evidence, preserving all unresolved economic/return authorities.",
   "replacement": "Recover native original terminal producer/award/return semantics; complete atomic saved settlement/return/recovery/hosting and full-client acceptance in final phase before production promotion."
+},
+{
+  "id": "CUSTOM-0127",
+  "name": "Owned TW two-fullwrite atomic terminal HP-MP save",
+  "authority": "TW_CUSTOM_PRIVATE_SAME_BINDING_TWO_FULLWRITE_RESOURCE_STAGE_NOT_NATIVE_REWARDS_OR_RETURN",
+  "implementation": [
+    "src/db/SqliteDatabase.cpp",
+    "src/db/SqliteDatabase.h",
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedPkRoomState.h"
+  ],
+  "native_gap": "Original PK award/revival/return semantics and complete native savedworldaggregate lifecycle remain unresolved; no zeroXP/HP1 inferred.",
+  "rules": {
+    "authority": "Only exact Publication Binding fullwrite completions retain actual immutable final deliveries/revisions. BOTH same-revision original Sessions current private holds and actual written pointers rechecked. Private friend RoomState supplies actual runtime-claimed checkpoint and BOTH actual logical buffers to private repository. DB submitted flags alone cannot invoke this seam/reconstruct fullwrite observations.",
+    "material": "Original private issuer/complete sameDB graph/unchanged recomputed readset/profile, exact main/schema/TEMP/trigger guards, canonical Finished checkpoint+RNG/topology/controllers/winner, actual Terminalv4/headers/bounds, BOTH member/session/generation locks, final88/canonical89 supported grammar/fullrows/submitted1/no olderpending. DB final buffers must equal BOTH actualwritten buffers.",
+    "values": "Clone each original resource tuple, HPMP from actual actor0/14, preserve maxHP/maxMP/designCUSTOM0012; checked original revision<INT64MAX then+1 exactlyonce even unchanged scalars. HP0 stays0, EXP/role/progression/economy untouched and award policy stillopen.",
+    "transaction": "ONE PK-specific transaction: original strict owners then derived full canonical material; raw exact fulltuple CAS BOTH HPMP/revision rows with readbacks; insert one resource ledger and final saved-owner qualification before COMMIT. No CharacterRepository code changes/public helper nesting/diagnostic ID reuse. Fallible staged checks may allocate and rollback within transaction.",
+    "ledger": "Explicit new CUSTOM0127 feature/table, one room row; full original readset/profile, canonical checkpoint/round, both membertuples, beforeafter resources and exact combined finaloutputbytes/submitted1. Compare exact derived bytes, not caller digest. Existing exact ledger + currentafter rows retry idempotently without revision bump.",
+    "guards": "Finished-only owner branch validates ledger before requiring derivedafter. ACTIVE/RESERVED owners_current unchanged; absent extension/ledger uses original strict resources. No recursive read_round/require_ticket in material helper. Recovery snapshot/finalcut compares optional ledger as well.",
+    "schema": "Separate opt-in feature/ledger DDL/version; basePK/resource DDL and finished state unchanged, resource design remainsCUSTOM0012. Reject partial/TEMP/wrongnamespace/extension/resource triggers. Backend factory requires pre-existing extension before archiveIO; generic old factory stayscompatible; no install-on-read.",
+    "limits": "Both locks/Finishedcheckpoint/output stayretained. No XP/revival/return/visibility/SessionWORLD/restart/App activation. Same-binding proofs are processlocal; loss after output/submission before resourceCOMMIT cannot auto-recover from flags. Fullwrite is not native89 consumption/ACK; savedDB and network/WORLD are not atomic.",
+    "phase": "Static source/instruction/byte accounting only; no build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Connect privately observed final dual fullwrite to atomic two-owner resource persistence without invalidating original retained Ticket/current/recovery invariants or inventing rewards/return.",
+  "replacement": "Recover original terminal/resource/award/return source, complete real freshWORLDreturn/lock/reconnect/restart/host lifecycle and full-client acceptance before production promotion."
 }
 ]
 }

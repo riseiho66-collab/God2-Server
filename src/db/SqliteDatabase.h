@@ -114,6 +114,7 @@ public:
     // Application must not install it until the full room adapter is ready.
     void install_owned_pk_room_schema();
     void install_owned_pk_round_schema();
+    void install_owned_pk_terminal_resource_schema();
     std::unique_ptr<SqliteOwnedPkRoomRepository> make_owned_pk_room_repository();
     // CUSTOM-0112 explicit preparation source on this exact common connection.
     // No raw connection escapes, schema installation, reservation or sends at
