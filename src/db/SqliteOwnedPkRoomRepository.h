@@ -8,6 +8,9 @@
 #include "game/OwnedTaiwanPkCombatSource.h"
 #include <array>
 #include <memory>
+#include <map>
+#include <mutex>
+#include <utility>
 #include <string>
 struct sqlite3;
 namespace god2 {
@@ -15,6 +18,12 @@ namespace god2 {
 // experience awards, diagnostic reservation reuse or implicit schema install.
 // This is a shared-state backend, NOT the Session RoomAuthority adapter.
 class SqliteOwnedPkRoomRepository {
+    struct RuntimeOwner {};
+    struct Issuer {
+        // Copies of this concrete repository share the same runtime namespace.
+        std::mutex mutex; // Claim registry only, not SQLite/RoomState safety.
+        std::map<std::uint64_t,std::weak_ptr<const RuntimeOwner>> claims;
+    };
 public:
     using Pair=OwnedPkInvitationService::Pair;
     using Replies=std::array<std::vector<std::uint8_t>,2>;
@@ -48,11 +57,13 @@ public:
         }
     private:
         friend class SqliteOwnedPkRoomRepository;
-        Ticket(std::uint64_t id,std::shared_ptr<const Input> input,std::string readset)
-            :id_(id),input_(std::move(input)),readset_(std::move(readset)){}
+        Ticket(std::uint64_t id,std::shared_ptr<const Input> input,std::string readset,
+               std::shared_ptr<Issuer> issuer)
+            :id_(id),input_(std::move(input)),readset_(std::move(readset)),issuer_(std::move(issuer)){}
         std::uint64_t id_;
         std::shared_ptr<const Input> input_;
         std::string readset_;
+        std::shared_ptr<Issuer> issuer_; // NEW recovery/claim identity only.
     };
     struct Delivery {
         std::uint64_t room{},revision{},session{},world_generation{},battle_generation{};
@@ -63,6 +74,40 @@ public:
         std::uint64_t room{},epoch{},session{},world_generation{},battle_generation{};
         std::uint8_t viewer{};
         std::vector<std::uint8_t> logical;
+    };
+    // CUSTOM-0114 one same-process mutable Room owner, not a database lease.
+    // A copied recovery snapshot cannot copy or share this owning capability.
+    class RuntimeClaim {
+    public:
+        RuntimeClaim(const RuntimeClaim&)=delete;
+        RuntimeClaim& operator=(const RuntimeClaim&)=delete;
+        RuntimeClaim(RuntimeClaim&&)noexcept=default;
+        RuntimeClaim& operator=(RuntimeClaim&&)noexcept=default;
+    private:
+        friend class SqliteOwnedPkRoomRepository;
+        explicit RuntimeClaim(std::shared_ptr<const RuntimeOwner> owner):owner_(std::move(owner)){}
+        std::shared_ptr<const RuntimeOwner> owner_;
+    };
+    struct RetainedOutbox {
+        Delivery delivery;
+        bool submitted;
+    };
+    class RetainedRecovery {
+    public:
+        const Ticket& ticket()const noexcept{return ticket_;}
+        const BattleCheckpoint& checkpoint()const noexcept{return checkpoint_;}
+        const OwnedPkRound& round()const noexcept{return round_;}
+        const std::vector<RetainedOutbox>& outboxes()const noexcept{return outboxes_;}
+    private:
+        friend class SqliteOwnedPkRoomRepository;
+        RetainedRecovery(Ticket ticket,BattleCheckpoint checkpoint,OwnedPkRound round,
+                         std::vector<RetainedOutbox> outboxes)
+            :ticket_(std::move(ticket)),checkpoint_(std::move(checkpoint)),round_(std::move(round)),
+             outboxes_(std::move(outboxes)){}
+        Ticket ticket_;
+        BattleCheckpoint checkpoint_;
+        OwnedPkRound round_;
+        std::vector<RetainedOutbox> outboxes_;
     };
     explicit SqliteOwnedPkRoomRepository(sqlite3* db):db_(db),owners_(db){require_schema(db_);require_round_schema(db_);}
     // Identity only; no read, schema installation or admission permission.
@@ -81,6 +126,11 @@ public:
     // ONE transaction: both owner locks, one checkpoint, BOTH durable entries.
     // Outbox insertion is not a socket enqueue/client ACK or Session binding.
     void activate(const Ticket&);
+    // Original retained private Ticket only. No JSON/scalar ticket rehydration,
+    // live world qualification, state transition, resends or submitted resets.
+    RuntimeClaim claim_runtime(const Ticket&);
+    RetainedRecovery recover_retained(const Ticket&);
+    bool retained_recovery_current(const RetainedRecovery&);
     // ONE shared checkpoint + TWO viewer projections, or no durable change.
     void advance(const Ticket&,const BattleCheckpoint& expected,
                  const BattleCheckpoint& next,const Replies&,
@@ -110,6 +160,7 @@ public:
 private:
     sqlite3* db_;
     SqliteRecoveredCharacterRepository owners_; // SAME SQLite connection
+    std::shared_ptr<Issuer> issuer_=std::make_shared<Issuer>();
     static void validate(const Input&);
     static std::string readset(const Input&);
     bool owners_current(const Input&);

@@ -3053,3 +3053,12 @@ CUSTOM0113把可見性專用的雙端退場接到明示 opt-in admission：同�
 新 departure 不產生猜測回場；post-activate 失敗關閉雙端並保留 active/outboxes，marker 由 exact cleanup 回收。private current 僅為 Held／Committed 的 pre-release 範圍，不是 Written/nativeACK 或 terminal authority。原有未選取此 common visibility 的 admission/default 與凍結功能維持。Application pk_rooms 未安裝；Finished 鎖、完整 saved settlement／89／fresh generation initialization／worldreturn 與 restart recovery 仍待接，舊 diagnostic 回場不能代用。
 
 本輪既有 C++ 修改6份／新增0份；CUSTOM110→111、mixed257→258、groups26不變；新增 departure source1、新opcode0、新完整雙向路徑0。TW C2S74（具局部分支50／控制11／未接13），S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9，86selector7／case6，83action23／projection2。TW unhosted38關聯／去重34、CN93／71不變。全遊戲總量與完成率未知。未build／compiler／test／runtime／native／VM／codec／gameDBSQL／migrate／activate／deploy；GitHub/Discord通知分開記錄，不當遊戲驗收。
+
+
+## 第276輪：保留私有 Ticket 的持久 PK 房間復綁
+
+CUSTOM0114由原 repository 的真正私有 Ticket 讀取 active／finished room、雙方 owner locks、完整 checkpoint／RNG、round 與全 outbox，產生不可外造的 recovery snapshot。RoomState 先取得唯一 runtime claim、恢復該 checkpoint 並預配置 map node，最後重驗完整 durable snapshot 才發布房間。activate 也持有相同 claim，拒絕另一個 RoomState 同時擁有第二份可修改 Battle；失敗由 RAII 釋放未發布 claim，舊持有者析構後才可復綁。
+
+復綁不從 seed 重開、不重置 round／grant／intent／submitted，不自動重送或解除 Finished 鎖、不改 saved resources 或 Session。此來源只恢復仍保留真正 Ticket 的執行器房間；跨程序 restart 的 private Prepared／Observation／Session／initialization 重建、terminal saved settlement／native89／fresh generation worldreturn 與 Application hosting 仍待接，不能以 scalar／JSON 偽造憑證。
+
+本輪既有 C++ 修改3份／新增0份，CUSTOM111→112、mixed258→259、groups26不變；新增 retained recovery source1，新opcode0、新完整雙向路徑0。TW C2S74（具局部分支50／控制11／未接13），S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9，86selector7／case6，83action23／projection2。TW unhosted38關聯／去重34、CN93／71不變。全遊戲總量與完成率未知；未 build／compiler／test／runtime／native／VM／codec／game DB SQL／migration／activation／deployment。GitHub／Discord 通知另外記錄。

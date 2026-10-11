@@ -27,14 +27,35 @@ public:
     // this does not change Session states or claim their queues accepted them.
     void activate(const Ticket& ticket){
         if(rooms_.contains(ticket.id()))throw DatabaseError("PK room already active in this executor");
+        // CUSTOM-0114 same issuer claim also covers retained recovery. A
+        // different RoomState cannot own another mutable Battle concurrently.
+        auto claim=repository_.claim_runtime(ticket);
         auto battle=Battle::restore(repository_.initial(ticket));
         // Allocate the future map node BEFORE the durable transaction. A DB
         // exception leaves no published in-memory room; after COMMIT map node
         // transfer and Battle moves do not allocate or call user callbacks.
         Rooms staged;
-        staged.emplace(ticket.id(),Room{ticket,std::move(battle)});
+        staged.emplace(ticket.id(),Room{ticket,std::move(battle),std::move(claim)});
         auto node=staged.extract(ticket.id());
         repository_.activate(ticket);
+        rooms_.insert(std::move(node));
+    }
+    // CUSTOM-0114 restore the latest durable active/retained-finished room
+    // only while its genuine Ticket and original repository issuer survive.
+    // No seed restart, Session binding, sends, grant reset, saved settlement,
+    // lock release or private source rehydration across process restart.
+    void restore_retained(const Ticket& ticket){
+        if(rooms_.contains(ticket.id()))throw DatabaseError("PK room already active in this executor");
+        auto claim=repository_.claim_runtime(ticket);
+        const auto retained=repository_.recover_retained(ticket);
+        auto battle=Battle::restore(retained.checkpoint());
+        Rooms staged;
+        staged.emplace(ticket.id(),Room{retained.ticket(),std::move(battle),std::move(claim)});
+        auto node=staged.extract(ticket.id());
+        // All fallible allocation/restoration precedes the final full durable
+        // fence. Publishing the preallocated node neither sends nor writes DB.
+        if(!repository_.retained_recovery_current(retained))
+            throw DatabaseError("PK retained recovery changed before executor binding");
         rooms_.insert(std::move(node));
     }
     std::optional<BattleSnapshot> inspect(std::uint64_t room)const{
@@ -172,7 +193,7 @@ public:
     // Finished rooms/owner locks are retained. No generic clear(), loss of a
     // peer, simulated89 or re-login is an authorized settlement/recovery.
 private:
-    struct Room {Ticket ticket;Battle battle;};
+    struct Room {Ticket ticket;Battle battle;Repository::RuntimeClaim claim;};
     using Rooms=std::map<std::uint64_t,Room>;
     Repository& repository_;
     Rooms rooms_;

@@ -11,6 +11,17 @@ namespace {
 using sqlite_detail::Statement;
 using sqlite_detail::Transaction;
 using Json=nlohmann::json;
+// CUSTOM-0114 owns one consistent read snapshot. Unlike Transaction this
+// uses BEGIN, not BEGIN IMMEDIATE, and performs no DML/schema installation.
+struct RecoveryRead {
+    sqlite3* db;bool finished=false;
+    explicit RecoveryRead(sqlite3* value):db(value){
+        if(!sqlite3_get_autocommit(db))throw DatabaseError("PK recovery requires its own read scope");
+        sqlite_detail::execute(db,"BEGIN");
+    }
+    ~RecoveryRead(){if(!finished)sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}
+    void commit(){sqlite_detail::execute(db,"COMMIT");finished=true;}
+};
 std::string owned_combat_profile_digest(std::string_view readset){
     auto value=Json::parse(readset);
     value.erase("profile_readset_sha256"); // No recursive/self-supplied hash input.
@@ -558,7 +569,7 @@ SqliteOwnedPkRoomRepository::Ticket SqliteOwnedPkRoomRepository::prepare(Input i
         member.bind_id(1,id);member.bind_id(2,i);member.bind_id(3,p.account);member.bind_id(4,p.character);
         member.bind_id(5,p.session);member.bind_id(6,p.world_generation);member.bind_id(7,p.battle_generation);member.done();
     }
-    Ticket ticket(id,std::move(snapshot),std::move(document));
+    Ticket ticket(id,std::move(snapshot),std::move(document),issuer_);
     tx.commit();return ticket;
 }
 void SqliteOwnedPkRoomRepository::require_ticket(const Ticket& ticket,const char* state){
@@ -583,6 +594,104 @@ bool SqliteOwnedPkRoomRepository::current(const Ticket& ticket){
     Transaction tx(db_);
     try{require_ticket(ticket,"reserved");}catch(const DatabaseError&){return false;}
     tx.commit();return true;
+}
+SqliteOwnedPkRoomRepository::RuntimeClaim SqliteOwnedPkRoomRepository::claim_runtime(const Ticket& ticket){
+    if(!issuer_||ticket.issuer_!=issuer_)throw DatabaseError("PK runtime claim requires its original repository issuer");
+    // Registry exclusion alone does not make this repository/SQLite/RoomState
+    // thread-safe: their actual single-game-executor contract still applies.
+    // Remove only expired entries; a live claim is never displaced or shared.
+    const std::lock_guard lock(issuer_->mutex);
+    for(auto at=issuer_->claims.begin();at!=issuer_->claims.end();)
+        if(at->second.expired())at=issuer_->claims.erase(at);else ++at;
+    if(issuer_->claims.contains(ticket.id()))throw DatabaseError("PK room already has a mutable runtime owner");
+    auto owner=std::make_shared<const RuntimeOwner>();
+    issuer_->claims.emplace(ticket.id(),owner);
+    return RuntimeClaim(std::move(owner));
+}
+SqliteOwnedPkRoomRepository::RetainedRecovery SqliteOwnedPkRoomRepository::recover_retained(const Ticket& ticket){
+    if(!issuer_||ticket.issuer_!=issuer_)throw DatabaseError("PK recovery requires its original repository issuer");
+    // Private retained input and persisted full readset, not a supplied digest
+    // or new world qualification. Active admission material remains frozen.
+    if(readset(ticket.input())!=ticket.readset_)throw DatabaseError("PK retained input/readset mismatch");
+    RecoveryRead scope(db_);
+    Statement room(db_,"SELECT state,checkpoint,revision FROM owned_pk_rooms WHERE id=?");room.bind_id(1,ticket.id());
+    if(!room.row())throw DatabaseError("PK retained room missing");
+    const auto state=room.text(0),checkpoint_text=room.text(1);
+    const auto revision=room.number<std::uint64_t>(2);
+    if(state!="active"&&state!="finished")throw DatabaseError("PK retained recovery requires active or finished state");
+    require_ticket(ticket,state.c_str());
+    Statement count(db_,"SELECT COUNT(*) FROM owned_pk_room_members WHERE room=?");count.bind_id(1,ticket.id());
+    if(!count.row()||count.integer(0)!=2)throw DatabaseError("PK recovery requires both exact owner locks");
+    auto checkpoint=BattleCheckpointCodec::decode(checkpoint_text);
+    if(checkpoint.snapshot.id!=ticket.id()||checkpoint.snapshot.revision!=revision)
+        throw DatabaseError("PK retained checkpoint identity/revision mismatch");
+    (void)Battle::restore(checkpoint); // Preserve full canonical RNG, never reseed/replay.
+    const auto initial_checkpoint=Battle(ticket.id(),ticket.input().actors,ticket.input().seed).checkpoint();
+    checkpoint_owned_pair(ticket.input(),initial_checkpoint,checkpoint);
+    if(revision==1&&checkpoint!=initial_checkpoint)
+        throw DatabaseError("PK retained revision1 differs from original checkpoint/RNG");
+    auto phase=read_round(ticket); // Same read snapshot; headers, bounds and durable state.
+    const auto phase_document=Json::parse(phase.document());
+    std::vector<RetainedOutbox> outboxes;
+    std::array<bool,2> latest_submitted{};
+    Statement rows(db_,"SELECT revision,viewer,logical,submitted FROM owned_pk_room_outbox WHERE room=? ORDER BY revision,viewer");
+    rows.bind_id(1,ticket.id());
+    std::uint64_t previous=0,current=0;std::size_t total_bytes=0;
+    std::uint8_t expected_viewer=0;
+    while(rows.row()){
+        const auto row_revision=rows.number<std::uint64_t>(0);
+        const auto viewer=rows.number<std::uint8_t>(1);
+        const auto submitted=rows.number<std::uint8_t>(3);
+        if(!row_revision||row_revision>revision||viewer!=expected_viewer||submitted>1)
+            throw DatabaseError("PK retained outbox identity/pair mismatch");
+        if(viewer==0){
+            if((!previous&&row_revision!=1)||(previous&&(row_revision<=previous||row_revision-previous>2)))
+                throw DatabaseError("PK retained outbox revision history mismatch");
+            current=row_revision;
+        }else if(row_revision!=current)throw DatabaseError("PK retained outbox pair revision mismatch");
+        const auto blob=rows.blob(2,1,RecoveredWorldFrame::max_logical_size);
+        std::vector<std::uint8_t> bytes(blob.begin(),blob.end());
+        if(bytes.size()>std::numeric_limits<std::size_t>::max()-total_bytes)
+            throw DatabaseError("PK retained outbox aggregate size overflow");
+        total_bytes+=bytes.size();
+        if(row_revision==1&&bytes!=ticket.input().entry.records()[viewer])
+            throw DatabaseError("PK retained initial outbox differs from original Prepared");
+        if(row_revision<revision&&!submitted)throw DatabaseError("PK older outbox was not submitted before settlement");
+        if(row_revision==revision)latest_submitted[viewer]=submitted!=0;
+        const auto& peer=viewer==0?ticket.input().pair.challenger:ticket.input().pair.recipient;
+        outboxes.push_back({Delivery{ticket.id(),row_revision,peer.session,peer.world_generation,
+            peer.battle_generation+1,viewer,std::move(bytes)},submitted!=0});
+        expected_viewer=static_cast<std::uint8_t>(1-viewer);
+        if(viewer==1)previous=row_revision;
+    }
+    if(outboxes.empty()||expected_viewer!=0||previous!=revision)
+        throw DatabaseError("PK retained outbox lacks complete current revision");
+    for(std::size_t viewer=0;viewer<2;++viewer){
+        const bool received=phase_document.at("controls").at(viewer).get<bool>();
+        const bool needs_both=phase.phase()==OwnedPkRound::Phase::Grants||
+            phase.phase()==OwnedPkRound::Phase::Collect||phase.phase()==OwnedPkRound::Phase::Ready;
+        if((received||needs_both)&&!latest_submitted[viewer])
+            throw DatabaseError("PK retained round control precedes own outbox submission");
+    }
+    RetainedRecovery result(ticket,std::move(checkpoint),std::move(phase),std::move(outboxes));
+    scope.commit();return result;
+}
+bool SqliteOwnedPkRoomRepository::retained_recovery_current(const RetainedRecovery& snapshot){
+    try{
+        const auto now=recover_retained(snapshot.ticket_);
+        if(now.checkpoint_!=snapshot.checkpoint_||now.round_.document()!=snapshot.round_.document()||
+           now.outboxes_.size()!=snapshot.outboxes_.size())return false;
+        for(std::size_t i=0;i<now.outboxes_.size();++i){
+            const auto& a=now.outboxes_[i];const auto& b=snapshot.outboxes_[i];
+            if(a.submitted!=b.submitted||a.delivery.room!=b.delivery.room||a.delivery.revision!=b.delivery.revision||
+               a.delivery.viewer!=b.delivery.viewer||a.delivery.session!=b.delivery.session||
+               a.delivery.world_generation!=b.delivery.world_generation||a.delivery.battle_generation!=b.delivery.battle_generation||
+               a.delivery.logical!=b.delivery.logical)return false;
+        }
+        return true;
+    }catch(const DatabaseError&){return false;}
+     catch(const std::invalid_argument&){return false;}
+     catch(const Json::exception&){return false;}
 }
 BattleCheckpoint SqliteOwnedPkRoomRepository::initial(const Ticket& ticket){
     if(!owned_appearance_current(ticket.input(),db_))throw DatabaseError("PK owned appearance source expired");

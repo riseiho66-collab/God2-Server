@@ -4249,6 +4249,38 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Connect actual dual native PK admission to visibility departure preserving common transport through entry writes.",
   "replacement": "Replace custom lifecycle only with build-matched original evidence; complete hosting/turns/return/recovery before comprehensive tests/activation."
+},
+{
+  "id": "CUSTOM-0114",
+  "name": "Same-process retained private-ticket PK recovery with exclusive runtime claim",
+  "authority": "CUSTOM_RETAINED_PRIVATE_OBJECT_AND_DURABLE_SNAPSHOT_NOT_RESTART_OR_SESSION_RECOVERY",
+  "implementation": [
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/handlers/OwnedPkRoomState.h"
+  ],
+  "native_image": "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+  "native_gap": "Original recovery/reconnect policy is unrecovered. Complete Application hosting, transport recovery, terminal settlement/world return and restart rehydration of private owned sources remain open.",
+  "rules": {
+    "original_ticket": "Only original genuine retained Ticket plus original stable private repository issuer. Persisted full readset and immutable source graph remain; never mint Prepared/Observation/Ticket from JSON, scalar id, digest or origin label. New issuer field gates only new recovery/claim paths; existing readset serialization and ticket equality unchanged.",
+    "runtime_owner": "Move-only private RuntimeClaim retained in RoomState for both ordinary activate and restore. Copied repositories share stable issuer/weak claim registry; live claim cannot be replaced/copied/shared. Only expired registry entries removed; previous State destruction releases its owner. Shared mutex covers registry cleanup/lookup/insertion only. Single actual game executor and borrowed repository/connection lifetimes remain required; no whole-repository thread safety, global database or cross-process lease.",
+    "observation": "Own autocommit-required explicit BEGIN read snapshot, no DML/schema install. Require active/finished full readset/CUSTOM0086, exact two member locks and existing frozen saved resources/role/position/no diagnostic pending-battle checks. Do not require old InWorld appearance.current/normal current/RESERVED source fences after activation.",
+    "checkpoint": "Validate canonical exact checkpoint/RNG and Battle restore, id/revision/LegacyCustom/resource/winner state and admitted actors only0/14 with immutable controller/maxima/dual attack/dual defense, allowing only current HP/MP variation. Revision1 entire checkpoint/RNG equals original initial checkpoint. Never reseed current Battle or replay settled intents.",
+    "round": "Retain complete canonical round/SQL revision/battle revision/state/headers/context/bounds/permanent first observations/masks/controls/grant submissions/intents. Existing read_round source fences remain. Grant epoch is not outbox revision; historical settled intent costs not reauthorized against post-action MP.",
+    "outbox": "Read ALL rows including submitted. Every actual revision exact viewer0/1, bounded nonempty logical bytes, submitted0/1 unchanged; revision1 exact Prepared entries, current checkpoint revision pair mandatory; legal gaps1/2 retained. Older pairs allsubmitted; current control requires ownsubmitted, Grants/Collect/Ready require both. No auto-resend/reset/re-encoding/ACK claim. No new fixed total history quota; checked size_t overflow/allocation failure reject without mutation.",
+    "publication": "Private immutable recovery snapshot contains genuine Ticket/checkpoint/round/all outboxes, no runtime claim. RoomState claims owner, restores exact Battle, preallocates complete map node, then full durable snapshot-current reload before nonallocating node publication. No state transition/action/DB write/send. Read-fence-to-publication is not cross-process atomic; subsequent existing CAS still applies.",
+    "scope": "Same-process retained Ticket only, one concrete loader/rebinding increment, no new opcode/full gameplay route/whole-game percentage. Sessions/reconnect, departure markers/admission operations, terminal locks/saves/world return, later grants/learned skills and restart authority remain separate. Native/CN/web/frozen features and 64-bit extension unchanged.",
+    "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Recover one retained shared Battle from real durable checkpoint/round/full outbox without losing private input provenance or creating a second mutable owner.",
+  "replacement": "Replace custom recovery only with build-matched original policy; implement actual Application/Session lifecycle and restart authority separately before full testing and activation."
 }
 ]
 }
