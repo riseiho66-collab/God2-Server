@@ -274,6 +274,18 @@ public:
     // Exact Held OR Committed, PRE-RELEASE only. No Written/terminal-return
     // authority; pending-cleared/released transports deliberately fail.
     bool taiwan_pk_departure_current(const TaiwanPkDeparture&)const;
+    // CUSTOM-0130 pure retained registry/transport guards. No repository or
+    // callback observations, world resume, marker retirement or native ACK.
+    // Binding requires BOTH Committed holds; retained input requires BOTH
+    // binding proofs and only this viewer's accepted Written entry.
+    bool taiwan_pk_departure_bound_current(const TaiwanPkDeparture&,
+        const std::array<Lease,2>&,const std::array<RecoveredPosition,2>&,
+        const std::array<std::shared_ptr<Session>,2>&,
+        const std::array<Session::NativePkEntryHold,2>&)const;
+    bool taiwan_pk_departure_retained_current(const TaiwanPkDeparture&,
+        const std::array<Lease,2>&,const std::array<RecoveredPosition,2>&,
+        const std::array<std::shared_ptr<Session>,2>&,
+        const std::array<Session::NativePkEntryHold,2>&,std::uint8_t viewer)const;
     void reset_recipient(const Lease&); // Actual native pool reset: invalidate incoming bindings, no invented packets.
     // Generation-qualified source/recipient disconnect or failed-entry cleanup.
     // Departing recipients receive nothing; surviving peers get stored73 when
@@ -283,6 +295,10 @@ private:
     bool taiwan_pk_departed(const Lease&)const noexcept;
     bool taiwan_pk_departure_fence(const std::shared_ptr<TaiwanPkDepartureState>&,
         bool installed,bool held_only)const;
+    bool taiwan_pk_departure_exact_current(const TaiwanPkDeparture&,
+        const std::array<Lease,2>&,const std::array<RecoveredPosition,2>&,
+        const std::array<std::shared_ptr<Session>,2>&,
+        const std::array<Session::NativePkEntryHold,2>&,bool retained,std::uint8_t viewer)const;
     struct Entry {
         Binding binding;RecoveredPosition position;Native native;
         std::shared_ptr<const TaiwanAppearanceAfterState> last_taiwan_appearance;

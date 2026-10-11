@@ -475,12 +475,19 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
             auto value=resolvers->seed(pair);return resolvers->stopped?std::nullopt:std::move(value);},
         std::move(companion_source));
     auto driver=std::make_unique<OwnedTaiwanPkBasicDriver>(std::move(game),*rooms,lua,parameters,order,retry);
+    // CUSTOM-0130 capture actual owners BEFORE argument evaluation can move
+    // them into Admission. The genuine Attempt token reaches the same driver.
+    const auto departure_visibility=visibility;const auto departure_presence=presence;
     auto admission=std::make_unique<OwnedPkEntryAdmission>(*rooms,
         [preparation](const OwnedPkInvitationService::Pair& pair){return preparation->prepare(pair);},
         session_source,peer_source,std::move(visibility),std::move(presence),
-        [owner=driver.get()](const OwnedPkRoomState::Ticket& ticket,
+        OwnedPkEntryAdmission::Bind{},
+        [owner=driver.get(),departure_visibility,departure_presence](const OwnedPkRoomState::Ticket& ticket,
             const std::array<std::shared_ptr<Session>,2>& bound,
-            const std::array<Session::NativePkEntryHold,2>& holds){return owner->bind(ticket,bound,holds);});
+            const std::array<Session::NativePkEntryHold,2>& holds,
+            const cn::SharedActorVisibility::TaiwanPkDeparture& departure){
+            return owner->bind(ticket,bound,holds,
+                OwnedTaiwanPkBasicDriver::WorldDeparture{departure_visibility,departure_presence,departure});});
     // The private constructor only moves already assembled owners; no callback
     // captures a partly constructed backend. On exceptions local reverse-order
     // destruction also retires Admission before driver/state/repository.

@@ -31,18 +31,24 @@ public:
     // here or waits for both written callbacks to find a fast peer's first0B.
     using Bind=std::function<bool(const Ticket&,const std::array<std::shared_ptr<Session>,2>&,
                                  const std::array<Session::NativePkEntryHold,2>&)>;
+    // CUSTOM-0130 exclusive additive bind path. The real Attempt supplies its
+    // privately minted departure; no caller scalar can recreate this token.
+    using DepartureBind=std::function<bool(const Ticket&,const std::array<std::shared_ptr<Session>,2>&,
+        const std::array<Session::NativePkEntryHold,2>&,const cn::SharedActorVisibility::TaiwanPkDeparture&)>;
     OwnedPkEntryAdmission(OwnedPkRoomState& rooms,Prepare prepare,Sessions sessions,
                           Invitations::Resolve peers,
                           std::shared_ptr<cn::SharedActorVisibility> world_visibility = {},
                           std::shared_ptr<SharedWorldPresence> world_presence = {},
-                          Bind bind = {})
+                          Bind bind = {},DepartureBind departure_bind = {})
         :rooms_(rooms),prepare_(std::move(prepare)),sessions_(std::move(sessions)),
          peers_(std::move(peers)),world_visibility_(std::move(world_visibility)),
          world_presence_(std::move(world_presence)),
          bind_(std::move(bind)),
+         departure_bind_(std::move(departure_bind)),
          lifetime_(std::make_shared<Lifetime>(Lifetime{this})){
         if(bool(world_visibility_)!=bool(world_presence_) ||
-           (world_visibility_ && !world_visibility_->owns_presence(world_presence_)))
+           (world_visibility_ && !world_visibility_->owns_presence(world_presence_)) ||
+           (departure_bind_&&(!world_visibility_||bind_)))
             throw std::invalid_argument("PK departure requires exact common presence and visibility owners");
     }
     ~OwnedPkEntryAdmission(){
@@ -154,6 +160,7 @@ private:
     std::shared_ptr<cn::SharedActorVisibility> world_visibility_;
     std::shared_ptr<SharedWorldPresence> world_presence_;
     Bind bind_;
+    DepartureBind departure_bind_;
     std::shared_ptr<Lifetime> lifetime_;
     std::map<std::uint64_t,std::shared_ptr<Attempt>> attempts_;
     const std::thread::id thread_=std::this_thread::get_id();
@@ -259,11 +266,14 @@ private:
                 !attempt.sessions[1]->native_pk_entry_committed_current(*attempt.holds[1]))){
                 cancel(attempt,true);return;
             }
-            if(bind_){
+            if(bind_||departure_bind_){
                 if(attempt.stage!=Stage::Active ||
                    !attempt.sessions[0]->native_pk_entry_committed_current(*attempt.holds[0]) ||
                    !attempt.sessions[1]->native_pk_entry_committed_current(*attempt.holds[1]) ||
-                   !bind_(attempt.ticket,attempt.sessions,{*attempt.holds[0],*attempt.holds[1]}) ||
+                   !(departure_bind_ ?
+                       (attempt.departure&&departure_bind_(attempt.ticket,attempt.sessions,
+                           {*attempt.holds[0],*attempt.holds[1]},*attempt.departure)) :
+                       bind_(attempt.ticket,attempt.sessions,{*attempt.holds[0],*attempt.holds[1]})) ||
                    (world_visibility_ && (!attempt.departure ||
                     !world_visibility_->taiwan_pk_departure_current(*attempt.departure))) ||
                    attempt.stage!=Stage::Active ||

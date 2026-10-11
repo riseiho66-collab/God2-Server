@@ -75,6 +75,10 @@ bool SharedWorldPresence::ready(const Lease& lease) const {
     owner();const auto found=sessions_.find(lease.session);
     return found!=sessions_.end() && found->second.active && current(lease);
 }
+bool SharedWorldPresence::retained_ready_current(const Lease& lease) const {
+    owner();const auto found=sessions_.find(lease.session);
+    return found!=sessions_.end() && found->second.active && found->second.lease==lease;
+}
 std::optional<SharedWorldPresence::Lease> SharedWorldPresence::ready_lease(
     std::uint64_t session,std::uint64_t account,std::uint64_t character) const {
     owner();if(!session || !account || !character)return std::nullopt;

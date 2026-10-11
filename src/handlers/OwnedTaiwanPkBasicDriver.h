@@ -23,6 +23,7 @@ class OwnedTaiwanPkBasicDriver final {
 public:
     using Parameters=OwnedTaiwanPkLuaBasicOwner::Parameters;
     using NativeBatch=OwnedTaiwanPkLuaBasicOwner::NativeBatch;
+    using WorldDeparture=OwnedTaiwanPkLuaBasicOwner::WorldDeparture;
     OwnedTaiwanPkBasicDriver(asio::any_io_executor game,OwnedPkRoomState& rooms,LuaEngine& lua,
             Parameters parameters,std::array<std::uint8_t,2> order,std::chrono::milliseconds retry)
         :game_(std::move(game)),retry_(checked(retry)),timer_(game_),
@@ -32,7 +33,8 @@ public:
     OwnedTaiwanPkBasicDriver& operator=(const OwnedTaiwanPkBasicDriver&)=delete;
 
     bool bind(const Ticket& ticket,const std::array<std::shared_ptr<Session>,2>& sessions,
-            const std::array<Session::NativePkEntryHold,2>& holds){
+            const std::array<Session::NativePkEntryHold,2>& holds,
+            std::optional<WorldDeparture> departure={}){
         check_action();
         if(pairs_.size()>=256 || pairs_.contains(ticket.id()) || !sessions[0] || !sessions[1] ||
            sessions[0]==sessions[1] || by_session_.contains(sessions[0]->id()) ||
@@ -44,7 +46,7 @@ public:
         Pairs staged;staged.emplace(ticket.id(),Pair{ticket,sessions,holds});
         Index staged_index;
         for(const auto& session:sessions)staged_index.emplace(session->id(),ticket.id());
-        if(staged_index.size()!=2 || !owner_.bind(ticket,sessions,holds))return false;
+        if(staged_index.size()!=2 || !owner_.bind(ticket,sessions,holds,std::move(departure)))return false;
         pairs_.insert(staged.extract(ticket.id()));
         while(!staged_index.empty())by_session_.insert(staged_index.extract(staged_index.begin()));
         try{arm();}catch(...){stop_on_game();throw;}

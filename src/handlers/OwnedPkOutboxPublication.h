@@ -1,5 +1,6 @@
 #pragma once
 #include "handlers/OwnedPkRoomState.h"
+#include "cn/world/SharedActorVisibility.h"
 #include "net/Session.h"
 #include <algorithm>
 #include <array>
@@ -23,6 +24,14 @@ class OwnedPkOutboxPublication final {
 public:
     using Ticket=OwnedPkRoomState::Ticket;
     using Repository=OwnedPkRoomState::Repository;
+    // CUSTOM-0130 genuine departure is optional on historical bindings. Its
+    // actual registry/presence and privately minted token stay together; raw
+    // markers, same IDs or another visibility instance are not substitutes.
+    struct WorldDeparture {
+        std::shared_ptr<cn::SharedActorVisibility> visibility;
+        std::shared_ptr<SharedWorldPresence> presence;
+        cn::SharedActorVisibility::TaiwanPkDeparture token;
+    };
     explicit OwnedPkOutboxPublication(OwnedPkRoomState& rooms)
         :rooms_(rooms),lifetime_(std::make_shared<Lifetime>(Lifetime{this})){}
     ~OwnedPkOutboxPublication(){
@@ -36,7 +45,8 @@ public:
     // either release. Both original capabilities are stored atomically in
     // preallocated map nodes; no callback/send/DB mutation occurs here.
     bool bind(const Ticket& ticket,const std::array<std::shared_ptr<Session>,2>& sessions,
-              const std::array<Session::NativePkEntryHold,2>& holds){
+              const std::array<Session::NativePkEntryHold,2>& holds,
+              std::optional<WorldDeparture> departure={}){
         check_thread();
         if(bindings_.size()>=256 || bindings_.contains(ticket.id()) || !rooms_.owns_ticket(ticket) ||
            !sessions[0] || !sessions[1] || sessions[0]==sessions[1] ||
@@ -58,7 +68,17 @@ public:
                request.logical!=input.entry.records()[i] ||
                !sessions[i]->native_pk_entry_committed_current(holds[i]))return false;
         }
-        auto binding=std::make_shared<Binding>(ticket,sessions,holds);
+        if(departure){
+            if(!departure->visibility||!departure->presence||
+               !departure->visibility->owns_presence(departure->presence))return false;
+            for(const auto& source:*input.entry.owned_appearances())
+                if(!source.owns_presence(departure->presence))return false;
+            if(!departure->visibility->taiwan_pk_departure_bound_current(departure->token,
+                {(*input.entry.owned_appearances())[0].material().lease,
+                 (*input.entry.owned_appearances())[1].material().lease},
+                {input.pair.challenger.position,input.pair.recipient.position},sessions,holds))return false;
+        }
+        auto binding=std::make_shared<Binding>(ticket,sessions,holds,std::move(departure));
         Bindings staged;staged.emplace(ticket.id(),binding);
         SessionIndex staged_index;
         for(std::uint8_t i=0;i<2;++i)staged_index.emplace(sessions[i]->id(),Index{ticket.id(),i});
@@ -356,6 +376,7 @@ private:
         Ticket ticket;
         std::array<std::shared_ptr<Session>,2> sessions;
         std::array<Session::NativePkEntryHold,2> holds;
+        std::optional<WorldDeparture> departure;
         std::array<std::shared_ptr<Flight>,2> flights;
         // CUSTOM-0127 actual immutable deliveries accepted by fullwrite in
         // THIS original binding. Durable submitted flags never mint these.
@@ -370,8 +391,8 @@ private:
         std::array<std::optional<TerminalContext>,2> terminal_contexts;
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
-                std::array<Session::NativePkEntryHold,2> entries)
-            :ticket(std::move(value)),sessions(std::move(peers)),holds(std::move(entries)){}
+                std::array<Session::NativePkEntryHold,2> entries,std::optional<WorldDeparture> world)
+            :ticket(std::move(value)),sessions(std::move(peers)),holds(std::move(entries)),departure(std::move(world)){}
     };
     struct Index {std::uint64_t room;std::uint8_t viewer;};
     using Bindings=std::map<std::uint64_t,std::shared_ptr<Binding>>;
@@ -397,6 +418,19 @@ private:
         if(!room)throw DatabaseError("PK input lacks this Session's accepted private entry");
         return bindings_.at(*room);
     }
+    bool departure_retained_current(const Binding& binding,std::uint8_t viewer)const{
+        // CUSTOM-0130 registry-only exact lineage; no SQL/observer callback.
+        // Absence preserves the historical input path and supplies no return
+        // authority. Saved owner/pose/Finished qualification remains below.
+        if(!binding.departure)return true;
+        const auto& world=*binding.departure;const auto& input=binding.ticket.input();
+        return world.visibility&&world.presence&&world.visibility->owns_presence(world.presence)&&
+            world.visibility->taiwan_pk_departure_retained_current(world.token,
+                {(*input.entry.owned_appearances())[0].material().lease,
+                 (*input.entry.owned_appearances())[1].material().lease},
+                {input.pair.challenger.position,input.pair.recipient.position},
+                binding.sessions,binding.holds,viewer);
+    }
     void observe_terminal_context(Binding& binding,Session& session,std::uint8_t viewer,
             const std::array<std::uint8_t,4>& payload){
         // Native shared queue can coalesce1C with Tick. Whole-frame
@@ -408,7 +442,8 @@ private:
             return binding.sessions[viewer].get()==&session&&written_current(binding,viewer)&&
                 !binding.flights[viewer]&&!session.native_battle_skill_publication_pending()&&
                 written&&revision&&binding.terminal_written[viewer]==written&&
-                binding.terminal_written_revision[viewer]==revision&&session.native_battle_skill_written()==written;
+                binding.terminal_written_revision[viewer]==revision&&session.native_battle_skill_written()==written&&
+                departure_retained_current(binding,viewer);
         };
         try{
             if(!current())throw DatabaseError("PK terminal context lost this viewer's actual final fullwrite");

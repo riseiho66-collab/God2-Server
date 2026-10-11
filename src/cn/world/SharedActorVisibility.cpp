@@ -80,6 +80,45 @@ bool SharedActorVisibility::taiwan_pk_departure_fence(const std::shared_ptr<Taiw
 bool SharedActorVisibility::taiwan_pk_departure_current(const TaiwanPkDeparture& token)const {
     return taiwan_pk_departure_fence(token.state_,true,false);
 }
+bool SharedActorVisibility::taiwan_pk_departure_exact_current(const TaiwanPkDeparture& token,
+        const std::array<Lease,2>& leases,const std::array<RecoveredPosition,2>& positions,
+        const std::array<std::shared_ptr<Session>,2>& sessions,
+        const std::array<Session::NativePkEntryHold,2>& holds,bool retained,std::uint8_t viewer)const {
+    // CUSTOM-0130 no callbackful current()/ready()/saved_position() here:
+    // this exact process-local departure is not a fresh stored-world read.
+    owner();const auto& state=token.state_;
+    if(viewer>1 || !state || state->identity!=identity_ || state->poisoned ||
+       state->retiring[0] || state->retiring[1] || state->leases!=leases || state->positions!=positions ||
+       !sessions[0] || !sessions[1] || sessions[0]==sessions[1])return false;
+    for(std::size_t i=0;i<2;++i){
+        if(state->connections[i].lock()!=sessions[i] || state->holds[i]!=holds[i])return false;
+        // Private game-owner/transport predicate before mutable Session fields.
+        if(retained ? !sessions[i]->native_pk_entry_binding_current(holds[i]) :
+                      !sessions[i]->native_pk_entry_committed_current(holds[i]))return false;
+        const auto& lease=leases[i];const auto& request=holds[i].request();
+        if(holds[i].session_id()!=lease.session || sessions[i]->id()!=lease.session ||
+           request.account!=lease.account || request.character!=lease.character ||
+           request.common_generation!=lease.generation || sessions[i]->account_id!=lease.account ||
+           sessions[i]->character_id!=lease.character)return false;
+        const auto marker=taiwan_pk_departures_.find(lease.session);
+        if(marker==taiwan_pk_departures_.end() || marker->second!=state ||
+           !presence_->retained_ready_current(lease))return false;
+    }
+    return sessions[0]->same_native_pk_game_executor(*sessions[1]) &&
+        (!retained || sessions[viewer]->native_pk_entry_written_current(holds[viewer]));
+}
+bool SharedActorVisibility::taiwan_pk_departure_bound_current(const TaiwanPkDeparture& token,
+        const std::array<Lease,2>& leases,const std::array<RecoveredPosition,2>& positions,
+        const std::array<std::shared_ptr<Session>,2>& sessions,
+        const std::array<Session::NativePkEntryHold,2>& holds)const {
+    return taiwan_pk_departure_exact_current(token,leases,positions,sessions,holds,false,0);
+}
+bool SharedActorVisibility::taiwan_pk_departure_retained_current(const TaiwanPkDeparture& token,
+        const std::array<Lease,2>& leases,const std::array<RecoveredPosition,2>& positions,
+        const std::array<std::shared_ptr<Session>,2>& sessions,
+        const std::array<Session::NativePkEntryHold,2>& holds,std::uint8_t viewer)const {
+    return taiwan_pk_departure_exact_current(token,leases,positions,sessions,holds,true,viewer);
+}
 SharedActorVisibility::ChatActorSnapshot::ChatActorSnapshot(std::shared_ptr<const State> s):state_(std::move(s)) {}
 SharedActorVisibility::ChatActorSnapshot::ChatActorSnapshot(ChatActorSnapshot&& other) noexcept:state_(other.state_) {}
 SharedActorVisibility::ChatActorSnapshot& SharedActorVisibility::ChatActorSnapshot::operator=(ChatActorSnapshot&& other) noexcept {

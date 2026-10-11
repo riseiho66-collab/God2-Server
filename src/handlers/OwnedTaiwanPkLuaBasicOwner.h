@@ -18,6 +18,7 @@ public:
     using NativeBatch=OwnedPkOutboxPublication::NativeBatch;
     using Advance=OwnedPkOutboxPublication::BasicAdvance;
     using Ticket=OwnedPkOutboxPublication::Ticket;
+    using WorldDeparture=OwnedPkOutboxPublication::WorldDeparture;
 
     OwnedTaiwanPkLuaBasicOwner(OwnedPkRoomState& rooms,LuaEngine& lua,
             Parameters parameters,std::array<std::uint8_t,2> server_order)
@@ -28,8 +29,9 @@ public:
     // Admission supplies both original private committed holds before their
     // release. No entry/output send or callback registration occurs here.
     bool bind(const Ticket& ticket,const std::array<std::shared_ptr<Session>,2>& sessions,
-            const std::array<Session::NativePkEntryHold,2>& holds){
-        check_thread();return publication_.bind(ticket,sessions,holds);
+            const std::array<Session::NativePkEntryHold,2>& holds,
+            std::optional<WorldDeparture> departure={}){
+        check_thread();return publication_.bind(ticket,sessions,holds,std::move(departure));
     }
 
     // One complete native frame only. Actual private binding derives identity,

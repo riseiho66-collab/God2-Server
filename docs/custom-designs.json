@@ -4754,6 +4754,42 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Retain the actual pre-entry published companion lineage needed by later authoritative settlement/return instead of flattening it or treating missing selection as an empty native companion.",
   "replacement": "Complete original resource producer/persistence, trusted actual Application resolver and whole return/visibility/lock/recovery route; comprehensive final-phase native acceptance before activation."
+},
+{
+  "id": "CUSTOM-0130",
+  "name": "Owned TW retained world-departure lineage at terminal input",
+  "authority": "TW_CUSTOM_PRIVATE_RETAINED_DEPARTURE_SOURCE_NOT_WORLD_RETURN_OR_NATIVE_ACK",
+  "implementation": [
+    "src/cn/world/SharedActorVisibility.cpp",
+    "src/cn/world/SharedActorVisibility.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/game/SharedWorldPresence.cpp",
+    "src/game/SharedWorldPresence.h",
+    "src/handlers/OwnedPkEntryAdmission.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedTaiwanPkBasicDriver.h",
+    "src/handlers/OwnedTaiwanPkLuaBasicOwner.h"
+  ],
+  "native_gap": "Whole samelease/newgeneration return/input/visibility/lockrelease/recovery and original companion resource supplier remain open.",
+  "rules": {
+    "source": "Actual Admission Attempt private TaiwanPkDeparture, original Visibility/presence instances, exact2leases/recordedpositions/Session instances/private holds. No scalar/token reconstruction or samePresence-only Visibility substitution.",
+    "composition": "Exclusive additive DepartureBind with actual visibility/presence; complete Database factory captures owners before moves and passes actual token through Driver→LuaOwner→Publication before entry release. Historical3arg binds remain optional/unchanged, absent source no return authority. Explicit factory never missing-token fallback.",
+    "binding": "BOTH exactCommitted holds; actual Visibility private incarnation/both marker entries, notpoisoned/notretiring, original connections/hold pointer identity/leases/recordedposes, samegame/commonidentity and exactactive retainedPresence. Appearance sources own the same actual Presence.",
+    "terminal": "Distinct retained guard requires BOTH original binding_current and OWN acceptedWritten entry; consumed before/after existing ownfinalfullwrite/revision/noownpending and privateRepoFinished qualification. Peer final output/resourceCOMMIT may remain pending. Old Held/Committed pre-release current API unchanged.",
+    "purity": "Only owned registry/immutablestate and existing pure Session predicates; new retained_ready_current does not observe repositories/SQL/callbacks. Original recorded pose is not fresh saved position; separate full durable owner/pose/Finished/readset/bothlocks/ownrow remains existing guard.",
+    "limits": "No newDDL/DBwrite/unlock/state/generation/normalinit/reply/visibilityrebuild/markerretire/App. Real return needs strand input/ACK barrier, genuine retained normal lineage, paired durable/resource/companion/current visibility cut and recovery; exactlocalfullwrite not nativeACK.",
+    "native": "S39 actual selectedcompanion DWORDcurrentHP2C/maxHP30 consumer qualified; raw34/36 WORDs retained unlabelled. S30/31 no directresourceproducer. Complete targetedreturntops lack stale HPMPcopy but modifierwrites/opaquechildren remainopen.",
+    "phase": "Static source/instruction/byte accounting only; no build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Keep the actual private world-departure ownership through terminal input instead of dropping it at admission Bind or widening a pre-release guard into return authority.",
+  "replacement": "Complete genuine return/input/visibility/durable release/recovery and companion resource supplier, then comprehensive final-phase acceptance before production activation."
 }
 ]
 }

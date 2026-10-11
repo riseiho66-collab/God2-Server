@@ -49,6 +49,9 @@ public:
     bool preparation_current(const Lease&) const;
     bool activate(const Lease&,std::uint16_t claimed_handle);
     bool ready(const Lease&) const;
+    // CUSTOM-0130 exact retained registry only. No repository observer or
+    // resource/position refresh; callers retain their separately qualified data.
+    bool retained_ready_current(const Lease&) const;
     // Read only the exact currently active registry lease for this tuple.
     // Requalifies actual character ownership; never reserves, activates or
     // manufactures a position. Saved position may have advanced after entry.
