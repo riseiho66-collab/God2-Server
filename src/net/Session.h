@@ -352,6 +352,9 @@ public:
     // CUSTOM-0113 exact private post-commit/pre-release fence. This does not
     // authorize a world return, prove socket completion or acknowledge a client.
     bool native_pk_entry_committed_current(const NativePkEntryHold&)const noexcept;
+    // CUSTOM-0123 actual game-owner retained binding in Committed/Released/
+    // Written phases. This is NOT a fullwrite/submission/output permit.
+    bool native_pk_entry_binding_current(const NativePkEntryHold&)const noexcept;
     // CUSTOM-0115 actual full entry write accepted by its exact source owner,
     // after the entry pending handoff clears. No native ACK/turn permission.
     bool native_pk_entry_written_current(const NativePkEntryHold&)const noexcept;

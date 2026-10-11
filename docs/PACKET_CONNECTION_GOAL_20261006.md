@@ -3156,3 +3156,12 @@ C++5既有改／新增0，限定resultnotification source1；mixed266→267、CU
 
 
 第284輪原生證據補充：51F2A0先收到input+4，之後清14targets，再讀unsignedinput4 cap5；mode47是second-dispatch當下46C，非已證函式進入值。worker完整2helpercode4614B／1426ins+table128B、retainedcaller745B已比對ownpinnedimage；4547codeB相對具名TW283 scope為新增，67B重疊countdown，不作globalcoverage百分比。candidate1 source不變，candidate2只精確修正文件順序與覆蓋範圍。
+
+
+## 第285輪：實際 Lua basic owner 與原生數量來源
+
+CUSTOM0123新增OwnedTaiwanPkLuaBasicOwner，由同一RoomState建構並獨佔OutboxPublication，借用實際LuaEngine。明示coefficients／兩端order複製、界限檢查且immutable，無caller Rule／stats／nextmask／templates／default seed。Admission private committed holds bind，完整nativeframe dispatch沿現有privateprofile／identity／epoch；input與Tick不resolve／pump。明示advance_at_idle只於真正後續gameidle使用，實際pair／incarnation／failure檢查，privateWritten／flights／pending不就緒回AwaitingTransport；兩端新Session private binding predicate先核對Committed／Released／Written的原pending／common／normal／world／battle identity，revoked拒絕並failpair、不當無限retry；phase／pre-resolver／output例外也failpair，非fullwrite授權。此狀態不證明ordinaryoutput／strand清空，一次post不足。Ready才同步呼叫內部Lua combat_damage，LegacyCustom／zeroMP／exactcoefficients及既有pureRule前後profile／checkpoint／phase／reentry fence；同一sharedBattle原子settle後透過原outbox送兩視角。Grants／ResultsControl／Terminal僅訪問pending；Initialrevision1仍Admission獨有，Collect不resolve。OutputVisited／Resolved不是fullwrite／remoteACK／nativeacceptance；無async Lua捕捉／新scheduler／App啟用。scriptbytes/reload並非本次immutablepolicy，既有CUSTOM0006及legacy限制保留。
+
+Native限定靜態51F2A0完整74B／27ins，實際manager2F4／2F8逐bit計數；flag0計0..13、nonzero計5..13，perbitreload非atomicmask snapshot。mode47 input4／5即flag1輸出，aligned51398B的min(count,5)只限該條件分支。5154E0完整398B／131ins，selectedrecord BYTE1==2且WORD3E!=0FF5先轉opaque5108C0(47)繞過普通countsetup；普通515619數量來自51EAD0(manager,selectedBYTE45,&Battle468)，仍下輪追查，末端flag0計全部14bit。5151A0完整785B／264ins及36Bshortcut table確認轉交input。總新scope1257codeB／422ins+36dataB，不作全client覆蓋率／固定0Bmask／原服公式。
+
+C++既有3改／新增1，限定Lua-basic owner source1；mixed267→268、CUSTOM120→121、groups26不變，新opcode0／完整雙向路徑0。TW C2S156／worldparser74（限定50／控制11／未接13），S2C252（230fixed／22variable）／reply48／push11／gated4、battle110／specialized9／86selectors7／cases6／83actions23／projection2均不變；TW chains3／bindings38去重34、CN chains35／bindings93去重71，CN歷史C2S156／S2Cphaseopcode280／length253各自範圍。全遊戲分母／TW與全遊戲百分比null。App pk_rooms仍null；真正seed／Fightpath／coeff/order政策選擇／idle重試排程與drain／技能／terminal89／savedsettle／WORLDreturn／recovery／shared64仍缺。Webv70..77 metadata pending，無新ACK／acceptance／容量測量。完整TW/CN/web及凍結功能保留。PHASE1無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。

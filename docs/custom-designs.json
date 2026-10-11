@@ -4526,6 +4526,37 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Remove guessed exactnextmask dependency from an explicit private TW basic result/notification path while preserving old exact contracts and native recovery gaps.",
   "replacement": "Recover original producers/replaypolicy and close Application/Lua/idleoutput/skills/terminal/recovery owners before final native acceptance/release."
+},
+{
+  "id": "CUSTOM-0123",
+  "name": "Owned TW Lua basic rule and private transport composition",
+  "authority": "TW_CUSTOM_OPT_IN_LUA_BASIC_OWNER_NOT_NATIVE_BALANCE_OR_COMPLETE_APPLICATION_HOST",
+  "implementation": [
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedTaiwanPkLuaBasicOwner.h",
+    "src/net/Session.cpp",
+    "src/net/Session.h"
+  ],
+  "native_gap": "Actual count helper recovered but server initiative/basic coefficients/balance and full native0B readiness/replay lifecycle remain unproved.",
+  "rules": {
+    "identity": "Owner constructs and owns Publication with exactly the supplied RoomState, stores actual LuaEngine reference; no separately supplied transport/room, rawroom/digest/stat/Rule/nextmask or seeded diagnostic source.",
+    "policy": "Explicit copied bounded physical basic coefficients and exact two-viewer order immutable perowner; no defaultvalues/arrivalorder/seed. Existing CUSTOM0006 Lua source remains separately labeled and per-evaluation loaded; no immutable scriptbytes claim.",
+    "input": "Admission binds actual original private committed holds; full nativeframe uses existing dispatcher with actual private current profile/phase/epoch. Input/Tick callbacks never resolve/pump; indexedinvalid sessions reject, notfallback.",
+    "idle": "Explicit genuine later idle seam, no automatic post/timer. Exact retainedSessionpair/incarnation/error guards; pending/fullwrite gate returns AwaitingTransport; this is not proof ordinary output/strand drained. Actual scheduler must establish boundary/retry. Both exactprivate Session bindings must remainCommitted/Released/Written with originalpending/common/normal/world/battle identities; revokedbinding fails instead ofretry. Phase/pre-resolver/output exceptionsfailpair; newpredicate is notWritten authority.",
+    "resolve": "Only actualReady with bothWritten/noFlights/noPending invokes synchronous internal LuaEngine::combat_damage; requireLegacyCustom/zeroMP/exactcoefficients. Existing pureRule before/afterprofile/checkpoint/phase/reentry fences and one shared atomic settle retained.",
+    "output": "Ready then sameidlevisit results; Grants/ResultsControl/Terminal visitexistingrows; Initialrevision1 remainsAdmission, Collectneverresolves. OutputVisited/Resolved mean owneractivity, notwrite/remoteACK/acceptance. Privatecallbacks retain noLua or concreteowner.",
+    "lifetime": "Actual samegameexecutor, initializedLua and RoomState/repository outlive owner; drain/destroyAdmission first. No config/Applicationactivation, idle scheduling, terminal return/recovery or schema supplied.",
+    "phase": "Static source/instruction/accounting only; no build/compiler/tests/runtime/native/VM/emulator/assetcodec/gameDBSQL/migration/activation/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Close actual basic Lua rule/immutable policy/publication composition without client-supplied authority, while retaining the genuine missing fullhost and nativeproducer prerequisites.",
+  "replacement": "Close actual explicitpolicy/idle/lifetime/terminal/recovery Application owners; recover nativebalance/producer and qualify nativeacceptance in finalphase."
 }
 ]
 }

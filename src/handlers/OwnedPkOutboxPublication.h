@@ -16,6 +16,7 @@ namespace god2 {
 // actual game executor. No Application default, reconnect, world return,
 // native ACK, new raw template or later-round grant authority is supplied.
 class OwnedPkOutboxPublication final {
+    friend class OwnedTaiwanPkLuaBasicOwner;
     struct Binding;
     struct Flight;
     struct Lifetime {OwnedPkOutboxPublication* owner;};
@@ -185,6 +186,50 @@ public:
         resolve_collected_basic_impl(session,server_order,std::nullopt,supplied_rule);
     }
 private:
+    // CUSTOM-0123 consumed only by the concrete Lua owner that OWNS this
+    // publication. Call at a genuine later game-owner idle boundary, never
+    // from input/write callbacks. A pending token is a retry condition, not
+    // an ACK or proof that the Session strand/ordinary output has drained.
+    enum class BasicAdvance {AwaitingTransport,Idle,OutputVisited,Resolved};
+    std::optional<BasicAdvance> advance_basic_notifications_at_idle(Session& session,
+            const std::array<std::uint8_t,2>& order,const Battle::Rule& rule){
+        check_thread();
+        const auto indexed=by_session_.find(session.id());
+        if(indexed==by_session_.end())return {};
+        const auto at=bindings_.find(indexed->second.room);
+        if(at==bindings_.end())throw DatabaseError("PK idle owner lost its private binding");
+        const auto binding=at->second;
+        reject_resolver_reentry(*binding);
+        if(indexed->second.viewer>1 || binding->failed ||
+           binding->sessions[indexed->second.viewer].get()!=&session ||
+           !rooms_.owns_ticket(binding->ticket) ||
+           binding->sessions[0]->closing() || binding->sessions[1]->closing()){
+            fail(*binding);
+            throw DatabaseError("PK idle owner requires its exact retained Session pair");
+        }
+        try{
+            for(std::uint8_t viewer=0;viewer<2;++viewer)
+                if(!binding->sessions[viewer]->native_pk_entry_binding_current(binding->holds[viewer]))
+                    throw DatabaseError("PK idle owner retained a revoked private entry identity");
+            if(!resolution_transport_current(*binding))return BasicAdvance::AwaitingTransport;
+            const auto phase=rooms_.round(binding->ticket.id()).phase();
+            if(phase==OwnedPkRound::Phase::Ready){
+                // The resolver reobserves current private profile/phase/checkpoint
+                // and fences the synchronous Lua call before any settlement.
+                resolve_collected_basic_notifications(session,order,rule);
+                publish_pending(binding->ticket.id());
+                return BasicAdvance::Resolved;
+            }
+            if(phase==OwnedPkRound::Phase::Grants || phase==OwnedPkRound::Phase::ResultsControl ||
+               phase==OwnedPkRound::Phase::Terminal){
+                publish_pending(binding->ticket.id());
+                return BasicAdvance::OutputVisited;
+            }
+            // Initial outbox revision1 belongs to Admission's entry writer. A
+            // one-sided control or collected attack never triggers resolution.
+            return BasicAdvance::Idle;
+        }catch(...){fail(*binding);throw;}
+    }
     void resolve_collected_basic_impl(Session& session,const std::array<std::uint8_t,2>& server_order,
             const std::optional<OwnedPkRound::Masks>& next_control_masks,const Battle::Rule& supplied_rule){
         check_thread();

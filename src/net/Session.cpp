@@ -2628,6 +2628,23 @@ bool Session::native_pk_entry_committed_current(const NativePkEntryHold& hold)co
         impl_->world_delivery_identity.load()==data->battle_identity &&
         account_id==data->request.account && character_id==data->request.character;
 }
+bool Session::native_pk_entry_binding_current(const NativePkEntryHold& hold)const noexcept {
+    const auto data=hold.data_;
+    if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
+       data->session.lock().get()!=this || data->session_id!=id() || !data->battle_identity ||
+       account_id!=data->request.account ||
+       character_id!=data->request.character)return false;
+    const auto phase=data->phase.load();
+    if(phase!=NativePkEntryHold::Data::Phase::Committed &&
+       phase!=NativePkEntryHold::Data::Phase::Released &&
+       phase!=NativePkEntryHold::Data::Phase::Written)return false;
+    // Before completion clears the pending token, prove the exact common/
+    // initialization/phase/generation identities already committed by entry.
+    // After clear only the existing accepted Written predicate qualifies it.
+    return (impl_->native_pk_transport_current(data,true) &&
+            impl_->world_delivery_identity.load()==data->battle_identity) ||
+           impl_->native_pk_written_transport_current(data);
+}
 bool Session::native_pk_entry_written_current(const NativePkEntryHold& hold)const noexcept {
     const auto data=hold.data_;
     // Private immutable owner/executor check BEFORE game-owned IDs.
