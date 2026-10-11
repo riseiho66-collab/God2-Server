@@ -318,7 +318,9 @@ public:
         // profile. Supplier owns text1 unless common_name_source supplies it;
         // it owns text2/text3 unless role_text_source supplies them.
         // Actual common name projection remains in this full readset.
-        // Concrete text2/guild rows are jointly requalified in one final snapshot.
+        // Concrete text2/guild rows and CUSTOM-0137 current common endpoint
+        // roots/poses are jointly requalified in one final snapshot, including
+        // both participants even if this ordered scene has no actor edges.
         // Requalifies ALL supplier-owned inputs together,
         // after per-edge observers. No yield/mutation/send/event pumping.
         std::function<bool(TaiwanReturnCheck)> current;
@@ -342,7 +344,7 @@ public:
         std::array<std::shared_ptr<Session>,2>,std::array<Session::NativePkEntryHold,2>,
         std::array<Session::NativePkReturnPreparation,2>,TaiwanReturnScene);
     bool taiwan_pk_return_current(const TaiwanPkReturnPlan&)const;
-    // CUSTOM-0136 joint text/guild-only read cut AFTER actual terminal ledger
+    // CUSTOM-0136/0137 joint text/guild/current-root/pose cut AFTER terminal ledger
     // reads. No scene/name/profile/presence observers; pure fences follow.
     bool taiwan_pk_return_stored_current(const TaiwanPkReturnPlan&)const;
     // Registry/Session only, for the final cut after actual read-only ledger

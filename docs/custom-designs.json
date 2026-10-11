@@ -4974,6 +4974,36 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Actual storedguildname or positivelyobservedabsence supplies native thirdfield while avoiding falseempty/staleoptionalrow/sequentialsourcegap.",
   "replacement": "Complete actualcurrentfullactor/resources/selection, pairedoutput/normal/durableFinished lifecycle and Application composition before globaltests/release."
+},
+{
+  "id": "CUSTOM-0137",
+  "name": "Private TW return actual common current endpoint roots and poses",
+  "authority": "TW_CUSTOM_SOURCE_OWNERSHIP_AND_READSET_POLICY_NOT_NATIVE_GAMEPLAY_RULE",
+  "implementation": [
+    "src/cn/world/SharedActorVisibility.cpp",
+    "src/cn/world/SharedActorVisibility.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/game/OwnedTaiwanPkReturnRoleTextSource.h",
+    "src/handlers/OwnedPkOutboxPublication.h"
+  ],
+  "native_gap": "Fullnative actor/resources/opaque/currentmarker/directedselection remain unqualified; concrete commonroot/pose finalcut does not supply their missing originalrules.",
+  "rules": {
+    "actual_source": "Exact sharedSqliteDatabase factory injects actualrecoveredcharacters and retained samePresence into private existingreturn source; sameconnection and pureexactrepositoryidentity mandatory.",
+    "population": "Bothreturningparticipants seeded even zeroedges; allsource/recipient endpoints canonicalsessiondedup with exactlease/pose/Session/battlegeneration. Endpointcardinality distinctfromdirectedtextrows.",
+    "observation": "Privateowner+identity+Lease+allsevenrootfields+fullcurrentpose includingrevision. Actualconcretereader provesaccount/root/position; expectedpose iscurrentplan, notimmutableentryLease.position. Presenceobservers outsideSQL, secondwholeendpointread afterobservers, pureRegistryafter.",
+    "final_cut": "Sameactualreadsnapshot everytext/guild/epoch/root/pose, reusedbyfullretained and actualPublicationstoredonlycut AFTER terminalresource+bothcontext SQL. Retainedrows neverrefreshed to hidechanges; reentry/DML/namespace/thread/ownerfences remain.",
+    "namespace": "Actualmain tables only, TEMPshadows excluded across accounts/recovered_characters/recovered_positions/character_role_text/owned_guilds/owned_guild_members. Missingroots/positions fail; no credential snapshot.",
+    "limitations": "Exactrootvalue hasno independentnativerevision/noarbitraryexternalSQLABA immunity. Nativefullbody/resources/eligibility remain mandatoryexternalsource, allold2A/equipment/Session/terminalguards preserved. No wirebytes/sends/merge/consume/WORLD/markerretire/unlock/inputresume/App/schemawrites."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Close actualsharedroot/pose source gap at final terminal-read cut, including empty scene and recipient-only endpoints, without inventing fullnative actor/resource state.",
+  "replacement": "Complete originalfullactor opaque/currentappearance/resource/directedaudience source and realhost/fullreturnlifecycle before concentratedverification/release."
 }
 ]
 }

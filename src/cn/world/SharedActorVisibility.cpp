@@ -68,6 +68,10 @@ struct SharedActorVisibility::TaiwanPkReturnPlan::State {
     std::map<Key,std::vector<RecordSlot>> record_slots;
     // CUSTOM-0135/0136 canonical map order, joint text/guild row per directed edge.
     std::vector<OwnedTaiwanPkReturnRoleTextSource::Observation> role_rows;
+    // CUSTOM-0137 current common endpoints, independent of directed text rows.
+    // Both participants exist here even when no fullactor edge was selected.
+    std::vector<OwnedTaiwanPkReturnRoleTextSource::EndpointRequest> endpoint_requests;
+    std::vector<OwnedTaiwanPkReturnRoleTextSource::EndpointObservation> endpoint_rows;
     bool poisoned=false;
 };
 void SharedActorVisibility::reject_taiwan_return_reentry()const {
@@ -159,7 +163,8 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
             const auto source=state->scene.role_text_source;
             if(!source)return valid();
             return source->owns_presence(presence_)&&state->role_rows.size()==state->actors.size()&&
-                source->stored_current(state->role_rows)&&valid();
+                state->endpoint_rows.size()==state->endpoints.size()&&
+                source->stored_current(state->role_rows,state->endpoint_rows)&&valid();
         }
         if(!valid()||!state->scene.current||!state->scene.current(check)||!valid())return false;
         // Empty scenes still qualify BOTH exact saved participant poses.
@@ -167,7 +172,9 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
             if(presence_->saved_position(state->leases[i])!=std::optional{state->positions[i]}||!valid())return false;
         const auto role_source=state->scene.role_text_source;
         if(role_source&&(!role_source->owns_presence(presence_)||!valid()||
-           (check==TaiwanReturnCheck::Prepare?!state->role_rows.empty():state->role_rows.size()!=state->actors.size())))return false;
+           (check==TaiwanReturnCheck::Prepare?
+                (!state->role_rows.empty()||!state->endpoint_rows.empty()):
+                (state->role_rows.size()!=state->actors.size()||state->endpoint_rows.size()!=state->endpoints.size()))))return false;
         std::size_t role_index=0;
         for(auto& [key,actor]:state->actors){
             if(presence_->saved_position(actor.source)!=std::optional{actor.source_position}||!valid()||
@@ -266,10 +273,15 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         // The full supplier requalifies ordered selection/entire current after
         // all position/resource/native-name observers. Final fence is pure.
         if(!state->scene.current(check)||!valid())return false;
+        if(role_source&&check==TaiwanReturnCheck::Prepare){
+            auto observed=role_source->observe_endpoints(state->endpoint_requests);
+            if(!observed||observed->size()!=state->endpoints.size()||!valid())return false;
+            state->endpoint_rows=std::move(*observed);
+        }
         // All rows in ONE final read snapshot after every external scene,
         // name, profile and presence observer; secondary and guild share the
         // same snapshot. No callbacks after this cut.
-        if(role_source&&(!role_source->stored_current(state->role_rows)||!valid()))return false;
+        if(role_source&&(!role_source->stored_current(state->role_rows,state->endpoint_rows)||!valid()))return false;
         return valid();
     }catch(...){state->poisoned=true;return false;}
 }
@@ -299,6 +311,11 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
             RecoveredRemoteActorRemove::encode_logical(a.native.removal)==RecoveredRemoteActorRemove::encode_logical(b.native.removal);
     };
     std::map<Key,std::uint8_t> occurrences;
+    // CUSTOM-0137 an empty scene is not permission to omit the returning pair's
+    // actual current roots/poses. Actor loops below retain exact deduplication.
+    for(std::size_t i=0;i<2;++i)
+        if(!state->endpoints.emplace(leases[i].session,TaiwanPkReturnPlan::State::Endpoint{
+                leases[i],positions[i],state->sessions[i],state->sessions[i]->battle_generation()}).second)return {};
     for(std::size_t i=0;i<2;++i)for(std::size_t side=0;side<2;++side){
         const auto& actors=side==0?state->scene.incoming[i]:state->scene.outgoing[i];
         //128 is the recovered per-receiver actor pool.256 outgoing is only
@@ -356,7 +373,12 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
         Binding binding(identity_,actor.source,actor.recipient,generation_+state->staged.size()+1);
         state->staged.emplace(key,Entry{binding,actor.source_position,Native{actor.native}});
     }
-    if(state->scene.role_text_source)state->role_rows.reserve(state->actors.size());
+    if(state->scene.role_text_source){
+        state->role_rows.reserve(state->actors.size());
+        state->endpoint_requests.reserve(state->endpoints.size());
+        for(const auto& [session,endpoint]:state->endpoints)
+            state->endpoint_requests.push_back({endpoint.lease,endpoint.position});
+    }
     if(!taiwan_pk_return_read(state,TaiwanReturnCheck::Prepare))return {};
     return TaiwanPkReturnPlan(std::move(state));
 }

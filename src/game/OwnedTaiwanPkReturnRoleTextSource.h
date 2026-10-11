@@ -1,6 +1,7 @@
 #pragma once
 #include "db/SqliteGuildRepository.h"
 #include "db/SqliteRoleTextRepository.h"
+#include "db/SqliteRecoveredCharacterRepository.h"
 #include "db/SqliteSupport.h"
 #include "game/SharedWorldPresence.h"
 #include <memory>
@@ -23,11 +24,33 @@ class SqliteDatabase;
 // owner/schema/provenance read must never manufacture an empty guild field.
 // Retained global guild generation also detects maintenance join/leave ABA
 // while absent. Any effective CUSTOM-0075 maintenance change invalidates it.
+// CUSTOM-0137 also owns current common endpoint roots/poses in that final cut,
+// including both returning participants when the directed scene is empty.
 class OwnedTaiwanPkReturnRoleTextSource final {
     friend class SqliteDatabase;
     struct Identity {};
 public:
     using Lease=SharedWorldPresence::Lease;
+    struct EndpointRequest {Lease lease;RecoveredPosition position;};
+    class EndpointObservation {
+    public:
+        EndpointObservation(const EndpointObservation&)=default;
+        EndpointObservation& operator=(const EndpointObservation&)=default;
+        EndpointObservation(EndpointObservation&&)=default;
+        EndpointObservation& operator=(EndpointObservation&&)=default;
+    private:
+        friend class OwnedTaiwanPkReturnRoleTextSource;
+        EndpointObservation(const OwnedTaiwanPkReturnRoleTextSource* owner,
+                std::shared_ptr<const Identity> identity,Lease lease,RecoveredCharacter root,
+                RecoveredPosition position)
+            :owner_(owner),identity_(std::move(identity)),lease_(std::move(lease)),
+             root_(std::move(root)),position_(position){}
+        const OwnedTaiwanPkReturnRoleTextSource* owner_;
+        std::shared_ptr<const Identity> identity_;
+        Lease lease_;
+        RecoveredCharacter root_;
+        RecoveredPosition position_;
+    };
     class Observation {
     public:
         Observation(const Observation&)=default;
@@ -84,19 +107,62 @@ public:
                 row->guild_epoch==observation.guild_epoch_&&unchanged(changes);
         }catch(const std::exception&){return false;}
     }
+    // Actual concrete root/pose reads; expected pose is the current plan pose,
+    // never the immutable entry Lease.position. No native/fullactor projection.
+    std::optional<std::vector<EndpointObservation>> observe_endpoints(
+            std::span<const EndpointRequest> supplied)const{
+        owner();
+        try{
+            Operation operation(*this);
+            const std::vector<EndpointRequest> requests(supplied.begin(),supplied.end());
+            if(!owns_database()||!sqlite3_get_autocommit(db_))return {};
+            const auto changes=sqlite3_total_changes64(db_);
+            for(const auto& request:requests)
+                if(!valid_lease(request.lease)||!presence_->ready(request.lease)||!unchanged(changes))return {};
+            std::vector<EndpointObservation> observations;observations.reserve(requests.size());
+            {
+                ReadScope scope(db_);namespaces();
+                for(const auto& request:requests){
+                    auto root=read_root(request.lease);
+                    const auto position=characters_.load_position(request.lease.account,request.lease.character);
+                    if(!root||position!=std::optional{request.position}||!unchanged(changes))return {};
+                    observations.push_back(EndpointObservation(this,identity_,request.lease,std::move(*root),*position));
+                }
+                namespaces();if(!unchanged(changes))return {};scope.finish();
+            }
+            // Presence callbacks are outside SQL. Re-read the whole saved set
+            // AFTER them, then only pure retained registry checks follow.
+            for(const auto& observation:observations)
+                if(!presence_->ready(observation.lease_)||!unchanged(changes))return {};
+            {
+                ReadScope scope(db_);namespaces();
+                for(const auto& observation:observations)
+                    if(!endpoint_current(observation)||!unchanged(changes))return {};
+                namespaces();if(!unchanged(changes))return {};scope.finish();
+            }
+            for(const auto& observation:observations)
+                if(!presence_->retained_ready_current(observation.lease_)||!unchanged(changes))return {};
+            return unchanged(changes)&&sqlite3_get_autocommit(db_)?
+                std::optional{std::move(observations)}:std::nullopt;
+        }catch(const std::exception&){return {};}
+    }
     // Final ALL-row snapshot after the complete scene/other source observers.
-    // Text and membership/name share this cut. No presence/native/external
-    // source callbacks and no row refresh. Empty scenes still qualify this
-    // concrete DB's namespaces; absence is never a
+    // Text, membership/name and all complete common roots/poses share this cut.
+    // No presence/native/external observers or row refresh. Empty scenes still
+    // qualify both retained participants; absence is never a
     // manufactured empty title. Caller's pure registry/Session fence follows.
-    bool stored_current(std::span<const Observation> supplied)const{
+    bool stored_current(std::span<const Observation> supplied,
+            std::span<const EndpointObservation> supplied_endpoints)const{
         owner();
         try{
             Operation operation(*this);
             const std::vector<Observation> observations(supplied.begin(),supplied.end());
+            const std::vector<EndpointObservation> endpoints(supplied_endpoints.begin(),supplied_endpoints.end());
             if(!owns_database()||!sqlite3_get_autocommit(db_))return false;
             for(const auto& observation:observations)
                 if(observation.owner_!=this||observation.identity_!=identity_||!valid_lease(observation.source_))return false;
+            for(const auto& endpoint:endpoints)
+                if(endpoint.owner_!=this||endpoint.identity_!=identity_||!valid_lease(endpoint.lease_))return false;
             const auto changes=sqlite3_total_changes64(db_);
             {
                 ReadScope scope(db_);
@@ -109,6 +175,8 @@ public:
                     const auto guild=guilds_.load(observation.source_.account,observation.source_.character);
                     if(guild!=observation.guild_||!unchanged(changes))return false;
                 }
+                for(const auto& endpoint:endpoints)
+                    if(!endpoint_current(endpoint)||!unchanged(changes))return false;
                 namespaces();
                 if(!unchanged(changes))return false;
                 scope.finish();
@@ -120,15 +188,17 @@ private:
     sqlite3* const db_;
     SqliteRoleTextRepository& texts_;
     SqliteGuildRepository& guilds_;
+    SqliteRecoveredCharacterRepository& characters_;
     const std::shared_ptr<SharedWorldPresence> presence_;
     const std::shared_ptr<const Identity> identity_=std::make_shared<const Identity>();
     const std::thread::id thread_=std::this_thread::get_id();
     mutable bool reading_=false,poisoned_=false;
 
     OwnedTaiwanPkReturnRoleTextSource(sqlite3* db,SqliteRoleTextRepository& texts,SqliteGuildRepository& guilds,
-            std::shared_ptr<SharedWorldPresence> presence)
-        :db_(db),texts_(texts),guilds_(guilds),presence_(std::move(presence)){
-        if(!db_||!texts_.uses_connection(db_)||!guilds_.uses_connection(db_)||!presence_)
+            SqliteRecoveredCharacterRepository& characters,std::shared_ptr<SharedWorldPresence> presence)
+        :db_(db),texts_(texts),guilds_(guilds),characters_(characters),presence_(std::move(presence)){
+        if(!db_||!texts_.uses_connection(db_)||!guilds_.uses_connection(db_)||
+           !characters_.uses_connection(db_)||!presence_||!presence_->owns_repository(characters_))
             throw DatabaseError("TW return role text requires actual same-DB sources");
     }
     void owner()const{
@@ -154,10 +224,11 @@ private:
         ~ReadScope(){if(!finished)sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}
         void finish(){sqlite_detail::execute(db,"COMMIT");finished=true;}
     };
-    bool owns_database()const noexcept{
-        return db_&&texts_.uses_connection(db_)&&guilds_.uses_connection(db_)&&!poisoned_;
+    bool owns_database()const{
+        return db_&&texts_.uses_connection(db_)&&guilds_.uses_connection(db_)&&
+            characters_.uses_connection(db_)&&presence_&&presence_->owns_repository(characters_)&&!poisoned_;
     }
-    bool unchanged(sqlite3_int64 changes)const noexcept{
+    bool unchanged(sqlite3_int64 changes)const{
         return owns_database()&&sqlite3_total_changes64(db_)==changes;
     }
     static bool valid_lease(const Lease& source)noexcept{
@@ -166,11 +237,29 @@ private:
     void namespaces()const{
         // Existing concrete repository uses unqualified table names. It may
         // read only actual main tables, never a TEMP shadow or substituted view.
-        sqlite_detail::Statement shadows(db_,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('character_role_text','recovered_characters','owned_guilds','owned_guild_members') OR tbl_name COLLATE NOCASE IN ('character_role_text','recovered_characters','owned_guilds','owned_guild_members')");
+        sqlite_detail::Statement shadows(db_,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('character_role_text','recovered_characters','owned_guilds','owned_guild_members','accounts','recovered_positions') OR tbl_name COLLATE NOCASE IN ('character_role_text','recovered_characters','owned_guilds','owned_guild_members','accounts','recovered_positions')");
         if(shadows.row())throw DatabaseError("TW return role text TEMP shadow rejected");
-        sqlite_detail::Statement tables(db_,"SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ('character_role_text','recovered_characters','owned_guilds','owned_guild_members')");
-        if(!tables.row()||tables.integer(0)!=4||tables.row())
+        sqlite_detail::Statement tables(db_,"SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ('character_role_text','recovered_characters','owned_guilds','owned_guild_members','accounts','recovered_positions')");
+        if(!tables.row()||tables.integer(0)!=6||tables.row())
             throw DatabaseError("TW return role text requires actual main tables");
+    }
+    static bool same_root(const RecoveredCharacter& a,const RecoveredCharacter& b)noexcept{
+        return a.id==b.id&&a.account_id==b.account_id&&a.slot==b.slot&&a.profile==b.profile&&
+            a.created_at==b.created_at&&a.name_codepage==b.name_codepage&&a.streamer_privilege==b.streamer_privilege;
+    }
+    std::optional<RecoveredCharacter> read_root(const Lease& lease)const{
+        std::optional<RecoveredCharacter> result;
+        for(const auto& root:characters_.list_for_account(lease.account))if(root.id==lease.character){
+            if(result||root.account_id!=lease.account)return {};
+            result=root;
+        }
+        return result;
+    }
+    bool endpoint_current(const EndpointObservation& endpoint)const{
+        if(endpoint.owner_!=this||endpoint.identity_!=identity_||!valid_lease(endpoint.lease_))return false;
+        const auto root=read_root(endpoint.lease_);
+        return root&&same_root(*root,endpoint.root_)&&
+            characters_.load_position(endpoint.lease_.account,endpoint.lease_.character)==std::optional{endpoint.position_};
     }
     struct StoredRows {
         StoredRoleText text;

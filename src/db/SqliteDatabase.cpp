@@ -480,10 +480,12 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     // configured source is mandatory at return; stop never produces empties.
     OwnedTaiwanPkRoomBackend::ReturnSceneSource return_source;
     if(resolvers->return_scene){
-        // CUSTOM-0135/0136 exact shared factory supplies the concrete text and
-        // guild owners; callers still own full actor/resources/selection.
+        // CUSTOM-0135/0136/0137 exact shared factory supplies concrete text,
+        // guild and current common root/pose owners. Full actor/resources/
+        // selection still require their genuine complete source.
         auto role_text_source=std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>(
-            new OwnedTaiwanPkReturnRoleTextSource(impl_->connection.get(),*impl_->role_text,*impl_->guilds,presence));
+            new OwnedTaiwanPkReturnRoleTextSource(impl_->connection.get(),*impl_->role_text,*impl_->guilds,
+                *impl_->recovered_characters,presence));
         return_source=[resolvers,role_text_source](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
             ->std::optional<cn::SharedActorVisibility::TaiwanReturnScene>{
         if(resolvers->stopped)return {};
