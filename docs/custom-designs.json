@@ -4790,6 +4790,34 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Keep the actual private world-departure ownership through terminal input instead of dropping it at admission Bind or widening a pre-release guard into return authority.",
   "replacement": "Complete genuine return/input/visibility/durable release/recovery and companion resource supplier, then comprehensive final-phase acceptance before production activation."
+},
+{
+  "id": "CUSTOM-0131",
+  "name": "Owned TW PK terminal input transport barrier",
+  "authority": "TW_CUSTOM_OPT_IN_PRIVATE_LOCAL_DRAIN_NOT_WORLD_RETURN_OR_NATIVE_ACK",
+  "implementation": [
+    "src/net/Session.h",
+    "src/net/Session.cpp",
+    "src/handlers/OwnedPkOutboxPublication.h"
+  ],
+  "native_gap": "Complete native coalesced input/final paired return and current selectedcompanion resource source remain open.",
+  "rules": {
+    "source": "Actual synchronous world_records TLS, genuine own accepted Written entry hold, exact final native delivery pointer and complete recipient identity. Publication supplies private retaineddeparture/Finished/context semantics, not raw Session IDs.",
+    "transport": "Distinct private pending Data holds original entry/init/common/battle lineage. Strand waits real current game ACK response enqueue, empty retained input/pending/skill prefix, exact zero-byte operation_aborted read cancellation ACK and actual writes/byte-count drain. Ready callbacks occur only on actual serial game executor.",
+    "composition": "Actual retaineddeparture Binding accepted1C starts perviewer weak facade; Binding strongly retains adapter on game. Fresh Finished/own finalrow/readset/ownerpose/bothlocks/departure guards before/afterReady. Historical bindings without departure retain context-only behavior; no peerfinal/save prerequisite added.",
+    "lifetime": "Ready and accepted separate. All queue appends while Ready invalidate/close, including held common publications. Dedicated five-second deadline remains armed afterReady/acceptance; timeout/failure/sourceexpiry closes and paired Publication owner retains recovery. No clean resume to old Battle input. Only weak source in network handlers.",
+    "limits": "Local cut not remoteTCPbuffer epoch/nativeACK/consumption. No newnormalinit/gen/Worldflip/visibilityrebuild/unlock/DDL/DBwrite/reply/App. No resume/consume API before future paired durable/resource/visibility commit.",
+    "phase": "Static source accounting only; all execution/deployment gates remain closed."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Connect actual terminal input to causal network/game handoff instead of treating one posted idle snapshot as world readiness.",
+  "replacement": "Complete exact paired normal generation/visibility/resources/durable release/recovery and native acceptance in final comprehensive phase."
 }
 ]
 }

@@ -169,6 +169,21 @@ struct Session::NativePkEntryHold::Data {
 const Session::NativePkEntryRequest& Session::NativePkEntryHold::request()const noexcept{return data_->request;}
 std::uint64_t Session::NativePkEntryHold::session_id()const noexcept{return data_->session_id;}
 std::uint64_t Session::NativePkEntryHold::committed_battle_generation()const noexcept{return data_->request.prebattle_generation+1;}
+struct Session::NativePkTerminalBarrier::Data {
+    enum class Phase {Draining,Ready,Failed};
+    const std::weak_ptr<Session> session;
+    const std::thread::id thread=std::this_thread::get_id();
+    const asio::any_io_executor game;
+    const NativePkEntryHold entry;
+    const NativeBattleSkill final;
+    const std::weak_ptr<NativePkTerminalOwner> source;
+    std::atomic<Phase> phase{Phase::Draining};
+    std::atomic<bool> accepted{false},ready_notified{false},failed_notified{false},armed{false},acknowledged{false},ack_handoff_failed{false};
+    Data(std::weak_ptr<Session> s,asio::any_io_executor executor,NativePkEntryHold hold,
+         NativeBattleSkill output,std::weak_ptr<NativePkTerminalOwner> owner)
+        :session(std::move(s)),game(std::move(executor)),entry(std::move(hold)),
+         final(std::move(output)),source(std::move(owner)){}
+};
 
 struct Session::NativeWorldSelectionInput::Data {
     const std::weak_ptr<Session> session;
@@ -280,6 +295,9 @@ struct Session::Impl {
     std::shared_ptr<NativeBattlePending> native_pk_output_staged;
     std::shared_ptr<Reservation> native_pk_output_reservation;
     std::atomic<std::shared_ptr<NativePkEntryHold::Data>> native_pk_pending;
+    std::atomic<std::shared_ptr<NativePkTerminalBarrier::Data>> native_pk_terminal;
+    // Game-only incarnation of this actual callback, surviving strand retirement.
+    std::shared_ptr<NativePkTerminalBarrier::Data> native_pk_terminal_callback_capture;
     // Strand-only staging until the accepted world's callback ACK has queued
     // its ordinary response. Never put that response behind the held entry.
     std::shared_ptr<Reservation> native_pk_reservation;
@@ -298,6 +316,7 @@ struct Session::Impl {
     asio::steady_timer timer;
     asio::steady_timer hold_timer;
     asio::steady_timer native_pk_timer;
+    asio::steady_timer native_pk_terminal_timer;
     enum class SessionTimeoutPolicy { Normal, UiGateHold };
     SessionTimeoutPolicy timeout_policy=SessionTimeoutPolicy::Normal;
     std::filesystem::path hold_control;
@@ -375,6 +394,7 @@ struct Session::Impl {
     bool native_pk_read_paused=false;
     asio::cancellation_signal native_pk_read_cancel;
     bool native_pk_cancel_read=false; // Strand; acknowledgement precedes Held.
+    bool native_pk_terminal_cancel_read=false;
     bool read_inflight=false; // Passive read ownership; avoids duplicate resume.
     bool resume_after_login_write = false;
 
@@ -382,7 +402,7 @@ struct Session::Impl {
          std::uint64_t id_, bool dump_, PacketHandler packet_, DisconnectHandler disconnect_,ProtocolMode mode_,
          RecoveredLoginHandler login_,RecoveredCharacterHandlers characters_,std::vector<std::uint8_t> routes_)
         : owner(owner_), socket(std::move(socket_)), strand(asio::make_strand(socket.get_executor())),
-          game(std::move(game_)), timer(strand), hold_timer(strand), native_pk_timer(strand), game_work(asio::make_work_guard(game)),
+          game(std::move(game_)), timer(strand), hold_timer(strand), native_pk_timer(strand), native_pk_terminal_timer(strand), game_work(asio::make_work_guard(game)),
           network_work(asio::make_work_guard(socket.get_executor())),
           id(id_), packet_dump(dump_), mode(mode_), on_packet(std::move(packet_)),
           on_disconnect(std::move(disconnect_)), recovered_login(std::move(login_)),character_handlers(std::move(characters_)),character_routes(std::move(routes_)) {
@@ -521,6 +541,7 @@ struct Session::Impl {
                 if(!socket.remote_endpoint().address().is_loopback()) { fail("Recovered peer must be loopback");return; }
                 const auto hello=RecoveredSeedExchange::hello();
                 auto bytes=std::make_shared<std::vector<std::uint8_t>>(hello.begin(),hello.end());
+                if(!terminal_write_allowed())return;
                 write_bytes+=bytes->size();writes.push_back({bytes,{}});write();
                 logger("session")->debug("session_id={} GOD2_INITIAL_S2C_QUEUED length=19",id);
             } else protocol.on_session_created(owner);
@@ -704,6 +725,73 @@ struct Session::Impl {
             native_pk_reservation.reset();fail("Native PK completion handoff failed");
         }
     }
+    bool native_pk_terminal_transport_current(const std::shared_ptr<NativePkTerminalBarrier::Data>& data)const {
+        // Atomic/immutable only: no game-owned account/character reads here.
+        return data && native_pk_terminal.load()==data && !close_requested.load() &&
+            data->session.lock().get()==&owner && data->game==game && !data->source.expired() &&
+            data->phase.load()!=NativePkTerminalBarrier::Data::Phase::Failed &&
+            !native_battle_pending.load() && native_pk_written_transport_current(data->entry.data_) &&
+            owner.native_battle_skill_written_.load()==data->final;
+    }
+    void retire_native_pk_terminal() {
+        const auto data=native_pk_terminal.exchange({});if(!data)return;
+        // Only this exact returned game callback may retire its busy latch.
+        if(data->ack_handoff_failed.load())game_busy=false;
+        data->accepted.store(false);data->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
+        native_pk_terminal_timer.cancel();
+        // Only game owns the strong callback reference and its destruction.
+        try {asio::post(game,[self=owner.shared_from_this(),data] {
+            if(data->failed_notified.exchange(true))return;
+            if(const auto source=data->source.lock())try {
+                source->native_pk_terminal_failed(*self,NativePkTerminalBarrier(data));
+            }catch(...) {try {self->close();}catch(...) {self->impl_->close_requested.store(true);}}
+        });}catch(...) {close_requested.store(true);}
+    }
+    bool terminal_write_allowed() {
+        const auto data=native_pk_terminal.load();
+        if(data && data->phase.load()!=NativePkTerminalBarrier::Data::Phase::Draining) {
+            fail("Native PK terminal drained cut acquired new output");return false;
+        }
+        return true;
+    }
+    void stage_native_pk_terminal() {
+        const auto data=native_pk_terminal.load();if(!data)return;
+        if(!native_pk_terminal_transport_current(data) || closing) {
+            fail("Native PK terminal barrier lost retained source");return;
+        }
+        if(!data->armed.load() || data->phase.load()==NativePkTerminalBarrier::Data::Phase::Ready)return;
+        if(game_busy || !data->acknowledged.load())return; // Its exact accepted ACK must enqueue first.
+        if(c2s0002_state!=C2S0002State::WorldTailAccepted || !world_input.empty() ||
+           !world_pending_records.empty() || skill_deadline || native_skill_generation ||
+           common_ready_waiting.load() || common_entry_identity.load()) {
+            fail("Native PK terminal intersects buffered or staged input");return;
+        }
+        if(read_inflight) {
+            if(!native_pk_terminal_cancel_read) {
+                native_pk_terminal_cancel_read=true;
+                native_pk_read_cancel.emit(asio::cancellation_type::terminal);
+            }
+            return;
+        }
+        if(!writes.empty() || write_bytes)return; // Real full-write drain hook retries.
+        auto draining=NativePkTerminalBarrier::Data::Phase::Draining;
+        if(!data->phase.compare_exchange_strong(draining,NativePkTerminalBarrier::Data::Phase::Ready))return;
+        try {asio::post(game,[self=owner.shared_from_this(),data] {
+            if(data->ready_notified.exchange(true))return;
+            bool accepted=false;
+            if(self->native_pk_terminal_barrier_ready_current(NativePkTerminalBarrier(data)))
+                if(const auto source=data->source.lock())try {
+                    accepted=source->native_pk_terminal_ready(*self,NativePkTerminalBarrier(data));
+                }catch(...) {}
+            if(!accepted || !self->native_pk_terminal_barrier_ready_current(NativePkTerminalBarrier(data))) {
+                data->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
+                data->accepted.store(false);
+                try {self->close();}catch(...) {self->impl_->close_requested.store(true);}
+                return;
+            }
+            data->accepted.store(true); // Deadline intentionally remains armed.
+        });}catch(...) {fail("Native PK terminal ready handoff failed");}
+    }
     void stage_native_pk() {
         const auto data=native_pk_pending.load();
         if(!data || data->completing.load() || data->phase.load()!=NativePkEntryHold::Data::Phase::Preparing)return;
@@ -726,6 +814,7 @@ struct Session::Impl {
             if(data->frame->size()>max_buffer-write_bytes || writes.size()>=max_writes)
                 throw std::length_error("Native PK held queue limit");
             Write held{data->frame,std::move(native_pk_reservation),false,true};held.native_pk=data;
+            if(!terminal_write_allowed())return;
             writes.push_back(std::move(held));write_bytes+=data->frame->size();
             auto preparing=NativePkEntryHold::Data::Phase::Preparing;
             if(!data->phase.compare_exchange_strong(preparing,NativePkEntryHold::Data::Phase::Held)) {
@@ -758,12 +847,14 @@ struct Session::Impl {
             if(bytes->size()>max_buffer-write_bytes || writes.size()>=max_writes){
                 fail("Native PK output queue limit");return;
             }
+            if(!terminal_write_allowed())return;
             writes.push_back({bytes,std::move(native_pk_output_reservation),false,true,{},{},pending});
             write_bytes+=bytes->size();native_pk_output_staged.reset();
             release_native_battle(pending,bytes);
         }catch(...){fail("Native PK output staged encoding or handoff failed");}
     }
     void read() {
+        if(native_pk_terminal.load()) {stage_native_pk_terminal();return;}
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
         if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
         if (closing || game_busy) return;
@@ -773,6 +864,16 @@ struct Session::Impl {
             [self = owner.shared_from_this()](const asio::error_code& ec, std::size_t size) {
                 auto& s = *self->impl_;
                 s.read_inflight=false;
+                if(s.native_pk_terminal_cancel_read) {
+                    s.native_pk_terminal_cancel_read=false;
+                    if(ec==asio::error::operation_aborted && size==0 && !s.closing && s.native_pk_terminal.load()) {
+                        s.stage_native_pk_terminal();return;
+                    }
+                    s.fail("Native PK terminal read cancellation was ambiguous");return;
+                }
+                if(s.native_pk_terminal.load()) {
+                    s.fail("Native PK terminal received ambiguous in-flight bytes");return;
+                }
                 if(s.native_pk_cancel_read) {
                     s.native_pk_cancel_read=false;
                     if(ec==asio::error::operation_aborted && size==0 && !s.closing) {
@@ -809,6 +910,7 @@ struct Session::Impl {
                                     }
                                     const auto candidate=LegacyCharacterListCandidate::wire();
                                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(candidate.begin(),candidate.end());
+                                    if(!s.terminal_write_allowed())return;
                                     s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                                     if(s.writes.size()==1) s.write();
                                     logger("session")->info("session_id={} POST_SERVER_SELECT_C2S_ACCEPTED length=6; legacy character-list candidate queued; current client acceptance UNKNOWN",s.id);
@@ -854,6 +956,7 @@ struct Session::Impl {
                                            at+length==input.size()) {
                                             auto reply=std::make_shared<std::vector<std::uint8_t>>(
                                                 RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
+                                            if(!s.terminal_write_allowed())return;
                                             s.write_bytes+=reply->size();s.writes.push_back({reply,{}});
                                             if(s.writes.size()==1)s.write();
                                             logger("session")->info("session_id={} CHARACTER_TERMINAL_ACK_QUEUED reason={}",s.id,(*logical)[1]);
@@ -944,6 +1047,7 @@ struct Session::Impl {
                                     // Length table requires3 logical bytes; trailing bytes unread here.
                                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(
                                         RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
+                                    if(!s.terminal_write_allowed())return;
                                     s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                                     if(s.writes.size()==1) s.write();
                                     s.close();return;
@@ -1049,6 +1153,7 @@ struct Session::Impl {
                                 s.post_seed_state=RecoveredPostSeed::State::SeedAccepted;
                                 const auto frame=RecoveredPostSeed::frame(s.mode==ProtocolMode::God2CharacterConnection?0xf6:0x53);
                                 auto bytes=std::make_shared<std::vector<std::uint8_t>>(frame.begin(),frame.end());
+                                if(!s.terminal_write_allowed())return;
                                 s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                                 if(s.writes.size()==1) s.write();
                             }
@@ -1077,6 +1182,7 @@ struct Session::Impl {
     }
     void send_recovered_login(std::span<const std::uint8_t> response) {
         auto bytes=std::make_shared<std::vector<std::uint8_t>>(response.begin(),response.end());
+        if(!terminal_write_allowed())return;
         write_bytes+=bytes->size();writes.push_back({bytes,{}});
         if(is_server_list_mode(mode)) {
             const auto entry=RecoveredServerList::one_entry();
@@ -1088,11 +1194,13 @@ struct Session::Impl {
                 Session::RecoveredServerAdvertisement{id,character_routes.empty()?
                     Session::RecoveredServerAdvertisement::Origin::LegacyListCandidate:
                     Session::RecoveredServerAdvertisement::Origin::LoopbackRoutesCandidate,*next});
+            if(!terminal_write_allowed())return;
             write_bytes+=next->size();writes.push_back({next,{},false,false,std::move(observation)});
         }
         if(is_terminal_mode(mode)) {
             const auto terminal=RecoveredLoginTerminal::success();
             auto next=std::make_shared<std::vector<std::uint8_t>>(terminal.begin(),terminal.end());
+            if(!terminal_write_allowed())return;
             write_bytes+=next->size();writes.push_back({next,{}});
         }
         if(writes.front().bytes==bytes) write();
@@ -1129,6 +1237,7 @@ struct Session::Impl {
                     }
                     const auto frame=error ? RecoveredLoginFailure::server_error() : RecoveredLoginFailure::password_mismatch();
                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(frame.begin(),frame.end());
+                    if(!s.terminal_write_allowed())return;
                     s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                     logger("session")->info("session_id={} LOGIN_REJECTION_QUEUED opcode=30 result={} bytes=5",s.id,error?255:3);
                     if(s.writes.size()==1) s.write();
@@ -1212,8 +1321,9 @@ struct Session::Impl {
                     if(delivery) {
                         if(s.writes.size()>=max_writes || s.write_bytes>max_buffer-bytes->size())
                             throw std::invalid_argument("Native character list queue capacity exhausted");
+                        if(!s.terminal_write_allowed())return;
                         s.writes.push_back({bytes,{},false,true,{},delivery});s.write_bytes+=bytes->size();
-                    } else {s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});}
+                    } else { if(!s.terminal_write_allowed())return; s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});}
                     if(created_id) {
                         s.c2s0002_state=C2S0002State::CharacterCreateCommitted;
                         s.character_create_input.clear();
@@ -1287,6 +1397,7 @@ struct Session::Impl {
                 if(s.close_requested.load()) { s.close();return; }
                 auto bytes=std::make_shared<std::vector<std::uint8_t>>(
                     RecoveredCharacterDelete::response(accepted));
+                if(!s.terminal_write_allowed())return;
                 s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                 logger("session")->info("session_id={} CHARACTER_DELETE_RESULT accepted={}",s.id,accepted);
                 if(s.writes.size()==1)s.write();
@@ -1313,6 +1424,7 @@ struct Session::Impl {
                     // 15210 reads byte1; byte2 is unread here, zero candidate only.
                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(
                         RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{0x18,*slot,0}));
+                    if(!s.terminal_write_allowed())return;
                     s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                     s.native_create_ack_sent=true;s.post_create_input.clear();
                     logger("session")->info("session_id={} NATIVE_CREATE_SLOT_ACK_QUEUED slot={}; tail=unverified_zero; world not entered",s.id,*slot);
@@ -1392,12 +1504,14 @@ struct Session::Impl {
                     // Current 14D20 accepts the same 02/result-WORD-zero shape.
                     const auto frame=RecoveredCharacterCreateResult::committed_success();
                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(frame.begin(),frame.end());
+                    if(!s.terminal_write_allowed())return;
                     s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                     if(const auto old=s.normal_entry.exchange(normal_entry))old->retired.store(true);
                     s.normal_initialization.store({});
                     s.normal_tail_size=0;s.normal_tail_observable=true;
                     if(world_frame) {
                         auto next=std::make_shared<std::vector<std::uint8_t>>(world_frame->begin(),world_frame->end());
+                        if(!s.terminal_write_allowed())return;
                         s.write_bytes+=next->size();s.writes.push_back({next,{},true});
                         s.writes.back().normal_entry=normal_entry;
                     }
@@ -1567,6 +1681,7 @@ struct Session::Impl {
         return true;
     }
     void resume_world_input(bool awaiting_skill=false) {
+        if(native_pk_terminal.load()) {stage_native_pk_terminal();return;}
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
         if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
         if(world_input.size()>=2) {
@@ -1584,6 +1699,12 @@ struct Session::Impl {
         read();
     }
     void feed_world(std::span<const std::uint8_t> bytes) {
+        if(native_pk_terminal.load()) {
+            if(!bytes.empty() || !world_input.empty() || !world_pending_records.empty()) {
+                fail("Native PK terminal cannot reclassify old input");return;
+            }
+            stage_native_pk_terminal();return;
+        }
         if(native_pk_pending.load()) {
             native_pk_read_paused=true;
             if(!bytes.empty() || !world_input.empty() || !world_pending_records.empty()) {
@@ -1623,6 +1744,7 @@ struct Session::Impl {
                records.empty() && !skill_deadline) {
                 auto reply=std::make_shared<std::vector<std::uint8_t>>(
                     RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
+                if(!terminal_write_allowed())return;
                 write_bytes+=reply->size();writes.push_back({reply,{}});
                 if(writes.size()==1)write();
                 logger("session")->info("session_id={} NATIVE_LOGOUT_ACK_QUEUED reason={}",id,(*control)[1]);
@@ -1765,13 +1887,14 @@ struct Session::Impl {
         game_busy=true;
         asio::post(game,[self=owner.shared_from_this(),records=std::move(records),requests=std::move(requests),native_batch_generation] {
             auto& s=*self->impl_;
+            s.native_pk_terminal_callback_capture.reset(); // This exact serial input callback only.
             std::vector<std::uint8_t> response;
             bool accepted=false;
             try {
                 if(!s.close_requested.load()) {
                     if(native_batch_generation && self->battle_generation()!=*native_batch_generation)
                         throw std::runtime_error("Native skill batch belongs to a retired battle generation");
-                    if(s.native_battle_pending.load() || s.native_pk_pending.load())
+                    if(s.native_battle_pending.load() || s.native_pk_pending.load() || s.native_pk_terminal.load())
                         throw std::runtime_error("Native world batch reached game during battle publication");
                     // Conservative server gate, not recovered turn/actor authority.
                     // Check the full batch before any handler can commit a prefix.
@@ -1813,11 +1936,17 @@ struct Session::Impl {
                     }
                 }
             } catch(const std::exception& error) {
+                if(s.native_pk_terminal_callback_capture)accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason={}",s.id,error.what());
             } catch(...) {
+                if(s.native_pk_terminal_callback_capture)accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason=unknown",s.id);
             }
-            asio::post(s.strand,[self,accepted,response=std::move(response),
+            // The game-owned incarnation survives deadline/close retirement.
+            // Only this actual TLS handler could mint it. No later generic ACK
+            // can qualify it; rejection/throw never acknowledges acceptance.
+            const auto terminal_ack=std::exchange(s.native_pk_terminal_callback_capture,{});
+            try {asio::post(s.strand,[self,accepted,terminal_ack,response=std::move(response),
                                  count=records.size(),movement_count=requests.size()]() mutable {
                 auto& s=*self->impl_;
                 s.game_busy=false;
@@ -1830,6 +1959,7 @@ struct Session::Impl {
                             s.fail("World response queue limit");return;
                         }
                         auto bytes=std::make_shared<std::vector<std::uint8_t>>(std::move(response));
+                        if(!s.terminal_write_allowed())return;
                         s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                         if(s.writes.front().bytes==bytes) s.write();
                     }
@@ -1837,9 +1967,24 @@ struct Session::Impl {
                         logger("session")->info("session_id={} RECOVERED_WORLD_BATCH_HANDLED records={}; live acceptance UNKNOWN",s.id,count);
                     else
                         logger("session")->info("session_id={} RECOVERED_MOVEMENT_ACCEPTED records={}; live acceptance UNKNOWN",s.id,movement_count);
+                    if(terminal_ack && s.native_pk_terminal.load()==terminal_ack)
+                        terminal_ack->acknowledged.store(true);
                     s.resume_world_input();
                 } catch(...) { s.fail("Recovered world response failed"); }
-            });
+            });}catch(...) {
+                if(!terminal_ack)throw; // Existing nonterminal handoff semantics.
+                // The actual callback returned; this is failure, never its ACK.
+                terminal_ack->ack_handoff_failed.store(true);
+                terminal_ack->accepted.store(false);
+                terminal_ack->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
+                s.close_requested.store(true);
+                try {asio::post(s.strand,[self,terminal_ack] {
+                    auto& s=*self->impl_;
+                    // No next input job can start before this callback's ACK.
+                    // Cleanup must still finish if deadline retired its token.
+                    s.game_busy=false;s.fail("Native PK terminal exact ACK handoff failed");
+                });}catch(...) {} // Independently armed strand deadline remains.
+            }
         });
     }
     void deliver(std::vector<Packet> packets) {
@@ -1872,6 +2017,7 @@ struct Session::Impl {
                 fail("encoded write queue limit"); return;
             }
             log_packet(packet, "S2C");
+            if(!terminal_write_allowed())return;
             write_bytes += bytes->size();
             writes.push_back({std::move(bytes), std::move(reservation)});
             if (writes.size() == 1) write();
@@ -1978,6 +2124,7 @@ struct Session::Impl {
                 }
                 s.write_bytes -= s.writes.front().bytes->size();
                 s.writes.pop_front();
+                if(s.native_pk_terminal.load())s.stage_native_pk_terminal();
                 if (!s.writes.empty()) s.write();
                 else if (s.closing) s.finish();
                 else if(s.resume_after_login_write) {
@@ -1991,6 +2138,7 @@ struct Session::Impl {
         closing = true;
         close_requested.store(true);
         retire_normal_initialization();
+        retire_native_pk_terminal();
         if(native_pk_pending.load()) {fail("Native PK closed while entry pending");return;}
         if(native_battle_pending.load()) {fail("Native battle closed while publication pending");return;}
         if(active_native_list) {fail("Native list closed while delivery pending");return;}
@@ -2007,6 +2155,7 @@ struct Session::Impl {
         closing = true;
         close_requested.store(true);
         retire_normal_initialization();
+        retire_native_pk_terminal();
         cancel_common_ready();
         world_pending_records.clear();skill_deadline.reset();native_skill_generation.reset();
         asio::error_code ignored;
@@ -2020,11 +2169,12 @@ struct Session::Impl {
         finish();
     }
     void finish() {
-        if (finished || !closing || game_busy || !writes.empty() || native_battle_pending.load() || native_pk_pending.load()) return;
+        if (finished || !closing || game_busy || !writes.empty() || native_battle_pending.load() || native_pk_pending.load() || native_pk_terminal.load()) return;
         finished = true;
         timeout_policy=SessionTimeoutPolicy::Normal;
         hold_timer.cancel();
         native_pk_timer.cancel();
+        native_pk_terminal_timer.cancel();
         try { hold_status(); } catch(...) {}
         owner.state_.store(SessionState::Disconnected);
         asio::error_code ignored;
@@ -2191,6 +2341,7 @@ void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
             if(bytes->size()>max_buffer-s.write_bytes || s.writes.size()>=max_writes) {
                 s.fail("Recovered world push queue limit");return;
             }
+            if(!s.terminal_write_allowed())return;
             s.write_bytes+=bytes->size();
             if(attempt)attempt->frame=bytes;
             s.writes.push_back({std::move(bytes),std::move(reservation),false,false,{},{},{},attempt});
@@ -2344,6 +2495,7 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
             if(bytes->size()>max_buffer-s.write_bytes || s.writes.size()>=max_writes) {
                 s.fail("Pending common entry queue limit");finish(false);return;
             }
+            if(!s.terminal_write_allowed()){finish(false);return;}
             s.writes.push_back({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
             asio::post(s.game,[self,bytes,before,after,account,character,publish=std::move(publish),finish] {
                 bool accepted=false;
@@ -2405,6 +2557,7 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
             }
             // Prepare the queue entry before accounting; allocation failure may
             // not strand bytes or the reservation. Prior writes may finish.
+            if(!s.terminal_write_allowed()){finish(false);return;}
             s.writes.push_back({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
             asio::post(s.game,[self,bytes,account,character,common,publish=std::move(publish),finish]() mutable {
                 bool accepted=false;
@@ -2441,7 +2594,7 @@ void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     if(!common || impl_->common_ready_thread==std::thread::id{} ||
        impl_->common_ready_thread!=std::this_thread::get_id())
         throw std::logic_error("Native battle publication requires actual async common game owner");
-    if(!delivery || source.expired() || !delivery->sequence || delivery->session!=id() ||
+    if(impl_->native_pk_terminal.load() || !delivery || source.expired() || !delivery->sequence || delivery->session!=id() ||
        delivery->account!=account_id || delivery->character!=character_id ||
        !delivery->account || !delivery->character || !delivery->common_generation ||
        closing() || state()!=SessionState::InBattle || battle_generation()!=delivery->battle_generation ||
@@ -2492,6 +2645,7 @@ void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
                 if(bytes->size()>max_buffer-s.write_bytes || s.writes.size()>=max_writes) {
                     s.fail("Native battle publication queue limit");return;
                 }
+                if(!s.terminal_write_allowed())return;
                 s.writes.push_back({bytes,std::move(reservation),false,true,{},{},pending});
                 s.write_bytes+=bytes->size();
                 s.release_native_battle(pending,bytes);
@@ -2658,11 +2812,62 @@ bool Session::native_pk_entry_written_current(const NativePkEntryHold& hold)cons
     return impl_->native_pk_written_transport_current(data) &&
         account_id==data->request.account && character_id==data->request.character;
 }
+Session::NativePkTerminalBarrier Session::prepare_native_pk_terminal_barrier(
+        const NativePkEntryHold& hold,NativeBattleSkill final,std::weak_ptr<NativePkTerminalOwner> source) {
+    // CUSTOM-0131 Publication owns Finished/context semantics. This TLS proves
+    // the actual synchronous Session world callback, not arbitrary caller IDs.
+    if(observed_world_callback!=this || !native_pk_entry_written_current(hold) || !final ||
+       native_battle_skill_written()!=final || source.expired() ||
+       impl_->native_battle_pending.load() || impl_->native_pk_pending.load())
+        throw std::logic_error("Native PK terminal barrier requires actual accepted input and final write");
+    const auto& request=hold.request();
+    if(final->session!=id() || final->account!=request.account || final->character!=request.character ||
+       final->common_generation!=request.common_generation || final->battle_generation!=hold.committed_battle_generation())
+        throw std::logic_error("Native PK terminal final delivery differs from private entry identity");
+    auto data=std::make_shared<NativePkTerminalBarrier::Data>(shared_from_this(),impl_->game,
+        hold,std::move(final),std::move(source));
+    std::shared_ptr<NativePkTerminalBarrier::Data> absent;
+    if(!impl_->native_pk_terminal.compare_exchange_strong(absent,data))
+        throw std::logic_error("Native PK terminal barrier already pending");
+    impl_->native_pk_terminal_callback_capture=data;
+    try {asio::post(impl_->strand,[self=shared_from_this(),data] {
+        auto& s=*self->impl_;if(s.native_pk_terminal.load()!=data)return;
+        try {
+            s.native_pk_terminal_timer.expires_after(close_timeout);
+            s.native_pk_terminal_timer.async_wait([self,data](const asio::error_code& ec) {
+                if(!ec && self->impl_->native_pk_terminal.load()==data) {
+                    if(data->ack_handoff_failed.load())self->impl_->game_busy=false;
+                    self->impl_->fail("Native PK terminal barrier deadline expired; retained recovery required");
+                }
+            });
+            data->armed.store(true);s.stage_native_pk_terminal();
+        }catch(...) {s.fail("Native PK terminal barrier timer/staging failed");}
+    });}catch(...) {
+        data->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
+        auto expected=data;impl_->native_pk_terminal.compare_exchange_strong(expected,{});
+        if(!data->failed_notified.exchange(true))if(const auto actual=data->source.lock())try {
+            actual->native_pk_terminal_failed(*this,NativePkTerminalBarrier(data));
+        }catch(...) {}
+        try {close();}catch(...) {impl_->close_requested.store(true);}
+        throw;
+    }
+    return NativePkTerminalBarrier(std::move(data));
+}
+bool Session::native_pk_terminal_barrier_ready_current(const NativePkTerminalBarrier& barrier)const noexcept {
+    const auto data=barrier.data_;
+    if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
+       data->session.lock().get()!=this || data->phase.load()!=NativePkTerminalBarrier::Data::Phase::Ready)
+        return false;
+    return impl_->native_pk_terminal_transport_current(data) && native_pk_entry_written_current(data->entry);
+}
+bool Session::native_pk_terminal_barrier_accepted_current(const NativePkTerminalBarrier& barrier)const noexcept {
+    return barrier.data_ && barrier.data_->accepted.load() && native_pk_terminal_barrier_ready_current(barrier);
+}
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){
     // CUSTOM-0115 explicit exact accepted entry. Raw output is never room,
     // grant/skill or current checkpoint authority; its game owner must prove it.
-    if(!native_pk_entry_written_current(hold))
+    if(impl_->native_pk_terminal.load() || !native_pk_entry_written_current(hold))
         throw std::invalid_argument("Native PK output requires its actual accepted written entry");
     const auto data=hold.data_;const auto common=impl_->common_world_identity.load();
     if(!delivery || source.expired() || !delivery->sequence || delivery->session!=id() ||
@@ -2843,6 +3048,7 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
             if(bytes->size()>max_buffer-s.write_bytes || s.writes.size()>=max_writes) {
                 complete(false);s.fail("Recovered world push queue limit");return;
             }
+            if(!s.terminal_write_allowed()){complete(false);return;}
             s.write_bytes+=bytes->size();
             s.writes.push_back({std::move(bytes),std::move(reservation)});
             complete(true);

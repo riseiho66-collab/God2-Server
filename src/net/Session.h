@@ -170,6 +170,26 @@ public:
         // completion and closes; durable recovery belongs to the room owner.
         virtual bool native_pk_entry_written(Session&,const NativePkEntryHold&,bool)=0;
     };
+    // CUSTOM-0131 actual accepted-terminal input drain; not WORLD/DB authority.
+    class NativePkTerminalBarrier {
+    public:
+        NativePkTerminalBarrier(const NativePkTerminalBarrier&)=default;
+        NativePkTerminalBarrier& operator=(const NativePkTerminalBarrier&)=default;
+        bool operator==(const NativePkTerminalBarrier&)const=default;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit NativePkTerminalBarrier(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class NativePkTerminalOwner {
+    public:
+        virtual ~NativePkTerminalOwner()=default;
+        // Actual game executor only. Ready is a local drained cut, not an ACK.
+        virtual bool native_pk_terminal_ready(Session&,const NativePkTerminalBarrier&)=0;
+        virtual void native_pk_terminal_failed(Session&,const NativePkTerminalBarrier&)=0;
+    };
     struct NativeCharacterSelectionInput {
         std::uint64_t session,account;
         RecoveredPostCreateSelect::Selection input;
@@ -360,6 +380,10 @@ public:
     // CUSTOM-0115 actual full entry write accepted by its exact source owner,
     // after the entry pending handoff clears. No native ACK/turn permission.
     bool native_pk_entry_written_current(const NativePkEntryHold&)const noexcept;
+    NativePkTerminalBarrier prepare_native_pk_terminal_barrier(const NativePkEntryHold&,
+        NativeBattleSkill,std::weak_ptr<NativePkTerminalOwner>);
+    bool native_pk_terminal_barrier_ready_current(const NativePkTerminalBarrier&)const noexcept;
+    bool native_pk_terminal_barrier_accepted_current(const NativePkTerminalBarrier&)const noexcept;
     // Separate retained-entry PK output only; old skill sender grammar stays
     // unchanged. Exact durable grant/result authority belongs to weak owner.
     void send_native_pk_output(const NativePkEntryHold&,NativeBattleSkill,

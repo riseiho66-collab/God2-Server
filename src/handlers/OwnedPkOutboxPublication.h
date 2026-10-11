@@ -20,6 +20,7 @@ class OwnedPkOutboxPublication final {
     friend class OwnedTaiwanPkLuaBasicOwner;
     struct Binding;
     struct Flight;
+    struct TerminalFlight;
     struct Lifetime {OwnedPkOutboxPublication* owner;};
 public:
     using Ticket=OwnedPkRoomState::Ticket;
@@ -352,6 +353,32 @@ public:
         }catch(...){fail(*binding);throw;}
     }
 private:
+    // CUSTOM-0131 this owner stays on game. Network handlers retain only the
+    // Session's private data and a weak facade; no repository callback crosses
+    // to the strand. Ready is bounded local transport quiescence, not WORLD.
+    struct TerminalFlight final:Session::NativePkTerminalOwner {
+        std::weak_ptr<Lifetime> lifetime;
+        std::weak_ptr<Binding> binding;
+        const std::uint8_t viewer;
+        const std::array<std::uint8_t,4> payload;
+        const std::uint64_t revision;
+        const Session::NativeBattleSkill final_write;
+        std::optional<Session::NativePkTerminalBarrier> barrier;
+        bool ready_seen=false,failed_seen=false;
+        TerminalFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
+                std::uint8_t side,std::array<std::uint8_t,4> context,std::uint64_t version,
+                Session::NativeBattleSkill written)
+            :lifetime(std::move(life)),binding(std::move(owner)),viewer(side),payload(context),
+             revision(version),final_write(std::move(written)){}
+        bool native_pk_terminal_ready(Session& session,const Session::NativePkTerminalBarrier& value)override{
+            const auto life=lifetime.lock();
+            return life&&life->owner&&life->owner->terminal_ready(*this,session,value);
+        }
+        void native_pk_terminal_failed(Session& session,const Session::NativePkTerminalBarrier& value)override{
+            const auto life=lifetime.lock();
+            if(life&&life->owner)life->owner->terminal_failed(*this,session,value);
+        }
+    };
     struct Flight final:Session::NativeBattleSkillPublicationOwner {
         std::weak_ptr<Lifetime> lifetime;
         std::weak_ptr<Binding> binding;
@@ -389,6 +416,7 @@ private:
             std::uint64_t revision;
         };
         std::array<std::optional<TerminalContext>,2> terminal_contexts;
+        std::array<std::shared_ptr<TerminalFlight>,2> terminal_inputs;
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
                 std::array<Session::NativePkEntryHold,2> entries,std::optional<WorldDeparture> world)
@@ -452,11 +480,61 @@ private:
             if(actual!=revision||!current()||
                (prior&&(prior->revision!=revision||prior->payload!=payload)))
                 throw DatabaseError("PK terminal context changed its private terminal observation");
-            // Fixed-size no-throw publication AFTER every fallible guard. The
-            // peer may still be writing. No resource save, unlock, phase flip,
-            // visibility publication, timer pump or receipt is implied.
+            // CUSTOM-0131 only the genuine retained-departure composition
+            // starts this distinct async input barrier. Historical bindings
+            // keep their old context-only path and gain no return authority.
+            if(binding.departure&&!prior){
+                const auto owned=bindings_.at(binding.ticket.id());
+                if(owned.get()!=&binding)throw DatabaseError("PK terminal input lost its private binding");
+                auto flight=std::make_shared<TerminalFlight>(lifetime_,owned,viewer,payload,revision,written);
+                auto barrier=session.prepare_native_pk_terminal_barrier(binding.holds[viewer],written,flight);
+                flight->barrier=std::move(barrier);
+                binding.terminal_inputs[viewer]=std::move(flight);
+            }
+            // No throwing work after publishing the barrier owner. Its ready
+            // callback is on this same serial game executor after this batch
+            // ACK has enqueued its response. The peer may still be writing.
             binding.terminal_contexts[viewer]=Binding::TerminalContext{payload,revision};
         }catch(...){fail(binding);throw;}
+    }
+    bool terminal_exact(const Binding& binding,const TerminalFlight& flight,const Session& session,
+            const Session::NativePkTerminalBarrier& value)const noexcept{
+        const auto at=bindings_.find(binding.ticket.id());
+        if(flight.viewer>1||at==bindings_.end()||at->second.get()!=&binding||binding.failed||
+           binding.terminal_inputs[flight.viewer].get()!=&flight||!flight.barrier||*flight.barrier!=value||
+           binding.sessions[flight.viewer].get()!=&session)return false;
+        const auto& context=binding.terminal_contexts[flight.viewer];
+        return context&&context->payload==flight.payload&&context->revision==flight.revision&&
+            binding.terminal_written[flight.viewer]==flight.final_write&&
+            binding.terminal_written_revision[flight.viewer]==flight.revision;
+    }
+    bool terminal_ready(TerminalFlight& flight,Session& session,const Session::NativePkTerminalBarrier& value){
+        if(!on_thread())return false;
+        const auto binding=flight.binding.lock();if(!binding)return false;
+        const auto current=[&]{
+            return !flight.failed_seen&&terminal_exact(*binding,flight,session,value)&&
+                written_current(*binding,flight.viewer)&&departure_retained_current(*binding,flight.viewer)&&
+                !binding->flights[flight.viewer]&&!session.native_battle_skill_publication_pending()&&
+                session.native_battle_skill_written()==flight.final_write&&
+                session.native_pk_terminal_barrier_ready_current(value);
+        };
+        try{
+            if(flight.ready_seen||!current())throw DatabaseError("PK terminal input barrier lost exact local quiescence");
+            // Requalify the actual Finished/own fullbytes/owner/pose/readset/
+            // both memberlocks after asynchronous drain. This is not a peer
+            // output/save gate and does not mutate or release durable state.
+            if(rooms_.require_terminal_context(binding->ticket.id(),flight.viewer,flight.payload,
+                    flight.final_write->logical)!=flight.revision||!current())
+                throw DatabaseError("PK terminal input barrier changed durable terminal context");
+            flight.ready_seen=true;
+            return true; // Session stamps accepted separately, deadline stays.
+        }catch(...){fail(*binding);return false;}
+    }
+    void terminal_failed(TerminalFlight& flight,Session& session,const Session::NativePkTerminalBarrier& value){
+        if(!on_thread())return;
+        const auto binding=flight.binding.lock();if(!binding)return;
+        if(flight.failed_seen||!terminal_exact(*binding,flight,session,value))return;
+        flight.failed_seen=true;fail(*binding);
     }
     static void reject_resolver_reentry(Binding& binding){
         if(binding.resolving){
