@@ -3,6 +3,8 @@
 #include "game/SharedNativeActorNameSource.h"
 #include "game/OwnedTaiwanPkReturnRoleTextSource.h"
 #include "protocol/RecoveredRemoteRoleText.h"
+#include "protocol/RecoveredGuildChat.h"
+#include "text/LegacyChineseCodec.h"
 #include "text/NativePeerRoleTextCodec.h"
 #include <limits>
 #include <stdexcept>
@@ -64,7 +66,7 @@ struct SharedActorVisibility::TaiwanPkReturnPlan::State {
     // CUSTOM-0134 every ordered copy is allocated before actual name readers.
     struct RecordSlot {std::size_t member,side,index;};
     std::map<Key,std::vector<RecordSlot>> record_slots;
-    // CUSTOM-0135 canonical map order, one complete saved row per directed edge.
+    // CUSTOM-0135/0136 canonical map order, joint text/guild row per directed edge.
     std::vector<OwnedTaiwanPkReturnRoleTextSource::Observation> role_rows;
     bool poisoned=false;
 };
@@ -138,7 +140,7 @@ bool SharedActorVisibility::taiwan_pk_return_fence(const std::shared_ptr<TaiwanP
     return true;
 }
 bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>& state,
-        TaiwanReturnCheck check)const {
+        TaiwanReturnCheck check,bool stored_only)const {
     owner();
     if(taiwan_return_reading_){taiwan_return_reentered_=true;if(state)state->poisoned=true;return false;}
     taiwan_return_reading_=true;taiwan_return_reentered_=false;
@@ -149,6 +151,16 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
     }end{taiwan_return_reading_,taiwan_return_reentered_,state};
     const auto valid=[&]{return taiwan_pk_return_fence(state);};
     try{
+        // CUSTOM-0136 actual Publication requalifies terminal SQL after full
+        // scene observation. Close that tail without replaying scene/name/pose
+        // callbacks. The same persistent visibility guard covers SQLite hooks.
+        if(stored_only){
+            if(!valid())return false;
+            const auto source=state->scene.role_text_source;
+            if(!source)return valid();
+            return source->owns_presence(presence_)&&state->role_rows.size()==state->actors.size()&&
+                source->stored_current(state->role_rows)&&valid();
+        }
         if(!valid()||!state->scene.current||!state->scene.current(check)||!valid())return false;
         // Empty scenes still qualify BOTH exact saved participant poses.
         for(std::size_t i=0;i<2;++i)
@@ -199,15 +211,16 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                     }
                 }else if(!issuer->current(actor.source,actor.recipient,Native{actor.native})||!valid())return false;
             }
-            // CUSTOM-0135 actual common secondary text, never the legacy
-            // blank-on-failure projector or a caller-supplied row callback.
+            // CUSTOM-0135/0136 actual common secondary/guild text, never the
+            // legacy blank-on-failure projector or a supplied row callback.
             if(role_source){
                 if(check==TaiwanReturnCheck::Prepare){
                     auto observed=role_source->observe(actor.source);
                     if(!observed||!valid())return false;
                     state->role_rows.emplace_back(std::move(*observed));
                 }else if(!role_source->current(state->role_rows.at(role_index))||!valid())return false;
-                const auto& saved=state->role_rows.at(role_index++).row();
+                const auto& observation=state->role_rows.at(role_index++);
+                const auto& saved=observation.row();
                 const auto source_page=RecoveredRemoteRoleText::source_codepage(actor.native.spawn);
                 // Both actual531C10 operands and the explicit receiving page
                 // must agree; Session language/protocol alone supplies neither.
@@ -219,20 +232,33 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                 const std::string_view bytes(reinterpret_cast<const char*>(text->data()),
                     static_cast<std::size_t>(end-text->begin()));
                 if(!NativePeerRoleTextCodec::project(bytes,source_page,raw.wire_codepage))return false;
-                const auto projected=RecoveredRemoteRoleText::with_source_text(actor.native.spawn,*text);
-                if(!projected||!valid())return false;
+                const auto secondary=RecoveredRemoteRoleText::with_source_text(actor.native.spawn,*text);
+                if(!secondary||!valid())return false;
+                // Native2D assigns the local saved third string; remote6F61
+                // reaches that same third display setter. CUSTOM-0075 supplies
+                // our actual common guild membership/name, not native storage.
+                // Only a successfully observed nonmember produces empty text.
+                const auto& guild=observation.guild();
+                const auto guild_name=guild?LegacyChineseCodec::encode(guild->name_utf8,source_page==936):std::string{};
+                if(guild&&LegacyChineseCodec::decode(guild_name,source_page==936)!=guild->name_utf8)return false;
+                const auto local_name=RecoveredGuildChat::name(guild_name);
+                if(!NativePeerRoleTextCodec::project(guild_name,source_page,raw.wire_codepage)||!valid())return false;
+                auto projected_bytes=RecoveredRemoteActor::encode_logical(*secondary);
+                std::copy(local_name.begin()+1,local_name.end(),projected_bytes.begin()+61);
+                const auto projected=RecoveredRemoteActor::parse_logical(projected_bytes);
+                if(!projected)return false;
                 const auto before=RecoveredRemoteActor::encode_logical(actor.native.spawn);
                 const auto after=RecoveredRemoteActor::encode_logical(*projected);
                 if(check==TaiwanReturnCheck::Retained){if(before!=after)return false;}
                 else{
                     for(std::size_t offset=0;offset<before.size();++offset)
-                        if((offset<45||offset>=61)&&before[offset]!=after[offset])return false;
+                        if((offset<45||offset>=77)&&before[offset]!=after[offset])return false;
                     actor.native.spawn=*projected;
                     std::get<Taiwan>(state->staged.at(key).native).spawn=*projected;
                     for(const auto& slot:state->record_slots.at(key)){
                         auto& records=slot.side==0?state->incoming_records[slot.member]:state->outgoing_records[slot.member];
                         auto& record=records.at(slot.index);
-                        for(std::size_t offset=45;offset<61;++offset)record[offset]=after[offset];
+                        for(std::size_t offset=45;offset<77;++offset)record[offset]=after[offset];
                     }
                 }
             }
@@ -241,7 +267,8 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         // all position/resource/native-name observers. Final fence is pure.
         if(!state->scene.current(check)||!valid())return false;
         // All rows in ONE final read snapshot after every external scene,
-        // name, profile and presence observer. No callbacks after this cut.
+        // name, profile and presence observer; secondary and guild share the
+        // same snapshot. No callbacks after this cut.
         if(role_source&&(!role_source->stored_current(state->role_rows)||!valid()))return false;
         return valid();
     }catch(...){state->poisoned=true;return false;}
@@ -292,8 +319,8 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
                actor.native.movement.identity()!=actor.source.actor_handle||
                actor.native.spawn.x()!=actor.source_position.x||actor.native.spawn.y()!=actor.source_position.y||
                actor.native.movement.x()!=actor.source_position.x||actor.native.movement.y()!=actor.source_position.y)return {};
-            // Complete supplied actor/resources/text3 remains mandatory.
-            // Text2 is replaced only by the factory-owned actual saved source.
+            // Complete supplied actor/resources remains mandatory.
+            // Text2/3 are replaced only by the factory-owned actual saved source.
             // Optional common stored first-name source is qualified privately
             // only after all nodes and ordered copies have been allocated.
             const auto record=RecoveredRemoteActor::encode_logical(actor.native.spawn);
@@ -336,6 +363,10 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
 bool SharedActorVisibility::taiwan_pk_return_current(const TaiwanPkReturnPlan& plan)const {
     const auto state=plan.state_; // Own private material before source callbacks.
     return taiwan_pk_return_read(state,TaiwanReturnCheck::Retained);
+}
+bool SharedActorVisibility::taiwan_pk_return_stored_current(const TaiwanPkReturnPlan& plan)const {
+    const auto state=plan.state_;
+    return taiwan_pk_return_read(state,TaiwanReturnCheck::Retained,true);
 }
 bool SharedActorVisibility::taiwan_pk_return_retained_current(const TaiwanPkReturnPlan& plan)const {
     owner();return taiwan_pk_return_fence(plan.state_);

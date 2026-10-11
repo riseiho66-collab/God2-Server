@@ -4943,6 +4943,37 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Consume actual common secondary storage in existing private return source instead of fabricated absentempty or an unfed row-reader seam.",
   "replacement": "Complete actual current fullactor/resources/alltext/selection, paired output/normal/durable release/recovery and later comprehensive native acceptance."
+},
+{
+  "id": "CUSTOM-0136",
+  "name": "Same-DB private TW return common guild third text",
+  "authority": "TW_CUSTOM_PRIVATE_RETURN_ACTUAL_COMMON_GUILD_SOURCE_NOT_ORIGINAL_GUILD_STORAGE",
+  "implementation": [
+    "src/cn/world/SharedActorVisibility.cpp",
+    "src/cn/world/SharedActorVisibility.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/db/SqliteGuildRepository.h",
+    "src/game/OwnedTaiwanPkReturnRoleTextSource.h",
+    "src/handlers/OwnedPkOutboxPublication.h"
+  ],
+  "native_gap": "Native2D/thirdsetter/6F sourcepage and mode3 structuralassociation qualified; fullactor/opaques/resources/selection/finalreturn remain incomplete.",
+  "rules": {
+    "actual_source": "ExactsharedSqliteDatabase factory injects sameconnection actualSqliteGuildRepository alongside existingroletext/presence. Actualsecondaccepted driver/Lua/publication consumes it, no newunfedreader.",
+    "receipt": "Whole StoredRoleText + optional whole StoredGuildMembership + actualmain globalMAX guildepoch in SAME snapshot. Missingowner/schema/provenance/readfailure rejects; confirmednonmembership distinct. Opaqueidentity/thread/reentry/sameconnectionDML rules retained.",
+    "absence_epoch": "Retained globalguildMAX catches trustedwriter join/leave ABA, conservatively invalidates on unrelatedguildchange. Existing guildrows retained. Dynamicrootdeletion requires separate currentowner/lease check; no arbitraryexternalSQL immunity.",
+    "projection": "Exact originalUTF8→unchangedpacketbit25 sourcepage roundtrip; existing2D:name bounds and NativePeerRoleTextCodec receivercapacity; actualD8DA/profile agreement. Third61..76 only; combinedsecondary+third45..76 only, other49bytes exact; allcanonical/staged/orderedcopies consistent.",
+    "final_cut": "Fullscene observation then actualterminalresources+bothcontextSQL reads then stored-only finaljointtext/guild snapshot under persistentVisibilityreentryguard; only purepair/Session/registryfences follow. Independentreview R300-01 previous299tailgap corrected, historyretained.",
+    "scope": "Privatepreparedscene only; no sends/merge/WORLD/markerretire/unlock/readresume/App/schemawrites. Ordinaryguild/chat/name/roletext and frozenpaths unchanged."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Actual storedguildname or positivelyobservedabsence supplies native thirdfield while avoiding falseempty/staleoptionalrow/sequentialsourcegap.",
+  "replacement": "Complete actualcurrentfullactor/resources/selection, pairedoutput/normal/durableFinished lifecycle and Application composition before globaltests/release."
 }
 ]
 }

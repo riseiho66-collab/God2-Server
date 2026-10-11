@@ -287,9 +287,9 @@ public:
         const std::array<std::shared_ptr<Session>,2>&,
         const std::array<Session::NativePkEntryHold,2>&,std::uint8_t viewer)const;
     // CUSTOM-0133 private paired return preallocation, never a WORLD permit.
-    // Supplier owns the COMPLETE current ordered scene, resources and native
-    // text3. CUSTOM-0135 factory-owned role_text_source projects stored text2;
-    // without it the supplier still owns text2. CUSTOM-0134 projects text1
+    // Supplier owns the COMPLETE current ordered scene and resources.
+    // CUSTOM-0135/0136 factory-owned role_text_source projects stored text2 and
+    // current guild text3; without it the supplier owns both. CUSTOM-0134 projects text1
     // from the actual common stored original using this presence's selected
     // NameSource and canonical
     // receiver_text. Without common_name_source, supplier owns native text1.
@@ -315,15 +315,16 @@ public:
         // Mandatory pure full readset: exact complete ordered sets (including
         // deliberate empties), every source/recipient common root/saved pose,
         // qualification revision/resource availability and receiver_text
-        // profile/native text3. Supplier owns text1 unless common_name_source
-        // supplies it; it owns text2 unless role_text_source supplies it.
+        // profile. Supplier owns text1 unless common_name_source supplies it;
+        // it owns text2/text3 unless role_text_source supplies them.
         // Actual common name projection remains in this full readset.
-        // Concrete text2 rows are separately requalified in one final snapshot.
+        // Concrete text2/guild rows are jointly requalified in one final snapshot.
         // Requalifies ALL supplier-owned inputs together,
         // after per-edge observers. No yield/mutation/send/event pumping.
         std::function<bool(TaiwanReturnCheck)> current;
-        // CUSTOM-0135 only the concrete same-DB factory can create this owner.
-        // It retains complete saved rows; missing never means saved empty.
+        // CUSTOM-0135/0136 only the same-DB factory can create this owner.
+        // Complete saved rows and confirmed guild absence stay distinct from
+        // read failure; all share the final snapshot and retained guild epoch.
         std::shared_ptr<god2::OwnedTaiwanPkReturnRoleTextSource> role_text_source;
     };
     class TaiwanPkReturnPlan {
@@ -341,6 +342,9 @@ public:
         std::array<std::shared_ptr<Session>,2>,std::array<Session::NativePkEntryHold,2>,
         std::array<Session::NativePkReturnPreparation,2>,TaiwanReturnScene);
     bool taiwan_pk_return_current(const TaiwanPkReturnPlan&)const;
+    // CUSTOM-0136 joint text/guild-only read cut AFTER actual terminal ledger
+    // reads. No scene/name/profile/presence observers; pure fences follow.
+    bool taiwan_pk_return_stored_current(const TaiwanPkReturnPlan&)const;
     // Registry/Session only, for the final cut after actual read-only ledger
     // qualification. This does not refresh resource/text/saved-position data.
     bool taiwan_pk_return_retained_current(const TaiwanPkReturnPlan&)const;
@@ -351,7 +355,7 @@ public:
     void release(const Lease&);
 private:
     bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
-    bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck)const;
+    bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck,bool stored_only=false)const;
     void reject_taiwan_return_reentry()const;
     bool taiwan_pk_return_pending(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_departed(const Lease&)const noexcept;

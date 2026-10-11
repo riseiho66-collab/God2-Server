@@ -637,6 +637,12 @@ private:
                            own.final_write->logical)!=own.revision||!pair_current())
                         throw DatabaseError("PK return scene changed saved terminal context");
                 }
+                // CUSTOM-0136 terminal SQLite reads above can observe/mutate
+                // common text/guild sources. Their joint final read cut belongs
+                // here, after those reads; only pure Session/pair fences follow.
+                if(!world.visibility->taiwan_pk_return_stored_current(*visibility_plan)||
+                   binding->return_reentered||!pair_current())
+                    throw DatabaseError("PK return stored text/guild source changed after terminal reads");
                 if(!world.visibility->taiwan_pk_return_retained_current(*visibility_plan)||
                    binding->return_reentered||!pair_current())
                     throw DatabaseError("PK return scene changed before private retention");

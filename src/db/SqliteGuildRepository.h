@@ -21,6 +21,8 @@ class SqliteGuildRepository {
     sqlite3* db_;
 public:
     explicit SqliteGuildRepository(sqlite3* db);
+    // CUSTOM-0136 concrete backend identity only; no SQL or guild permission.
+    bool uses_connection(const sqlite3* db)const noexcept{return db_==db;}
     static std::string schema();
     std::optional<StoredGuildMembership> load(std::uint64_t account,std::uint64_t character);
     std::uint64_t admin_create(const std::string& name_utf8);
