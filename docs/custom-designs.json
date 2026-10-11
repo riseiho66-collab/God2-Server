@@ -4885,6 +4885,34 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Do not reuse cleared native pool or old moved scene vectors; retain an explicitly current complete private plan at reachable real callback.",
   "replacement": "Supply actual current full6F authority and finish paired transport/visibility/resources/durable release/recovery, then comprehensive native acceptance."
+},
+{
+  "id": "CUSTOM-0134",
+  "name": "Owned TW PK return common stored first-name source",
+  "authority": "TW_CUSTOM_PRIVATE_RETURN_COMMON_ORIGINAL_NAME_PROJECTION_NOT_FULL_ACTOR_ISSUER",
+  "implementation": [
+    "src/cn/world/SharedActorVisibility.cpp",
+    "src/cn/world/SharedActorVisibility.h"
+  ],
+  "native_gap": "Full current actor/resource/secondary+tertiary text/selection issuer and final paired return/release/recovery remain incomplete.",
+  "rules": {
+    "actual_source": "At existing actual secondaccepted callback→296 paired plan, explicitly selected samePresence SharedNativeActorNameSource reads real common stored original profile/name_codepage and exact receiver native profile; no new caller action stub.",
+    "scope": "Only exact private paired departure/leases/poses/Sessions/holds/returnpreparations allow direct return path. Generic normal departed/name wrappers and original common NameSource are unchanged.",
+    "profile": "Canonical qualification.receiver_text copied before actual nameproject; legacy native.raw_name_state never gains separate authority. Actual D8/DA selector/CP950/936 checks, strict stored decoding and same original Unicode encoding; no truncation/defaultname.",
+    "bytes": "Only first6F29..44 name field changes. Complete supplied other65bytes/movement/removal preserved. Projected canonical record copied to staged model and every applicable ordered incoming/outgoing record, mutual edge staged once and owner/profile/qualification must agree.",
+    "current": "Initial projection and retained exactbytes NameSource.current execute under persistent caughtreentry poison and exact private pair/endpoint fences. Fullscene Current requalifies full selection/root/pose/resource/text after all name observers, then pure fence. Retained plan never silently refreshes a changed name.",
+    "limits": "No full6F builder, resource/visibility rules, second/third text source, modelmerge/send/liveData/state/marker retirement/unlock/readresume/App. Existing finite terminal deadline remains.",
+    "phase": "Static source/accounting only; no new native disassembly or execution credit."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Replace return-only blanket rejection with actual common original-name authority while preserving all normal guards and full-source gaps.",
+  "replacement": "Complete actual directed model/resources/alltexts/selection supplier, paired transport/visibility/durable release/recovery and later comprehensive native acceptance."
 }
 ]
 }

@@ -58,6 +58,9 @@ struct SharedActorVisibility::TaiwanPkReturnPlan::State {
     struct Endpoint {Lease lease;RecoveredPosition position;std::shared_ptr<Session> session;std::uint64_t battle;};
     std::map<std::uint64_t,Endpoint> endpoints;
     std::array<std::vector<god2cn::Bytes>,2> incoming_records,outgoing_records;
+    // CUSTOM-0134 every ordered copy is allocated before actual name readers.
+    struct RecordSlot {std::size_t member,side,index;};
+    std::map<Key,std::vector<RecordSlot>> record_slots;
     bool poisoned=false;
 };
 void SharedActorVisibility::reject_taiwan_return_reentry()const {
@@ -145,13 +148,48 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         // Empty scenes still qualify BOTH exact saved participant poses.
         for(std::size_t i=0;i<2;++i)
             if(presence_->saved_position(state->leases[i])!=std::optional{state->positions[i]}||!valid())return false;
-        for(const auto& [key,actor]:state->actors){
+        for(auto& [key,actor]:state->actors){
             if(presence_->saved_position(actor.source)!=std::optional{actor.source_position}||!valid()||
                presence_->saved_position(actor.recipient)!=std::optional{actor.recipient_position}||!valid()||
                !actor.qualification->current()||!valid())return false;
-            const auto receiver=actor.native.connection.lock();const auto& raw=*actor.qualification->receiver_text;
+            const auto receiver=actor.native.connection.lock();const auto raw=*actor.native.raw_name_state;
             if(!receiver||!raw.current(*receiver,raw.source_revision,raw.wire_codepage,
                     raw.actual_global_word_d8,raw.actual_global_word_da)||!valid())return false;
+            // CUSTOM-0134 this private paired return authority already qualified
+            // BOTH genuine terminal preparations; ordinary departed wrappers
+            // remain closed. Reuse the actual common stored-name owner, never
+            // an invented full6F issuer or a legacy raw-name witness.
+            const auto issuer=actor.native.common_name_source;
+            if(issuer){
+                if(!issuer->owns_presence(presence_)||!valid())return false;
+                if(check==TaiwanReturnCheck::Prepare){
+                    const auto before=RecoveredRemoteActor::encode_logical(actor.native.spawn);
+                    const auto projected=issuer->project(actor.source,actor.recipient,Native{actor.native});
+                    if(!projected||!valid())return false;
+                    const auto* native=std::get_if<Taiwan>(&*projected);
+                    if(!native||native->connection.lock()!=receiver||native->common_name_source!=issuer||
+                       !native->raw_name_state||
+                       native->raw_name_state->source_revision!=raw.source_revision||
+                       native->raw_name_state->wire_codepage!=raw.wire_codepage||
+                       native->raw_name_state->actual_global_word_d8!=raw.actual_global_word_d8||
+                       native->raw_name_state->actual_global_word_da!=raw.actual_global_word_da||
+                       RecoveredRemoteActorMove::encode_logical(native->movement)!=RecoveredRemoteActorMove::encode_logical(actor.native.movement)||
+                       RecoveredRemoteActorRemove::encode_logical(native->removal)!=RecoveredRemoteActorRemove::encode_logical(actor.native.removal))return false;
+                    const auto after=RecoveredRemoteActor::encode_logical(native->spawn);
+                    for(std::size_t offset=0;offset<before.size();++offset)
+                        if((offset<29||offset>=45)&&before[offset]!=after[offset])return false;
+                    // Assign only the immutable first-name projection. The
+                    // canonical qualification/raw callback and all other model
+                    // fields retain their exact owned inputs. No allocation.
+                    actor.native.spawn=native->spawn;
+                    std::get<Taiwan>(state->staged.at(key).native).spawn=native->spawn;
+                    for(const auto& slot:state->record_slots.at(key)){
+                        auto& records=slot.side==0?state->incoming_records[slot.member]:state->outgoing_records[slot.member];
+                        auto& record=records.at(slot.index);
+                        for(std::size_t offset=29;offset<45;++offset)record[offset]=after[offset];
+                    }
+                }else if(!issuer->current(actor.source,actor.recipient,Native{actor.native})||!valid())return false;
+            }
         }
         // The full supplier requalifies ordered selection/entire current after
         // all position/resource/native-name observers. Final fence is pure.
@@ -179,6 +217,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
         return a.source==b.source&&a.recipient==b.recipient&&a.source_position==b.source_position&&
             a.recipient_position==b.recipient_position&&a.source_connection==b.source_connection&&
             a.native.connection.lock()==b.native.connection.lock()&&a.qualification==b.qualification&&
+            a.native.common_name_source==b.native.common_name_source&&
             RecoveredRemoteActor::encode_logical(a.native.spawn)==RecoveredRemoteActor::encode_logical(b.native.spawn)&&
             RecoveredRemoteActorMove::encode_logical(a.native.movement)==RecoveredRemoteActorMove::encode_logical(b.native.movement)&&
             RecoveredRemoteActorRemove::encode_logical(a.native.removal)==RecoveredRemoteActorRemove::encode_logical(b.native.removal);
@@ -197,15 +236,16 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
                actor.source.actor_handle>0xfff||actor.source_position.area!=actor.recipient_position.area||
                actor.source_position.scene!=actor.recipient_position.scene||
                !actor.qualification||!actor.qualification->revision||!actor.qualification->current||
-               actor.native.common_name_source||!actor.qualification->receiver_text||
+               !actor.qualification->receiver_text||
                !actor.qualification->receiver_text->source_revision||!actor.qualification->receiver_text->current||
                (actor.qualification->receiver_text->wire_codepage!=950&&actor.qualification->receiver_text->wire_codepage!=936)||
                actor.native.spawn.identity()!=actor.source.actor_handle||actor.native.removal.identity()!=actor.source.actor_handle||
                actor.native.movement.identity()!=actor.source.actor_handle||
                actor.native.spawn.x()!=actor.source_position.x||actor.native.spawn.y()!=actor.source_position.y||
                actor.native.movement.x()!=actor.source_position.x||actor.native.movement.y()!=actor.source_position.y)return {};
-            // Unsupported common-name issuer fails explicitly; old ordinary
-            // source wrappers reject departed actors and are never bypassed.
+            // Complete supplied actor/resource/text2/text3 remains mandatory.
+            // Optional common stored first-name source is qualified privately
+            // only after all nodes and ordered copies have been allocated.
             const auto record=RecoveredRemoteActor::encode_logical(actor.native.spawn);
             if(actor.native.movement.state()!=(std::uint16_t(record[7])|(std::uint16_t(record[8])<<8)))return {};
             for(const auto& [lease,session]:{std::pair{actor.source,actor.source_connection},std::pair{actor.recipient,receiver}}){
@@ -226,6 +266,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
             if(!inserted&&!equal(found->second,actor))return {};
             // Explicit canonical actual receiver witness, no name/byte rewrite.
             found->second.native.raw_name_state=*actor.qualification->receiver_text;
+            state->record_slots[key].push_back({i,side,records.size()});
             records.emplace_back(record.begin(),record.end());
         }
     }

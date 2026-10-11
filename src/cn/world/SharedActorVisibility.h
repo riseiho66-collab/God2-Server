@@ -287,8 +287,11 @@ public:
         const std::array<std::shared_ptr<Session>,2>&,
         const std::array<Session::NativePkEntryHold,2>&,std::uint8_t viewer)const;
     // CUSTOM-0133 private paired return preallocation, never a WORLD permit.
-    // Supplier owns the COMPLETE current ordered scene, resources and all three
-    // native text fields. Old bindings/DA projections cannot supply this data.
+    // Supplier owns the COMPLETE current ordered scene, resources and native
+    // text2/text3. CUSTOM-0134 optionally projects text1 from the actual common
+    // stored original using this presence's selected NameSource and canonical
+    // receiver_text. Without common_name_source, supplier owns ALL THREE native
+    // texts. Old bindings/DA projections cannot supply a full actor.
     struct TaiwanReturnQualification {
         std::uint64_t revision;
         // Pure actual issuer: full record/resource/text/selection provenance.
@@ -310,7 +313,9 @@ public:
         // Mandatory pure full readset: exact complete ordered sets (including
         // deliberate empties), every source/recipient common root/saved pose,
         // qualification revision/resource availability and receiver_text
-        // profile/all three native texts. Requalifies ALL of them together,
+        // profile/native text2/text3 and actual stored original text1 when a
+        // common_name_source is selected; otherwise all three supplied native
+        // texts. Requalifies ALL of them together,
         // after per-edge observers. No yield/mutation/send/event pumping.
         std::function<bool(TaiwanReturnCheck)> current;
     };
