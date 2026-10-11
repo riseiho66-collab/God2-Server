@@ -777,6 +777,19 @@ void SqliteOwnedPkRoomRepository::commit_terminal_resources(const Ticket& ticket
     require_ticket(ticket,"finished"); // Both staged rows + complete ledger/unchanged locks before COMMIT.
     tx.commit();
 }
+void SqliteOwnedPkRoomRepository::require_terminal_resources_saved(const Ticket& ticket,const BattleCheckpoint& actual,
+                                                                  const Replies& actually_written){
+    // CUSTOM-0132 actual paired transport observations come from Publication;
+    // this private snapshot proves the prior CUSTOM0127 save still exists.
+    // Own early1C remains weaker and continues to use require_terminal_context.
+    RecoveryRead scope(db_);
+    const auto material=terminal_resources_in_scope(ticket,&actual);
+    const auto ledger=terminal_resource_ledger(ticket);
+    if(!ledger || !material.both_submitted || material.outputs!=actually_written || *ledger!=material.document)
+        throw DatabaseError("PK return preparation lacks the exact existing paired resource save");
+    require_ticket(ticket,"finished"); // Exact saved after rows, complete readset and both original locks.
+    scope.commit(); // Read-only: no resource increment, missing-ledger repair or lock release.
+}
 void SqliteOwnedPkRoomRepository::require_terminal_context(const Ticket& ticket,const BattleCheckpoint& actual,
         std::uint8_t viewer,const std::array<std::uint8_t,4>& payload,
         const std::vector<std::uint8_t>& actually_written){

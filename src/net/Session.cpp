@@ -131,8 +131,13 @@ struct Session::NormalWorldInitialization::Data {
     const std::shared_ptr<Entry> entry;
     const std::vector<std::uint8_t> tail;
     const std::uint8_t config;
+    // CUSTOM-0132 physical Entry::battle/Written stay the actual original IO.
+    const std::uint64_t effective_battle;
+    const std::weak_ptr<const Data> previous;
     Data(std::shared_ptr<Entry> source,std::vector<std::uint8_t> bytes,std::uint8_t flag)
-        :entry(std::move(source)),tail(std::move(bytes)),config(flag) {}
+        :entry(std::move(source)),tail(std::move(bytes)),config(flag),effective_battle(entry->battle) {}
+    Data(std::shared_ptr<const Data> prior,std::uint64_t future)
+        :entry(prior->entry),tail(prior->tail),config(prior->config),effective_battle(future),previous(std::move(prior)) {}
 };
 const RecoveredWorldEntry::Frame& Session::NormalWorldInitialization::entry_frame() const noexcept {return data_->entry->frame;}
 const std::vector<std::uint8_t>& Session::NormalWorldInitialization::entry_logical() const noexcept {return data_->entry->logical;}
@@ -153,6 +158,8 @@ struct Session::NativePkEntryHold::Data {
     const NormalWorldInitialization initialization;
     const std::shared_ptr<const void> common;
     const std::shared_ptr<const WorldDeliveryIdentity> battle_identity;
+    // Actual pre-PK WORLD identity; not Request::world_generation's namespace.
+    const std::shared_ptr<const WorldDeliveryIdentity> original_world_identity;
     const std::shared_ptr<std::vector<std::uint8_t>> frame;
     const std::weak_ptr<NativePkEntryOwner> source;
     std::atomic<Phase> phase{Phase::Preparing};
@@ -160,11 +167,11 @@ struct Session::NativePkEntryHold::Data {
     std::atomic<bool> written_accepted{false}; // Only actual game completion may set true.
     Data(std::weak_ptr<Session> s,std::uint64_t id,asio::any_io_executor executor,
          NativePkEntryRequest r,SessionState phase,NormalWorldInitialization init,std::shared_ptr<const void> c,
-         std::shared_ptr<const WorldDeliveryIdentity> identity,
+         std::shared_ptr<const WorldDeliveryIdentity> identity,std::shared_ptr<const WorldDeliveryIdentity> original,
          std::shared_ptr<std::vector<std::uint8_t>> bytes,std::weak_ptr<NativePkEntryOwner> owner)
         :session(std::move(s)),session_id(id),game(std::move(executor)),request(std::move(r)),prebattle_phase(phase),
          initialization(std::move(init)),common(std::move(c)),battle_identity(std::move(identity)),
-         frame(std::move(bytes)),source(std::move(owner)){}
+         original_world_identity(std::move(original)),frame(std::move(bytes)),source(std::move(owner)){}
 };
 const Session::NativePkEntryRequest& Session::NativePkEntryHold::request()const noexcept{return data_->request;}
 std::uint64_t Session::NativePkEntryHold::session_id()const noexcept{return data_->session_id;}
@@ -183,6 +190,15 @@ struct Session::NativePkTerminalBarrier::Data {
          NativeBattleSkill output,std::weak_ptr<NativePkTerminalOwner> owner)
         :session(std::move(s)),game(std::move(executor)),entry(std::move(hold)),
          final(std::move(output)),source(std::move(owner)){}
+};
+
+struct Session::NativePkReturnPreparation::Data {
+    const NativePkTerminalBarrier terminal;
+    const NormalWorldInitialization initialization;
+    const std::shared_ptr<const WorldDeliveryIdentity> world_identity;
+    Data(NativePkTerminalBarrier barrier,NormalWorldInitialization normal,
+         std::shared_ptr<const WorldDeliveryIdentity> world)
+        :terminal(std::move(barrier)),initialization(std::move(normal)),world_identity(std::move(world)) {}
 };
 
 struct Session::NativeWorldSelectionInput::Data {
@@ -653,6 +669,8 @@ struct Session::Impl {
            common_world_identity.load().get()!=data->common.get() || common_entry_identity.load() ||
            normal_initialization.load()!=data->initialization.data_ ||
            !data->initialization.entry_written())return false;
+        if(!committed && data->original_world_identity && world_delivery_identity.load()!=data->original_world_identity)
+            return false; // Qualify the actual captured WORLD namespace until PK commit.
         const auto& r=data->request;
         const auto common=common_world_identity.load();
         return common && common->account==r.account && common->character==r.character &&
@@ -790,6 +808,15 @@ struct Session::Impl {
                 return;
             }
             data->accepted.store(true); // Deadline intentionally remains armed.
+            bool notified=false;
+            if(self->native_pk_terminal_barrier_accepted_current(NativePkTerminalBarrier(data)))
+                if(const auto source=data->source.lock())try {
+                    notified=source->native_pk_terminal_accepted(*self,NativePkTerminalBarrier(data));
+                }catch(...) {}
+            if(!notified || !self->native_pk_terminal_barrier_accepted_current(NativePkTerminalBarrier(data))) {
+                data->accepted.store(false);data->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
+                try {self->close();}catch(...) {self->impl_->close_requested.store(true);}
+            }
         });}catch(...) {fail("Native PK terminal ready handoff failed");}
     }
     void stage_native_pk() {
@@ -2285,7 +2312,7 @@ bool Session::normal_world_initialization_current(const NormalWorldInitializatio
         entry.session.lock().get()==this && !entry.retired.load() && !closing() && recovered_world_ready() &&
         impl_->mode==ProtocolMode::God2CharacterConnection &&
         (state()==SessionState::CharacterSelected || state()==SessionState::InWorld) &&
-        entry.account==account_id && entry.character==character_id && entry.battle==battle_generation();
+        entry.account==account_id && entry.character==character_id && data.effective_battle==battle_generation();
 }
 bool Session::world_records_write_current_on_game(const WorldRecordsWrite& observation) const {
     const auto data=observation.data_;
@@ -2307,7 +2334,7 @@ bool Session::normal_world_initialization_current_on_game(const NormalWorldIniti
         !entry->retired.load() && !closing() && recovered_world_ready() &&
         impl_->mode==ProtocolMode::God2CharacterConnection &&
         (state()==SessionState::CharacterSelected || state()==SessionState::InWorld) &&
-        entry->account==account_id && entry->character==character_id && entry->battle==battle_generation();
+        entry->account==account_id && entry->character==character_id && data->effective_battle==battle_generation();
 }
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         std::shared_ptr<WorldRecordsWrite::Data> observed) {
@@ -2727,8 +2754,14 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     auto frame=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(request.logical));
     auto identity=std::make_shared<const WorldDeliveryIdentity>(WorldDeliveryIdentity{
         request.account,request.character,request.world_generation,request.prebattle_generation+1});
+    auto original_world=impl_->world_delivery_identity.load();
+    // Do not narrow historical entry transport. Missing/stale actual WORLD
+    // identity disables only new retained-return preparation, never fabricates it.
+    if(original_world && (!original_world->world_generation || original_world->account!=request.account ||
+       original_world->character!=request.character || original_world->battle_generation!=request.prebattle_generation))
+        original_world.reset();
     auto pending=std::make_shared<NativePkEntryHold::Data>(shared_from_this(),id(),impl_->game,
-        std::move(request),prebattle_phase,initialization,common,std::move(identity),frame,std::move(source));
+        std::move(request),prebattle_phase,initialization,common,std::move(identity),std::move(original_world),frame,std::move(source));
     auto budget=impl_->budget;std::shared_ptr<Reservation> reservation;
     {
         std::lock_guard lock(budget->mutex);
@@ -2862,6 +2895,46 @@ bool Session::native_pk_terminal_barrier_ready_current(const NativePkTerminalBar
 }
 bool Session::native_pk_terminal_barrier_accepted_current(const NativePkTerminalBarrier& barrier)const noexcept {
     return barrier.data_ && barrier.data_->accepted.load() && native_pk_terminal_barrier_ready_current(barrier);
+}
+Session::NativePkReturnPreparation Session::prepare_native_pk_return_generation(const NativePkTerminalBarrier& barrier) {
+    if(!native_pk_terminal_barrier_accepted_current(barrier))
+        throw std::logic_error("PK return preparation requires actual accepted terminal barrier");
+    const auto entry=barrier.data_->entry.data_;
+    const auto original=entry->original_world_identity;
+    const auto& request=entry->request;
+    if(!original || request.prebattle_generation>std::numeric_limits<std::uint64_t>::max()-2 ||
+       original->account!=request.account || original->character!=request.character ||
+       !original->world_generation || original->battle_generation!=request.prebattle_generation ||
+       entry->initialization.data_->effective_battle!=request.prebattle_generation)
+        throw std::logic_error("PK return lacks its original WORLD namespace or checked next generation");
+    const auto future=request.prebattle_generation+2;
+    auto normal=std::make_shared<const NormalWorldInitialization::Data>(entry->initialization.data_,future);
+    auto identity=std::make_shared<const WorldDeliveryIdentity>(WorldDeliveryIdentity{
+        original->account,original->character,original->world_generation,future});
+    NativePkReturnPreparation result(std::make_shared<const NativePkReturnPreparation::Data>(
+        barrier,NormalWorldInitialization(std::move(normal)),std::move(identity)));
+    if(!native_pk_return_preparation_current(result))
+        throw std::logic_error("PK return preparation lost exact retained source during allocation");
+    return result; // No store into live normal/world identity or state.
+}
+bool Session::native_pk_return_preparation_current(const NativePkReturnPreparation& preparation)const noexcept {
+    const auto data=preparation.data_;
+    if(!data || !native_pk_terminal_barrier_accepted_current(data->terminal))return false;
+    const auto entry=data->terminal.data_->entry.data_;
+    const auto original=entry->original_world_identity;
+    const auto prior=entry->initialization.data_;
+    const auto future=data->initialization.data_;
+    const auto& request=entry->request;
+    return original && future && data->world_identity &&
+        request.prebattle_generation<=std::numeric_limits<std::uint64_t>::max()-2 &&
+        original->account==request.account && original->character==request.character &&
+        original->world_generation && original->battle_generation==request.prebattle_generation &&
+        prior->effective_battle==request.prebattle_generation && future->previous.lock()==prior &&
+        future->entry==prior->entry && future->tail==prior->tail && future->config==prior->config &&
+        future->effective_battle==request.prebattle_generation+2 &&
+        data->world_identity->account==original->account && data->world_identity->character==original->character &&
+        data->world_identity->world_generation==original->world_generation &&
+        data->world_identity->battle_generation==future->effective_battle;
 }
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){

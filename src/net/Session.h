@@ -188,7 +188,22 @@ public:
         virtual ~NativePkTerminalOwner()=default;
         // Actual game executor only. Ready is a local drained cut, not an ACK.
         virtual bool native_pk_terminal_ready(Session&,const NativePkTerminalBarrier&)=0;
+        // CUSTOM-0132 invoked only AFTER the separate accepted stamp/current fence.
+        virtual bool native_pk_terminal_accepted(Session&,const NativePkTerminalBarrier&)=0;
         virtual void native_pk_terminal_failed(Session&,const NativePkTerminalBarrier&)=0;
+    };
+    // CUSTOM-0132 preallocated retained-generation material only. No state,
+    // initialization publication, input release or durable/world return permit.
+    class NativePkReturnPreparation {
+    public:
+        NativePkReturnPreparation(const NativePkReturnPreparation&)=default;
+        NativePkReturnPreparation& operator=(const NativePkReturnPreparation&)=default;
+        bool operator==(const NativePkReturnPreparation&)const=default;
+    private:
+        friend class Session;
+        struct Data;
+        explicit NativePkReturnPreparation(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
     };
     struct NativeCharacterSelectionInput {
         std::uint64_t session,account;
@@ -384,6 +399,8 @@ public:
         NativeBattleSkill,std::weak_ptr<NativePkTerminalOwner>);
     bool native_pk_terminal_barrier_ready_current(const NativePkTerminalBarrier&)const noexcept;
     bool native_pk_terminal_barrier_accepted_current(const NativePkTerminalBarrier&)const noexcept;
+    NativePkReturnPreparation prepare_native_pk_return_generation(const NativePkTerminalBarrier&);
+    bool native_pk_return_preparation_current(const NativePkReturnPreparation&)const noexcept;
     // Separate retained-entry PK output only; old skill sender grammar stays
     // unchanged. Exact durable grant/result authority belongs to weak owner.
     void send_native_pk_output(const NativePkEntryHold&,NativeBattleSkill,

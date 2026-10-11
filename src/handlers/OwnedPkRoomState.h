@@ -265,6 +265,13 @@ private:
         const auto& current=find(room);
         repository_.commit_terminal_resources(current.ticket,current.battle.checkpoint(),actually_written);
     }
+    // CUSTOM-0132 stronger paired preparation guard, distinct from own early
+    // terminal context. Runtime claim supplies checkpoint; existing save only.
+    std::uint64_t require_terminal_resources_saved(std::uint64_t room,const Replies& actually_written){
+        const auto& current=find(room);const auto actual=current.battle.checkpoint();
+        repository_.require_terminal_resources_saved(current.ticket,actual,actually_written);
+        return actual.snapshot.revision;
+    }
     // CUSTOM-0128 private, read-only terminal input guard. Never resurrect an
     // old world-entry receipt or derive a runtime checkpoint from native1C.
     std::uint64_t require_terminal_context(std::uint64_t room,std::uint8_t viewer,

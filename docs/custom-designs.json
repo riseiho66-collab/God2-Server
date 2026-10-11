@@ -4818,6 +4818,38 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Connect actual terminal input to causal network/game handoff instead of treating one posted idle snapshot as world readiness.",
   "replacement": "Complete exact paired normal generation/visibility/resources/durable release/recovery and native acceptance in final comprehensive phase."
+},
+{
+  "id": "CUSTOM-0132",
+  "name": "Owned TW PK paired retained return-generation preparation",
+  "authority": "TW_CUSTOM_OPT_IN_PRIVATE_PREALLOCATION_NOT_WORLD_RETURN_OR_NATIVE_ACK",
+  "implementation": [
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedPkRoomState.h",
+    "src/net/Session.cpp",
+    "src/net/Session.h"
+  ],
+  "native_gap": "Final paired consume/visibility/companion-resource/release/recovery owners and native acceptance are incomplete.",
+  "rules": {
+    "trigger": "Session actual ready-owner acceptance and fresh current fence precede accepted stamp, exact accepted notification and postcallback recheck. Actual TerminalFlight callback drives paired preparation without hypothetical future input or stopped driver timer.",
+    "pair": "Both actual private barriers/contexts/final fullwrites, Written entry holds and retained departure remain current. Private read-only saved guard requires preexisting exact CUSTOM0127 player ledger, same actual runtime checkpoint, both submitted fullbytes, saved after rows/readset/memberlocks. Never retry missing ledger or mint transport receipt from submitted flag.",
+    "generation": "Keep SAME original physical Entry/frame/logical/Written; normal Data carries effective_battle initialized original Entry battle. Future prebattle+2 is overflow checked/preallocated only. Previous Data weak lineage plus actual terminal/hold keeps genuine parent without immortal strong normal epoch chain.",
+    "namespace": "Capture actual original prebattle world_delivery_identity pointer and qualify through held/commit. Future normal identity retains original world namespace, not PK peer worldgeneration or common lease generation. Missing/stale legacy capture cannot gain return authority.",
+    "lifetime": "Pair private preparations retained only after current rechecks; original5s terminal deadline remains. No live normalData/identity store, state/gen change, read resume, visibility marker retirement, lock release, new2A/relogin or App install.",
+    "native": "Bounded S30/S31 UI children and full playerMP readiness leaf do not derive companion resources. Separate exact fresh-normal reset body+direct child proves reset-time zero of16 rows, not PK-time baseline or native server formula.",
+    "phase": "Static source and archive accounting only; execution gates closed."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Preserve real physical entry across future battle generations and supply actual accepted-notification progress with stronger existing-save authority.",
+  "replacement": "Complete paired final transport/visibility/resources/durable release and recovery, then comprehensive native acceptance."
 }
 ]
 }

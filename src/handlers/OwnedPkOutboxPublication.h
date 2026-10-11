@@ -364,7 +364,7 @@ private:
         const std::uint64_t revision;
         const Session::NativeBattleSkill final_write;
         std::optional<Session::NativePkTerminalBarrier> barrier;
-        bool ready_seen=false,failed_seen=false;
+        bool ready_seen=false,accepted_seen=false,failed_seen=false;
         TerminalFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
                 std::uint8_t side,std::array<std::uint8_t,4> context,std::uint64_t version,
                 Session::NativeBattleSkill written)
@@ -373,6 +373,10 @@ private:
         bool native_pk_terminal_ready(Session& session,const Session::NativePkTerminalBarrier& value)override{
             const auto life=lifetime.lock();
             return life&&life->owner&&life->owner->terminal_ready(*this,session,value);
+        }
+        bool native_pk_terminal_accepted(Session& session,const Session::NativePkTerminalBarrier& value)override{
+            const auto life=lifetime.lock();
+            return life&&life->owner&&life->owner->terminal_accepted(*this,session,value);
         }
         void native_pk_terminal_failed(Session& session,const Session::NativePkTerminalBarrier& value)override{
             const auto life=lifetime.lock();
@@ -417,6 +421,9 @@ private:
         };
         std::array<std::optional<TerminalContext>,2> terminal_contexts;
         std::array<std::shared_ptr<TerminalFlight>,2> terminal_inputs;
+        // CUSTOM-0132 actually consumed by the second accepted callback.
+        // Preallocated only: original live initialization/identity/state remain.
+        std::optional<std::array<Session::NativePkReturnPreparation,2>> return_preparations;
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
                 std::array<Session::NativePkEntryHold,2> entries,std::optional<WorldDeparture> world)
@@ -528,6 +535,55 @@ private:
                 throw DatabaseError("PK terminal input barrier changed durable terminal context");
             flight.ready_seen=true;
             return true; // Session stamps accepted separately, deadline stays.
+        }catch(...){fail(*binding);return false;}
+    }
+    bool terminal_accepted(TerminalFlight& flight,Session& session,const Session::NativePkTerminalBarrier& value){
+        if(!on_thread())return false;
+        const auto binding=flight.binding.lock();if(!binding)return false;
+        const auto accepted_current=[&](std::uint8_t viewer){
+            const auto& own=binding->terminal_inputs[viewer];
+            return own&&own->barrier&&own->ready_seen&&own->accepted_seen&&!own->failed_seen&&
+                terminal_exact(*binding,*own,*binding->sessions[viewer],*own->barrier)&&
+                written_current(*binding,viewer)&&departure_retained_current(*binding,viewer)&&
+                !binding->flights[viewer]&&!binding->sessions[viewer]->native_battle_skill_publication_pending()&&
+                binding->sessions[viewer]->native_battle_skill_written()==own->final_write&&
+                binding->sessions[viewer]->native_pk_terminal_barrier_accepted_current(*own->barrier);
+        };
+        try{
+            if(flight.accepted_seen||!flight.ready_seen||flight.failed_seen||
+               !terminal_exact(*binding,flight,session,value)||
+               !session.native_pk_terminal_barrier_accepted_current(value))
+                throw DatabaseError("PK return preparation requires exact accepted terminal incarnation");
+            flight.accepted_seen=true;
+            if(!accepted_current(flight.viewer))throw DatabaseError("PK accepted terminal source changed");
+            const auto other=std::uint8_t(1-flight.viewer);
+            if(!binding->terminal_inputs[other]||!binding->terminal_inputs[other]->accepted_seen)return true;
+            const auto pair_current=[&]{return accepted_current(0)&&accepted_current(1)&&
+                binding->terminal_written_revision[0]==binding->terminal_written_revision[1];};
+            if(binding->return_preparations||!pair_current())
+                throw DatabaseError("PK paired return generation lost its exact two accepted barriers");
+            // Read-only existing save qualification: never create/repair a
+            // ledger while preparing a return generation.
+            if(rooms_.require_terminal_resources_saved(binding->ticket.id(),
+                    {binding->terminal_written[0]->logical,binding->terminal_written[1]->logical})!=
+                    binding->terminal_written_revision[0] || !pair_current())
+                throw DatabaseError("PK return preparation lacks its exact prior paired resource save");
+            for(std::uint8_t viewer=0;viewer<2;++viewer){
+                const auto& own=*binding->terminal_inputs[viewer];
+                if(rooms_.require_terminal_context(binding->ticket.id(),viewer,own.payload,
+                        own.final_write->logical)!=own.revision||!pair_current())
+                    throw DatabaseError("PK paired return preparation changed its saved terminal source");
+            }
+            std::array<Session::NativePkReturnPreparation,2> prepared{
+                binding->sessions[0]->prepare_native_pk_return_generation(*binding->terminal_inputs[0]->barrier),
+                binding->sessions[1]->prepare_native_pk_return_generation(*binding->terminal_inputs[1]->barrier)};
+            if(!pair_current())throw DatabaseError("PK return pair changed during preallocation");
+            for(std::uint8_t viewer=0;viewer<2;++viewer)
+                if(!binding->sessions[viewer]->native_pk_return_preparation_current(prepared[viewer]))
+                    throw DatabaseError("PK preallocated return generation no longer matches its Session");
+            if(!pair_current())throw DatabaseError("PK return pair changed before private retention");
+            binding->return_preparations.emplace(std::move(prepared));
+            return true; // No publish, state change, marker removal, unlock or input release.
         }catch(...){fail(*binding);return false;}
     }
     void terminal_failed(TerminalFlight& flight,Session& session,const Session::NativePkTerminalBarrier& value){

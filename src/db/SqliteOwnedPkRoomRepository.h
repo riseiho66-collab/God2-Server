@@ -201,6 +201,9 @@ private:
     // actual two fullwrite callbacks in one original binding; DB flags alone
     // cannot mint those transport observations or authorize this write.
     void commit_terminal_resources(const Ticket&,const BattleCheckpoint& actual,const Replies& actually_written);
+    // CUSTOM-0132 paired return preparation requires the EXISTING exact saved
+    // player ledger. Read snapshot only; never create/retry a missing save.
+    void require_terminal_resources_saved(const Ticket&,const BattleCheckpoint& actual,const Replies& actually_written);
     // CUSTOM-0128 read-only qualification of this original viewer's native1C
     // after its actual final fullwrite. Not a save, ACK or WORLD permit.
     void require_terminal_context(const Ticket&,const BattleCheckpoint& actual,std::uint8_t viewer,
