@@ -28,6 +28,7 @@ struct StoredDeitySelection {
     bool operator==(const StoredDeitySelection&) const = default;
 };
 class SqliteCompanionRepository;
+class OwnedTaiwanPkCompanionSource;
 // Complete saved world roster observation on one actual repository/connection.
 // Raw30/31/34, row order, revisions, provenance and selection remain separate
 // from battle actor identities, issued87, grants, learning or action permission.
@@ -96,6 +97,7 @@ struct Pet2TransferCommit { StoredPet2Slot source,destination; };
 class SqliteCompanionRepository {
 public:
     explicit SqliteCompanionRepository(sqlite3* db):db_(db) {}
+    bool uses_connection(const sqlite3* db) const noexcept {return db_==db;}
     static constexpr const char* source_sha256=
         "70a4e7dd1a1f66d7a70f5c5e97c77ef4063904cc473292758c5abd2da7bd8731";
     // Catalog rows are independently native-parsed current GOD/NCP metadata.
@@ -146,6 +148,10 @@ public:
         const StoredPet2Slot& source,const StoredPet2Slot& destination,
         const std::function<void(const Pet2TransferCommit&)>& prepare);
 private:
+    friend class OwnedTaiwanPkCompanionSource;
+    // CUSTOM-0129 borrow the RESERVED transaction; no BEGIN, callback or write.
+    // Complete privately minted roster equality, not a live Session qualifier.
+    bool deity_roster_current_in_transaction(const OwnedDeityRosterReadset&);
     std::optional<SelectedDeitySkillReadset> read_selected_deity_skill(
         std::uint64_t account,std::uint64_t character,std::uint8_t kind,std::uint8_t skill);
     void require_owner(std::uint64_t account,std::uint64_t character);

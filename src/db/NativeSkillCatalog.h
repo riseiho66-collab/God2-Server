@@ -45,6 +45,7 @@ public:
 
     // The caller owns the connection and keeps it alive during every lookup.
     explicit NativeSkillCatalog(sqlite3* db);
+    bool uses_connection(const sqlite3* db) const noexcept {return db_==db;}
 
     // Missing keys return nullopt. Invalid selectors, corrupt matched rows and
     // SQLite failures throw DatabaseError. Returned snapshots own all storage.

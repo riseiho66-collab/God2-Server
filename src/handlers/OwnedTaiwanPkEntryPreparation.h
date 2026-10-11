@@ -29,16 +29,20 @@ public:
     // Explicit trusted server supplier. Zero is a supplied uint32 value, not
     // a missing/default seed. No native RNG/clock/context formula is claimed.
     using Seed=std::function<std::optional<std::uint32_t>(const Pair&)>;
+    // CUSTOM-0129 actual published restoration observation, never a caller
+    // supplied roster, selected-key scalar or empty-on-failure fallback.
+    using Companions=std::function<std::optional<OwnedTaiwanPkCompanionSource::Observation>(
+        const std::shared_ptr<Session>&,const Session::NormalWorldInitialization&)>;
     OwnedTaiwanPkEntryPreparation(sqlite3* db,SqliteAccountRepository& accounts,
         SqliteRecoveredCharacterRepository& characters,SqliteNativeWorldEntrySnapshotRepository& worlds,
         SqliteRoleAuxiliaryRepository& auxiliary,SqliteRoleTextRepository& texts,
         TaiwanNativeFightCatalog catalog,std::shared_ptr<SharedWorldPresence> presence,
         std::shared_ptr<SqliteOwnedEquipmentTransaction> joint,SqliteOwnedPkRoomRepository& rooms,
-        Sessions sessions,Initializations initializations,Resolve peers,Seed seed)
+        Sessions sessions,Initializations initializations,Resolve peers,Seed seed,Companions companions={})
         :db_(db),accounts_(accounts),characters_(characters),worlds_(worlds),auxiliary_(auxiliary),texts_(texts),
          catalog_(std::move(catalog)),presence_(std::move(presence)),joint_(std::move(joint)),rooms_(rooms),
          sessions_(std::move(sessions)),initializations_(std::move(initializations)),peers_(std::move(peers)),
-         seed_(std::move(seed)){
+         seed_(std::move(seed)),companions_(std::move(companions)){
         if(!db_||!accounts_.uses_connection(db_)||!characters_.uses_connection(db_)||
            !worlds_.owns_sources(accounts_,characters_)||!auxiliary_.uses_connection(db_)||
            !texts_.uses_connection(db_)||!rooms_.uses_connection(db_)||!presence_||!joint_||
@@ -63,6 +67,7 @@ public:
         std::array<std::optional<Session::NormalWorldInitialization>,2> initializations;
         std::array<SessionState,2> prebattle_phases;
         std::array<std::optional<SharedWorldPresence::Lease>,2> leases;
+        std::array<std::optional<OwnedTaiwanPkCompanionSource::Observation>,2> companions;
         for(std::size_t i=0;i<2;++i){
             sessions[i]=callback([&]{return sessions_(peers[i].session);});
             if(!open()||!sessions[i])return {};
@@ -96,6 +101,16 @@ public:
             return local();
         };
         if(!exact())return {};
+        if(companions_)for(std::size_t i=0;i<2;++i){
+            companions[i]=callback([&]{return companions_(sessions[i],*initializations[i]);});
+            if(!exact()||!companions[i]||!companions[i]->uses_connection(db_)||!companions[i]->current()||!local())return {};
+        }
+        const auto companions_current=[&]{
+            if(!local())return false;
+            if(companions_)for(const auto& source:companions)
+                if(!source||!source->current()||!local())return false;
+            return local();
+        };
         std::array<std::optional<OwnedTaiwanPkCombatSource::Observation>,2> combat;
         std::array<std::optional<OwnedTaiwanPkPlayerEntrySource::Observation>,2> players;
         std::array<std::optional<OwnedTaiwanPkVitalSource::Observation>,2> vitals;
@@ -116,11 +131,11 @@ public:
         auto entry=RecoveredPkEntryProjection::prepare_waiting_notification_owned_initial_contexts(
             {*players[0],*players[1]},{*vitals[0],*vitals[1]},catalog_);
         const auto sources_current=[&]{
-            if(!local())return false;
+            if(!companions_current())return false;
             for(const auto& player:*entry.owned_players())if(!player.current()||!local())return false;
             // Full private player Current includes combat/appearance/resources,
             // text/root and the exact joint receipt, not a digest-only check.
-            return local();
+            return companions_current();
         };
         if(!exact()||!sources_current())return {};
         const auto seed=callback([&]{return seed_(pair);});
@@ -134,13 +149,18 @@ public:
             SqliteOwnedPkRoomRepository& rooms;std::optional<Ticket>& ticket;bool returned=false;
             ~Reservation(){if(ticket&&!returned)rooms.abandon(*ticket);}
         }reservation{rooms_,ticket};
-        ticket.emplace(rooms_.prepare_owned(pair,std::move(entry),{*combat[0],*combat[1]},*seed,bounds));
+        std::optional<SqliteOwnedPkRoomRepository::OwnedCompanionSources> retained_companions;
+        if(companions_)retained_companions.emplace(
+            SqliteOwnedPkRoomRepository::OwnedCompanionSources{*companions[0],*companions[1]});
+        ticket.emplace(rooms_.prepare_owned(pair,std::move(entry),{*combat[0],*combat[1]},*seed,bounds,
+                                           std::move(retained_companions)));
         // The reservation changed only durable room state. No holds, Session
         // state transition, delivery, visibility grant or active room here.
-        if(!exact())return {};
+        if(!exact()||!companions_current())return {};
         for(const auto& player:*ticket->input().entry.owned_players())if(!player.current()||!local())return {};
-        if(!rooms_.current(*ticket)||!exact())return {};
+        if(!rooms_.current(*ticket)||!exact()||!companions_current())return {};
         for(const auto& player:*ticket->input().entry.owned_players())if(!player.current()||!local())return {};
+        if(!companions_current())return {};
         reservation.returned=true;
         return ticket;
     }
@@ -191,6 +211,7 @@ private:
     std::shared_ptr<SqliteOwnedEquipmentTransaction> joint_;
     SqliteOwnedPkRoomRepository& rooms_;
     Sessions sessions_;Initializations initializations_;Resolve peers_;Seed seed_;
+    Companions companions_;
     const std::thread::id thread_=std::this_thread::get_id();
     bool preparing_=false,reentered_=false;
 };

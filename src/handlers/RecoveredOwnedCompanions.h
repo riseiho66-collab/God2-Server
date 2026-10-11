@@ -8,6 +8,9 @@ namespace god2 {
 class RecoveredOwnedCompanions {
 public:
     explicit RecoveredOwnedCompanions(SqliteCompanionRepository& repository):repository_(repository) {}
+    bool owns_repository(const SqliteCompanionRepository& repository)const noexcept {
+        return &repository_==&repository;
+    }
     class Restoration {
     public:
         const OwnedDeityRosterReadset& deity_roster() const noexcept {return deity_roster_;}

@@ -4716,6 +4716,44 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Consume actual native retained-world context under genuine final-write ownership without guessing full WORLD readiness or creating a premature persistent observation schema.",
   "replacement": "Complete original return/input/companion/visibility/lock/recovery/App ownership, then comprehensive final-phase native acceptance before production promotion."
+},
+{
+  "id": "CUSTOM-0129",
+  "name": "Owned TW PK original companion lineage",
+  "authority": "TW_CUSTOM_OPT_IN_PRIVATE_SOURCE_LINEAGE_NOT_NATIVE_RAM_HP_SKILL_PERMISSION_OR_WORLD_RETURN",
+  "implementation": [
+    "src/db/NativeSkillCatalog.h",
+    "src/db/SqliteCompanionRepository.cpp",
+    "src/db/SqliteCompanionRepository.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/db/SqliteDatabase.h",
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/game/OwnedTaiwanPkCompanionSource.h",
+    "src/handlers/OwnedTaiwanPkEntryPreparation.h",
+    "src/handlers/OwnedTaiwanPkRoomBackend.h",
+    "src/handlers/RecoveredOwnedCompanions.h"
+  ],
+  "native_gap": "Original server companion resource settlement, saved31-to-native2C/30 producer, actual reset/write ordering, full return/world/visibility/recovery and App hosting remain open.",
+  "rules": {
+    "source": "Actual same-Database companion repository/helper/catalog plus genuine private Session normal initialization and exact locally Written restoration batches; private shared incarnation observation, no caller-minted material authority.",
+    "material": "Complete private roster30/31/all34 ordered rows/revisions/provenance, nullable selection, template keys, expected reset/data prefix/all retained110 definitions, exact write logical batches and original owner/phase/battle generation. Null saved selection is not empty roster; last issued31 may select a row.",
+    "live": "Original game owner outside transaction: exact private init/fullwrite/Session state/owner/generation before/after full roster/prefix reads, same connection/helper/catalog, reentry and totalchanges/autocommit fences.",
+    "composition": "Optional trusted resolver consumed by Preparation and propagated through same-DB complete Backend factory into Input before internally computed full profile/readset digest. Configured source requires both original observations; absent resolver preserves historical path and provides no empty-roster credit.",
+    "stored": "Concrete closed SQL predicate borrows actual RESERVED/ACTIVE/Finished room transaction: private repository/readset/identity, main/TEMP owner/ordered rows/selection/templatekeys and full retained skill records/digests. No nestedBEGIN, live Current or Session/world callback. All old companion reader/writer semantics retained.",
+    "limits": "Local receipts lack queue ordinal/original init pointer: no physical order, absence of later traffic or consumed RAM proof. Existing companion writers not interlocked by owned PK locks; saved drift fails qualification without automatic repair. No companionHP/MP CAS, skill authority, sends, transition, schema or Application install.",
+    "native": "Actual return4658F8 writes remote manager13418=1 before128-slot cleanup. Full6F resource-qualified adapter/cleanup/constructor/ring source recovered; no invented duplicate policy. Role pointer publication/unsigned HPMP cap leaf qualified conditionally, opaque children open. Companion2C/30=currentHP/maxHP, not MP.",
+    "phase": "Static source/instruction/byte accounting only; no build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Retain the actual pre-entry published companion lineage needed by later authoritative settlement/return instead of flattening it or treating missing selection as an empty native companion.",
+  "replacement": "Complete original resource producer/persistence, trusted actual Application resolver and whole return/visibility/lock/recovery route; comprehensive final-phase native acceptance before activation."
 }
 ]
 }

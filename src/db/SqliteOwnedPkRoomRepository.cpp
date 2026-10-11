@@ -102,6 +102,44 @@ Json appearance_material(const OwnedTaiwanPkAppearanceSource::Material& m){
             {"source_record",e.source_record},{"record",e.record},{"revision",e.revision},{"actor_handle",e.actor_handle}}},
         {"ordinary86_4",RecoveredBattlePlayerAppearance::encode(m.appearance)}};
 }
+Json companion_definition(const NativeSkillRecord& record){
+    const auto& s=record.source;
+    return Json{{"source",Json::array({s.dataset_id,s.source_path,s.source_sha256,s.decoded_sha256,
+        s.native_image_sha256,s.source_section,s.loader_rva,s.lookup_rva,s.row_count})},
+        {"index",record.source_record_index},{"offset",record.source_offset},
+        {"sha256",record.record_sha256},{"raw",record.raw_record},
+        {"kind",record.kind},{"definition_id",record.definition_id}};
+}
+Json companion_material(const OwnedTaiwanPkCompanionSource::Material& m){
+    const auto& roster=m.restoration.deity_roster();Json rows=Json::array();
+    for(const auto& row:roster.rows()){
+        Json skills=Json::array();for(const auto& skill:row.snapshot.skills)skills.push_back(skill.encode());
+        rows.push_back(Json{{"declaration",row.snapshot.declaration.encode()},
+            {"status",row.snapshot.status.encode()},{"skills",skills},{"revision",row.revision},
+            {"provenance",Json::array({row.provenance.source_sha256,row.provenance.authority,row.provenance.evidence_id})}});
+    }
+    Json selected=nullptr;if(roster.selection())selected=Json::array({roster.selection()->key,roster.selection()->revision});
+    Json prefix_rows=Json::array(),definitions=Json::array(),writes=Json::array();
+    for(const auto& row:m.prefix.rows()){
+        Json learned=Json::array(),auxiliary=Json::array();
+        for(const auto& d:row.learned_definitions)learned.push_back(d?companion_definition(*d):Json(nullptr));
+        for(const auto& d:row.auxiliary_definitions)auxiliary.push_back(d?companion_definition(*d):Json(nullptr));
+        prefix_rows.push_back(Json{{"key",row.row_key},{"learned_count",row.learned_count},
+            {"learned_flags",row.learned_flags},{"learned_definitions",learned},
+            {"auxiliary_count",row.auxiliary_count},{"auxiliary_definitions",auxiliary}});
+    }
+    for(const auto& d:m.prefix.catalog_records())definitions.push_back(companion_definition(d));
+    for(const auto& w:m.writes)writes.push_back(w.logical());
+    return Json{{"owner",Json::array({m.session,m.account,m.character,m.battle_generation,static_cast<int>(m.phase)})},
+        {"normal_entry",m.initialization.entry_frame()},{"normal_logical",m.initialization.entry_logical()},
+        {"accepted_tail",m.initialization.accepted_tail()},{"config_flag",m.initialization.config_flag()},
+        {"roster_owner",Json::array({roster.account(),roster.character()})},{"roster",rows},
+        {"saved_selection",selected},{"template_keys",roster.template_keys()},
+        {"issued_batches",m.restoration.batches()},{"written_batches",writes},
+        {"prefix_rows",prefix_rows},{"prefix_count",m.prefix.roster_count()},
+        {"prefix_selected",m.prefix.selected_row()},{"prefix_catalog",definitions},
+        {"prefix_batches",m.prefix.actual_batches()}};
+}
 bool owned_appearance_current(const SqliteOwnedPkRoomRepository::Input& input,sqlite3* db){
     if(!input.entry.owned_appearances())return true; // Historical path unchanged.
     if(!sqlite3_get_autocommit(db))return false;
@@ -124,6 +162,8 @@ bool owned_appearance_current(const SqliteOwnedPkRoomRepository::Input& input,sq
         if(!source.uses_connection(db)||!source.current())return false;
     if(input.entry.owned_initial_contexts())for(const auto& source:*input.entry.owned_initial_contexts())
         if(!source.uses_connection(db)||!source.current())return false;
+    if(input.companion_sources)for(const auto& source:*input.companion_sources)
+        if(!source.uses_connection(db)||!source.current())return false;
     return true;
 }
 bool owned_combat_stored_current(const SqliteOwnedPkRoomRepository::Input& input,sqlite3* db){
@@ -136,6 +176,8 @@ bool owned_combat_stored_current(const SqliteOwnedPkRoomRepository::Input& input
     if(input.entry.owned_initial_grants())for(const auto& source:*input.entry.owned_initial_grants())
         if(!source.stored_current_in_room_transaction(db))return false;
     if(input.entry.owned_initial_contexts())for(const auto& source:*input.entry.owned_initial_contexts())
+        if(!source.stored_current_in_room_transaction(db))return false;
+    if(input.companion_sources)for(const auto& source:*input.companion_sources)
         if(!source.stored_current_in_room_transaction(db))return false;
     return true;
 }
@@ -325,6 +367,23 @@ void SqliteOwnedPkRoomRepository::validate(const Input& in){
            actor.position!=(i==0?0:14)||actor.controller!=p.character||
            actor.hp!=r.hp||actor.max_hp!=r.max_hp||actor.mp!=r.mp||actor.max_mp!=r.max_mp)
             throw DatabaseError("PK actors must match both saved owner readsets");
+    }
+    if(in.companion_sources){
+        if(!in.combat_sources||!in.entry.owned_appearances()||!in.entry.owned_players())
+            throw DatabaseError("PK companion lineage requires complete private owned player sources");
+        for(std::size_t i=0;i<2;++i){
+            const auto& m=(*in.companion_sources)[i].material();
+            const auto& original=(*in.entry.owned_appearances())[i].material();
+            const auto& p=i==0?a:b;
+            if(m.session!=p.session||m.account!=p.account||m.character!=p.character||
+               m.battle_generation!=p.battle_generation||
+               (m.phase!=SessionState::CharacterSelected&&m.phase!=SessionState::InWorld)||
+               m.initialization.entry_frame()!=original.entry_frame||
+               m.initialization.entry_logical()!=original.entry_logical||
+               m.initialization.accepted_tail()!=original.accepted_tail||
+               m.initialization.config_flag()!=original.config_flag)
+                throw DatabaseError("PK companion lineage differs from original admitted initialization");
+        }
     }
     if(in.combat_sources){
         if(!in.entry.owned_appearances())throw DatabaseError("PK combat requires its exact owned appearance sources");
@@ -555,9 +614,20 @@ std::string SqliteOwnedPkRoomRepository::readset(const Input& in){
             {"native_pointer_prerequisite","successful-normal82-reset-168-inline-actor-pointers;no-fake-identities"},
             {"original_timer_or_round_rule_claimed",false},{"sources",views},{"initial_only",true}};
     }
+    if(in.companion_sources){
+        Json sources=Json::array();for(const auto& source:*in.companion_sources)sources.push_back(companion_material(source.material()));
+        result["owned_companion_source"]=Json{{"design_id","CUSTOM-0129"},
+            {"authority","saved-roster-expected-reset-data-prefix-and-local-fullwrites-not-native-RAM-HP-or-ACK"},
+            {"physical_order_or_later_companion_traffic_qualified",false},
+            {"native_resource_offsets_qualified",false},{"sources",sources}};
+    }
     return result.dump();
 }
 bool SqliteOwnedPkRoomRepository::owners_current(const Input& in){
+    // CUSTOM-0129 old inputs stay unchanged; opted-in rooms retain this exact
+    // saved roster/catalog through ACTIVE/Finished, without live-world calls.
+    if(in.companion_sources)for(const auto& source:*in.companion_sources)
+        if(!source.stored_current_in_room_transaction(db_))return false;
     for(std::size_t i=0;i<2;++i){
         const auto& p=i==0?in.pair.challenger:in.pair.recipient;
         if(owners_.load_resources(p.account,p.character)!=std::optional{in.resources[i]}||
@@ -666,6 +736,8 @@ SqliteOwnedPkRoomRepository::terminal_resources_in_scope(const Ticket& ticket,co
     return result;
 }
 bool SqliteOwnedPkRoomRepository::finished_owners_current(const Ticket& ticket){
+    if(ticket.input().companion_sources)for(const auto& source:*ticket.input().companion_sources)
+        if(!source.stored_current_in_room_transaction(db_))return false;
     const auto ledger=terminal_resource_ledger(ticket);
     if(!ledger)return owners_current(ticket.input());
     const auto material=terminal_resources_in_scope(ticket);
@@ -740,10 +812,11 @@ bool SqliteOwnedPkRoomRepository::occupied(std::uint64_t account,std::uint64_t c
 }
 SqliteOwnedPkRoomRepository::Ticket SqliteOwnedPkRoomRepository::prepare_owned(Pair pair,
         RecoveredPkEntryProjection::Prepared entry,OwnedCombatSources sources,std::uint32_t seed,
-        OwnedPkRound::Masks initial_control_masks){
+        OwnedPkRound::Masks initial_control_masks,std::optional<OwnedCompanionSources> companion_sources){
     const auto& a=sources[0].material();const auto& b=sources[1].material();
     Input input{std::move(pair),std::move(entry),{a.resources,b.resources},{a.role,b.role},
-        {sources[0].actor(0),sources[1].actor(14)},seed,{},initial_control_masks,std::move(sources)};
+        {sources[0].actor(0),sources[1].actor(14)},seed,{},initial_control_masks,std::move(sources),
+        std::move(companion_sources)};
     // The complete custom entry/material readset produces its own binding.
     // It is not proof of native formulas or any learned/issued skill permission.
     input.profile_readset_sha256=owned_combat_profile_digest(readset(input));

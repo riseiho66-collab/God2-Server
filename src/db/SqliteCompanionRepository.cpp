@@ -215,6 +215,58 @@ bool SqliteCompanionRepository::deity_roster_current(const OwnedDeityRosterReads
     }
     return true;
 }
+bool SqliteCompanionRepository::deity_roster_current_in_transaction(const OwnedDeityRosterReadset& readset) {
+    if(readset_reading_){readset_reentered_=true;return false;}
+    const auto identity=readset.identity_.lock();
+    if(!db_ || sqlite3_get_autocommit(db_) || readset.repository_!=this ||
+       !identity || identity!=readset_identity_)return false;
+    const auto owned=readset;
+    readset_reading_=true;readset_reentered_=false;
+    struct Exit{bool& reading;~Exit(){reading=false;}}exit{readset_reading_};
+    const auto changes=sqlite3_total_changes64(db_);
+    for(const auto* name:{"accounts","recovered_characters","native_companion_metadata",
+                         "character_deities","character_deity_selection"}){
+        sqlite_detail::Statement shadow(db_,"SELECT 1 FROM temp.sqlite_master WHERE name=? COLLATE NOCASE OR tbl_name=? COLLATE NOCASE LIMIT 1");
+        shadow.bind(1,std::string(name));shadow.bind(2,std::string(name));
+        if(shadow.row())return false;
+        sqlite_detail::Statement base(db_,"SELECT 1 FROM main.sqlite_master WHERE type='table' AND name=? COLLATE NOCASE");
+        base.bind(1,std::string(name));if(!base.row() || base.row())return false;
+    }
+    sqlite_detail::Statement owner(db_,"SELECT 1 FROM main.recovered_characters c JOIN main.accounts a ON a.id=c.account_id WHERE c.account_id=? AND c.id=?");
+    owner.bind_id(1,owned.account());owner.bind_id(2,owned.character());
+    if(!owner.row() || owner.row())return false;
+    sqlite_detail::Statement catalog(db_,"SELECT metadata_key,source_sha256 FROM main.native_companion_metadata WHERE family='GOD' ORDER BY metadata_key");
+    std::size_t at=0;
+    while(catalog.row()){
+        if(at>=owned.template_keys().size() ||
+           catalog.number<std::uint16_t>(0)!=std::uint16_t(2800+owned.template_keys()[at]) ||
+           catalog.text(1)!=source_sha256)return false;
+        ++at;
+    }
+    if(at!=owned.template_keys().size())return false;
+    sqlite_detail::Statement rows(db_,"SELECT row_key,declaration,status,skills,revision,source_sha256,authority,evidence_id FROM main.character_deities WHERE character_id=? ORDER BY row_key");
+    rows.bind_id(1,owned.character());at=0;
+    while(rows.row()){
+        if(at>=owned.rows().size())return false;
+        const auto& expected=owned.rows()[at++];
+        const auto declaration=rows.blob(1,19,19),status=rows.blob(2,29,29),skills=rows.blob(3,0,400);
+        const auto expected_skills=skills_blob(expected.snapshot);
+        if(rows.number<std::uint8_t>(0)!=expected.snapshot.status.key_raw() ||
+           !std::equal(declaration.begin(),declaration.end(),expected.snapshot.declaration.encode().begin()) ||
+           !std::equal(status.begin(),status.end(),expected.snapshot.status.encode().begin()) ||
+           skills.size()!=expected_skills.size() || !std::equal(skills.begin(),skills.end(),expected_skills.begin()) ||
+           rows.number<std::uint64_t>(4)!=expected.revision || rows.text(5)!=expected.provenance.source_sha256 ||
+           rows.text(6)!=expected.provenance.authority || rows.text(7)!=expected.provenance.evidence_id)return false;
+    }
+    if(at!=owned.rows().size())return false;
+    sqlite_detail::Statement selection(db_,"SELECT row_key,revision FROM main.character_deity_selection WHERE character_id=?");
+    selection.bind_id(1,owned.character());
+    if(selection.row()){
+        if(!owned.selection() || selection.number<std::uint8_t>(0)!=owned.selection()->key ||
+           selection.number<std::uint64_t>(1)!=owned.selection()->revision || selection.row())return false;
+    }else if(owned.selection())return false;
+    return !readset_reentered_ && !sqlite3_get_autocommit(db_) && sqlite3_total_changes64(db_)==changes;
+}
 std::optional<SelectedDeitySkillReadset> SqliteCompanionRepository::load_selected_deity_skill(
         std::uint64_t account,std::uint64_t character,std::uint8_t kind,std::uint8_t skill) {
     return read_selected_deity_skill(account,character,kind,skill);

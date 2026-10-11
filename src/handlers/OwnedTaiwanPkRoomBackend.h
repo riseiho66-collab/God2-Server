@@ -57,6 +57,7 @@ private:
         Preparation::Initializations initializations;
         Preparation::Resolve peers;
         Preparation::Seed seed;
+        Preparation::Companions companions;
         bool stopped=false;
     };
     // Exactly one instance of every potentially mutable callable. Preparation

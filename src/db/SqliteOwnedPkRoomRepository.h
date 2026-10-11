@@ -6,6 +6,7 @@
 #include "game/Battle.h"
 #include "game/OwnedPkRound.h"
 #include "game/OwnedTaiwanPkCombatSource.h"
+#include "game/OwnedTaiwanPkCompanionSource.h"
 #include <array>
 #include <memory>
 #include <map>
@@ -28,6 +29,7 @@ public:
     using Pair=OwnedPkInvitationService::Pair;
     using Replies=std::array<std::vector<std::uint8_t>,2>;
     using OwnedCombatSources=std::array<OwnedTaiwanPkCombatSource::Observation,2>;
+    using OwnedCompanionSources=std::array<OwnedTaiwanPkCompanionSource::Observation,2>;
     struct Input {
         Pair pair;
         RecoveredPkEntryProjection::Prepared entry;
@@ -46,6 +48,9 @@ public:
         OwnedPkRound::Masks initial_control_masks;
         // CUSTOM-0106 optional at END: old aggregate/factory paths stay absent.
         std::optional<OwnedCombatSources> combat_sources{};
+        // CUSTOM-0129 optional exact published normal-entry companion lineage.
+        // Absent legacy input is never evidence of an empty native roster.
+        std::optional<OwnedCompanionSources> companion_sources{};
     };
     class Ticket {
     public:
@@ -129,7 +134,8 @@ public:
     // Explicit custom stored-total adoption. Actor/resources/role values and
     // complete retained-source digest are produced internally, not caller stats.
     Ticket prepare_owned(Pair,RecoveredPkEntryProjection::Prepared,OwnedCombatSources,
-        std::uint32_t seed,OwnedPkRound::Masks initial_control_masks);
+        std::uint32_t seed,OwnedPkRound::Masks initial_control_masks,
+        std::optional<OwnedCompanionSources> companion_sources={});
     bool current(const Ticket&); // RESERVED only; full two-owner readset
     BattleCheckpoint initial(const Ticket&); // no activation or sends
     // ONE transaction: both owner locks, one checkpoint, BOTH durable entries.
