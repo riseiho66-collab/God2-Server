@@ -2610,6 +2610,10 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     }
     return NativePkEntryHold(std::move(pending)); // PREPARING cancellation token, not a Held result.
 }
+bool Session::native_pk_game_executor_matches(const asio::any_io_executor& executor)const noexcept {
+    return impl_->common_world_identity.load() &&
+        impl_->common_ready_thread==std::this_thread::get_id() && impl_->game==executor;
+}
 bool Session::native_pk_entry_current(const NativePkEntryHold& hold)const noexcept {
     const auto data=hold.data_;
     if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||

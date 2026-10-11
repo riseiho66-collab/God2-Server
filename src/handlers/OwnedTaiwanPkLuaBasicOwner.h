@@ -12,6 +12,7 @@ namespace god2 {
 // This does not install Application hosting, invent seed/coefficients/order,
 // schedule idle retries, rehydrate a room or return players to WORLD.
 class OwnedTaiwanPkLuaBasicOwner final {
+    friend class OwnedTaiwanPkBasicDriver;
 public:
     using Parameters=OwnedPkOutboxPublication::BasicParameters;
     using NativeBatch=OwnedPkOutboxPublication::NativeBatch;
@@ -45,6 +46,13 @@ public:
     // asio::post proves that boundary. OutputVisited/Resolved mean an owner
     // visit/settlement, NOT full write, peer ACK or native acceptance.
     std::optional<Advance> advance_at_idle(Session& session){
+        return advance(session);
+    }
+private:
+    // CUSTOM-0124 actual later game-timer visit, NOT an idle certificate.
+    // The original Session strand staging remains the ACK/prefix authority.
+    std::optional<Advance> advance_from_scheduled_turn(Session& session){return advance(session);}
+    std::optional<Advance> advance(Session& session){
         check_thread();
         const Battle::Rule rule=[this](const CombatRuleInput& input){
             // Snapshot stats and roll originate in the actual room Battle.
@@ -61,7 +69,6 @@ public:
         // private profile/checkpoint before/after Lua, reentry and one settle.
         return publication_.advance_basic_notifications_at_idle(session,order_,rule);
     }
-private:
     LuaEngine& lua_;
     const Parameters parameters_;
     const std::array<std::uint8_t,2> order_;

@@ -4557,6 +4557,37 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Close actual basic Lua rule/immutable policy/publication composition without client-supplied authority, while retaining the genuine missing fullhost and nativeproducer prerequisites.",
   "replacement": "Close actual explicitpolicy/idle/lifetime/terminal/recovery Application owners; recover nativebalance/producer and qualify nativeacceptance in finalphase."
+},
+{
+  "id": "CUSTOM-0124",
+  "name": "Owned TW basic scheduled driver with exact game-executor binding",
+  "authority": "TW_CUSTOM_OPT_IN_SCHEDULED_TRANSPORT_OWNER_NOT_NATIVE_CLOCK_OR_COMPLETE_APP_HOST",
+  "implementation": [
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedTaiwanPkBasicDriver.h",
+    "src/handlers/OwnedTaiwanPkLuaBasicOwner.h",
+    "src/net/Session.cpp",
+    "src/net/Session.h"
+  ],
+  "native_gap": "Original initiative/roundtiming and exact0B readiness/replay remainunproved; nativecounttable source recovered but resource/skillmapping upstream stillopen.",
+  "rules": {
+    "ownership": "Driver owns285LuaBasicOwner hence one privatePublication/sameRoomState. Retains genuineTicket/twoSessions/holds. Preallocatebinding/index nodes beforeprivateownerbind. Both Sessions actualgameexecutors must equal timerexecutor; identityonlygetter no grant/roomauthority.",
+    "scheduling": "One coalescedsteady_timer, explicit1..1000ms retry (no default/nativeclock). Only latergamevisits resolve/pump. Dirtybinding revisited oncepertick; genuineIdle/noRows sleepsuntilactualinput. Weaklifetime invalidates callbacks; terminalstop cancels andneverrestarts. No strand-owned getter/offthreadbufferread.",
+    "authority": "Only actualReady/bothprivateWritten/noflights/nopending mayresolve via immutablebasic policy/actualLua/currentprofile/checkpoint/reentryfences. No callerRule/masks/templates/stats/seed. Initialentryrevision1Admission only.",
+    "transport": "Scheduledvisit isnotidleproof. ExistingSessionstage waitsgame_busy, ACKqueuesordinaryresponse thenresume stagesPK; partial/staged/skillprefixguards+beforewrite recheck retained. Durablesettlecanprecedelaterprefixfailure; retainscheckpoint/outboxes noatomicnetwork/rollbackclaim.",
+    "failure": "Timer/allocation/reentry/revokedbinding closesretainedpair, leavesTicket/room/outboxes/locks forrecovery. Reentryclosesimmediately visibletoexistingpureRulefences. Stopcancelsweakwait, disconnectexactinstance/idempotentafterstop; noabandon/resend/WORLDreturn/savesettlement.",
+    "lifetime": "Allconstruction/operations/destruction actualsinglethread gameexecutor; Admissiondrains/diesfirst, Lua/rooms/repository/executoroutlive. No formalApplication/config/terminal/reconnect/restart install.",
+    "phase": "Static source/instruction/metadata only; no compiler/build/tests/runtime/native/VM/emulator/assetcodec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Provide real source-owned scheduled retries/cancellation around actual285Lua/room/output chain while preserving the existing strand ACK/prefix barrier and missinghost prerequisites.",
+  "replacement": "Complete actualApp/policy/terminal/recovery and nativeproducer/acceptance in finalphase; replace CUSTOMtransport cadence onlywith qualifiedexplicitpolicy."
 }
 ]
 }

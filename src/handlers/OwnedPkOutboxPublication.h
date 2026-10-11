@@ -187,9 +187,10 @@ public:
     }
 private:
     // CUSTOM-0123 consumed only by the concrete Lua owner that OWNS this
-    // publication. Call at a genuine later game-owner idle boundary, never
-    // from input/write callbacks. A pending token is a retry condition, not
-    // an ACK or proof that the Session strand/ordinary output has drained.
+    // publication. CUSTOM-0124 also consumes it on a later scheduled game
+    // visit, never inline from input/write callbacks. A pending token is a
+    // retry condition, not an ACK/strand-idle proof. Actual Session staging
+    // waits for the ordinary response enqueue and guards old input prefixes.
     enum class BasicAdvance {AwaitingTransport,Idle,OutputVisited,Resolved};
     std::optional<BasicAdvance> advance_basic_notifications_at_idle(Session& session,
             const std::array<std::uint8_t,2>& order,const Battle::Rule& rule){
@@ -223,7 +224,9 @@ private:
             if(phase==OwnedPkRound::Phase::Grants || phase==OwnedPkRound::Phase::ResultsControl ||
                phase==OwnedPkRound::Phase::Terminal){
                 publish_pending(binding->ticket.id());
-                return BasicAdvance::OutputVisited;
+                // No rows means no flight/pending token was installed. Stop
+                // scheduled retries until the next real input dirties it.
+                return resolution_transport_current(*binding)?BasicAdvance::Idle:BasicAdvance::OutputVisited;
             }
             // Initial outbox revision1 belongs to Admission's entry writer. A
             // one-sided control or collected attack never triggers resolution.

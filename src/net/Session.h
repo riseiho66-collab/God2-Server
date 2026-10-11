@@ -344,6 +344,8 @@ public:
     NativeBattleSkill native_battle_skill_written() const noexcept;
     bool native_battle_skill_publication_pending() const noexcept;
     bool same_native_pk_game_executor(const Session&)const noexcept;
+    // CUSTOM-0124 executor identity only; no entry/room/output authority.
+    bool native_pk_game_executor_matches(const asio::any_io_executor&)const noexcept;
     // Capture exact qualified CharacterSelected/InWorld privately and preserve
     // it until commit; Request cannot choose a phase or manufacture InWorld.
     NativePkEntryHold prepare_native_pk_entry(NativePkEntryRequest,
