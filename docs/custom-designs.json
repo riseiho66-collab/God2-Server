@@ -4178,6 +4178,41 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Remove externally chosen initial82/88 templates from complete ordinary owned entry preparation using actual private source lifetimes and explicitly documented TW custom field choices.",
   "replacement": "Replace custom field selection only with build-matched original producer evidence; retain saved-source provenance and old receipts, complete all remaining source routes before comprehensive testing and activation."
+},
+{
+  "id": "CUSTOM-0112",
+  "name": "Owned Taiwan PK preparation from concrete current source receipts and explicit server seed",
+  "authority": "CUSTOM_CURRENT_DURABLE_OBSERVATION_AND_INTERNAL_PREPARATION_NOT_NATIVE_ISSUER_OR_HOSTED_ROOM_AUTHORITY",
+  "implementation": [
+    "src/db/SqliteOwnedEquipmentTransaction.h",
+    "src/db/SqliteOwnedEquipmentTransaction.cpp",
+    "src/handlers/OwnedTaiwanPkEntryPreparation.h",
+    "src/db/SqliteDatabase.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h"
+  ],
+  "native_image": "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+  "native_gap": "Original world/battle/stat/skill formulas and producers are not recovered by durable observation. Genuine Application-owned initialization/peer/seed resolvers and complete room hosting, common visibility, turns and recovery remain separate. Existing custom0086 and0105..0111 policies retain their original provenance.",
+  "rules": {
+    "durable_observation": "Read one consistent full joint inventory/equipment/root/current-position tuple using existing concrete joint observe_before. Mint joint and both writer private identity-bound immutable receipts from that single read, then committed_current re-read. No write, revision increment, item grant, equip permission, historical-writer invocation or native capture qualification is inferred. Missing material rejects.",
+    "preparation": "Game-owner-only non-reentrant preparation with exact concrete same-connection accounts/characters/world snapshots/auxiliary/title/room repositories, same shared presence and joint writers; value-owned immutable Fight catalog. Internally resolve real shared Sessions, genuine Written/current private NormalInitialization, exact common ready leases and saved current poses, then privately derive267 appearance,268 combat,269 complete recipient-correct identities,271 vitals and273 contexts/bulks/grants/complete two305byte views. No caller View, stats, raw records, control masks or substituted private receipt accepted.",
+    "identity": "Immutable full Pair per attempt, exact session shared_ptr incarnation/account/full character/prebattle generation/private entry current, ready/unblocked peer values/current saved position and same actual asio game executor. Repeat both Session/peer resolvers before and after reservation; PK world_generation remains distinct from common Lease.generation. Full owned source currents rechecked after external callbacks.",
+    "seed": "Explicit optional uint32 value from trusted internal server-owned Seed(Pair) supplier. Missing rejects, no default/clock/context/room-id/hash/zero substitution. Supplied zero is a real chosen uint32 value. This is the existing CUSTOM0086 shared Battle seed, not a recovered original RNG, global nonce or skill/formula authority.",
+    "callbacks": "Synchronous no-yield resolver contract; guard game thread/reentry, actual SQLite autocommit and total-changes before/after callbacks. Actual private initialization is checked before Session fields. Recheck exact Session/lease/source after callbacks; callbacks are trusted concrete owner integration, not client bool authorization. Cross-connection writes, mutate-and-restore ABA, executor pumping and native-network freshness are not solved by this fence.",
+    "reservation": "Use actual room.prepare_owned from private Combat sources, internally derived complete Prepared and its exact notification bounds; full readset/digest remain produced inside existing repository. Post-reservation current/pair/private-source failure or exception abandons RESERVED via no-throw cleanup. Durable identifier remains retained. No hold, state transition, active room, enqueue/socket write/clientACK during preparation. Live checks are outside SQL, RESERVED closed source tuples inside existing transaction; active source behavior stays frozen.",
+    "factory": "SqliteDatabase factory assembles actual private connection and exact concrete repository-owned writers into this preparer without exposing raw database publicly. No schema creation, SQL execution at factory creation, Application installation, default flags or source activation. Callback owners and borrowed repositories must outlive all preparers/tickets and drain on shared game executor.",
+    "limits": "One concrete preparation source chain, not complete hosted C69/PK route. Admission hold/release, common visibility, real source resolvers/seed wiring, learned skills/Lua/turns/results/later grants/world return/reconnect and persistent recovery remain separate. Legacy writer/read/template/default behavior and frozen auth/chat/IME/fonts/conversion/nativeclients/CN/web/shared64 objectives unchanged.",
+    "phase": "Static source/hash/accounting only. No build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Connect the existing private complete owned participant/entry sources to a real Prepare callback and durable room reservation without arbitrary caller views or invented writer provenance.",
+  "replacement": "Replace custom field policies only with build-matched original producer evidence, wire genuine Application owners and complete all remaining routes before comprehensive testing/activation."
 }
 ]
 }

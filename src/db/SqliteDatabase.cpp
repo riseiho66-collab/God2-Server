@@ -382,6 +382,25 @@ std::unique_ptr<SqliteOwnedPkRoomRepository> SqliteDatabase::make_owned_pk_room_
     SqliteOwnedPkRoomRepository::require_schema(raw);
     return std::make_unique<SqliteOwnedPkRoomRepository>(raw);
 }
+std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan_pk_entry_preparation(
+    SqliteOwnedPkRoomRepository& rooms,std::shared_ptr<SharedWorldPresence> presence,
+    TaiwanNativeFightCatalog catalog,OwnedTaiwanPkEntryPreparation::Sessions sessions,
+    OwnedTaiwanPkEntryPreparation::Initializations initializations,
+    OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed){
+    if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
+       !rooms.uses_connection(impl_->connection.get()))
+        throw DatabaseError("TW PK preparation requires actual common Database/presence/room sources");
+    // These existing accessors only assemble the exact same-Database readers/
+    // writers; they perform no schema installation or source population.
+    auto& inventory=owned_inventory_writer();
+    auto& equipment=native_equipment_snapshot_writer();
+    auto& worlds=native_world_entry_writer();
+    auto joint=std::make_shared<SqliteOwnedEquipmentTransaction>(inventory,equipment);
+    return std::make_shared<OwnedTaiwanPkEntryPreparation>(impl_->connection.get(),
+        *impl_->accounts,*impl_->recovered_characters,worlds,*impl_->role_auxiliary,
+        *impl_->role_text,std::move(catalog),std::move(presence),std::move(joint),rooms,
+        std::move(sessions),std::move(initializations),std::move(peers),std::move(seed));
+}
 std::unique_ptr<SqliteBeastBankRepository> SqliteDatabase::make_beast_bank_repository(){
     if(!migrated_)throw DatabaseError("Migrate before PET bank access");
     auto* raw=impl_->connection.get();

@@ -47,6 +47,7 @@
 #include "db/SqliteOwnedGuildMembershipRepository.h"
 #include "db/SqliteOwnedGuildAnnouncementRepository.h"
 #include "db/SqliteTeleportGemRepository.h"
+#include "handlers/OwnedTaiwanPkEntryPreparation.h"
 #include <filesystem>
 #include <memory>
 namespace god2 {
@@ -113,6 +114,16 @@ public:
     void install_owned_pk_room_schema();
     void install_owned_pk_round_schema();
     std::unique_ptr<SqliteOwnedPkRoomRepository> make_owned_pk_room_repository();
+    // CUSTOM-0112 explicit preparation source on this exact common connection.
+    // No raw connection escapes, schema installation, reservation or sends at
+    // construction. The genuine Session/initialization/peer/seed owners must
+    // remain alive and drain with the preparer before this Database/room owner.
+    // Complete room visibility/turn/return/recovery hosting remains required;
+    // this factory alone never installs Application's RoomAuthority.
+    std::shared_ptr<OwnedTaiwanPkEntryPreparation> make_owned_taiwan_pk_entry_preparation(
+        SqliteOwnedPkRoomRepository&,std::shared_ptr<SharedWorldPresence>,TaiwanNativeFightCatalog,
+        OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
+        OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed);
     SqliteWorldDisplayRepository& world_displays();
     SqliteQuestJournalRepository& quest_journals();
     // Borrowed reader; valid only for this database's lifetime, after migration.

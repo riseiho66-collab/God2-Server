@@ -65,6 +65,8 @@ public:
         std::vector<std::uint8_t> logical;
     };
     explicit SqliteOwnedPkRoomRepository(sqlite3* db):db_(db),owners_(db){require_schema(db_);require_round_schema(db_);}
+    // Identity only; no read, schema installation or admission permission.
+    bool uses_connection(const sqlite3* supplied)const noexcept{return supplied==db_;}
     static void install_schema(sqlite3*); // explicit caller; never called on read
     static void require_schema(sqlite3*); // exact own DDL; no DDL-on-read
     static void install_round_schema(sqlite3*); // separate opt-in; base DDL unchanged

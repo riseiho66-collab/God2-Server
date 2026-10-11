@@ -78,6 +78,10 @@ public:
     // Actual same-connection complete old tuple in one owned read scope.
     // Missing material stays absent; this never allocates slots or grants items.
     std::optional<Before> observe_before(std::uint64_t account,std::uint64_t character);
+    // CUSTOM-0112: mint private receipts for ONE consistent complete durable
+    // tuple, then requalify it. This is a read, not a new write, item/equip
+    // grant, original native issuer or proof of historical writer invocation.
+    std::optional<Committed> observe_committed(std::uint64_t account,std::uint64_t character);
 private:
     void owner() const;
     bool common_current(const RecoveredCharacter&,const RecoveredPosition&);

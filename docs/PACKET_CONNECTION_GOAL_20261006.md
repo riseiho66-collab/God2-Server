@@ -3035,3 +3035,12 @@ Application pk_rooms仍未安裝；完整context／counter／commonworldvisibili
 本輪2份既有C++修改、1份新增，3source84,671bytes；108舊CUSTOM exact保留→109筆，mixedsegments255→256。新增initialcontext source1、新opcode0、完整玩法路徑0、reviewgroups26不變。TW世界parser74／局部來源50／控制11／未接13；S2C252（230fixed／22variable）／限定回覆48／推播11／gated4，battle110／specialized9、86selector7／case6、83action23／projection2；TW來源關聯38／去重34、CN93／去重71均不變。全遊戲總路徑與完成率未知，67.6%僅parser限定覆蓋。
 
 Application pk_rooms未安裝；commonvisibility、35／skills／Lua turn/results、latergrants／counter、terminal／worldreturn／reconnect／recovery待接。全TW／CN／web與共用64位數值目標保留；未build／compiler／test／runtime／native／codec／gameDBSQL／migrate／activate／deploy。根代理本輪另處理使用者GitHub私有專案與Discord通知；.git／.gitignore／工作流與通知檔案完全不計273source證據。273帳務由source子代理依授權完成，root未聲稱全文閱讀native/findings/doc；各代理實際閱讀範圍分開封存。
+
+
+## 第274輪：同資料庫的 PK 入場準備來源
+
+CUSTOM0112新增joint.observe_committed唯讀完整durable tuple→真正private joint／雙writer憑證；不執行無意義write，不把普通Before或兩次獨立讀取拼成提交證據。callback-compatible準備來源以實際Session／private正常入場Written／InWorld／共同readyLease／savedPose／exactPair ready與blocked及世代重觀察，依序連到267外觀→268角色能力→269玩家文字→271體力→273完整82／88與初次grant→prepare_owned。伺服器seed由明示可信來源供應，不能用context、時鐘或任意預設冒充原生規則。reservation後失敗會abandon RESERVED；未啟用或發包。
+
+SqliteDatabase factory只組裝同一connection的實際reader／writer及joint，保留rawdb私有、Fight immutable資料owned lifetime與借用Database／room drain要求。CharacterSelected不得順手改InWorld。單向common lifecycle release不是PK暫停／返回；完整世界可見性退場與回場、35／skills／Lua turn／results、terminal／reconnect／recovery仍待接，Application pk_rooms維持未安裝。
+
+本輪5份既有C++修改、1份新增，CUSTOM109→110、mixedsegments256→257、groups26不變；new preparation source1、新opcode0、完整雙向玩法路徑0。TW C2S parser74／具局部來源50／控制11／未接13；S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9、86selector7／case6、83action23／projection2。TW未host關聯38／去重34、CN93／去重71不變。全遊戲分母與完成率未知；未build／compiler／test／runtime／native／codec／gameDBSQL／migrate／activate／deploy，保留TW／CN／web與共用64位數值及凍結功能。

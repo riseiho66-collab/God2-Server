@@ -216,6 +216,20 @@ std::optional<SqliteOwnedEquipmentTransaction::Before> SqliteOwnedEquipmentTrans
         throw DatabaseError("Joint bag observation reentered or lost read scope");
     sqlite_detail::execute(db,"COMMIT");read.finished=true;return result;
 }
+std::optional<SqliteOwnedEquipmentTransaction::Committed> SqliteOwnedEquipmentTransaction::observe_committed(
+    std::uint64_t account,std::uint64_t character) {
+    // CUSTOM-0112: reuse the actual joint read/namespace/root qualification,
+    // never combine two independently observed writer receipts.
+    auto observed=observe_before(account,character);
+    if(!observed||!observed->inventory||!observed->equipment)return std::nullopt;
+    std::optional<Committed> result{Committed(identity_,
+        SqliteOwnedInventoryRepository::Committed(inventory_.identity_,
+            std::make_shared<const OwnedInventorySnapshot>(std::move(*observed->inventory))),
+        SqliteNativeEquipmentSnapshotRepository::Committed(equipment_.identity_,
+            std::make_shared<const NativeEquipmentSnapshot>(std::move(*observed->equipment))))};
+    if(!committed_current(*result))return std::nullopt;
+    return result;
+}
 bool SqliteOwnedEquipmentTransaction::before_current(const Before& expected) {
     owner();
     if(inventory_.writing_||equipment_.writing_){inventory_.reentered_=equipment_.reentered_=true;return false;}
