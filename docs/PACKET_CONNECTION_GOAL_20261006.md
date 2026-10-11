@@ -3346,3 +3346,25 @@ actual DA15 source/commit authority存在，但Visibility存last_taiwan_appearan
 nativephase17限定spans2075B/586sites，vsqualified303新選15/2022B/570sites，明示overlap53B/16sites，data13B；closure131/7140243B。nativeactor14spans2275B/762sites，新child6/793B/268sites，歴史overlap8/1482B/494sites，data44B；closure129/7048736B。recipient source36完整captured inputs/1214516B，closure43/1259670B；bounded searches及failedlookups/truncation均保留，不冒稱全域absence/novelty或完整手讀990src。
 
 990src byteunchanged，C++0改/0新增，sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10不變。TW C2S156/worldparser74=limited50/control11/unconnected13，S2C252=fixed230/variable22，reply48/push11/gated4/unclassified117/nondefault206/default46，battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21；TW unhostedchains3/bindings38unique34，CN chains35/bindings93unique71，CN歷史C2S156/S2Cphaseopcode280/length253各自scope，CN增量0。完整遊戲封包數/已完整串接路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。下一來源為精確owner alias/gate/child custody及current full6F issuer，再接actual Apphost/ReturnHold/fullwrite/normal publication/terminal marker retirement/inputresume/durableFinished recovery；shared64/CN/web保留。
+
+
+## 第305輪：初始化owner來源、89佇列與C2S36實際輸入缺口
+
+Actual world464910 saves firstarg root and root+438; outer4655E0 passes the same root to5112C0 which rereads root+438 into phase+10. Shared initialization provenance is closed; later owner replacement/opaque-child equality remains conditional.
+
+Actual gate0 producer5117F8 and secondary89 queue51D4E0 are qualified. Caller ignores capacity/append failure.5140C0 consumes89 only with active gate, pending head, phase+A9DF6C4 zero and second output pointee zero;518BF0/parent set gate1. Separate helper/mode5 conditions exit; not native ACK/immediate result1.
+
+Exact4116F0 worker+14 sendowner,411690 timestamp/count under+6C lock, conditional+3C send lock; formatter uses embeddedobject+10 output distinct from receive+C10 and parsedowner+2CC4. Compression stub0 and optional transform qualified; original/mapped IAT separately pinned. No global concurrency/custody stability claim.
+
+Actual actor+224 resource subobject has owner at+24C from pool+4; adjacent opaque+220 is separate. Four stride6 resource slots/Actionrecord owner+10+handle*290 have bounded readsets, not whole-actor/skill/server authority.
+
+Concrete actual C2S36 TimerNotification private route rejects before durable operation and Driver closes exact paired Sessions retaining durable state. Default-off diagnostic fixture path is not formal PK authority. Original timer purpose/timing must be recovered before genuine consumer, not ignored/noop acceptance.
+
+原生記憶體offset均依原證據hex；resource actor+0x224/0x24C不同於opaque+0x220，完整81B及logical byte9/17保持未知權威。原候選19/2282B/694sites owner（2錯位slice已撤回資格，改採corrected successor）、16/730B/274sites custody、9/1477B/507sites resource均為限定區段；明示歷史overlap，非全域新增或已接通遊戲。source-obligation16完整captured inputs/979768B。完整worker封存與metric pins見本輪research doc及外部archive。
+
+990src byteunchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13，S2C252=fixed230/variable22，reply48/push11/gated4/unclassified117/nondefault206/default46；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34，CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整路徑/分母/TW與全遊戲百分比null。未build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/帳號存檔/native fonts/CN/web與其他凍結功能保留。
+
+下一來源：Trace root+438 binding/replacement and reached postreset/prereceive children; native C2S36 producer caller/lifecycle/control purpose, then actual private PK input; full current6F issuer before actual App backend/paired ReturnHold/fullwrite/normal publication.
+
+Independent static review rejected two original owner slices starting midinstruction (511797 and515858). Original seal/candidate1 retained immutable; corrected successor requalifies boundaries and replaces effective owner metrics, without new source/opcode/fullroute credit.
+有效owner metrics: {"qualified_spans": 19, "bytes": 2284, "sites": 692, "new_selected_spans_vs_qualified304": 15, "new_bytes": 2063, "new_sites": 627, "explicit_overlap_bytes": 221, "overlap_sites": 65, "data_slices": 5, "data_bytes": 26, "global_new_coverage_claim": false, "raw_seal_sha256": "72ca8138af90af6a551f74a2238fd753f343331b63bea96a56228ce289cb3437", "canonical_closure_sha256": "0e5f43aa9ae76d4d2da40369b542b4710ec7806a52ea00a4224be960c2a4d53a", "closure_members": 92, "closure_bytes": 619272}
