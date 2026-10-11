@@ -46,21 +46,21 @@ public:
             throw std::invalid_argument("PK departure requires exact common presence and visibility owners");
     }
     ~OwnedPkEntryAdmission(){
-        lifetime_->owner=nullptr;
-        for(auto& [id,attempt]:attempts_)cancel(*attempt,false);
+        stop_on_game();
     }
     OwnedPkEntryAdmission(const OwnedPkEntryAdmission&)=delete;
     OwnedPkEntryAdmission& operator=(const OwnedPkEntryAdmission&)=delete;
     std::optional<Invitations::Reservation> prepare(const Invitations::Pair& pair)override{
         check_thread();
-        if(preparing_||!prepare_||!sessions_||!peers_||attempts_.size()>=max_retained_rooms)return {};
+        if(stopped_||preparing_||!prepare_||!sessions_||!peers_||attempts_.size()>=max_retained_rooms)return {};
         preparing_=true;struct End{bool& value;~End(){value=false;}}end{preparing_};
         const auto sessions=resolve_sessions(pair);
-        if(!sessions||!exact_peers(pair))return {};
+        if(!sessions||stopped_||!exact_peers(pair)||stopped_)return {};
         auto ticket=prepare_(pair);if(!ticket)return {};
         // A preparer must issue a fresh reservation, never abandon an already
         // retained ticket on behalf of a duplicate call.
         if(attempts_.contains(ticket->id()))return {};
+        if(stopped_){rooms_.abandon(*ticket);return {};}
         bool stored=false;
         try {
             const auto& input=ticket->input();
@@ -72,7 +72,7 @@ public:
             if(world_presence_)for(const auto& appearance:*input.entry.owned_appearances())
                 if(!appearance.owns_presence(world_presence_)){rooms_.abandon(*ticket);return {};}
             auto attempt=std::make_shared<Attempt>(lifetime_,*ticket,*sessions);
-            if(!source_pair(*attempt)||!exact_peers(pair)){rooms_.abandon(*ticket);return {};}
+            if(!source_pair(*attempt)||stopped_||!exact_peers(pair)||stopped_){rooms_.abandon(*ticket);return {};}
             Invitations::Reservation reservation{ticket->id(),ticket->generation(),pair,input.entry};
             attempts_.emplace(ticket->id(),attempt);stored=true;
             return std::optional<Invitations::Reservation>(std::move(reservation));
@@ -85,9 +85,9 @@ public:
     bool current(const Invitations::Reservation& reservation)override{
         check_thread();
         const auto at=find(reservation);
-        if(!at||at->stage!=Stage::Reserved)return false;
+        if(stopped_||!at||at->stage!=Stage::Reserved)return false;
         return exact_sessions(*at)&&exact_peers(at->ticket.input().pair)&&
-            source_pair(*at)&&rooms_.current(at->ticket)&&at->stage==Stage::Reserved;
+            !stopped_&&source_pair(*at)&&rooms_.current(at->ticket)&&at->stage==Stage::Reserved&&!stopped_;
     }
     // Legacy bool commit remains false. Starting asynchronous work must never
     // satisfy the synchronous "both queues committed" contract.
@@ -96,7 +96,7 @@ public:
         check_thread();
         const auto& reservation=accepted.reservation();
         const auto attempt=find(reservation);
-        if(!complete||!attempt||!current(reservation))return false;
+        if(stopped_||!complete||!attempt||!current(reservation)||stopped_)return false;
         // All allocations/encodings and future delivery identities are staged
         // while both exact Sessions retain their captured qualified prebattle
         // phase (CharacterSelected or InWorld) and private sources current.
@@ -120,6 +120,12 @@ public:
         const auto attempt=find(reservation);if(!attempt)return;
         cancel(*attempt,true);
     }
+    // CUSTOM-0125 terminal shutdown only, on the real game owner. Drain the
+    // external InvitationService offers/completions BEFORE this call. Keep the
+    // Admission object/map alive across synchronous source-callback reentry;
+    // invalidate weak entry callbacks and cancel without invoking completions.
+    // Active rooms/outboxes/locks remain recoverable; no world return/rebind.
+    void stop(){check_thread();stop_on_game();}
 private:
     enum class Stage {Reserved,Preparing,Active,Complete,FailedReserved,FailedActive};
     struct Attempt final:Session::NativePkEntryOwner {
@@ -151,19 +157,26 @@ private:
     std::shared_ptr<Lifetime> lifetime_;
     std::map<std::uint64_t,std::shared_ptr<Attempt>> attempts_;
     const std::thread::id thread_=std::this_thread::get_id();
-    bool preparing_=false;
+    bool preparing_=false,stopped_=false;
+    void stop_on_game()noexcept{
+        stopped_=true;lifetime_->owner=nullptr;
+        for(auto& [id,attempt]:attempts_)cancel(*attempt,false);
+    }
     void check_thread()const{
         if(thread_!=std::this_thread::get_id())throw std::logic_error("PK admission game owner mismatch");
     }
     std::optional<std::array<std::shared_ptr<Session>,2>> resolve_sessions(const Invitations::Pair& pair)const{
-        std::array<std::shared_ptr<Session>,2> result{sessions_(pair.challenger.session),sessions_(pair.recipient.session)};
-        if(!result[0]||!result[1]||result[0]==result[1]||
+        if(stopped_)return {};
+        const auto first=sessions_(pair.challenger.session);if(stopped_||!first)return {};
+        const auto second=sessions_(pair.recipient.session);if(stopped_||!second)return {};
+        std::array<std::shared_ptr<Session>,2> result{first,second};
+        if(result[0]==result[1]||
            !result[0]->same_native_pk_game_executor(*result[1]))return {};
         return result;
     }
     bool exact_peers(const Invitations::Pair& pair)const{
-        return peers_(pair.challenger.session)==std::optional{pair.challenger}&&
-               peers_(pair.recipient.session)==std::optional{pair.recipient};
+        return !stopped_&&peers_(pair.challenger.session)==std::optional{pair.challenger}&&!stopped_&&
+               peers_(pair.recipient.session)==std::optional{pair.recipient}&&!stopped_;
     }
     bool exact_sessions(const Attempt& attempt)const{
         const auto peers=resolve_sessions(attempt.ticket.input().pair);
@@ -200,14 +213,14 @@ private:
         return {};
     }
     void held(Attempt& attempt,Session& session,std::optional<Session::NativePkEntryHold> hold){
-        check_thread();if(attempt.stage!=Stage::Preparing)return;
+        check_thread();if(stopped_||attempt.stage!=Stage::Preparing)return;
         const auto index=viewer(attempt,session);
         if(!index||!hold||!attempt.holds[*index]||*hold!=*attempt.holds[*index]||
            !session.native_pk_entry_current(*hold)){cancel(attempt,true);return;}
         attempt.held[*index]=true;
         if(!attempt.held[0]||!attempt.held[1])return;
         try {
-            if(!exact_sessions(attempt)||!exact_peers(attempt.ticket.input().pair)||!source_pair(attempt)||
+            if(!exact_sessions(attempt)||!exact_peers(attempt.ticket.input().pair)||stopped_||!source_pair(attempt)||
                !rooms_.current(attempt.ticket)||
                !attempt.sessions[0]->native_pk_entry_current(*attempt.holds[0])||
                !attempt.sessions[1]->native_pk_entry_current(*attempt.holds[1])||attempt.stage!=Stage::Preparing){
@@ -264,7 +277,7 @@ private:
         }catch(...){cancel(attempt,true);}
     }
     bool written(Attempt& attempt,Session& session,const Session::NativePkEntryHold& hold,bool ok){
-        check_thread();const auto index=viewer(attempt,session);
+        check_thread();if(stopped_)return false;const auto index=viewer(attempt,session);
         if(attempt.stage!=Stage::Active||!index||!attempt.holds[*index]||
            *attempt.holds[*index]!=hold||attempt.submitted[*index]||!ok){cancel(attempt,true);return false;}
         try {
@@ -292,7 +305,7 @@ private:
                 auto completion=std::move(attempt.completion);
                 if(completion)completion(true);
             }
-            return true;
+            return !stopped_;
         }catch(...){cancel(attempt,true);return false;}
     }
     void cancel(Attempt& attempt,bool notify)noexcept{

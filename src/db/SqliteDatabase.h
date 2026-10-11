@@ -48,6 +48,7 @@
 #include "db/SqliteOwnedGuildAnnouncementRepository.h"
 #include "db/SqliteTeleportGemRepository.h"
 #include "handlers/OwnedTaiwanPkEntryPreparation.h"
+#include "handlers/OwnedTaiwanPkRoomBackend.h"
 #include <filesystem>
 #include <memory>
 namespace god2 {
@@ -131,6 +132,17 @@ public:
         SqliteOwnedPkRoomRepository&,std::shared_ptr<SharedWorldPresence>,const std::filesystem::path&,
         OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed);
+    // CUSTOM-0125 complete source composition of preparation/admission/basic
+    // transport on this connection. Explicit policy/archive/live owners only;
+    // no schema install, callback invocation, reservation, sends or App install.
+    // Drain InvitationService offers before stop/destruction; this Database,
+    // initialized Lua/executor and callback dependencies must outlive backend.
+    std::unique_ptr<OwnedTaiwanPkRoomBackend> make_owned_taiwan_pk_room_backend(
+        asio::any_io_executor,LuaEngine&,std::shared_ptr<SharedWorldPresence>,
+        std::shared_ptr<cn::SharedActorVisibility>,const std::filesystem::path&,
+        OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
+        OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed,
+        OwnedTaiwanPkRoomBackend::Parameters,std::array<std::uint8_t,2>,std::chrono::milliseconds);
     SqliteWorldDisplayRepository& world_displays();
     SqliteQuestJournalRepository& quest_journals();
     // Borrowed reader; valid only for this database's lifetime, after migration.

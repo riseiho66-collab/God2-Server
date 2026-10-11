@@ -417,6 +417,58 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
     return make_owned_taiwan_pk_entry_preparation(rooms,std::move(presence),std::move(catalog),
         std::move(sessions),std::move(initializations),std::move(peers),std::move(seed));
 }
+std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_room_backend(
+    asio::any_io_executor game,LuaEngine& lua,std::shared_ptr<SharedWorldPresence> presence,
+    std::shared_ptr<cn::SharedActorVisibility> visibility,const std::filesystem::path& archive_path,
+    OwnedTaiwanPkEntryPreparation::Sessions sessions,
+    OwnedTaiwanPkEntryPreparation::Initializations initializations,
+    OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed,
+    OwnedTaiwanPkRoomBackend::Parameters parameters,std::array<std::uint8_t,2> order,
+    std::chrono::milliseconds retry){
+    // Identity/policy checks precede all file I/O and reader assembly. This
+    // factory has no supplied repository/preparer that could split issuers.
+    if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
+       !visibility||!visibility->owns_presence(presence)||
+       !game||!sessions||!initializations||!peers||!seed||archive_path.empty())
+        throw DatabaseError("TW PK backend requires actual common sources and explicit resolver owners");
+    OwnedTaiwanPkRoomBackend::require_policy(parameters,order,retry);
+    const auto path=archive_path; // Stable explicit path, no default/current-directory substitution.
+    auto resolvers=std::make_shared<OwnedTaiwanPkRoomBackend::Resolvers>(
+        OwnedTaiwanPkRoomBackend::Resolvers{std::move(sessions),std::move(initializations),
+                                          std::move(peers),std::move(seed)});
+    auto catalog=TaiwanNativeFightCatalog::from_archive_file(path);
+    auto repository=make_owned_pk_room_repository(); // Requires existing schema; never installs it.
+    auto rooms=std::make_unique<OwnedPkRoomState>(*repository);
+    auto session_source=[resolvers](std::uint64_t id)->std::shared_ptr<Session>{
+        if(resolvers->stopped)return {};
+        auto value=resolvers->sessions(id);return resolvers->stopped?nullptr:std::move(value);
+    };
+    auto peer_source=[resolvers](std::uint64_t id)->std::optional<OwnedPkInvitationService::Peer>{
+        if(resolvers->stopped)return {};
+        auto value=resolvers->peers(id);return resolvers->stopped?std::nullopt:std::move(value);
+    };
+    auto preparation=make_owned_taiwan_pk_entry_preparation(*repository,presence,std::move(catalog),
+        session_source,[resolvers](const std::shared_ptr<Session>& session)
+                ->std::optional<Session::NormalWorldInitialization>{
+            if(resolvers->stopped)return {};
+            auto value=resolvers->initializations(session);
+            return resolvers->stopped?std::nullopt:std::move(value);},peer_source,
+        [resolvers](const OwnedPkInvitationService::Pair& pair)->std::optional<std::uint32_t>{
+            if(resolvers->stopped)return {};
+            auto value=resolvers->seed(pair);return resolvers->stopped?std::nullopt:std::move(value);});
+    auto driver=std::make_unique<OwnedTaiwanPkBasicDriver>(std::move(game),*rooms,lua,parameters,order,retry);
+    auto admission=std::make_unique<OwnedPkEntryAdmission>(*rooms,
+        [preparation](const OwnedPkInvitationService::Pair& pair){return preparation->prepare(pair);},
+        session_source,peer_source,std::move(visibility),std::move(presence),
+        [owner=driver.get()](const OwnedPkRoomState::Ticket& ticket,
+            const std::array<std::shared_ptr<Session>,2>& bound,
+            const std::array<Session::NativePkEntryHold,2>& holds){return owner->bind(ticket,bound,holds);});
+    // The private constructor only moves already assembled owners; no callback
+    // captures a partly constructed backend. On exceptions local reverse-order
+    // destruction also retires Admission before driver/state/repository.
+    return std::unique_ptr<OwnedTaiwanPkRoomBackend>(new OwnedTaiwanPkRoomBackend(std::move(resolvers),
+        std::move(repository),std::move(rooms),std::move(preparation),std::move(driver),std::move(admission)));
+}
 std::unique_ptr<SqliteBeastBankRepository> SqliteDatabase::make_beast_bank_repository(){
     if(!migrated_)throw DatabaseError("Migrate before PET bank access");
     auto* raw=impl_->connection.get();

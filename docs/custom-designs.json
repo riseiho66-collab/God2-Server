@@ -4588,6 +4588,35 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Provide real source-owned scheduled retries/cancellation around actual285Lua/room/output chain while preserving the existing strand ACK/prefix barrier and missinghost prerequisites.",
   "replacement": "Complete actualApp/policy/terminal/recovery and nativeproducer/acceptance in finalphase; replace CUSTOMtransport cadence onlywith qualifiedexplicitpolicy."
+},
+{
+  "id": "CUSTOM-0125",
+  "name": "Owned TW same-Database PK preparation/admission/basic backend",
+  "authority": "TW_CUSTOM_OPT_IN_OWNED_SOURCE_COMPOSITION_NOT_COMPLETE_APPLICATION_HOST",
+  "implementation": [
+    "src/db/SqliteDatabase.cpp",
+    "src/db/SqliteDatabase.h",
+    "src/handlers/OwnedPkEntryAdmission.h",
+    "src/handlers/OwnedTaiwanPkRoomBackend.h"
+  ],
+  "native_gap": "Complete native skill record suppliers, timing/0B replay, terminal89/world return/recovery and actual policy suppliers remain unqualified.",
+  "rules": {
+    "factory": "Private same-DB factory owns ONE issuer/repository/RoomState/Preparation/Driver/Admission. Exact presence owns common characters; visibility owns that presence. Nonempty executor/path/four callbacks and existing basic/order/retry bounds checked BEFORE archive I/O/reader assembly. Reuse pinned single-read Fight loader; require existing schema, no install/populate/prepare/hold/send/callback invocation at construction.",
+    "callbacks": "One shared private bundle stores each potentially mutable callback once. Forwarders invoke bundle members directly with terminal pre/post fences. Retaining function targets is not proof that external captured raw objects survive.",
+    "dispatch": "AsyncRoomAuthority delegates genuine prepare/current/begin_commit/abandon; sync commit false. Admission exact pre-release Bind captures the owned Driver, no inline resolve/send. Full-frame basic dispatch and exact disconnect use that Driver; existing private Session ACK/prefix/Written barriers remain authoritative.",
+    "stop": "External Invitation offers/completions must drain first. Stop flags bundle/backend terminal, invalidates Admission weak callbacks and cancels without Completion callbacks while retaining object/map, then stops Driver. Post-callback guards prevent retaining fresh tickets/stage resurrection. Reserved abandon; active peers close with durable room/outbox/locks retained.",
+    "lifetime": "Actual single-thread game owner for construction/use/stop/destruction. Reverse destruction Admission->Driver->Preparation->RoomState->Repository; bundle outlives forwarders. Database/initializedLua/game executor/callback captures outlive backend. Invitation raw RoomAuthority pointers require external drain; no arbitrary self-destruction claim.",
+    "phase": "Static source/instruction/byte-accounting only. No Application assignment/default policy/new opcode/runtime/SQL/schema install/testing/deployment."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Consume the real preparation/admission/scheduled basic owner chain with one issuer and explicit lifetime, rather than independent caller-supplied components.",
+  "replacement": "Complete actual Application/invitation drain/terminal return/recovery/native policy sources and eventual full-client acceptance before production promotion."
 }
 ]
 }
