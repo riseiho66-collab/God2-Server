@@ -4438,6 +4438,34 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Replace real basic-dispatch external current-profile dependency with concrete actual-room durable qualification while preserving frozen active combat policy.",
   "replacement": "Complete actual Application/catalog/policy/Lua/lifetime/grant/terminal composition and recover original rules before broad native acceptance."
+},
+{
+  "id": "CUSTOM-0120",
+  "name": "Explicit bounded pinned Fight archive JSON file to same-Database PK preparation",
+  "authority": "CUSTOM_OPT_IN_INACTIVE_FILE_PROVIDER_NOT_NATIVE_ASSET_DECODER_OR_FULL_HOST",
+  "implementation": [
+    "src/db/SqliteDatabase.cpp",
+    "src/db/SqliteDatabase.h",
+    "src/game/TaiwanNativeFightCatalog.h"
+  ],
+  "native_gap": "Historical parsed JSON remains independently hash-bound data representation, not original decoded rawCSV or current client acceptance. Native producer/whole host/latergrant/mask authority remains open.",
+  "rules": {
+    "file": "Copy explicit native filesystem path, reject empty/open failure. One binaryopen/read fixedaudit_size+1; only exact pinnedsize withEOF and no badbit accepted. Rejectshort/extra/nonEOF/bad; no filesizeprecheck/reopen/narrowpath/Zsuffix/fallback/CSVZdecode.",
+    "qualification": "Existing2853351B/fullSHA owncopy before JSON then3578rows/sequence/keys/numbers retains entire immutable input. Path or metadata cannot qualify bytes; afterload filechanges do not alter catalog.",
+    "factory": "New Database from_archive method purechecks migrated/impl/actualpresence/roomconnection/all4resolverowners beforeIO, then delegates existing sameDBfactory. No callbacks/prepare/reservation/schema/Sessiontransition/invitationenable.",
+    "lifetime": "Catalog owns immutable bytes/rows, so filename owner need not persist. Database/room/presence/resolver borrowed owners must drain on actual gameexecutor. No threadsafety/specialfiletimeout/FSimmutability claim.",
+    "scope": "One inactive file-to-preparer path. No Config/defaultpath/Application host added. Seed/coefficients/order/masks/Lua/output/latergrant/terminal/recovery remain mandatory.",
+    "phase": "Static source/accounting only; no build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Close actual explicit archive file input dependency of existing pinned Fight catalog and concrete preparation factory without decoding assets or inventing defaults.",
+  "replacement": "Compose complete actual Application ownership/policies and qualify native producers/consumer acceptance before release."
 }
 ]
 }

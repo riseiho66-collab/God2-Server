@@ -3117,3 +3117,14 @@ Active採admitted immutable stats/text/appearance，絕不把RESERVED recursive 
 另找出已verified exact FightJSON2853351B／550095...abd142d及現讀installedCSVZ36974B／1195af...338b8。既有from_archive已fullhash／rowgate，下一步仍須明示singleopen bounded JSON provider；本輪未decode／restorewhole tree／實作provider／掛Application。seed／coefficients／order／nextmasks／Lua／idleoutput／latergrants／skills／terminal89／savedsettle／worldreturn／reconnect仍缺。
 
 C++4既有檔修改、新增0，限定profile source1；mixed263→264、CUSTOM116→117、groups26不變，新opcode0、新完整雙向路徑0。TW C2S156／worldparser74（限定來源50／控制11／未接13），S2C252（fixed230／variable22）／reply48／push11／gated4不變；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW chains3／bindings38去重34，CN chains35／bindings93去重71不變；CN歷史C2S156／S2C階段opcode280／length253範圍獨立。全遊戲分母／百分比null。完整TW/CN/web／shared64與凍結功能保留；webv70..75 pending無新ACK或credit；PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment。
+
+
+## 第282輪：限定FightJSON檔案來源接實際準備工廠
+
+CUSTOM0120新增TaiwanNativeFightCatalog::from_archive_file，copy明示filesystempath，singlebinaryopen／固定2853352B read，只收exact2853351+EOF+noBad，再交原owncopy→SHA→JSON→3578row gate；empty／openfailed／short／extra／bad／nonEOF拒絕。不stat／reopen／窄字串／Zsuffix／fallback／CSVZdecode。新的Database *_from_archive在IO前查actualsameDB／presence／room／4resolver身份，catalog完整合格後才delegate原factory；沒有callback／prepare／reservation／schema／Sessiontransition。
+
+檔案provider補上既有準備工廠實際輸入，仍無Configpath/default/Appinstall。具體JSON來源已在281留verified550095...abd142d；c5d8 parseddata與current149c code／1195af compressedasset保持分開。後續grant再讀retained272 fullconsumer：WORD5 unsigned+1僅最低3decimalglyphs，非88counter／timer／mask／serverepoch。CUSTOM0110初次scope及round!=1 guard保持，不冒稱原服laterproducer已恢復。
+
+C++3既有檔修改／新增0，限定fileprovider source1；mixed264→265、CUSTOM117→118、groups26不變；新opcode0／完整雙向路徑0。TW C2S156／worldparser74（限定來源50／控制11／未接13），S2C252（230fixed／22variable）／reply48／push11／gated4不變；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW chains3／bindings38去重34，CN chains35／bindings93去重71不變；CN歷史C2S156／S2C階段opcode280／length253獨立範圍。分母／百分比null。
+
+仍缺actualseed／coefficients／order／nextmasks／Lua／idleoutput／latergrants／skills／terminal89／savedsettle／worldreturn／reconnect的完整Appowner。完整TW/CN/web／shared64與凍結功能保留；webv70..75 pending無新ACK／credit；PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy。

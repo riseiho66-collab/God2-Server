@@ -124,6 +124,13 @@ public:
         SqliteOwnedPkRoomRepository&,std::shared_ptr<SharedWorldPresence>,TaiwanNativeFightCatalog,
         OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed);
+    // CUSTOM-0120 explicit bounded/hash-pinned archive file -> the same
+    // concrete preparation factory. No default path, schema installation,
+    // reservation, Session transition, invitation enable or Application host.
+    std::shared_ptr<OwnedTaiwanPkEntryPreparation> make_owned_taiwan_pk_entry_preparation_from_archive(
+        SqliteOwnedPkRoomRepository&,std::shared_ptr<SharedWorldPresence>,const std::filesystem::path&,
+        OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
+        OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed);
     SqliteWorldDisplayRepository& world_displays();
     SqliteQuestJournalRepository& quest_journals();
     // Borrowed reader; valid only for this database's lifetime, after migration.

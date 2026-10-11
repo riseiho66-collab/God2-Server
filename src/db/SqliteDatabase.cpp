@@ -401,6 +401,22 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
         *impl_->role_text,std::move(catalog),std::move(presence),std::move(joint),rooms,
         std::move(sessions),std::move(initializations),std::move(peers),std::move(seed));
 }
+std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan_pk_entry_preparation_from_archive(
+    SqliteOwnedPkRoomRepository& rooms,std::shared_ptr<SharedWorldPresence> presence,
+    const std::filesystem::path& archive_path,OwnedTaiwanPkEntryPreparation::Sessions sessions,
+    OwnedTaiwanPkEntryPreparation::Initializations initializations,
+    OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed){
+    // CUSTOM-0120 fail invalid owner composition before file I/O or reader
+    // assembly. These checks are identities, never SQL/schema qualification.
+    if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
+       !rooms.uses_connection(impl_->connection.get())||!sessions||!initializations||!peers||!seed)
+        throw DatabaseError("TW PK archive preparation requires actual sources and resolver owners");
+    auto catalog=TaiwanNativeFightCatalog::from_archive_file(archive_path);
+    // Full immutable catalog owns its bytes. Only the established same-DB
+    // factory assembles borrowed writers; loading never reserves a room.
+    return make_owned_taiwan_pk_entry_preparation(rooms,std::move(presence),std::move(catalog),
+        std::move(sessions),std::move(initializations),std::move(peers),std::move(seed));
+}
 std::unique_ptr<SqliteBeastBankRepository> SqliteDatabase::make_beast_bank_repository(){
     if(!migrated_)throw DatabaseError("Migrate before PET bank access");
     auto* raw=impl_->connection.get();

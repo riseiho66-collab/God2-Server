@@ -2,7 +2,10 @@
 #include "protocol/RecoveredBattlePlayerAppearance.h"
 #include <array>
 #include <charconv>
+#include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <optional>
@@ -28,6 +31,7 @@ namespace god2 {
 // world->battle conversion, equipped-item/owner authority or renderer success.
 class TaiwanNativeFightCatalog final {
 public:
+    static constexpr std::size_t audit_size=2853351;
     static constexpr char audit_sha256[]="5500950022f789d1372f92fe2dd6ebee936c2e7f5a04b133c45151f3aabd142d";
     static constexpr char encoded_sha256[]="1195afeeb060d7d81c07e65476da8089d5ab72edea90971d72a07f20863338b8";
     // A claim retained in the historical audit, NOT independently decoded here.
@@ -73,7 +77,7 @@ public:
     // This parses a known archived JSON representation, NOT CSVZ/CSV/native.
     // Full byte pin precedes parsing; no caller-supplied digest/bool is trusted.
     static TaiwanNativeFightCatalog from_archive(std::span<const std::uint8_t> bytes){
-        if(bytes.size()!=2853351)throw std::invalid_argument("TW Fight audit byte bound mismatch");
+        if(bytes.size()!=audit_size)throw std::invalid_argument("TW Fight audit byte bound mismatch");
         auto storage=std::make_shared<Storage>();
         storage->audit_bytes.assign(bytes.begin(),bytes.end());
         if(digest(storage->audit_bytes)!=audit_sha256)
@@ -108,6 +112,23 @@ public:
                 static_cast<std::uint8_t>(family),static_cast<std::uint8_t>(derived)});
         }
         return TaiwanNativeFightCatalog(std::move(storage));
+    }
+    // CUSTOM-0120 explicit archived JSON input, never native TextFile/CSVZ.
+    // One opened binary stream supplies actual bounded bytes. Path/metadata
+    // cannot substitute for from_archive's full own-copy/SHA/row qualification.
+    static TaiwanNativeFightCatalog from_archive_file(const std::filesystem::path& supplied_path){
+        const std::filesystem::path path=supplied_path;
+        if(path.empty())throw std::invalid_argument("TW Fight archive path is required");
+        std::ifstream input(path,std::ios::binary);
+        if(!input)throw std::runtime_error("TW Fight archive cannot be opened");
+        std::vector<std::uint8_t> bytes(audit_size+1);
+        input.read(reinterpret_cast<char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));
+        // Exact input reaches EOF one byte before the bounded request. Extra,
+        // short, bad or non-EOF failure cannot become a partial catalog.
+        if(input.bad()||input.gcount()!=static_cast<std::streamsize>(audit_size)||!input.eof())
+            throw std::runtime_error("TW Fight archive exact binary read failed");
+        bytes.resize(audit_size);
+        return from_archive(bytes);
     }
     std::size_t size()const noexcept{return source_?source_->rows.size():0;}
     // Only complete already-supplied ordinary86/4 material. Position is actual
