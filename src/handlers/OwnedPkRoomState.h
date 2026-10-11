@@ -69,6 +69,13 @@ public:
         const auto at=rooms_.find(room);if(at==rooms_.end())return {};
         return at->second.battle.inspect();
     }
+    // CUSTOM-0119 derives the expected complete checkpoint including RNG
+    // from this actual runtime-claimed Battle. No supplied digest/checkpoint
+    // can mint this current durable frozen-profile binding.
+    std::string current_owned_profile(std::uint64_t room){
+        const auto& current=find(room);
+        return repository_.require_active_owned_profile(current.ticket,current.battle.checkpoint());
+    }
     // Policies are supplied by the authoritative adapter. This method does
     // not accept native35/context/selection bytes as a BattleAction directly.
     // Resource deltas are battle-local; saved character rows stay unchanged.

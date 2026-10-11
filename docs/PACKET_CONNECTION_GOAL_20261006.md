@@ -3106,3 +3106,14 @@ CUSTOM0118在既有OwnedPkOutboxPublication加入complete-frame preflight：Tick
 Application pk_rooms仍null，本輪未掛載。現有真正initialization registry保留；下一步需實際current profile／Fight archive／seed／coefficients／order／next masks／Lua owner及合法idle output scheduling，later grant／terminal89／saved settlement／world return／reconnect仍缺。不加dummy factory/default來灌正式進度。
 
 既有C++1檔修改、新增0；限定adapter1，mixed262→263、CUSTOM115→116、groups26不變；新opcode0、新完整雙向路徑0。TW C2S156、世界parser74（限定來源50／控制11／未接13）；S2C252（fixed230／variable22）、回覆48／推播11／gated4不變；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW未掛載chains3、bindings38／去重34；CN chains35、bindings93／71不變。CN歷史C2S156／S2C階段opcode280／length253屬不同範圍。分母及百分比未知。webv75 metadata pending，無ACK／integration credit。完整TW/CN/web／shared64及凍結功能保留；PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment。
+
+
+## 第281輪：實際active房間的凍結入場profile綁定來源
+
+CUSTOM0119新增repository require_active_owned_profile，原issuer／完整private來源圖／同connection／全readset／內部digest，ownBEGIN snapshot核13main表與TEMP shadow、既有PKDDL版本、active room／2locks／saved roleresourcespose／無獨立battle；persisted完整checkpoint含RNG須等於RoomState真正Battle，驗immutable topology／initialrev1／fullround。由private Room內部取得expectedcheckpoint；新no-profile-argument派送直接消費此來源，resolver每pure Rule前後再查。舊explicitprofile seam保持外部owner責任，不冒稱已內部查核。
+
+Active採admitted immutable stats/text/appearance，絕不把RESERVED recursive stored_current或戰前worldCurrent搬進來；current combatHPMP/RNG只由一個Battle提供，savedresources不等於戰鬥中HPMP。Read snapshot不是lease或Session+SQL原子，既有write CAS／grant／outbox fences保持。
+
+另找出已verified exact FightJSON2853351B／550095...abd142d及現讀installedCSVZ36974B／1195af...338b8。既有from_archive已fullhash／rowgate，下一步仍須明示singleopen bounded JSON provider；本輪未decode／restorewhole tree／實作provider／掛Application。seed／coefficients／order／nextmasks／Lua／idleoutput／latergrants／skills／terminal89／savedsettle／worldreturn／reconnect仍缺。
+
+C++4既有檔修改、新增0，限定profile source1；mixed263→264、CUSTOM116→117、groups26不變，新opcode0、新完整雙向路徑0。TW C2S156／worldparser74（限定來源50／控制11／未接13），S2C252（fixed230／variable22）／reply48／push11／gated4不變；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW chains3／bindings38去重34，CN chains35／bindings93去重71不變；CN歷史C2S156／S2C階段opcode280／length253範圍獨立。全遊戲分母／百分比null。完整TW/CN/web／shared64與凍結功能保留；webv70..75 pending無新ACK或credit；PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment。

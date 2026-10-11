@@ -136,6 +136,11 @@ public:
     RuntimeClaim claim_runtime(const Ticket&);
     RetainedRecovery recover_retained(const Ticket&);
     bool retained_recovery_current(const RetainedRecovery&);
+    // CUSTOM-0119 current durable binding to this active room's immutable
+    // admitted profile. Expected checkpoint MUST come from its actual runtime
+    // Battle, never native bytes. Read snapshot only, not a reusable permit,
+    // stat refresh, skill ownership, Session qualification or runtime claim.
+    std::string require_active_owned_profile(const Ticket&,const BattleCheckpoint& expected);
     // ONE shared checkpoint + TWO viewer projections, or no durable change.
     void advance(const Ticket&,const BattleCheckpoint& expected,
                  const BattleCheckpoint& next,const Replies&,

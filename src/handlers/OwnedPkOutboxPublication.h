@@ -109,6 +109,19 @@ public:
         std::uint32_t critical_chance_bp,critical_multiplier_percent;
     };
     enum class NativeBatch {Idle,ControlStored,BasicStored};
+    // CUSTOM-0119 actual private runtime room supplies a freshly checked
+    // durable frozen profile. No external digest authority or stat refresh.
+    std::optional<NativeBatch> dispatch_native_basic(Session& session,
+            const std::optional<BasicParameters>& server_basic,
+            std::span<const RecoveredWorldRecords::Record> records){
+        check_thread();
+        if(!by_session_.contains(session.id()))return {};
+        const auto binding=caller_binding(session);
+        reject_resolver_reentry(*binding);
+        const auto basic=server_basic;
+        const auto profile=rooms_.current_owned_profile(binding->ticket.id());
+        return dispatch_native_basic(session,profile,basic,records);
+    }
     std::optional<NativeBatch> dispatch_native_basic(Session& session,const std::string& current_profile,
             const std::optional<BasicParameters>& server_basic,
             std::span<const RecoveredWorldRecords::Record> records){
@@ -170,6 +183,7 @@ public:
         reject_resolver_reentry(*binding);
         if(!rule||!resolution_transport_current(*binding))
             throw DatabaseError("PK resolver requires both private Written peers with cleared publication");
+        const auto profile=rooms_.current_owned_profile(binding->ticket.id());
         const auto before=rooms_.inspect(binding->ticket.id());
         const auto phase=rooms_.round(binding->ticket.id()).document();
         if(!before)throw DatabaseError("PK resolver lost its actual shared Battle");
@@ -179,7 +193,8 @@ public:
             const auto source_current=[&]{
                 return !binding->resolver_reentered&&resolution_transport_current(*binding)&&
                     rooms_.inspect(binding->ticket.id())==before&&
-                    rooms_.round(binding->ticket.id()).document()==phase;
+                    rooms_.round(binding->ticket.id()).document()==phase&&
+                    rooms_.current_owned_profile(binding->ticket.id())==profile;
             };
             const Battle::Rule checked_rule=[&](const CombatRuleInput& input){
                 if(!source_current())throw DatabaseError("PK resolver authority changed before pure Rule");

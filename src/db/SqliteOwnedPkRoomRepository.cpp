@@ -595,6 +595,65 @@ bool SqliteOwnedPkRoomRepository::current(const Ticket& ticket){
     try{require_ticket(ticket,"reserved");}catch(const DatabaseError&){return false;}
     tx.commit();return true;
 }
+std::string SqliteOwnedPkRoomRepository::require_active_owned_profile(
+        const Ticket& ticket,const BattleCheckpoint& supplied_expected){
+    // CUSTOM-0119 active combat keeps its admitted stat/text/appearance
+    // readset. RESERVED stored_current/live world Current must NOT run here.
+    const auto expected=supplied_expected;
+    const auto& input=ticket.input();
+    if(!issuer_||ticket.issuer_!=issuer_||!input.combat_sources||
+       !input.entry.owned_appearances()||!input.entry.owned_players()||
+       !input.entry.owned_vitals()||!input.entry.owned_initial_grants()||
+       !input.entry.owned_initial_contexts())
+        throw DatabaseError("PK active profile requires original complete private owned input");
+    for(std::size_t i=0;i<2;++i)
+        if(!(*input.combat_sources)[i].uses_connection(db_)||
+           !(*input.entry.owned_appearances())[i].uses_connection(db_)||
+           !(*input.entry.owned_players())[i].uses_connection(db_)||
+           !(*input.entry.owned_vitals())[i].uses_connection(db_)||
+           !(*input.entry.owned_initial_grants())[i].uses_connection(db_)||
+           !(*input.entry.owned_initial_contexts())[i].uses_connection(db_))
+            throw DatabaseError("PK active profile private sources use another connection");
+    validate(input); // Complete retained graph and internally recomputed digest.
+    if(readset(input)!=ticket.readset_)
+        throw DatabaseError("PK active profile retained readset changed");
+    RecoveryRead scope(db_);
+    // Existing readers use unqualified names: bind them to the real main
+    // tables and reject TEMP substitutes before any owner/round lookup.
+    constexpr const char* names="('owned_pk_room_feature','owned_pk_rooms','owned_pk_room_members','owned_pk_room_outbox','owned_pk_round_feature','owned_pk_room_rounds','accounts','recovered_characters','recovered_positions','character_role_snapshots','character_resources','battle_reservations','battle_settlements')";
+    const auto shadow_sql=std::string("SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ")+names+" OR tbl_name COLLATE NOCASE IN "+names;
+    Statement shadows(db_,shadow_sql.c_str());
+    if(shadows.row())throw DatabaseError("PK active profile TEMP source shadow rejected");
+    const auto table_sql=std::string("SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ")+names;
+    Statement tables(db_,table_sql.c_str());
+    if(!tables.row()||tables.integer(0)!=13||tables.row())
+        throw DatabaseError("PK active profile requires its exact main source tables");
+    require_round_schema(db_); // Read-only own DDL/version checks, no install.
+    require_ticket(ticket,"active");
+    Statement members(db_,"SELECT COUNT(*) FROM main.owned_pk_room_members WHERE room=?");
+    members.bind_id(1,ticket.id());
+    if(!members.row()||members.integer(0)!=2||members.row())
+        throw DatabaseError("PK active profile requires both exact member locks");
+    Statement room(db_,"SELECT checkpoint,revision FROM main.owned_pk_rooms WHERE id=? AND state='active'");
+    room.bind_id(1,ticket.id());
+    if(!room.row())throw DatabaseError("PK active profile room is absent");
+    const auto checkpoint=BattleCheckpointCodec::decode(room.text(0));
+    if(checkpoint!=expected||checkpoint.snapshot.id!=ticket.id()||
+       checkpoint.snapshot.revision!=room.number<std::uint64_t>(1)||
+       checkpoint.snapshot.state!=BattleState::Active||room.row())
+        throw DatabaseError("PK active profile differs from the actual runtime checkpoint");
+    (void)Battle::restore(checkpoint); // Full canonical RNG/state, no reseeding.
+    const auto initial=Battle(ticket.id(),input.actors,input.seed).checkpoint();
+    checkpoint_owned_pair(input,initial,checkpoint);
+    if(checkpoint.snapshot.revision==1&&checkpoint!=initial)
+        throw DatabaseError("PK active profile initial checkpoint changed");
+    const auto phase=read_round(ticket); // Same snapshot, full headers/bounds.
+    if(phase.battle_revision()!=checkpoint.snapshot.revision||
+       phase.phase()==OwnedPkRound::Phase::Terminal)
+        throw DatabaseError("PK active profile round does not match its active checkpoint");
+    scope.commit();
+    return input.profile_readset_sha256; // Qualified frozen binding, not a lease.
+}
 SqliteOwnedPkRoomRepository::RuntimeClaim SqliteOwnedPkRoomRepository::claim_runtime(const Ticket& ticket){
     if(!issuer_||ticket.issuer_!=issuer_)throw DatabaseError("PK runtime claim requires its original repository issuer");
     // Registry exclusion alone does not make this repository/SQLite/RoomState

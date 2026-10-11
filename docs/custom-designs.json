@@ -4407,6 +4407,37 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Connect complete decoded-frame classification and exact private Session authority to existing durable PK command/result source without partial-prefix writes or guessed host authority.",
   "replacement": "Recover original scheduling/producer rules and compose actual server profile/policy/Lua/lifetime/publication/terminal owner before broad native acceptance."
+},
+{
+  "id": "CUSTOM-0119",
+  "name": "Current durable private-room binding to immutable admitted Taiwan PK profile",
+  "authority": "CUSTOM_OPT_IN_INACTIVE_TW_ACTIVE_FROZEN_PROFILE_NOT_NATIVE_STAT_OR_SKILL_RECOVERY",
+  "implementation": [
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedPkRoomState.h"
+  ],
+  "native_gap": "No new native rules/PE traces. CUSTOM0106 admitted stored totals and historical source labels remain unchanged. Active frozen binding is not live stat/equipment/title refresh, learned skills or full host authority.",
+  "rules": {
+    "issuer": "Original concrete repository issuer, complete private combat/appearance/player/vital/initial-grant/context graph, exact same-connection identity; full retained readset and internally recomputed domain-separated digest. No legacy hash-only promotion.",
+    "read": "Own explicit BEGIN read snapshot, relevant TEMP shadow rejection and13main source tables, read-only PK DDL/version checks. Active durable state/readset/design and2exactlocks, existing saved role/resources/pose/no independentbattle equality retained.",
+    "battle": "Expected full checkpoint derived internally by actual RoomState runtime Battle, including RNG/HPMP/revision/profile. Canonical stored checkpoint exact match, immutable admitted actor topology/properties, revision1 initial equality and full current round headers/context/bounds/state validated in same read snapshot.",
+    "frozen": "Never call prebattle Current or recursive reserved stored_current on active fight. Auxiliary/equipment/text stay admitted immutable; current combat resources/RNG from single Battle. Saved resources are not equated to combat HPMP. No live original stat/skill claim.",
+    "consumer": "New no-profile-input private Session dispatcher uses fresh concrete room binding then280fullframeclassifier; no mutation before classification. Resolver requalifies before/after each pure Rule. Old external-profile API retained without internalqualification claim.",
+    "race": "Read evidence is not a future lease/Session+SQL atomic operation. Existing control/intent/settle transactions retain full phase/checkpoint/readset CAS and submitted-grant/output fences. No reusable profile permit API added.",
+    "scope": "One inactive profile-source chain; Application remains uninstalled. Fight provider/seed/coefficients/order/masks/Lua/idlepump/latergrant/terminal/recovery still required. No schema/wire/state refresh.",
+    "phase": "Static source/accounting only; no build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Replace real basic-dispatch external current-profile dependency with concrete actual-room durable qualification while preserving frozen active combat policy.",
+  "replacement": "Complete actual Application/catalog/policy/Lua/lifetime/grant/terminal composition and recover original rules before broad native acceptance."
 }
 ]
 }
