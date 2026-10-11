@@ -4685,6 +4685,37 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Connect privately observed final dual fullwrite to atomic two-owner resource persistence without invalidating original retained Ticket/current/recovery invariants or inventing rewards/return.",
   "replacement": "Recover original terminal/resource/award/return source, complete real freshWORLDreturn/lock/reconnect/restart/host lifecycle and full-client acceptance before production promotion."
+},
+{
+  "id": "CUSTOM-0128",
+  "name": "Owned TW terminal native-context observation",
+  "authority": "TW_CUSTOM_PRIVATE_PROCESS_LOCAL_INPUT_STAGE_NOT_NATIVE_ACK_OR_WORLD_RETURN",
+  "implementation": [
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedPkRoomState.h"
+  ],
+  "native_gap": "Original server use of context1C, all coalesced world records, complete return/resource/companion/visibility/recovery ownership remain open.",
+  "rules": {
+    "wire": "Native465DF2→4157F0 emits existing1C+raw4: original retained normal2A native14bit handle and independent cached system-default Chinese/Simplified predicate0/1. No new opcode or winner/CP/display authorization. Same-entry aggregate identity lineage separately pinned.",
+    "dispatch": "Actual Backend/Driver/LuaOwner/Publication input chain reuses ContextNotification parser. Entire span pure-classified: exactlyone context with optionalTicks; mixed/repeated/unsupported input rejected before mutations. Only context bypasses active-only current profile reader and instead requires private Finished guard.",
+    "authority": "Original private Binding derives exact Session/viewer/hold and own actual terminal fullwrite object/revision; ownflight/pendingclear required before/after guard. Peer fullwrite/resourceCOMMIT may still be pending. DBsubmitted cannot mint this observation.",
+    "snapshot": "Private RoomState provides actual runtimeclaimed checkpoint. Private repository read snapshot reuses full sameDB/issuer/readset/mainTEMP/schema graph, canonicalFinished/Terminalv4/bothmemberlocks/bothfinalrows; owncompletebytes and submitted1 must match actualwritten. Originalbefore resources or exactqualifiedCUSTOM0127savedafter accepted.",
+    "identity": "Original private appearance normalentry view actorhandle equals originallease handle and rawlowWORD; no commoncharacter truncation. HighWORD domain0/1 independent config_flag, profile and winner.",
+    "publication": "After fallible guards recheck ownactualpointer/revision/hold/current then assignfixedsize processlocal marker. Exactretry idempotent; differentraw/revision failclosed. No serializable/recoverable authority; futureconsumer requires freshoriginalBinding and durableguards.",
+    "limits": "No DBwrite/schema/save/newrevision/reply/phaseflip/lockrelease/visibility/Worldresume/Appactivation. Existing86/88resourceconsumer also deductscompanionHP; playerledgeralone doesnotpersistit.",
+    "phase": "Static source/instruction/byte accounting only; no build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Consume actual native retained-world context under genuine final-write ownership without guessing full WORLD readiness or creating a premature persistent observation schema.",
+  "replacement": "Complete original return/input/companion/visibility/lock/recovery/App ownership, then comprehensive final-phase native acceptance before production promotion."
 }
 ]
 }

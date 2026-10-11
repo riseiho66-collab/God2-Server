@@ -109,7 +109,7 @@ public:
         std::uint32_t power_percent,defense_percent;
         std::uint32_t critical_chance_bp,critical_multiplier_percent;
     };
-    enum class NativeBatch {Idle,ControlStored,BasicStored};
+    enum class NativeBatch {Idle,ControlStored,BasicStored,TerminalContextObserved};
     // CUSTOM-0119 actual private runtime room supplies a freshly checked
     // durable frozen profile. No external digest authority or stat refresh.
     std::optional<NativeBatch> dispatch_native_basic(Session& session,
@@ -120,6 +120,13 @@ public:
         const auto binding=caller_binding(session);
         reject_resolver_reentry(*binding);
         const auto basic=server_basic;
+        // CUSTOM-0128 native retained-world return emits1C after Finished;
+        // the active-only profile reader is deliberately not an authority for
+        // that branch. The second overload classifies the ENTIRE frame first,
+        // then the private terminal guard checks its actual Finished readset.
+        if(std::any_of(records.begin(),records.end(),[](const auto& record){
+            return std::holds_alternative<RecoveredWorldRecords::ContextNotification>(record);
+        }))return dispatch_native_basic(session,binding->ticket.input().profile_readset_sha256,basic,records);
         const auto profile=rooms_.current_owned_profile(binding->ticket.id());
         return dispatch_native_basic(session,profile,basic,records);
     }
@@ -139,21 +146,29 @@ public:
             throw DatabaseError("PK frame lacks the separately current server profile binding");
         const RecoveredBattleCommand::ControlRequest* control=nullptr;
         const RecoveredBattleCommand::BasicAttackRequest* attack=nullptr;
+        const RecoveredWorldRecords::ContextNotification* context=nullptr;
         if(records.empty())throw DatabaseError("PK empty input is not an owned native frame");
         for(const auto& record:records){
             if(std::holds_alternative<RecoveredWorldRecords::Tick>(record))continue;
             if(const auto* value=std::get_if<RecoveredBattleCommand::ControlRequest>(&record)){
-                if(control||attack)throw DatabaseError("PK frame mixes or repeats owned operations");
+                if(control||attack||context)throw DatabaseError("PK frame mixes or repeats owned operations");
                 control=value;
             }else if(const auto* value=std::get_if<RecoveredBattleCommand::BasicAttackRequest>(&record)){
-                if(attack||control)throw DatabaseError("PK frame mixes or repeats owned operations");
+                if(attack||control||context)throw DatabaseError("PK frame mixes or repeats owned operations");
                 attack=value;
+            }else if(const auto* value=std::get_if<RecoveredWorldRecords::ContextNotification>(&record)){
+                if(context||control||attack)throw DatabaseError("PK frame mixes or repeats owned operations");
+                context=value;
             }else throw DatabaseError("PK basic frame contains an unsupported operation");
         }
         // Entire span classified BEFORE any durable phase/intent mutation.
         // Ticks provide no grant, resolution, pump or remote receipt authority.
-        if(!control&&!attack)return NativeBatch::Idle;
+        if(!control&&!attack&&!context)return NativeBatch::Idle;
         const auto viewer=indexed->second.viewer;
+        if(context){
+            observe_terminal_context(*binding,session,viewer,context->payload);
+            return NativeBatch::TerminalContextObserved;
+        }
         const auto phase=rooms_.round(binding->ticket.id());
         if(control){
             rooms_.control_native(binding->ticket.id(),caller(*binding,viewer),phase.revision(),profile,*control);
@@ -346,6 +361,13 @@ private:
         // THIS original binding. Durable submitted flags never mint these.
         std::array<Session::NativeBattleSkill,2> terminal_written;
         std::array<std::uint64_t,2> terminal_written_revision{};
+        // CUSTOM-0128 process-local actual input only. Never serialized or
+        // rehydrated from a submitted flag. No current WORLD/ACK capability.
+        struct TerminalContext {
+            std::array<std::uint8_t,4> payload;
+            std::uint64_t revision;
+        };
+        std::array<std::optional<TerminalContext>,2> terminal_contexts;
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
                 std::array<Session::NativePkEntryHold,2> entries)
@@ -374,6 +396,32 @@ private:
         const auto room=room_for(session);
         if(!room)throw DatabaseError("PK input lacks this Session's accepted private entry");
         return bindings_.at(*room);
+    }
+    void observe_terminal_context(Binding& binding,Session& session,std::uint8_t viewer,
+            const std::array<std::uint8_t,4>& payload){
+        // Native shared queue can coalesce1C with Tick. Whole-frame
+        // classification above already excluded unrelated world operations;
+        // supporting those and actually resuming WORLD remain separate work.
+        const auto written=binding.terminal_written[viewer];
+        const auto revision=binding.terminal_written_revision[viewer];
+        const auto current=[&]{
+            return binding.sessions[viewer].get()==&session&&written_current(binding,viewer)&&
+                !binding.flights[viewer]&&!session.native_battle_skill_publication_pending()&&
+                written&&revision&&binding.terminal_written[viewer]==written&&
+                binding.terminal_written_revision[viewer]==revision&&session.native_battle_skill_written()==written;
+        };
+        try{
+            if(!current())throw DatabaseError("PK terminal context lost this viewer's actual final fullwrite");
+            const auto actual=rooms_.require_terminal_context(binding.ticket.id(),viewer,payload,written->logical);
+            const auto& prior=binding.terminal_contexts[viewer];
+            if(actual!=revision||!current()||
+               (prior&&(prior->revision!=revision||prior->payload!=payload)))
+                throw DatabaseError("PK terminal context changed its private terminal observation");
+            // Fixed-size no-throw publication AFTER every fallible guard. The
+            // peer may still be writing. No resource save, unlock, phase flip,
+            // visibility publication, timer pump or receipt is implied.
+            binding.terminal_contexts[viewer]=Binding::TerminalContext{payload,revision};
+        }catch(...){fail(binding);throw;}
     }
     static void reject_resolver_reentry(Binding& binding){
         if(binding.resolving){

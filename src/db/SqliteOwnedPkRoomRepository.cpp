@@ -4,6 +4,7 @@
 #include "game/OwnedTaiwanPkLaterGrantSource.h"
 #include "game/OwnedTaiwanPkTerminalSource.h"
 #include "protocol/RecoveredWorldFrame.h"
+#include "protocol/RecoveredWorldEntryView.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <limits>
@@ -703,6 +704,33 @@ void SqliteOwnedPkRoomRepository::commit_terminal_resources(const Ticket& ticket
     ledger.bind_id(1,ticket.id());ledger.bind(2,material.document);ledger.done();changed(db_);
     require_ticket(ticket,"finished"); // Both staged rows + complete ledger/unchanged locks before COMMIT.
     tx.commit();
+}
+void SqliteOwnedPkRoomRepository::require_terminal_context(const Ticket& ticket,const BattleCheckpoint& actual,
+        std::uint8_t viewer,const std::array<std::uint8_t,4>& payload,
+        const std::vector<std::uint8_t>& actually_written){
+    // CUSTOM-0128 caller supplies a private Binding's actual fullwrite bytes;
+    // RoomState supplies its own runtime-claimed checkpoint. This snapshot
+    // accepts the first viewer before the peer's write/resource COMMIT.
+    if(viewer>1)throw DatabaseError("PK terminal context viewer outside owned pair");
+    RecoveryRead scope(db_);
+    const auto material=terminal_resources_in_scope(ticket,&actual);
+    require_ticket(ticket,"finished"); // Original before OR exact CUSTOM0127 saved after.
+    if(material.outputs[viewer]!=actually_written)
+        throw DatabaseError("PK terminal context differs from its actual final fullwrite");
+    Statement own(db_,"SELECT submitted FROM main.owned_pk_room_outbox WHERE room=? AND revision=? AND viewer=?");
+    own.bind_id(1,ticket.id());own.bind_id(2,actual.snapshot.revision);own.bind_id(3,viewer);
+    if(!own.row()||own.integer(0)!=1||own.row())
+        throw DatabaseError("PK terminal context requires its own submitted final row");
+    const auto& original=(*ticket.input().entry.owned_appearances())[viewer].material();
+    const auto entry=RecoveredWorldEntryView::read(original.entry_frame);
+    const auto identity=std::uint16_t{payload[0]}|(std::uint16_t{payload[1]}<<8);
+    const auto locale=std::uint16_t{payload[2]}|(std::uint16_t{payload[3]}<<8);
+    if(!entry||entry->actor_handle!=original.lease.actor_handle||identity!=entry->actor_handle||locale>1)
+        throw DatabaseError("PK terminal context native identity/locale mismatch");
+    // Native4157F0/531C10: locale describes GetSystemDefaultLangID, not
+    // win/loss, wire profile, CP936/950 or the retained display config_flag.
+    // No both_submitted requirement, new ledger/schema or SQL mutation.
+    scope.commit();
 }
 bool SqliteOwnedPkRoomRepository::occupied(std::uint64_t account,std::uint64_t character){
     // Owner lookup applies even if the independent feature has no row.

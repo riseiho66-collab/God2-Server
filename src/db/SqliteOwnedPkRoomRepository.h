@@ -195,6 +195,10 @@ private:
     // actual two fullwrite callbacks in one original binding; DB flags alone
     // cannot mint those transport observations or authorize this write.
     void commit_terminal_resources(const Ticket&,const BattleCheckpoint& actual,const Replies& actually_written);
+    // CUSTOM-0128 read-only qualification of this original viewer's native1C
+    // after its actual final fullwrite. Not a save, ACK or WORLD permit.
+    void require_terminal_context(const Ticket&,const BattleCheckpoint& actual,std::uint8_t viewer,
+        const std::array<std::uint8_t,4>& payload,const std::vector<std::uint8_t>& actually_written);
     void require_ticket(const Ticket&,const char* state);
     void enqueue(const Ticket&,std::uint64_t revision,const Replies&);
     OwnedPkRound read_round(const Ticket&); // inside existing read/write transaction

@@ -265,6 +265,14 @@ private:
         const auto& current=find(room);
         repository_.commit_terminal_resources(current.ticket,current.battle.checkpoint(),actually_written);
     }
+    // CUSTOM-0128 private, read-only terminal input guard. Never resurrect an
+    // old world-entry receipt or derive a runtime checkpoint from native1C.
+    std::uint64_t require_terminal_context(std::uint64_t room,std::uint8_t viewer,
+            const std::array<std::uint8_t,4>& payload,const std::vector<std::uint8_t>& actually_written){
+        const auto& current=find(room);const auto actual=current.battle.checkpoint();
+        repository_.require_terminal_context(current.ticket,actual,viewer,payload,actually_written);
+        return actual.snapshot.revision;
+    }
     struct Room {Ticket ticket;Battle battle;Repository::RuntimeClaim claim;};
     using Rooms=std::map<std::uint64_t,Room>;
     Repository& repository_;
