@@ -3084,3 +3084,14 @@ C++既有5檔修改，其中3檔行為、2檔註解；新增C++0。Material／Re
 TW C2S候選156／世界parser74（局部來源50／控制11／未接13），S2C252（fixed230／variable22），回覆48／推播11／gated4；battle110／specialized9、86selector7／case6、83action23／projection2；TW來源關聯38／去重34、CN93／71不變。CN歷史觀察C2S156／S2C階段opcode280／length253屬不同範圍。全遊戲路徑總數及完成率未知，不把50／74當遊戲百分比。
 
 尚缺完整Application派送、同一權威Lua回合／技能、fresh83 opaque／group及88counter／raw118、latergrant／controlmask、terminal存檔／89／世界回復／重連。原生來源審查另更正：PK撤出移除visibility incidence，仍保留ready lease；這不自動授權技能，也不能拿失去presence當拒用理由。phase equality不是事件歷史／ABA證明。保留TW／CN／web／共用64位及凍結功能，未build／compiler／tests／runtime／native／VM／codec／gameDBSQL／migration／activation／deploy。
+
+
+## 第279輪：真正房間持有的 fresh 基本攻擊結果來源
+
+新增CUSTOM0117 OwnedTaiwanPkBasicResultSource，由實際RoomState私有Ticket／目前單一Battle／repository Ready雙指令產生fresh83/1及88，接既有雙方相對視角與原子settle。嚴格要求兩位owned player/vital/combat/initial-context完整圖與initial88 seed0；legacy Ticket不升格，commit後不拿prebattle world Current作battle權限。basic只限物理零MP單對手；actual Rule必須pure/nonreentrant，server order及next masks仍必須明確提供。完整round document fence防止供應後重讀變動。
+
+本輪新static native追查分開R4、basic13/14、scalar3尾端及88 current/首次seed/readiness/latch。full15 queue copy／global context／renderer仍未全閉合。root另讀caller保留group與manager52AC20，發現255 BYTE加一wrap跳actor scan；首版mod128保留，修為mod127、兩組0..253。opaque零、group及positive checked counter=round≤INT32_MAX均為明示CUSTOM，不宣稱原服公式、native接受或全客戶端忽略。
+
+C++既有1檔修改、新增1檔，限定freshbasic source1；mixed261→262、CUSTOM114→115、groups26不變。新opcode0、新完整雙向路徑0；TW C2S156／世界parser74（限定來源50／控制11／未接13），S2C252（fixed230／variable22）、回覆48／推播11／gated4；battle110／specialized9、86selector7／case6、83action23／projection2不變。TW未掛載關聯38／去重34、CN93／71不變；CN歷史C2S156／S2C階段opcode280／length253屬不同範圍。全遊戲分母及完成率未知。
+
+尚缺Application／Lua完整owner派送、技能fresh83、later grants及實際control masks、terminal存檔／89／世界返回／重連。現有legacy signed16 loss仍failclosed，不能代替TW/CN/web64位擴充；完整目標與凍結功能保留。webv74僅metadata pending，沒有ACK或來源credit。PHASE1無build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment。

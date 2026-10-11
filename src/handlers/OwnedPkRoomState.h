@@ -2,6 +2,7 @@
 #include "db/SqliteOwnedPkRoomRepository.h"
 #include "handlers/RecoveredPkCommandSelection.h"
 #include "protocol/RecoveredPkActionProjection.h"
+#include "game/OwnedTaiwanPkBasicResultSource.h"
 #include <map>
 #include <type_traits>
 namespace god2 {
@@ -73,7 +74,7 @@ public:
     // Resource deltas are battle-local; saved character rows stay unchanged.
     // Legacy trusted primitive is refused by the repository for collection
     // rooms; it cannot bypass persisted input/grant phases. Use submit_native
-    // until the atomic two-intent resolver has been implemented.
+    // and the atomic paired resolver below for collection rooms.
     void act(std::uint64_t room,std::uint64_t controller,std::uint64_t revision,
              const BattleAction& action,const Battle::Rule& rule,const Project& project,
              const std::optional<NativeSkillRecord>& definition={}){
@@ -117,8 +118,9 @@ public:
         auto definition=selection->skill_key?repository_.scalar_definition_document(*selection->skill_key):std::string{};
         repository_.submit_intent(current.ticket,phase,viewer,
             OwnedPkRound::Intent{selection->action,selection->skill_key,std::move(definition)});
-        // Atomic paired resolver/order/second-action cancellation/results are
-        // the next source gap; no first-arrival action is executed here.
+        // The paired resolver below consumes the persisted pair. Its actual
+        // authority/order/Rule hosting remain open; no first-arrival action
+        // is executed here.
     }
     void control_native(std::uint64_t room,const NativeCaller& caller,std::uint64_t server_phase_revision,
                         const std::string& current_profile_readset_sha256,
@@ -146,14 +148,32 @@ public:
         std::array<RecoveredPkActionProjection::Templates,2> templates_by_actor;
         OwnedPkRound::Masks next_control_masks;
     };
+    // CUSTOM-0117 real room-owned fresh BASIC1 result source. Order, next
+    // native control masks and pure gameplay Rule remain authoritative inputs;
+    // none is inferred from initial masks, arrival order or client counters.
+    // No caller-supplied templates/checkpoint/round can mint this private source.
+    void resolve_collected_basic(std::uint64_t room,const std::array<std::uint8_t,2>& order,
+                                 const OwnedPkRound::Masks& next_control_masks,const Battle::Rule& rule){
+        auto& current=find(room);
+        const auto prior=repository_.round(current.ticket);
+        Resolution source{order,OwnedTaiwanPkBasicResultSource::prepare(
+            current.ticket,current.battle.inspect(),prior,order),next_control_masks};
+        resolve_collected_impl(room,source,rule,prior.document());
+    }
     void resolve_collected(std::uint64_t room,const Resolution& source,const Battle::Rule& rule){
+        resolve_collected_impl(room,source,rule,{});
+    }
+private:
+    void resolve_collected_impl(std::uint64_t room,const Resolution& source,const Battle::Rule& rule,
+                                const std::optional<std::string>& expected_round){
         if(!rule||!((source.order==std::array<std::uint8_t,2>{0,1})||
                      (source.order==std::array<std::uint8_t,2>{1,0})))
             throw DatabaseError("PK paired order requires explicit server policy");
         auto& current=find(room);
         const auto before=current.battle.checkpoint();
         const auto prior=repository_.round(current.ticket);
-        if(prior.phase()!=OwnedPkRound::Phase::Ready||prior.battle_revision()!=before.snapshot.revision||
+        if((expected_round&&prior.document()!=*expected_round)||
+           prior.phase()!=OwnedPkRound::Phase::Ready||prior.battle_revision()!=before.snapshot.revision||
            !OwnedPkRound::masks_valid(source.next_control_masks))
             throw DatabaseError("PK two owned commands are not ready for paired settlement");
         auto staged=current.battle;
@@ -190,6 +210,7 @@ public:
         static_assert(std::is_nothrow_move_assignable_v<Battle>);
         current.battle=std::move(staged);
     }
+public:
     std::vector<Repository::Delivery> pending(std::uint64_t room){
         return repository_.pending(find(room).ticket);
     }

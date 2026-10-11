@@ -4350,6 +4350,36 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Remove unreachable InWorld-only assumption from qualified ordinary Taiwan PK admission while preserving each actual private prebattle state until commit.",
   "replacement": "Replace custom lifecycle policy only with build-matched original evidence; finish actual Application ownership and all remaining source/lifecycle routes before comprehensive testing and activation."
+},
+{
+  "id": "CUSTOM-0117",
+  "name": "Room-owned fresh Taiwan BASIC1 result templates with explicit queue and positive counter policy",
+  "authority": "CUSTOM_OPT_IN_INACTIVE_TW_PRIVATE_BASIC_RESULT_SERIALIZATION_NOT_ORIGINAL_PRODUCER",
+  "implementation": [
+    "src/game/OwnedTaiwanPkBasicResultSource.h",
+    "src/handlers/OwnedPkRoomState.h"
+  ],
+  "native_image": "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+  "native_gap": "Selected basic1/direct scalar handlers do not read R4/R13/R14, but full15 queue/scratch copies, global/context aliases and rendering remain open. Original group/counter/opaque production, readiness success and Lua hosting are not recovered. Scalar3 tail remains distinct.",
+  "rules": {
+    "owner": "Private friend-only factory consumes actual RoomState Ticket, current shared Battle and actual Ready round. No public raw template/checkpoint/round factory. Requires both immutable owned combat/appearance/player/vital/initial-context/grant sources and exact initial88 seed0; legacy genuine Ticket alone is insufficient.",
+    "domain": "Active LegacyCustom arena with only canonical0/14, actual Pair controllers, both persisted physical zero-MP basic single-opponent intents; no skill definition or skill key. Full resource/max/template binding retained. No prebattle world Current after commit.",
+    "basic83": "Fresh15 bytes, recovered1 layout and relative source/target. Explicit CUSTOM R4/R13/R14=0, no original padding/global-ignore claim. Projection writes true loss/outcome and target masks; signed16 unrepresentable result remains fail-closed.",
+    "group": "Two distinct groups according to explicit server execution order, ((round-1)%127)*2+ordinal, range0..253. Avoid255 because52AC20 increments BYTE boundary then skips actor scan on wrap. Not a nonce, original formula or animation acceptance proof. First modulo128 source epoch retained as superseded.",
+    "bulk88": "Fresh121 bytes. Checked round1..INT32_MAX is a CUSTOM positive counter relative to exact initialseed0, not original round identity or guaranteed readiness. Raw117..120=0 explicit display policy; reset friendly slots1..13, actual own HP/MP supplied by shared projection. Never copy initial counter0 into each result.",
+    "settlement": "Complete actual round document fenced across source preparation and resolver reread; existing staged shared Battle and repository full settle CAS preserved. Rule must remain pure/nonreentrant. Server order and actual next masks mandatory, not arrival order/clientcounter/initialmask guesses.",
+    "scope": "One new inactive basic-result source path, no Application install, skill3 supplier, later-grant widening, terminal89/world return/saved settlement, schema/wire change or full route completion. Whole TW/CN/web/shared64 objective retained.",
+    "phase": "Static source/native disassembly/accounting only. No build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Remove real caller-supplied fresh basic83/88 template dependency using retained private entry provenance and actual shared room state, after new bounded native consumer research.",
+  "replacement": "Qualify build-matched original producers/global aliases/rendering and replace custom policies explicitly; connect actual Application/Lua/skills/later-grants/terminal sources before comprehensive dual-client tests."
 }
 ]
 }
