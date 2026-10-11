@@ -3142,3 +3142,17 @@ C++既有3改／新增1，限定latergrant source1；mixed265→266、CUSTOM118�
 
 
 第283輪靜態審查補強：新actualcheckpoint overload在任何phase的第一個round／owner lookup之前拒絕TEMP替代與檢查13個main tables，並全phase比對完整durablecheckpoint/RNG/id/revision，避免偽造round1降級跳過later資格。舊Ticket-only初次介面保持原行為；terminal空結果及legacyinitial不要求完整ownedgraph，後續grant仍必須完整private資格。候選1／初次帳本與報告保留，候選2為最終來源；REVIEW283-01以來源修補，無執行測試。
+
+
+## 第284輪：實際戰後roster與本輪結果通知
+
+CUSTOM0122新增明示Outbox／RoomState basic通知resolver，保留privateWritten／profile／order／pureRule／reentry邊界，actual staged postBattle交Round產生relativebounds1/1，非caller exactmask／initialmask／hit targets猜測。只有明示v2→canonical17field v3，v1/v2舊exact格式及行為保留；exactresultsAPI拒絕v3降級。percyclebounds／observations／battlerevision獨立permanentfirstreceipts，null與observed0/0分開。ownresultsubmission後每端一次subset通知，兩端後advance once/newgrant epoch；receipts保留Grants/Collect/Ready，freshresults重置；Terminal無0B／grant。
+
+Repo由actualnextsnapshot重推wholefollowingdoc，transaction在firstupgradewrites前完整originalprivateprofile資格，checkpoint／phase／tworesults原子寫入。v3readbindissuer／sameDB／readset／frozenactor／RNG／cycle／兩個resultrow，每個recordedreceipt必須ownsubmitted。無DDL／save migration／inlinepump。
+
+Native新bounded靜態恢復513080／514B70及mode tables：51398B才是aligned45Ccountwriter，51398D在disp32內；分支46C==47及record條件，unsignedinput4 cap5並清14targets，非basic/fresh0B固定值。Basic464==1只見first44Cwrite，無direct45Cwrite，opaquechildren／readiness仍缺。CUSTOM通知不冒稱原服公式；舊同header/mask跨cycle延遲replay無nonce不可唯一辨識，仍開放。
+
+C++5既有改／新增0，限定resultnotification source1；mixed266→267、CUSTOM119→120、groups26不變；新opcode0／完整雙向路徑0。TW C2S156／worldparser74（限定來源50／控制11／未接13），S2C252（230fixed／22variable）／reply48／push11／gated4、battle110／specialized9／86selector7／case6／83action23／projection2均不變。TW chains3／bindings38去重34、CN chains35／bindings93去重71；CN歷史C2S156／S2Cphaseopcode280／length253獨立範圍。全路徑分母／百分比null。Apphost／seed／coefficients／order／Lua／idleoutput／skills／terminal89／savedsettle／worldreturn／recovery／shared64仍缺；完整TW/CN/web及凍結功能保留。Webv70..77 metadata pending無新ACK／credit／容量測量。PHASE1無build/compiler/tests/game/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。
+
+
+第284輪原生證據補充：51F2A0先收到input+4，之後清14targets，再讀unsignedinput4 cap5；mode47是second-dispatch當下46C，非已證函式進入值。worker完整2helpercode4614B／1426ins+table128B、retainedcaller745B已比對ownpinnedimage；4547codeB相對具名TW283 scope為新增，67B重疊countdown，不作globalcoverage百分比。candidate1 source不變，candidate2只精確修正文件順序與覆蓋範圍。

@@ -176,6 +176,17 @@ public:
     // supplied, never initial-mask/target/arrival-order guesses. No auto-pump.
     void resolve_collected_basic(Session& session,const std::array<std::uint8_t,2>& server_order,
             const OwnedPkRound::Masks& next_control_masks,const Battle::Rule& supplied_rule){
+        resolve_collected_basic_impl(session,server_order,next_control_masks,supplied_rule);
+    }
+    // CUSTOM-0122 actual room-owned post-result notification policy. This
+    // explicit seam keeps the same private transport/pure Rule/reentry fences.
+    void resolve_collected_basic_notifications(Session& session,
+            const std::array<std::uint8_t,2>& server_order,const Battle::Rule& supplied_rule){
+        resolve_collected_basic_impl(session,server_order,std::nullopt,supplied_rule);
+    }
+private:
+    void resolve_collected_basic_impl(Session& session,const std::array<std::uint8_t,2>& server_order,
+            const std::optional<OwnedPkRound::Masks>& next_control_masks,const Battle::Rule& supplied_rule){
         check_thread();
         const auto order=server_order;const auto masks=next_control_masks;
         const auto rule=supplied_rule;
@@ -202,10 +213,12 @@ public:
                 if(!source_current())throw DatabaseError("PK resolver authority changed during pure Rule");
                 return result;
             };
-            rooms_.resolve_collected_basic(binding->ticket.id(),order,masks,checked_rule);
+            if(masks)rooms_.resolve_collected_basic(binding->ticket.id(),order,*masks,checked_rule);
+            else rooms_.resolve_collected_basic_notifications(binding->ticket.id(),order,checked_rule);
         }catch(...){fail(*binding);throw;}
     }
 
+public:
     // Explicit game-owner pump only. Entry callbacks and output completion
     // never auto-pump: Session's pending token clears later on its strand.
     // Await a later owner dispatch if a private Written proof/pending clear is

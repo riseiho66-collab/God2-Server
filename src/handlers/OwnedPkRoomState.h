@@ -168,12 +168,22 @@ public:
             current.ticket,current.battle.inspect(),prior,order),next_control_masks};
         resolve_collected_impl(room,source,rule,prior.document());
     }
+    // CUSTOM-0122 explicit result-notification mode. No caller next-mask
+    // guess: the actual staged post-Battle roster supplies notification bounds.
+    void resolve_collected_basic_notifications(std::uint64_t room,
+            const std::array<std::uint8_t,2>& order,const Battle::Rule& rule){
+        auto& current=find(room);
+        const auto prior=repository_.round(current.ticket);
+        Resolution source{order,OwnedTaiwanPkBasicResultSource::prepare(
+            current.ticket,current.battle.inspect(),prior,order),{}};
+        resolve_collected_impl(room,source,rule,prior.document(),true);
+    }
     void resolve_collected(std::uint64_t room,const Resolution& source,const Battle::Rule& rule){
         resolve_collected_impl(room,source,rule,{});
     }
 private:
     void resolve_collected_impl(std::uint64_t room,const Resolution& source,const Battle::Rule& rule,
-                                const std::optional<std::string>& expected_round){
+                                const std::optional<std::string>& expected_round,bool notifications=false){
         if(!rule||!((source.order==std::array<std::uint8_t,2>{0,1})||
                      (source.order==std::array<std::uint8_t,2>{1,0})))
             throw DatabaseError("PK paired order requires explicit server policy");
@@ -211,8 +221,10 @@ private:
         if(!executed)throw DatabaseError("PK resolution applied no owned action");
         const auto after=staged.checkpoint();
         auto following=prior;
-        if(!following.results_issued(after.snapshot.revision,source.next_control_masks,
-                                      after.snapshot.state==BattleState::Finished))
+        const bool advanced=notifications?following.results_issued_notification(after.snapshot):
+            following.results_issued(after.snapshot.revision,source.next_control_masks,
+                                      after.snapshot.state==BattleState::Finished);
+        if(!advanced)
             throw DatabaseError("PK paired result phase could not advance");
         repository_.settle(current.ticket,before,after,prior,following,replies);
         static_assert(std::is_nothrow_move_assignable_v<Battle>);

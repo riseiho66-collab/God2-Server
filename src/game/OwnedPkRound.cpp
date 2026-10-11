@@ -41,14 +41,17 @@ bool OwnedPkRound::control(std::uint8_t viewer,const RecoveredBattleCommand::Con
     if(viewer>1||(phase_!=Phase::InitialControl&&phase_!=Phase::ResultsControl)||controls_[viewer])return false;
     const auto& h=headers_[viewer];const auto& f=r.fields;
     if(f.actor_position!=h.actor||f.side_flag!=h.side||f.context_storage!=h.context)return false;
-    const bool notification=phase_==Phase::InitialControl&&notification_bounds_.has_value();
+    const bool initial_notification=phase_==Phase::InitialControl&&notification_bounds_.has_value();
+    const bool result_notification=phase_==Phase::ResultsControl&&result_notification_bounds_.has_value();
+    const bool notification=initial_notification||result_notification;
     if(notification){
-        const auto& bounds=(*notification_bounds_)[viewer];
+        const auto& bounds=initial_notification?(*notification_bounds_)[viewer]:(*result_notification_bounds_)[viewer];
         for(std::size_t i=0;i<2;++i)if(f.target_masks[i]&~bounds[i])return false;
     }else if(f.target_masks!=expected_masks_[viewer])return false;
     auto next=*this;
     if(notification){
-        next.notification_observations_[viewer]=f.target_masks;
+        if(initial_notification)next.notification_observations_[viewer]=f.target_masks;
+        else next.result_notification_observations_[viewer]=f.target_masks;
         next.expected_masks_[viewer]=f.target_masks;
     }
     next.controls_[viewer]=true;next.bump();
@@ -74,6 +77,33 @@ bool OwnedPkRound::submit(std::uint8_t viewer,Intent intent){
     next.validate();*this=std::move(next);return true;
 }
 bool OwnedPkRound::results_issued(std::uint64_t next_revision,Masks masks,bool terminal){
+    if(result_notification_bounds_)return false; // Explicit v3 policy cannot silently downgrade.
+    return results_issued_impl(next_revision,masks,terminal);
+}
+bool OwnedPkRound::results_issued_notification(const BattleSnapshot& actual){
+    if(!notification_bounds_||actual.numeric_profile!=BattleNumericProfile::LegacyCustom||
+       !actual.id||(actual.state!=BattleState::Active&&actual.state!=BattleState::Finished))return false;
+    Masks bounds{};
+    for(std::size_t position=0;position<actual.actors.size();++position){
+        if(actual.actors[position].has_value()!=(position==0||position==14))return false;
+        if(!actual.actors[position])continue;
+        const auto& actor=*actual.actors[position];
+        if(actor.position!=position||!actor.controller||!actor.max_hp||actor.hp>actor.max_hp||
+           actor.mp>actor.max_mp||(actual.state==BattleState::Active&&!actor.hp))return false;
+        for(std::size_t viewer=0;viewer<2;++viewer)
+            bounds[viewer][(position/14+viewer)%2]|=static_cast<std::uint16_t>(1u<<(position%14));
+    }
+    if(actual.actors[0]->controller==actual.actors[14]->controller)return false;
+    auto next=*this;
+    // Reset only this freshly issued result cycle. Permanent initial receipts
+    // stay intact; Terminal retains the policy but never accepts another0B.
+    next.result_notification_bounds_=bounds;
+    next.result_notification_observations_={};
+    next.result_notification_battle_revision_=actual.revision;
+    if(!next.results_issued_impl(actual.revision,bounds,actual.state==BattleState::Finished))return false;
+    *this=std::move(next);return true;
+}
+bool OwnedPkRound::results_issued_impl(std::uint64_t next_revision,Masks masks,bool terminal){
     if(phase_!=Phase::Ready||next_revision<=battle_revision_||next_revision-battle_revision_>2||!masks_valid(masks))return false;
     auto next=*this;next.battle_revision_=next_revision;next.expected_masks_=masks;next.controls_={false,false};
     next.phase_=terminal?Phase::Terminal:Phase::ResultsControl;next.bump();next.validate();*this=std::move(next);return true;
@@ -106,6 +136,31 @@ void OwnedPkRound::validate()const{
         }
     }else for(const auto& observed:notification_observations_)if(observed)
         throw std::invalid_argument("PK legacy round cannot contain notification observations");
+    if(result_notification_bounds_){
+        if(!notification_bounds_||phase_==Phase::InitialControl||battle_revision_<=1||
+           result_notification_battle_revision_!=battle_revision_)
+            throw std::invalid_argument("PK result notification has no matching owned cycle");
+        for(std::size_t viewer=0;viewer<2;++viewer){
+            const auto& bounds=(*result_notification_bounds_)[viewer];
+            const auto& observed=result_notification_observations_[viewer];
+            if(bounds!=std::array<std::uint16_t,2>{1,1})
+                throw std::invalid_argument("PK result notification requires the complete two-player roster");
+            if(observed)for(std::size_t side=0;side<2;++side)
+                if((*observed)[side]&~bounds[side])throw std::invalid_argument("PK result notification outside current roster");
+            if(phase_==Phase::ResultsControl){
+                if(controls_[viewer]!=observed.has_value()||expected_masks_[viewer]!=(observed?*observed:bounds))
+                    throw std::invalid_argument("PK result notification receipt/control mismatch");
+            }else if(phase_==Phase::Terminal){
+                if(observed||controls_[viewer]||expected_masks_[viewer]!=bounds)
+                    throw std::invalid_argument("PK terminal cannot contain result notification receipts");
+            }else if(round_<2||!observed||!controls_[viewer]||expected_masks_[viewer]!=*observed)
+                throw std::invalid_argument("PK post-result grants require both actual notification receipts");
+        }
+    }else{
+        if(result_notification_battle_revision_)throw std::invalid_argument("PK exact result has notification cycle metadata");
+        for(const auto& observed:result_notification_observations_)if(observed)
+            throw std::invalid_argument("PK exact result has notification receipts");
+    }
     for(std::size_t i=0;i<2;++i)if(intents_[i]){
         const auto& v=*intents_[i];const auto& a=v.action;
         if(a.source!=14*i||a.targets.size()!=1||a.targets[0]!=14*(1-i)||a.power_percent>10000||a.defense_percent>100||
@@ -147,13 +202,23 @@ std::string OwnedPkRound::document()const{
             observations.push_back(observed?Json(*observed):Json(nullptr));
         result["initial_notification_observations"]=std::move(observations);
     }
+    if(result_notification_bounds_){
+        result["version"]=3;result["design_id"]="CUSTOM-0122";
+        result["result_notification_bounds"]=*result_notification_bounds_;
+        result["result_notification_battle_revision"]=result_notification_battle_revision_;
+        auto observations=Json::array();
+        for(const auto& observed:result_notification_observations_)
+            observations.push_back(observed?Json(*observed):Json(nullptr));
+        result["result_notification_observations"]=std::move(observations);
+    }
     return result.dump();
 }
 OwnedPkRound OwnedPkRound::from_document(std::string_view text){
     if(text.empty()||text.size()>32768)throw std::invalid_argument("PK round document size");
     const auto j=Json::parse(text,[](int depth,Json::parse_event_t,Json&){if(depth>7)throw std::invalid_argument("PK round document depth");return true;});
     if(!j.is_object())throw std::invalid_argument("PK round schema");
-    const bool notification=j.size()==14&&j.at("version")==2&&j.at("design_id")=="CUSTOM-0104";
+    const bool result_notification=j.size()==17&&j.at("version")==3&&j.at("design_id")=="CUSTOM-0122";
+    const bool notification=result_notification||(j.size()==14&&j.at("version")==2&&j.at("design_id")=="CUSTOM-0104");
     if(!notification&&(j.size()!=12||j.at("version")!=1||j.at("design_id")!="CUSTOM-0086"))
         throw std::invalid_argument("PK round schema");
     OwnedPkRound result;
@@ -169,6 +234,23 @@ OwnedPkRound OwnedPkRound::from_document(std::string_view text){
             if(!observations[i].is_null()){
                 if(!observations[i].is_array()||observations[i].size()!=2)throw std::invalid_argument("PK notification observation shape");
                 result.notification_observations_[i]=std::array<std::uint16_t,2>{
+                    number<std::uint16_t>(observations[i][0]),number<std::uint16_t>(observations[i][1])};
+            }
+        }
+    }
+    if(result_notification){
+        const auto& bounds=j.at("result_notification_bounds");
+        const auto& observations=j.at("result_notification_observations");
+        if(!bounds.is_array()||bounds.size()!=2||!observations.is_array()||observations.size()!=2)
+            throw std::invalid_argument("PK result notification evidence shape");
+        result.result_notification_bounds_.emplace();
+        result.result_notification_battle_revision_=number<std::uint64_t>(j.at("result_notification_battle_revision"));
+        for(std::size_t i=0;i<2;++i){
+            if(!bounds[i].is_array()||bounds[i].size()!=2)throw std::invalid_argument("PK result notification bounds shape");
+            (*result.result_notification_bounds_)[i]={number<std::uint16_t>(bounds[i][0]),number<std::uint16_t>(bounds[i][1])};
+            if(!observations[i].is_null()){
+                if(!observations[i].is_array()||observations[i].size()!=2)throw std::invalid_argument("PK result notification observation shape");
+                result.result_notification_observations_[i]=std::array<std::uint16_t,2>{
                     number<std::uint16_t>(observations[i][0]),number<std::uint16_t>(observations[i][1])};
             }
         }

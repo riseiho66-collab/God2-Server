@@ -4495,6 +4495,37 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Connect later grants to actual private runtime and durable state instead of removing the guard or reusing initial templates.",
   "replacement": "Recover original producers and close actual App/Lua/control-mask/output/terminal/recovery owners before final native acceptance/release."
+},
+{
+  "id": "CUSTOM-0122",
+  "name": "Actual post-Battle roster-bounded TW result notifications",
+  "authority": "TW_CUSTOM_OPT_IN_V3_SOURCE_NOT_ORIGINAL_NATIVE_READINESS_OR_REPLAY_AUTHORITY",
+  "implementation": [
+    "src/db/SqliteOwnedPkRoomRepository.cpp",
+    "src/game/OwnedPkRound.cpp",
+    "src/game/OwnedPkRound.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedPkRoomState.h"
+  ],
+  "native_gap": "Conditional native count/target writers recovered but exact full basic/fresh0B producer and readiness remain open. Same-header/mask cross-cycle replay is indistinguishable without nonce.",
+  "rules": {
+    "source": "Explicit new Outbox/RoomState basic notification resolver uses actual staged post-Battle roster; no caller nextmask/initialmask/hittarget/counter guess. Same privateWritten/profile/order/pureRule/reentry fences, no inlinepump.",
+    "version": "Only explicit v2 initial-notification upgrade to canonical17field v3. v1/v2 exact latermask and serialization unchanged. Existing exact resultAPI rejects v3 rather than downgrade. No rawticket promotion.",
+    "cycle": "Actual two canonical0/14 actors derive allowedrelativebounds1/1; nonzero/distinctcontrollers/resourcesbounded, bothliving forActive. Currentcycle bounds/observations/battlerevision independent permanentfirstreceipts. Null distinctobserved0/0.",
+    "control": "Exact header/context, subsetbounds, ownresultsubmission and onceperviewer. Bothnotifications advance once/newtypedepoch. Receipts persistGrants/Collect/Ready until nextpairedresults; Terminal nullreceipts/no0B/nogrants.",
+    "transaction": "Repo independently rederives fullfollowingdoc fromactualnextcheckpoint, qualifies originalcompleteprivate currentprofile before firstupgradewrites, atomically stores checkpoint/round/twoviewresults. v3reads bindissuer/sameDB/readset/frozenactors/RNG/cycle andbothresultrows; everyreceipt requiresownsubmittedrow.",
+    "limits": "Rosterbounds are CUSTOM notification semantics, not predictedmask or attackauthority, originalnativeproducer/renderreadiness, universalreplayprevention, CNnativepolicy or wholeApphost.",
+    "phase": "Static source and instruction decoding/accounting only. No build/compiler/test/game/runtime/native/VM/emulator/assetcodec/gameDBSQL/migration/activation/deploy."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Remove guessed exactnextmask dependency from an explicit private TW basic result/notification path while preserving old exact contracts and native recovery gaps.",
+  "replacement": "Recover original producers/replaypolicy and close Application/Lua/idleoutput/skills/terminal/recovery owners before final native acceptance/release."
 }
 ]
 }

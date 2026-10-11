@@ -840,9 +840,9 @@ void SqliteOwnedPkRoomRepository::settle(const Ticket& ticket,const BattleCheckp
        (next.snapshot.state!=BattleState::Active&&next.snapshot.state!=BattleState::Finished))
         throw DatabaseError("PK paired settlement checkpoint/round mismatch");
     auto derived=expected_round;
-    if(!derived.results_issued(next.snapshot.revision,next_round.masks(),
-                               next.snapshot.state==BattleState::Finished)||
-       derived.document()!=next_round.document())
+    const bool advanced=next_round.result_notification_bounds()?derived.results_issued_notification(next.snapshot):
+        derived.results_issued(next.snapshot.revision,next_round.masks(),next.snapshot.state==BattleState::Finished);
+    if(!advanced||derived.document()!=next_round.document())
         throw DatabaseError("PK result phase did not derive from both collected intents");
     checkpoint_owned_pair(ticket.input(),expected,next);
     // Reject malformed/corrupt outcome and RNG before durable publication.
@@ -850,6 +850,10 @@ void SqliteOwnedPkRoomRepository::settle(const Ticket& ticket,const BattleCheckp
     replies_valid(replies);
     const auto before=BattleCheckpointCodec::encode(expected),after=BattleCheckpointCodec::encode(next);
     Transaction tx(db_);require_ticket(ticket,"active");
+    // Explicit v3 upgrade must qualify the complete original private graph
+    // BEFORE any durable writes, including its first v2->v3 transition.
+    if(next_round.result_notification_bounds())
+        (void)require_active_owned_profile_in_scope(ticket,expected);
     if(read_round(ticket).document()!=expected_round.document())
         throw DatabaseError("PK paired settlement phase is stale");
     Statement pending(db_,"SELECT count(*) FROM owned_pk_room_outbox WHERE room=? AND submitted=0");
@@ -908,6 +912,45 @@ OwnedPkRound SqliteOwnedPkRoomRepository::read_round(const Ticket& ticket){
        (!result.initial_notification_bounds()&&result.phase()==OwnedPkRound::Phase::InitialControl&&
         result.masks()!=ticket.input().initial_control_masks))
         throw DatabaseError("PK round immutable input binding mismatch");
+    if(result.result_notification_bounds()){
+        // CUSTOM-0122 v3 is an explicit complete owned-entry policy, not
+        // permission to upgrade historical exact/raw tickets by JSON alone.
+        const auto& input=ticket.input();const auto& entry=input.entry;
+        if(!issuer_||ticket.issuer_!=issuer_||!input.combat_sources||
+           !entry.owned_appearances()||!entry.owned_players()||!entry.owned_vitals()||
+           !entry.owned_initial_grants()||!entry.owned_initial_contexts()||!entry.waiting_control()||
+           result.result_notification_battle_revision()!=checkpoint.snapshot.revision)
+            throw DatabaseError("PK result notifications require the original complete private owned entry");
+        require_owned_main_sources(db_);
+        for(std::size_t viewer=0;viewer<2;++viewer)
+            if(!(*input.combat_sources)[viewer].uses_connection(db_)||
+               !(*entry.owned_appearances())[viewer].uses_connection(db_)||
+               !(*entry.owned_players())[viewer].uses_connection(db_)||
+               !(*entry.owned_vitals())[viewer].uses_connection(db_)||
+               !(*entry.owned_initial_grants())[viewer].uses_connection(db_)||
+               !(*entry.owned_initial_contexts())[viewer].uses_connection(db_))
+                throw DatabaseError("PK result notification sources use another connection");
+        validate(input);
+        if(readset(input)!=ticket.readset_)throw DatabaseError("PK result notification retained input changed");
+        (void)Battle::restore(checkpoint);
+        checkpoint_owned_pair(input,Battle(ticket.id(),input.actors,input.seed).checkpoint(),checkpoint);
+        for(const auto position:{0,14})
+            if(checkpoint.snapshot.state==BattleState::Active&&!checkpoint.snapshot.actors[position]->hp)
+                throw DatabaseError("PK active notification roster contains a defeated participant");
+        // These are current-cycle observations, independent of permanent
+        // first-entry receipts. A fast viewer needs only ITS full result write.
+        Statement rows(db_,"SELECT viewer,submitted FROM main.owned_pk_room_outbox WHERE room=? AND revision=?");
+        rows.bind_id(1,ticket.id());rows.bind_id(2,result.result_notification_battle_revision());
+        std::array<bool,2> seen{};
+        while(rows.row()){
+            const auto viewer=rows.number<std::uint8_t>(0);const auto submitted=rows.integer(1);
+            if(viewer>1||seen[viewer]||(submitted!=0&&submitted!=1)||
+               (result.result_notification_observations()[viewer]&&submitted!=1))
+                throw DatabaseError("PK notification receipt precedes its own result submission");
+            seen[viewer]=true;
+        }
+        if(!seen[0]||!seen[1])throw DatabaseError("PK result notification cycle lacks both result rows");
+    }
     return result;
 }
 OwnedPkRound SqliteOwnedPkRoomRepository::round(const Ticket& ticket){

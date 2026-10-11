@@ -31,6 +31,9 @@ public:
     const Masks& masks()const noexcept{return expected_masks_;}
     const std::optional<Masks>& initial_notification_bounds()const noexcept{return notification_bounds_;}
     const std::array<std::optional<std::array<std::uint16_t,2>>,2>& initial_notification_observations()const noexcept{return notification_observations_;}
+    const std::optional<Masks>& result_notification_bounds()const noexcept{return result_notification_bounds_;}
+    const std::array<std::optional<std::array<std::uint16_t,2>>,2>& result_notification_observations()const noexcept{return result_notification_observations_;}
+    std::uint64_t result_notification_battle_revision()const noexcept{return result_notification_battle_revision_;}
     const std::array<std::optional<Intent>,2>& intents()const noexcept{return intents_;}
     const std::array<bool,2>& grant_submissions()const noexcept{return grant_submissions_;}
     bool control(std::uint8_t viewer,const RecoveredBattleCommand::ControlRequest&);
@@ -39,6 +42,10 @@ public:
     // Trusted resolver must atomically pair this state transition with its
     // shared checkpoint/results. This function alone never settles a room.
     bool results_issued(std::uint64_t next_battle_revision,Masks,bool terminal);
+    // CUSTOM-0122 explicit v2->v3 result-notification policy. Bounds come
+    // from the actual post-settlement two-player roster, not native targets.
+    // Original exact-mask API cannot downgrade an opted-in v3 cycle.
+    bool results_issued_notification(const BattleSnapshot& actual_next);
     std::string document()const;
     static OwnedPkRound from_document(std::string_view);
     static bool masks_valid(const Masks&)noexcept;
@@ -50,9 +57,13 @@ private:
     std::optional<Masks> notification_bounds_;
     // Permanent first observations; null means unobserved, not a zero receipt.
     std::array<std::optional<std::array<std::uint16_t,2>>,2> notification_observations_{};
+    std::optional<Masks> result_notification_bounds_;
+    std::array<std::optional<std::array<std::uint16_t,2>>,2> result_notification_observations_{};
+    std::uint64_t result_notification_battle_revision_{};
     std::array<bool,2> controls_{},grant_submissions_{};
     std::array<std::optional<Intent>,2> intents_{};
     void bump();
+    bool results_issued_impl(std::uint64_t,Masks,bool);
     void validate()const;
 };
 }
