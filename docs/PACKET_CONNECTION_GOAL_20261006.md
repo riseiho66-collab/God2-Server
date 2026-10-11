@@ -3368,3 +3368,22 @@ Concrete actual C2S36 TimerNotification private route rejects before durable ope
 
 Independent static review rejected two original owner slices starting midinstruction (511797 and515858). Original seal/candidate1 retained immutable; corrected successor requalifies boundaries and replaces effective owner metrics, without new source/opcode/fullroute credit.
 有效owner metrics: {"qualified_spans": 19, "bytes": 2284, "sites": 692, "new_selected_spans_vs_qualified304": 15, "new_bytes": 2063, "new_sites": 627, "explicit_overlap_bytes": 221, "overlap_sites": 65, "data_slices": 5, "data_bytes": 26, "global_new_coverage_claim": false, "raw_seal_sha256": "72ca8138af90af6a551f74a2238fd753f343331b63bea96a56228ce289cb3437", "canonical_closure_sha256": "0e5f43aa9ae76d4d2da40369b542b4710ec7806a52ea00a4224be960c2a4d53a", "closure_members": 92, "closure_bytes": 619272}
+
+
+## 第306輪：原生36 producer生命週期與具體globalroot來源
+
+Exact4119B0 owner→worker14/CreateThread callback4117E0 is concrete, not successful live thread (return1 ignores creation result).411780(nonzero) sends36 immediately and updates last28 before gate1C; zero only disables36. Processing18/gate1C/unsigned elapsed≥raw10000 govern repeats; independent30 path uses primaryperiod5000. Selectedstop Sleep/deletelocks is not thread join.
+
+Actual36 payload84 comes from82 logicalbyte1 context_a through outer scratch28; payload88 comes from outerESP18, distinct from82 context_b atESP264. Constructor does not initialize84/88. Timestamp28/opaque payload kept distinct; no server clock/ACK/room/nonce semantics inferred.
+
+Actual globalroot5E00F8 constructor/init caller chain writesroot438 via40DD43 allocation4204→412D10→40DD87. Networkowner+40D4 worker is supplied owner through412E70→4119B0. Actualworldcallers passsame root; destructor clears438. Phase fresh read precedescalls, firsttwochildren directreadsets qualified, otherlifecycle/alias/children/concurrency remainopen.
+
+Actual Session1758..2003 frame→gamecallback→acceptedresponse→strand resume path has no automatic Timer acceptance; nohandler allows onlymovement/Tick; PKpending rejects beforecallback; Timer interrupts continuedskill. App installs orderedworldcallback, privatePK remainsunhosted; diagnostic fixture is not controlauthority.
+
+Current CUSTOM0111 first82 context uses checkedfutureSessiongeneration, context_b explicit1400. Native copy lineage is not originalnonce/timestamp authority. Source scope and bindingargument-list clerical corrections preserve originalsealed packages and qualifiedmetrics.
+
+timer23spans1117B/394sites，限定4sets比較new938B/336sites/overlap179B/58sites/imports119B；binding19spans4048B/1109sites，新local3707B/overlap341B，603B boundaryproof不給newcredit。Source-routing10完整captured inputs1041999B；scope successor/arg-order successor保留original封存並更正誤植，非新sourcebranch。完整metric/pins見本輪research doc與externalarchive。
+
+990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71，CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
+
+下一來源：Qualify actual outerESP18 writer and reached36 enable/disable caller lifecycle; originalserver36 controlpurpose/phase before privateconsumer; continue root/phase opaquechildcustody and originalcurrent6F issuer before actualApphost/pairedReturnHold/fullwrites/normalpublication.
