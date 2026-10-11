@@ -3062,3 +3062,14 @@ CUSTOM0114由原 repository 的真正私有 Ticket 讀取 active／finished room
 復綁不從 seed 重開、不重置 round／grant／intent／submitted，不自動重送或解除 Finished 鎖、不改 saved resources 或 Session。此來源只恢復仍保留真正 Ticket 的執行器房間；跨程序 restart 的 private Prepared／Observation／Session／initialization 重建、terminal saved settlement／native89／fresh generation worldreturn 與 Application hosting 仍待接，不能以 scalar／JSON 偽造憑證。
 
 本輪既有 C++ 修改3份／新增0份，CUSTOM111→112、mixed258→259、groups26不變；新增 retained recovery source1，新opcode0、新完整雙向路徑0。TW C2S74（具局部分支50／控制11／未接13），S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9，86selector7／case6，83action23／projection2。TW unhosted38關聯／去重34、CN93／71不變。全遊戲總量與完成率未知；未 build／compiler／test／runtime／native／VM／codec／game DB SQL／migration／activation／deployment。GitHub／Discord 通知另外記錄。
+
+
+## 第277輪：私有 PK 入場接到真正授權／結果封包寫出
+
+CUSTOM0115新增 opt-in outbox owner：同一 live Room 的原 Ticket incarnation，加上雙 Session 私有 Committed hold，在任一 entry release 前綁定；真正 full entry write 經其來源接受並清除 pending 後，以保留的私有 Written proof 接初次0B／35來源入口及後續封包。fast first0B 不要求另一端 Written，但兩端都不能 closing。新 Session PK sender 僅接受已有限定 standalone86/5 或一／兩組 scalar83／HP86（own MP可選）及 final88，不放寬原87／38／86-5技能 sender。
+
+明示 pump 讀取型別區分的 grant epoch／result revision，before write 與 full write completion 都重查完整 pending row、實際 checkpoint／round 和私有 Session incarnation，完整本機寫出才標記 submitted；不是 enqueue 或 native ACK。普通 callback response 先排入，之後才插 held frame；既收 prefix 在 release 前拒絕，快速回覆 bounded暫存直到交接完成。每viewer最多一個Flight，completion不auto-pump；5秒 deadline 及256 retained binding quota明示自訂。失敗關閉並保留room／locks／outboxes，不重送或偽造rollback；executor allocation失敗可能延後通知另一端，不能聲稱所有callback必達。
+
+本輪既有C++修改5份／新增1份，CUSTOM112→113、mixed259→260、groups26不變；新增限定publication來源1、新opcode0、新完整雙向路徑0。TW C2S候選156／世界parser74（局部來源50／控制11／未接13），S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9，86selector7／case6，83action23／projection2；TW來源關聯38／去重34、CN93／71不變。全遊戲總量與完成率未知。
+
+Application仍未安裝；完整Lua turn／skills／fresh projection、later grants／counter、terminal saved settlement／89／fresh generation worldreturn／reconnect／restart私有憑證仍待接。原生無epoch nonce，不能證明未接收TCP舊bytes不存在。保留TW／CN／web、共用64位數值與凍結功能；未build／compiler／test／runtime／native／VM／codec／gameDBSQL／migrate／activate／deploy。GitHub／Discord通知分開記錄。

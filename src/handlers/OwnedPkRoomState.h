@@ -22,6 +22,12 @@ public:
     OwnedPkRoomState& operator=(const OwnedPkRoomState&)=delete;
     Ticket prepare(Repository::Input input){return repository_.prepare(std::move(input));}
     bool current(const Ticket& ticket){return repository_.current(ticket);}
+    // CUSTOM-0115 identity only. The private live Room must own this original
+    // Ticket; an equal room/readset from another issuer is insufficient.
+    bool owns_ticket(const Ticket& ticket)const noexcept{
+        const auto at=rooms_.find(ticket.id());
+        return at!=rooms_.end()&&at->second.ticket.same_incarnation(ticket);
+    }
     void abandon(const Ticket& ticket)noexcept{repository_.abandon(ticket);}
     // Only server-side activation. Both entries become DURABLE outbox rows;
     // this does not change Session states or claim their queues accepted them.

@@ -55,6 +55,11 @@ public:
         bool operator==(const Ticket& other)const noexcept{
             return id_==other.id_&&readset_==other.readset_;
         }
+        // CUSTOM-0115 process-local capability identity, not serialized
+        // readset equality or permission to recover a replacement ticket.
+        bool same_incarnation(const Ticket& other)const noexcept{
+            return id_==other.id_&&issuer_==other.issuer_&&input_==other.input_;
+        }
     private:
         friend class SqliteOwnedPkRoomRepository;
         Ticket(std::uint64_t id,std::shared_ptr<const Input> input,std::string readset,

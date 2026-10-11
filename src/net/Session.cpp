@@ -18,6 +18,10 @@
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include "protocol/RecoveredBattleBootstrap.h"
 #include "protocol/RecoveredBattlePlayerAppearance.h"
+#include "protocol/RecoveredBattlePlayerGrant.h"
+#include "protocol/RecoveredBattleAttackPresentation.h"
+#include "protocol/RecoveredBattleVitals.h"
+#include "protocol/RecoveredBattleVitalsBatch.h"
 #include <asio/bind_cancellation_slot.hpp>
 #include <asio/cancellation_signal.hpp>
 #include <spdlog/spdlog.h>
@@ -151,6 +155,7 @@ struct Session::NativePkEntryHold::Data {
     const std::weak_ptr<NativePkEntryOwner> source;
     std::atomic<Phase> phase{Phase::Preparing};
     std::atomic<bool> held_notified{false},completing{false},clean_abort{false};
+    std::atomic<bool> written_accepted{false}; // Only actual game completion may set true.
     Data(std::weak_ptr<Session> s,std::uint64_t id,asio::any_io_executor executor,
          NativePkEntryRequest r,NormalWorldInitialization init,std::shared_ptr<const void> c,
          std::shared_ptr<const WorldDeliveryIdentity> identity,
@@ -264,9 +269,14 @@ struct Session::Impl {
         Session::NativeBattleSkill delivery;
         std::shared_ptr<const CommonWorldIdentity> common;
         std::weak_ptr<Session::NativeBattleSkillPublicationOwner> source;
+        std::shared_ptr<NativePkEntryHold::Data> pk_entry; // Absent for unchanged legacy sender.
         std::atomic<bool> completing{false};
     };
     std::atomic<std::shared_ptr<NativeBattlePending>> native_battle_pending;
+    // New PK output only: wait until ordinary game callback ACK has queued
+    // its response before inserting the held output. Network strand owns both.
+    std::shared_ptr<NativeBattlePending> native_pk_output_staged;
+    std::shared_ptr<Reservation> native_pk_output_reservation;
     std::atomic<std::shared_ptr<NativePkEntryHold::Data>> native_pk_pending;
     // Strand-only staging until the accepted world's callback ACK has queued
     // its ordinary response. Never put that response behind the held entry.
@@ -528,13 +538,14 @@ struct Session::Impl {
             id==delivery.session && common_world_identity.load()==pending->common &&
             pending->common && pending->common->account==delivery.account &&
             pending->common->character==delivery.character &&
-            pending->common->generation==delivery.common_generation && !common_entry_identity.load();
+            pending->common->generation==delivery.common_generation && !common_entry_identity.load() &&
+            (!pending->pk_entry || native_pk_written_transport_current(pending->pk_entry));
     }
     void complete_native_battle(const std::shared_ptr<NativeBattlePending>& pending,bool written) {
         if(!pending || native_battle_pending.load()!=pending || pending->completing.exchange(true))return;
         // The weak source is locked and released ONLY on game, including the
         // last strong reference. Network copies retain no source callback.
-        asio::post(game,[self=owner.shared_from_this(),pending,written] {
+        try {asio::post(game,[self=owner.shared_from_this(),pending,written] {
             auto& s=*self->impl_;bool accepted=false;
             const auto delivery=pending->delivery;
             {
@@ -548,11 +559,12 @@ struct Session::Impl {
                         self->account_id==delivery->account && self->character_id==delivery->character;
                 }catch(...) {}
             }
-            asio::post(s.strand,[self,pending,accepted] {
+            try {asio::post(s.strand,[self,pending,accepted] {
                 auto& s=*self->impl_;
                 const bool final_current=s.native_battle_current(pending);
                 auto expected=pending;
                 if(!s.native_battle_pending.compare_exchange_strong(expected,{}))return;
+                if(pending->pk_entry)s.native_pk_timer.cancel();
                 if(!accepted || !final_current || s.closing || s.close_requested.load()) {
                     s.fail("Native battle skill publication completion rejected");return;
                 }
@@ -561,12 +573,19 @@ struct Session::Impl {
                 if(s.native_battle_read_paused && !s.game_busy && !s.read_inflight) {
                     s.native_battle_read_paused=false;s.resume_world_input(bool(s.skill_deadline));
                 }
-            });
-        });
+            });}catch(...) {
+                if(!pending->pk_entry)throw; // Preserve legacy sender failure behavior.
+                s.close_requested.store(true); // Strand deadline retires this exact pending.
+            }
+        });}catch(...) {
+            if(!pending->pk_entry)throw;
+            auto expected=pending;native_battle_pending.compare_exchange_strong(expected,{});
+            native_pk_timer.cancel();fail("Native PK output completion handoff failed");
+        }
     }
     void release_native_battle(const std::shared_ptr<NativeBattlePending>& pending,
         const std::shared_ptr<std::vector<std::uint8_t>>& bytes) {
-        asio::post(game,[self=owner.shared_from_this(),pending,bytes] {
+        try {asio::post(game,[self=owner.shared_from_this(),pending,bytes] {
             auto& s=*self->impl_;bool accepted=false;
             {
                 const auto source=pending->source.lock();
@@ -578,7 +597,7 @@ struct Session::Impl {
                         self->character_id==delivery->character;
                 }catch(...) {}
             }
-            asio::post(s.strand,[self,pending,bytes,accepted] {
+            try {asio::post(s.strand,[self,pending,bytes,accepted] {
                 auto& s=*self->impl_;
                 if(s.native_battle_pending.load()!=pending || pending->completing.load())return;
                 if(!accepted || s.closing || !s.native_battle_current(pending)) {
@@ -590,9 +609,20 @@ struct Session::Impl {
                 if(found==s.writes.end() || !found->held || found->bytes!=bytes) {
                     s.fail("Native battle held frame identity mismatch");return;
                 }
+                if(pending->pk_entry && (!s.world_input.empty() || !s.world_pending_records.empty() ||
+                    s.skill_deadline || s.native_skill_generation)){
+                    s.fail("Native PK output acquired input before held write release");return;
+                }
                 found->held=false;if(found==s.writes.begin())s.write();
-            });
-        });
+            });}catch(...) {
+                if(!pending->pk_entry)throw;
+                s.close_requested.store(true); // Keep exact pending for bounded strand retirement.
+            }
+        });}catch(...) {
+            if(!pending->pk_entry)throw;
+            auto expected=pending;native_battle_pending.compare_exchange_strong(expected,{});
+            native_pk_timer.cancel();fail("Native PK output qualification handoff failed");
+        }
     }
     bool native_pk_transport_current(const std::shared_ptr<NativePkEntryHold::Data>& data,bool committed)const {
         if(!data || native_pk_pending.load()!=data || close_requested.load() ||
@@ -607,6 +637,26 @@ struct Session::Impl {
             owner.state()==(committed?SessionState::InBattle:SessionState::InWorld) &&
             owner.battle_generation()==r.prebattle_generation+(committed?1u:0u);
     }
+    bool native_pk_written_transport_current(const std::shared_ptr<NativePkEntryHold::Data>& data)const {
+        // Atomic/immutable transport material only: callable from network.
+        // The old InWorld initialization-current and native_pk_pending==data
+        // conditions must not qualify a post-entry battle publication.
+        if(!data || !data->written_accepted.load() || native_pk_pending.load() ||
+           data->phase.load()!=NativePkEntryHold::Data::Phase::Written ||
+           data->session.lock().get()!=&owner || data->session_id!=id || data->game!=game || !data->battle_identity ||
+           close_requested.load() || mode!=ProtocolMode::God2CharacterConnection ||
+           !owner.recovered_world_ready() || common_entry_identity.load() ||
+           normal_initialization.load()!=data->initialization.data_ ||
+           !data->initialization.entry_written() ||
+           world_delivery_identity.load()!=data->battle_identity)return false;
+        const auto common=common_world_identity.load();const auto& r=data->request;
+        return common && common.get()==data->common.get() &&
+            common->account==r.account && common->character==r.character && common->generation==r.common_generation &&
+            data->battle_identity->account==r.account && data->battle_identity->character==r.character &&
+            data->battle_identity->world_generation==r.world_generation &&
+            data->battle_identity->battle_generation==r.prebattle_generation+1 &&
+            owner.state()==SessionState::InBattle && owner.battle_generation()==r.prebattle_generation+1;
+    }
     void complete_native_pk(const std::shared_ptr<NativePkEntryHold::Data>& data,bool written) {
         if(!data || native_pk_pending.load()!=data || data->completing.exchange(true))return;
         if(!written && !data->clean_abort.load())data->phase.store(NativePkEntryHold::Data::Phase::Failed);
@@ -616,11 +666,20 @@ struct Session::Impl {
             // Strong source reference and callback destruction stay on game.
             if(const auto source=data->source.lock())try {
                 if(!had_hold)source->native_pk_entry_held(*self,std::nullopt);
-                else accepted=source->native_pk_entry_written(*self,NativePkEntryHold(data),
-                    written && s.native_pk_transport_current(data,true) &&
-                    data->phase.load()==NativePkEntryHold::Data::Phase::Written &&
-                    self->account_id==data->request.account && self->character_id==data->request.character);
+                else {
+                    const bool actual_written=written && s.native_pk_transport_current(data,true) &&
+                        data->phase.load()==NativePkEntryHold::Data::Phase::Written &&
+                        s.world_delivery_identity.load()==data->battle_identity &&
+                        self->account_id==data->request.account && self->character_id==data->request.character;
+                    accepted=source->native_pk_entry_written(*self,NativePkEntryHold(data),actual_written);
+                    accepted=accepted && actual_written && s.native_pk_transport_current(data,true) &&
+                        data->phase.load()==NativePkEntryHold::Data::Phase::Written &&
+                        s.world_delivery_identity.load()==data->battle_identity &&
+                        self->account_id==data->request.account && self->character_id==data->request.character;
+                }
             }catch(...) {accepted=false;}
+            // Not usable until the exact pending entry is cleared on strand.
+            data->written_accepted.store(accepted);
             try {asio::post(s.strand,[self,data,written,accepted] {
                 auto& s=*self->impl_;
                 auto expected=data;
@@ -682,9 +741,28 @@ struct Session::Impl {
             });
         }catch(...) {fail("Native PK hold allocation or game handoff failed");}
     }
+    void stage_native_pk_output(){
+        const auto pending=native_pk_output_staged;
+        if(!pending || native_battle_pending.load()!=pending || pending->completing.load())return;
+        if(game_busy)return; // Actual ordinary response ACK must enqueue first.
+        if(!native_battle_current(pending) || closing || !native_pk_output_reservation ||
+           c2s0002_state!=C2S0002State::WorldTailAccepted || !world_input.empty() ||
+           !world_pending_records.empty() || skill_deadline || native_skill_generation){
+            fail("Stale staged native PK output or incomplete input prefix");return;
+        }
+        try{
+            auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(pending->delivery->logical));
+            if(bytes->size()>max_buffer-write_bytes || writes.size()>=max_writes){
+                fail("Native PK output queue limit");return;
+            }
+            writes.push_back({bytes,std::move(native_pk_output_reservation),false,true,{},{},pending});
+            write_bytes+=bytes->size();native_pk_output_staged.reset();
+            release_native_battle(pending,bytes);
+        }catch(...){fail("Native PK output staged encoding or handoff failed");}
+    }
     void read() {
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
-        if(native_battle_pending.load()) {native_battle_read_paused=true;return;}
+        if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
         if (closing || game_busy) return;
         native_battle_read_paused=false;
         read_inflight=true;
@@ -1487,7 +1565,7 @@ struct Session::Impl {
     }
     void resume_world_input(bool awaiting_skill=false) {
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
-        if(native_battle_pending.load()) {native_battle_read_paused=true;return;}
+        if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
         if(world_input.size()>=2) {
             const auto length=static_cast<std::size_t>(world_input[0])+256u*world_input[1];
             if(length<5 || length>RecoveredWorldRecords::max_logical_size+3 ||
@@ -1519,7 +1597,7 @@ struct Session::Impl {
         }
         if(bytes.size()>16384-world_input.size()) { fail("World input limit");return; }
         world_input.insert(world_input.end(),bytes.begin(),bytes.end());
-        if(native_battle_pending.load()) {native_battle_read_paused=true;return;}
+        if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
         auto records=std::move(world_pending_records);
         world_pending_records.clear();
         const auto previously_staged=records.size();
@@ -1846,7 +1924,8 @@ struct Session::Impl {
                 if(s.writes.front().native_battle) {
                     const auto pending=s.writes.front().native_battle;
                     if(s.writes.front().held || s.writes.front().bytes!=bytes ||
-                       pending->completing.load() || !s.native_battle_current(pending)) {
+                       pending->completing.load() || !s.native_battle_current(pending) ||
+                       (pending->pk_entry && transferred!=bytes->size())) {
                         s.fail("Native battle actual write identity mismatch");return;
                     }
                     self->native_battle_skill_written_.store(pending->delivery);
@@ -1929,6 +2008,7 @@ struct Session::Impl {
         world_pending_records.clear();skill_deadline.reset();native_skill_generation.reset();
         asio::error_code ignored;
         socket.close(ignored);
+        native_pk_output_staged.reset();native_pk_output_reservation.reset();
         if(const auto pending=native_pk_pending.load())complete_native_pk(pending,false);
         if(const auto pending=native_battle_pending.load())complete_native_battle(pending,false);
         if(active_native_list)complete_native_list(active_native_list,false);
@@ -2540,6 +2620,102 @@ bool Session::native_pk_entry_committed_current(const NativePkEntryHold& hold)co
     return impl_->native_pk_transport_current(data,true) &&
         impl_->world_delivery_identity.load()==data->battle_identity &&
         account_id==data->request.account && character_id==data->request.character;
+}
+bool Session::native_pk_entry_written_current(const NativePkEntryHold& hold)const noexcept {
+    const auto data=hold.data_;
+    // Private immutable owner/executor check BEFORE game-owned IDs.
+    if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
+       data->session.lock().get()!=this)return false;
+    return impl_->native_pk_written_transport_current(data) &&
+        account_id==data->request.account && character_id==data->request.character;
+}
+void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
+        std::weak_ptr<NativeBattleSkillPublicationOwner> source){
+    // CUSTOM-0115 explicit exact accepted entry. Raw output is never room,
+    // grant/skill or current checkpoint authority; its game owner must prove it.
+    if(!native_pk_entry_written_current(hold))
+        throw std::invalid_argument("Native PK output requires its actual accepted written entry");
+    const auto data=hold.data_;const auto common=impl_->common_world_identity.load();
+    if(!delivery || source.expired() || !delivery->sequence || delivery->session!=id() ||
+       delivery->account!=data->request.account || delivery->character!=data->request.character ||
+       delivery->common_generation!=data->request.common_generation ||
+       delivery->battle_generation!=data->request.prebattle_generation+1 ||
+       impl_->common_ready_thread!=std::this_thread::get_id() || !common)
+        throw std::invalid_argument("Native PK output recipient identity mismatch");
+    const auto records=RecoveredTaiwanServerRecords::read(delivery->logical);
+    bool valid=false;
+    if(records && records->size()==1 && records->front().opcode==0x86 &&
+       RecoveredBattlePlayerGrant::parse(records->front().bytes))valid=true;
+    else if(records && records->size()>=3 && records->back().opcode==0x88 &&
+            RecoveredBattleVitalsBatch::parse_logical(records->back().bytes)){
+        // Current RecoveredPkActionProjection: one/two scalar action groups,
+        // each [own MP?],83,matching target HP; one final friendly bulk.
+        std::size_t at=0;unsigned groups=0,seen=0;valid=true;
+        const auto end=records->size()-1;
+        while(at<end){
+            bool own_mp=false;
+            if((*records)[at].opcode==0x86){
+                const auto mp=RecoveredBattleVitals::parse_logical((*records)[at].bytes);
+                if(!mp || mp->resource()!=RecoveredBattleVitals::Resource::Mp || mp->position()!=0){valid=false;break;}
+                own_mp=true;++at;
+            }
+            if(at>=end){valid=false;break;}
+            const auto& animation=(*records)[at++];
+            const auto attack=RecoveredBattleAttackPresentation::parse(animation.bytes);
+            if(!attack || (attack->source()!=0&&attack->source()!=14) ||
+               (animation.bytes[5]&~1u)||animation.bytes[6]||(animation.bytes[7]&~1u)||animation.bytes[8] ||
+               (own_mp&&attack->source()!=0) || at>=end){valid=false;break;}
+            const auto side=static_cast<unsigned>(attack->source()/14);
+            if(seen&(1u<<side)){valid=false;break;}seen|=1u<<side;
+            const auto hp=RecoveredBattleVitals::parse_logical((*records)[at++].bytes);
+            if(!hp || hp->resource()!=RecoveredBattleVitals::Resource::Hp ||
+               hp->position()!=14*(1-side) || ++groups>2){valid=false;break;}
+        }
+        valid=valid&&at==end&&groups>=1;
+    }
+    if(!valid)throw std::invalid_argument("Native PK output requires standalone primary grant or qualified scalar result records");
+    const auto charge=delivery->logical.size()+3;
+    auto budget=impl_->budget;std::shared_ptr<Reservation> reservation;
+    {
+        std::lock_guard lock(budget->mutex);
+        if(charge<=max_buffer-budget->bytes && budget->count<max_writes){
+            reservation=std::make_shared<Reservation>(budget,charge);
+            budget->bytes+=charge;++budget->count;
+        }
+    }
+    if(!reservation)throw std::length_error("Native PK output queue reservation failed");
+    auto pending=std::make_shared<Impl::NativeBattlePending>();
+    pending->delivery=std::move(delivery);pending->common=common;
+    pending->source=std::move(source);pending->pk_entry=data;
+    std::shared_ptr<Impl::NativeBattlePending> absent;
+    if(!impl_->native_battle_pending.compare_exchange_strong(absent,pending))
+        throw std::logic_error("Native battle publication already pending");
+    try {asio::post(impl_->strand,[self=shared_from_this(),pending,reservation=std::move(reservation)]()mutable{
+        auto& s=*self->impl_;
+        if(s.native_battle_pending.load()!=pending || pending->completing.load())return;
+        try{
+            s.native_pk_timer.expires_after(close_timeout);
+            s.native_pk_timer.async_wait([self,pending](const asio::error_code& ec){
+                auto& s=*self->impl_;
+                if(ec || s.native_battle_pending.load()!=pending)return;
+                // Schedule at most one failure completion if the game executor
+                // can accept it. Never wait forever for a delayed final post.
+                s.complete_native_battle(pending,false);
+                auto expected=pending;s.native_battle_pending.compare_exchange_strong(expected,{});
+                s.fail("Native PK output hold/write completion deadline expired");
+            });
+            s.native_pk_output_staged=pending;s.native_pk_output_reservation=std::move(reservation);
+            s.native_battle_read_paused=true;s.stage_native_pk_output();
+        }catch(...){
+            // Timer allocation can fail before any bounded callback exists.
+            s.complete_native_battle(pending,false);
+            auto expected=pending;s.native_battle_pending.compare_exchange_strong(expected,{});
+            s.native_pk_timer.cancel();s.fail("Native PK output encoding/timer/handoff failed");
+        }
+    });}catch(...){
+        auto expected=pending;impl_->native_battle_pending.compare_exchange_strong(expected,{});
+        throw; // No strand acceptance; source retains its durable row unsubmitted.
+    }
 }
 bool Session::commit_native_pk_entry(const NativePkEntryHold& hold)noexcept {
     if(!native_pk_entry_current(hold))return false;

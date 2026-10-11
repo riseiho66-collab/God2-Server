@@ -4281,6 +4281,42 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Recover one retained shared Battle from real durable checkpoint/round/full outbox without losing private input provenance or creating a second mutable owner.",
   "replacement": "Replace custom recovery only with build-matched original policy; implement actual Application/Session lifecycle and restart authority separately before full testing and activation."
+},
+{
+  "id": "CUSTOM-0115",
+  "name": "Exact accepted-entry Session transport for retained PK grant and result outboxes",
+  "authority": "CUSTOM_OPT_IN_DURABLE_ROW_AND_PRIVATE_SESSION_OUTPUT_LIFECYCLE_NOT_ORIGINAL_SERVER_OR_NATIVE_ACK",
+  "implementation": [
+    "src/net/Session.h",
+    "src/net/Session.cpp",
+    "src/db/SqliteOwnedPkRoomRepository.h",
+    "src/handlers/OwnedPkRoomState.h",
+    "src/handlers/OwnedPkEntryAdmission.h",
+    "src/handlers/OwnedPkOutboxPublication.h"
+  ],
+  "native_image": "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+  "native_gap": "Original server output scheduling/recovery, native ACK, learned skills/Lua, later-round grants and terminal return remain unrecovered. Native worker277 audits before-only C++ lifecycle; it does not qualify new native wire or execution.",
+  "rules": {
+    "entry_proof": "Private original EntryData Written plus actual full local write and actual source callback accepted=true; pending entry MUST be cleared. Check exact Session/game/thread, common pointer/account/character/common generation, original nonretired Written initialization pointer, preallocated battle identity, PK generation and current InBattle generation. No old InWorld normal-current or pending==data substitute. No actor/room/skill permission from parser or sourceAccepted alone.",
+    "binding": "Optional Admission Bind after one durable activate and both exact private Session commits, before either entry release. Driver retains genuine Ticket/private input incarnation plus both actual Sessions and Committed holds/full prepared entries/common leases. Exact same RoomState Ticket gate, one binding per Session. Preallocated publication with no send/DB mutation. Absence leaves legacy paths unchanged.",
+    "durable_owner": "Explicit owner pump builds immutable per-view Flight; compare exact room/viewer/session/PKgeneration/battlegeneration/fullbytes and current checkpoint/round before write and after full write. Grant epoch and result revision remain distinct. Only exact accepted full async_write and durable row fence mark grant_submitted or submitted. Entry revision1 remains Admission-owned. No reset/resend/ACK or network-atomicity claim.",
+    "grammar": "New sender only standalone parsed17byte primary own0 86/5, or one/two [optional own0 MP] then scalar83 selector1/3 then matching opposite HP groups plus one final121byte88. Source/target0/14, source once each, slot0 masks, MP source0 only. Complete bytes preserved, no invented opaque defaults. Old skill sender87/38/86-5 grammar/behavior unchanged absent new PK proof. No82/1C/89 or arbitrary83 authority.",
+    "ordering": "PK-only staged reservation waits actual game_busy callback ACK and ordinary response enqueue before inserting held output. Before stage/release reject old partial/staged input and skill prefix. During held/completion retain existing bounded append+pause, allowing after-release fast responses without parsing until completion/pending clear. Unreceived stale TCP bytes lack native nonce; no universal input freshness claim.",
+    "completion": "Atomic transport-only proof on strand; game-owned fields/hooks on actual game executor only. Exact full transfer/queue frame/pending/immutable written delivery required. Source acceptance then final pending CAS clear before resuming. Entry/output callbacks never auto-pump; later actual owner dispatch required. Own first0B may proceed after own entry accepted while peer entry completion remains pending, existing durable own-row barrier retained.",
+    "failure": "New PK-only 5second close_timeout deadline and conditional post/timer failure guards prevent immortal pending; delayed callbacks reject retired identity, not guaranteed executed by deadline. Normal source failure closes both and retains durable room/locks/submitted values. Executor allocation can prevent game-owner peer notification; only local close/strand retirement assured there. No rollback of partial I/O or already-marked owner rows.",
+    "capacity": "Driver retains up to256 bindings including failed owners, no automatic terminal removal; capacity may exhaust until real lifecycle recovery exists. Existing1MiB/256 write budget retained. Explicit custom resource bounds, not native gameplay caps.",
+    "scope": "One bounded output publication path, no Application hosting/activation, new opcode, completed whole-game route or completion percentage. Full result provenance, learned skills/Lua, later grants, terminal saves/world return, restart/private Ticket/Session recovery and nonce authority remain separate. Borrowed owners/repositories must live/drain on same actual game executor.",
+    "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment. Frozen auth/chat/IME/fonts/conversion/clients/CN/web and shared64 numeric scope unchanged."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Consume actual retained durable grant/result rows through exact accepted-entry private Session proofs and full local-write callbacks, without broadening the legacy skill sender or pretending queue intention is completion.",
+  "replacement": "Replace custom scheduling only with build-matched original evidence; install genuine Application owners and complete all remaining source/lifecycle paths before comprehensive testing and activation."
 }
 ]
 }

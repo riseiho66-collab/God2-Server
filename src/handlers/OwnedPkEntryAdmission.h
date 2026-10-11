@@ -26,13 +26,20 @@ public:
     // It cannot substitute caller statistics, an ID or a fabricated bool.
     using Prepare=std::function<std::optional<Ticket>(const Invitations::Pair&)>;
     using Sessions=std::function<std::shared_ptr<Session>(std::uint64_t)>;
+    // CUSTOM-0115 optional output/input owner binding BEFORE either entry is
+    // released. Only stores exact committed capabilities; never pumps output
+    // here or waits for both written callbacks to find a fast peer's first0B.
+    using Bind=std::function<bool(const Ticket&,const std::array<std::shared_ptr<Session>,2>&,
+                                 const std::array<Session::NativePkEntryHold,2>&)>;
     OwnedPkEntryAdmission(OwnedPkRoomState& rooms,Prepare prepare,Sessions sessions,
                           Invitations::Resolve peers,
                           std::shared_ptr<cn::SharedActorVisibility> world_visibility = {},
-                          std::shared_ptr<SharedWorldPresence> world_presence = {})
+                          std::shared_ptr<SharedWorldPresence> world_presence = {},
+                          Bind bind = {})
         :rooms_(rooms),prepare_(std::move(prepare)),sessions_(std::move(sessions)),
          peers_(std::move(peers)),world_visibility_(std::move(world_visibility)),
          world_presence_(std::move(world_presence)),
+         bind_(std::move(bind)),
          lifetime_(std::make_shared<Lifetime>(Lifetime{this})){
         if(bool(world_visibility_)!=bool(world_presence_) ||
            (world_visibility_ && !world_visibility_->owns_presence(world_presence_)))
@@ -139,6 +146,7 @@ private:
     Prepare prepare_;Sessions sessions_;Invitations::Resolve peers_;
     std::shared_ptr<cn::SharedActorVisibility> world_visibility_;
     std::shared_ptr<SharedWorldPresence> world_presence_;
+    Bind bind_;
     std::shared_ptr<Lifetime> lifetime_;
     std::map<std::uint64_t,std::shared_ptr<Attempt>> attempts_;
     const std::thread::id thread_=std::this_thread::get_id();
@@ -236,6 +244,19 @@ private:
                 !attempt.sessions[0]->native_pk_entry_committed_current(*attempt.holds[0]) ||
                 !attempt.sessions[1]->native_pk_entry_committed_current(*attempt.holds[1]))){
                 cancel(attempt,true);return;
+            }
+            if(bind_){
+                if(attempt.stage!=Stage::Active ||
+                   !attempt.sessions[0]->native_pk_entry_committed_current(*attempt.holds[0]) ||
+                   !attempt.sessions[1]->native_pk_entry_committed_current(*attempt.holds[1]) ||
+                   !bind_(attempt.ticket,attempt.sessions,{*attempt.holds[0],*attempt.holds[1]}) ||
+                   (world_visibility_ && (!attempt.departure ||
+                    !world_visibility_->taiwan_pk_departure_current(*attempt.departure))) ||
+                   attempt.stage!=Stage::Active ||
+                   !attempt.sessions[0]->native_pk_entry_committed_current(*attempt.holds[0]) ||
+                   !attempt.sessions[1]->native_pk_entry_committed_current(*attempt.holds[1])){
+                    cancel(attempt,true);return;
+                }
             }
             attempt.sessions[0]->release_native_pk_entry(*attempt.holds[0]);
             attempt.sessions[1]->release_native_pk_entry(*attempt.holds[1]);

@@ -350,6 +350,13 @@ public:
     // CUSTOM-0113 exact private post-commit/pre-release fence. This does not
     // authorize a world return, prove socket completion or acknowledge a client.
     bool native_pk_entry_committed_current(const NativePkEntryHold&)const noexcept;
+    // CUSTOM-0115 actual full entry write accepted by its exact source owner,
+    // after the entry pending handoff clears. No native ACK/turn permission.
+    bool native_pk_entry_written_current(const NativePkEntryHold&)const noexcept;
+    // Separate retained-entry PK output only; old skill sender grammar stays
+    // unchanged. Exact durable grant/result authority belongs to weak owner.
+    void send_native_pk_output(const NativePkEntryHold&,NativeBattleSkill,
+        std::weak_ptr<NativeBattleSkillPublicationOwner>);
     // Call ONLY after one durable shared activation. No allocation/callback;
     // failure then requires persistent recovery and both peers closed.
     bool commit_native_pk_entry(const NativePkEntryHold&)noexcept;
