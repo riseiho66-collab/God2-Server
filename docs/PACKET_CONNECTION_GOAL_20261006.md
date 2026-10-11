@@ -3281,3 +3281,12 @@ CUSTOM0134 接實際secondaccepted→296私有pairedreturnplan→現有同Presen
 稽核39members／31fullrawinputs明確限讀範圍：Application診斷模板fullspawn不能提升正式來源，21B71/72DB不是6F，2A/DA不構成81B，entered lists已move、main沒opt-in。故本輪接真正first-name來源，不冒稱完整6F/resource/text2/3/selection issuer已完成。無新的native解碼覆蓋或原生封包；無modelmerge/send/liveData/WORLD/identity/markerremove/readresume/unlock/App。
 
 既有C++2改／新增0；限定commonstoredreturnnamebranch1，mixed278→279／CUSTOM131→132／groups26不變，新opcode0／完整雙向route0。TW C2S156／worldparser74（限定50／控制11／未接13）；S2C252（230fixed／22variable）／reply48／push11／gated4／unclassified117；battle110／specialized9／86selectors7／cases6／83actions23／projection2不變。TWunhostedchains3／bindings38unique34；CNchains35／bindings93unique71；CN歷史C2S156／S2Cphaseopcode280／length253不同單位，本輪CN增量0。TW與全遊戲分母／百分比null。989capturedsrc是byteintegrity，不是989人工審閱。Webv70..90仍peer metadata未新ACK／聯合驗收／root執行。下步完整current定向actor/resource/alltext/selectionissuer、pairedfinalconsume/outputcompletion、同伴currentHP/maxHP authority、durableFinishedrelease/recovery、App。PHASE1無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。
+
+
+## 第298輪：完整6F欄位與當前來源生命週期
+
+本輪限定靜態原生恢復：9選取code spans3857B／1286sites，其中完整6F與insert重用292／296；新選取7下游函式1822B／628sites。原始PE與所選mapped bytes相等，不宣稱全image等價。恢復packedfirstDWORD全部位元切片／secondDWORD旗標及status、actor+220 exactcopy；bit15反相經actualID lookup到姓名顏色分支，status12／13影響外觀palette／顯示。這是呈現依賴，非PK／權限規則。DWORD9、secondDWORD低5bits、DWORD17的真正來源／同actor下游及第三文字語義仍OPEN，不補零、不拿配點WORD／guildname代替。wholetext+220搜尋只作lead定位，Main/local同偏移排除，無globalabsence宣稱。
+
+具體來源稽核找到entry writer與move/equipment不同mutationlineage：position commit及DA收據不更新原2A，Session immutableoriginalEntry＋effectivebattle只證owner/generation。OwnedTaiwanPkAppearanceSource167..195仍要求originalentry與lease座標一致，現有來源有stationaryentry限制；不放寬guard冒充完整currentmodel。下步完整issuer須聯結currentposition、jointcurrentequipment、全部opaque/text/resource與directedaudience實際來源，不再加unfedcallback。
+
+既有C++0改／新增0；新sourcebranch0／opcode0／完整雙向route0；mixed279／CUSTOM132／groups26不變。TW C2S156／worldparser74（limited50／control11／unconnected13），S2C252（fixed230／variable22）／reply48／push11／gated4／unclassified117；battle110／specialized9，86selectors7／cases6，83actions23／projection2不變。TWunhostedchains3／bindings38unique34；CNchains35／bindings93unique71，CN歷史C2S156／S2Cphaseopcode280／length253不同scope；本輪CN增量0。完整遊戲分母／TW與全遊戲百分比null。989sourcebytecapture不等於989人工審閱。新native/source evidence各自seal與boundedreadscope，凍結功能及CN/web保留。無build/compiler/tests/runtime/nativeexecution/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。
