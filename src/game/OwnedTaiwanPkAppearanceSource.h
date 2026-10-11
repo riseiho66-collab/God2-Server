@@ -44,6 +44,8 @@ public:
         bool uses_connection(const sqlite3*)const noexcept;
         // Identity only; no new qualifier supplied by the caller.
         bool owns_characters(const SqliteRecoveredCharacterRepository&)const noexcept;
+        // CUSTOM-0113 identity only; valid independently of a live world phase.
+        bool owns_presence(const std::shared_ptr<SharedWorldPresence>&)const noexcept;
         // CUSTOM-0106 RESERVED read-only SQL fence, never a live Session grant.
         // No joint Current/Session/presence callbacks or nested read transaction.
         bool stored_current_in_room_transaction(sqlite3*)const;
@@ -130,6 +132,10 @@ private:
 };
 inline bool OwnedTaiwanPkAppearanceSource::Observation::current()const{
     return state_->current(*material_);
+}
+inline bool OwnedTaiwanPkAppearanceSource::Observation::owns_presence(
+    const std::shared_ptr<SharedWorldPresence>& presence)const noexcept{
+    return state_ && presence && state_->presence==presence;
 }
 inline bool OwnedTaiwanPkAppearanceSource::Observation::uses_connection(const sqlite3* db)const noexcept{
     return state_->characters.uses_connection(db);

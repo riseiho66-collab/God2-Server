@@ -4213,6 +4213,42 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Connect the existing private complete owned participant/entry sources to a real Prepare callback and durable room reservation without arbitrary caller views or invented writer provenance.",
   "replacement": "Replace custom field policies only with build-matched original producer evidence, wire genuine Application owners and complete all remaining routes before comprehensive testing/activation."
+},
+{
+  "id": "CUSTOM-0113",
+  "name": "Paired Taiwan PK visibility departure preserving common entry transport identity",
+  "authority": "CUSTOM_OPT_IN_VISIBILITY_LIFECYCLE_NOT_ORIGINAL_SERVER_TIMING_OR_ATOMIC_NETWORK_ADMISSION",
+  "implementation": [
+    "src/cn/world/SharedActorVisibility.h",
+    "src/cn/world/SharedActorVisibility.cpp",
+    "src/net/Session.h",
+    "src/net/Session.cpp",
+    "src/handlers/OwnedPkEntryAdmission.h",
+    "src/game/OwnedTaiwanPkAppearanceSource.h"
+  ],
+  "native_image": "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+  "native_gap": "Original PK departure/return policy unrecovered; actual stored native73 reused. Application hosting, skills, turns, settlement, terminal return and recovery remain open.",
+  "rules": {
+    "opt_in": "Paired optional Visibility/Presence dependencies or neither; exact Visibility owns Presence and private267 appearance owns same Presence beforeholding. SamePresence does not prove globally unique Visibility; actual Application selection remains trusted. Legacy absence/defaults unchanged.",
+    "private_transport": "Private paired receipt requires two exact Session Held tokens, same actual asio game executor/gameowner, strong Sessions and fullcommonLease/account/character/generation/current savedpose. Private guard precedes Session mutable fields. PKworld_generation distinctcommongeneration.",
+    "scheduling": "AfterAccepted69+bothholds, one RoomState.activate, withdraw, recheck receipt+StageActive+BOTHHeld, commitbothSession, recheck BOTHCommitted+receipt BEFORE either release. No fullPlayerCurrent afteractivation or prebattle normalCurrent aftercommit. Postactivatefail closesboth, retainsactive room/outboxes/locks; no activeabandon/worldresume.",
+    "incidence": "Preallocatebothmarkers/fullstates/pending snapshots/storednative73. Last externalobserverfence BEFORE fullpure incidencecollection/preencoding/node merge. Bothmarkers+ALLincoming/outgoing BOTHedges+ALLaffectedpendingmaps detached beforecallbacks. Every direct/deferred source/recipient publication/current and allstaged initialsources gated; finaloutward guard pure exactpending/finished/markers afterrepository observer.",
+    "pending": "PRE-MUTATION reject any tracked notfinished actuallyissued outward/DA publication TOeitherexactparticipant: Session commonpublication independentlyfailsonrefusal/phasechange, no safe drain here. Finishedsuccess preservesoldFIFO beforePKframe, notACK. Nonissuedcancelallowed; issuedoutgoingtosurvivor retainsoldclosepolicy. Other/untracked/cancelled continuations/TCPoldbytes/partialIO remainOPEN; no universalsocketquiescence.",
+    "callbacks": "Markers+allincoming erasure precedecancelcallbacks. Visibility rejectclose suppressedonlyexactmarkedrecipient; externaldone maystillclose. Reentrantwithdraw poisons pair, allprivateholds/commonlease/savedpose recheckedaftercallbacks; no callbacksideeffectatomicity. Only actual stored native73 to surviving observers, submissiononly/noACK/fullwrite/rollback/atomicfanout.",
+    "current": "Private receipt exact Held OR Committed PRE-RELEASE ONLY. Session committedcurrent verifiespendingphase/commonidentity/preallocatedbattleidentity withoutstale prebattlecurrent. Released/Written/pendingcleared notauthorized. Markerpersists until exactlifecyclerelease.",
+    "retirement": "ExactVisibility.release retiresonlythatlease marker AFTERallcleanup; nested samerelease cannotearlyunblock; successor/otherparticipant intact. Reentrypoisons. No resume/commonpresence.release/Sessionmutation/DBwrites/newwire inVisibility. Lifecycle.release revokesneededcommonidentity and isnotused. Diagnosticreturn cannotreplace newnormalprivateinitialization/terminalowner.",
+    "limits": "Oneboundedoptinlifecyclepath, fullroutes0/newopcodes0. Saves/auth/chat/IME/fonts/conversion/clients/CN/web/shared64 retained exceptexactmarkedTW visibilitygate. NoApplicationactivation/wholegamepercentageclaim.",
+    "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Connect actual dual native PK admission to visibility departure preserving common transport through entry writes.",
+  "replacement": "Replace custom lifecycle only with build-matched original evidence; complete hosting/turns/return/recovery before comprehensive tests/activation."
 }
 ]
 }

@@ -8,6 +8,7 @@
 #include "protocol/RecoveredRemoteActor.h"
 #include "protocol/RecoveredTaiwanPlayerAppearanceUpdate.h"
 #include <functional>
+#include <array>
 #include <map>
 #include <memory>
 #include <string>
@@ -25,6 +26,7 @@ class SharedInitialAppearanceSource;
 // sources remain distinct; the legacy TW CUSTOM visibility stays frozen.
 class SharedActorVisibility:public std::enable_shared_from_this<SharedActorVisibility> {
     struct Identity {};
+    struct TaiwanPkDepartureState;
 public:
     using Lease=SharedWorldPresence::Lease;
     struct TaiwanRawNameState {
@@ -253,12 +255,34 @@ public:
     // No allocation or wire send; known fields only, preserving opaque data.
     bool advance(const Binding&,const RecoveredPosition& before,const RecoveredPosition& after);
     bool hide(const Binding&); // Erase incarnation first, then supplied native73.
+    // CUSTOM-0113 paired TW PK world departure. Only exact actual private Held
+    // transports may mint this receipt, after the common durable activation.
+    // It withdraws visibility only: never release common identity/presence,
+    // mutate Session/DB, resume world, or imply native73 receipt/atomic fanout.
+    class TaiwanPkDeparture {
+    public:
+        TaiwanPkDeparture(const TaiwanPkDeparture&)=default;
+        TaiwanPkDeparture& operator=(const TaiwanPkDeparture&)=default;
+        bool operator==(const TaiwanPkDeparture&)const=default;
+    private:
+        friend class SharedActorVisibility;
+        explicit TaiwanPkDeparture(std::shared_ptr<TaiwanPkDepartureState> state):state_(std::move(state)){}
+        std::shared_ptr<TaiwanPkDepartureState> state_;
+    };
+    std::optional<TaiwanPkDeparture> withdraw_taiwan_pk(std::array<Lease,2>,
+        std::array<std::shared_ptr<Session>,2>,std::array<Session::NativePkEntryHold,2>);
+    // Exact Held OR Committed, PRE-RELEASE only. No Written/terminal-return
+    // authority; pending-cleared/released transports deliberately fail.
+    bool taiwan_pk_departure_current(const TaiwanPkDeparture&)const;
     void reset_recipient(const Lease&); // Actual native pool reset: invalidate incoming bindings, no invented packets.
     // Generation-qualified source/recipient disconnect or failed-entry cleanup.
     // Departing recipients receive nothing; surviving peers get stored73 when
     // still bound to the old scene. No stale cleanup can remove a successor.
     void release(const Lease&);
 private:
+    bool taiwan_pk_departed(const Lease&)const noexcept;
+    bool taiwan_pk_departure_fence(const std::shared_ptr<TaiwanPkDepartureState>&,
+        bool installed,bool held_only)const;
     struct Entry {
         Binding binding;RecoveredPosition position;Native native;
         std::shared_ptr<const TaiwanAppearanceAfterState> last_taiwan_appearance;
@@ -294,5 +318,8 @@ private:
     bool taiwan_appearance_cancelling_=false;
     mutable bool taiwan_chat_busy_=false,taiwan_chat_reentered_=false;
     mutable bool current_busy_=false,current_reentered_=false;
+    std::map<std::uint64_t,std::shared_ptr<TaiwanPkDepartureState>> taiwan_pk_departures_;
+    std::shared_ptr<TaiwanPkDepartureState> taiwan_pk_withdrawing_;
+    mutable bool taiwan_pk_reading_=false,taiwan_pk_reentered_=false;
 };
 }

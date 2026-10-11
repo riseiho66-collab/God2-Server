@@ -347,6 +347,9 @@ public:
     NativePkEntryHold prepare_native_pk_entry(NativePkEntryRequest,
         std::weak_ptr<NativePkEntryOwner>);
     bool native_pk_entry_current(const NativePkEntryHold&)const noexcept;
+    // CUSTOM-0113 exact private post-commit/pre-release fence. This does not
+    // authorize a world return, prove socket completion or acknowledge a client.
+    bool native_pk_entry_committed_current(const NativePkEntryHold&)const noexcept;
     // Call ONLY after one durable shared activation. No allocation/callback;
     // failure then requires persistent recovery and both peers closed.
     bool commit_native_pk_entry(const NativePkEntryHold&)noexcept;

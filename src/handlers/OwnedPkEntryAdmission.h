@@ -1,5 +1,6 @@
 #pragma once
 #include "handlers/OwnedPkRoomState.h"
+#include "cn/world/SharedActorVisibility.h"
 #include "net/Session.h"
 #include <array>
 #include <map>
@@ -26,9 +27,17 @@ public:
     using Prepare=std::function<std::optional<Ticket>(const Invitations::Pair&)>;
     using Sessions=std::function<std::shared_ptr<Session>(std::uint64_t)>;
     OwnedPkEntryAdmission(OwnedPkRoomState& rooms,Prepare prepare,Sessions sessions,
-                          Invitations::Resolve peers)
+                          Invitations::Resolve peers,
+                          std::shared_ptr<cn::SharedActorVisibility> world_visibility = {},
+                          std::shared_ptr<SharedWorldPresence> world_presence = {})
         :rooms_(rooms),prepare_(std::move(prepare)),sessions_(std::move(sessions)),
-         peers_(std::move(peers)),lifetime_(std::make_shared<Lifetime>(Lifetime{this})){}
+         peers_(std::move(peers)),world_visibility_(std::move(world_visibility)),
+         world_presence_(std::move(world_presence)),
+         lifetime_(std::make_shared<Lifetime>(Lifetime{this})){
+        if(bool(world_visibility_)!=bool(world_presence_) ||
+           (world_visibility_ && !world_visibility_->owns_presence(world_presence_)))
+            throw std::invalid_argument("PK departure requires exact common presence and visibility owners");
+    }
     ~OwnedPkEntryAdmission(){
         lifetime_->owner=nullptr;
         for(auto& [id,attempt]:attempts_)cancel(*attempt,false);
@@ -53,6 +62,8 @@ public:
                !rooms_.current(*ticket)){
                 rooms_.abandon(*ticket);return {};
             }
+            if(world_presence_)for(const auto& appearance:*input.entry.owned_appearances())
+                if(!appearance.owns_presence(world_presence_)){rooms_.abandon(*ticket);return {};}
             auto attempt=std::make_shared<Attempt>(lifetime_,*ticket,*sessions);
             if(!source_pair(*attempt)||!exact_peers(pair)){rooms_.abandon(*ticket);return {};}
             Invitations::Reservation reservation{ticket->id(),ticket->generation(),pair,input.entry};
@@ -108,6 +119,9 @@ private:
         Ticket ticket;
         std::array<std::shared_ptr<Session>,2> sessions;
         std::array<std::optional<Session::NativePkEntryHold>,2> holds;
+        // CUSTOM-0113 opt-in world departure; no automatic restoration on
+        // failure or terminal result. Exact lifecycle cleanup retires markers.
+        std::optional<cn::SharedActorVisibility::TaiwanPkDeparture> departure;
         std::array<bool,2> held{},submitted{};
         Stage stage=Stage::Reserved;
         Completion completion;
@@ -123,6 +137,8 @@ private:
     };
     OwnedPkRoomState& rooms_;
     Prepare prepare_;Sessions sessions_;Invitations::Resolve peers_;
+    std::shared_ptr<cn::SharedActorVisibility> world_visibility_;
+    std::shared_ptr<SharedWorldPresence> world_presence_;
     std::shared_ptr<Lifetime> lifetime_;
     std::map<std::uint64_t,std::shared_ptr<Attempt>> attempts_;
     const std::thread::id thread_=std::this_thread::get_id();
@@ -192,8 +208,33 @@ private:
             // activate preallocates its map node before SQL commit. From this
             // point failure retains active room/outboxes; it is not rollback.
             attempt.stage=Stage::Active;
+            if(world_visibility_){
+                const auto& appearances=*attempt.ticket.input().entry.owned_appearances();
+                attempt.departure=world_visibility_->withdraw_taiwan_pk(
+                    {appearances[0].material().lease,appearances[1].material().lease},
+                    attempt.sessions,{*attempt.holds[0],*attempt.holds[1]});
+                // Pending publication cleanup can synchronously complete an
+                // owner or close a peer. Requalify exact held transports and
+                // stage AFTER those callbacks. World-source Current is not
+                // reused after durable activation acquired battle ownership.
+                if(!attempt.departure ||
+                   !world_visibility_->taiwan_pk_departure_current(*attempt.departure) ||
+                   attempt.stage!=Stage::Active ||
+                   !attempt.sessions[0]->native_pk_entry_current(*attempt.holds[0]) ||
+                   !attempt.sessions[1]->native_pk_entry_current(*attempt.holds[1])){
+                    cancel(attempt,true);return;
+                }
+            }
             if(!attempt.sessions[0]->commit_native_pk_entry(*attempt.holds[0])||
                !attempt.sessions[1]->commit_native_pk_entry(*attempt.holds[1])){
+                cancel(attempt,true);return;
+            }
+            if(world_visibility_ &&
+               (!attempt.departure ||
+                !world_visibility_->taiwan_pk_departure_current(*attempt.departure) ||
+                attempt.stage!=Stage::Active ||
+                !attempt.sessions[0]->native_pk_entry_committed_current(*attempt.holds[0]) ||
+                !attempt.sessions[1]->native_pk_entry_committed_current(*attempt.holds[1]))){
                 cancel(attempt,true);return;
             }
             attempt.sessions[0]->release_native_pk_entry(*attempt.holds[0]);

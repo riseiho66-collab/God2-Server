@@ -2532,6 +2532,15 @@ bool Session::native_pk_entry_current(const NativePkEntryHold& hold)const noexce
         normal_world_initialization_current_on_game(data->initialization) &&
         account_id==data->request.account && character_id==data->request.character;
 }
+bool Session::native_pk_entry_committed_current(const NativePkEntryHold& hold)const noexcept {
+    const auto data=hold.data_;
+    if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
+       data->session.lock().get()!=this || data->completing.load() ||
+       data->phase.load()!=NativePkEntryHold::Data::Phase::Committed)return false;
+    return impl_->native_pk_transport_current(data,true) &&
+        impl_->world_delivery_identity.load()==data->battle_identity &&
+        account_id==data->request.account && character_id==data->request.character;
+}
 bool Session::commit_native_pk_entry(const NativePkEntryHold& hold)noexcept {
     if(!native_pk_entry_current(hold))return false;
     const auto data=hold.data_;

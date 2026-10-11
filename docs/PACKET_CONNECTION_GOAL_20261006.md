@@ -3044,3 +3044,12 @@ CUSTOM0112新增joint.observe_committed唯讀完整durable tuple→真正private
 SqliteDatabase factory只組裝同一connection的實際reader／writer及joint，保留rawdb私有、Fight immutable資料owned lifetime與借用Database／room drain要求。CharacterSelected不得順手改InWorld。單向common lifecycle release不是PK暫停／返回；完整世界可見性退場與回場、35／skills／Lua turn／results、terminal／reconnect／recovery仍待接，Application pk_rooms維持未安裝。
 
 本輪5份既有C++修改、1份新增，CUSTOM109→110、mixedsegments256→257、groups26不變；new preparation source1、新opcode0、完整雙向玩法路徑0。TW C2S parser74／具局部來源50／控制11／未接13；S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9、86selector7／case6、83action23／projection2。TW未host關聯38／去重34、CN93／去重71不變。全遊戲分母與完成率未知；未build／compiler／test／runtime／native／codec／gameDBSQL／migrate／activate／deploy，保留TW／CN／web與共用64位數值及凍結功能。
+
+
+## 第275輪：雙人 PK 世界可見性退場來源
+
+CUSTOM0113把可見性專用的雙端退場接到明示 opt-in admission：同一 rooms.activate 後，兩個真正 private Held 與 common lease 產生 paired departure；先封鎖兩端、撤下雙方完整 incidence，取消待發來源與以既有 native73 撤下存活觀察者，再重驗兩個 Held；兩個 Session commit 後以新增 private Committed-current 及 departure fence 重驗，最後釋出 held82。保留共用 presence／common transport identity；不呼叫單向 lifecycle.release，不以 raw InBattle 或舊 normal Current 冒充私有承諾。
+
+新 departure 不產生猜測回場；post-activate 失敗關閉雙端並保留 active/outboxes，marker 由 exact cleanup 回收。private current 僅為 Held／Committed 的 pre-release 範圍，不是 Written/nativeACK 或 terminal authority。原有未選取此 common visibility 的 admission/default 與凍結功能維持。Application pk_rooms 未安裝；Finished 鎖、完整 saved settlement／89／fresh generation initialization／worldreturn 與 restart recovery 仍待接，舊 diagnostic 回場不能代用。
+
+本輪既有 C++ 修改6份／新增0份；CUSTOM110→111、mixed257→258、groups26不變；新增 departure source1、新opcode0、新完整雙向路徑0。TW C2S74（具局部分支50／控制11／未接13），S2C252（230fixed／22variable），回覆48／推播11／gated4；battle110／specialized9，86selector7／case6，83action23／projection2。TW unhosted38關聯／去重34、CN93／71不變。全遊戲總量與完成率未知。未build／compiler／test／runtime／native／VM／codec／gameDBSQL／migrate／activate／deploy；GitHub/Discord通知分開記錄，不當遊戲驗收。
