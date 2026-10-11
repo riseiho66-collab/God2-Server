@@ -430,7 +430,8 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     OwnedTaiwanPkEntryPreparation::Initializations initializations,
     OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed,
     OwnedTaiwanPkRoomBackend::Parameters parameters,std::array<std::uint8_t,2> order,
-    std::chrono::milliseconds retry,OwnedTaiwanPkEntryPreparation::Companions companions){
+    std::chrono::milliseconds retry,OwnedTaiwanPkEntryPreparation::Companions companions,
+    OwnedTaiwanPkRoomBackend::ReturnSceneSource return_scene){
     // Identity/policy checks precede all file I/O and reader assembly. This
     // factory has no supplied repository/preparer that could split issuers.
     if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
@@ -444,7 +445,7 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     const auto path=archive_path; // Stable explicit path, no default/current-directory substitution.
     auto resolvers=std::make_shared<OwnedTaiwanPkRoomBackend::Resolvers>(
         OwnedTaiwanPkRoomBackend::Resolvers{std::move(sessions),std::move(initializations),
-                                          std::move(peers),std::move(seed),std::move(companions)});
+                                          std::move(peers),std::move(seed),std::move(companions),std::move(return_scene)});
     auto catalog=TaiwanNativeFightCatalog::from_archive_file(path);
     auto repository=make_owned_pk_room_repository(); // Requires existing schema; never installs it.
     auto rooms=std::make_unique<OwnedPkRoomState>(*repository);
@@ -474,7 +475,17 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
             if(resolvers->stopped)return {};
             auto value=resolvers->seed(pair);return resolvers->stopped?std::nullopt:std::move(value);},
         std::move(companion_source));
-    auto driver=std::make_unique<OwnedTaiwanPkBasicDriver>(std::move(game),*rooms,lua,parameters,order,retry);
+    // CUSTOM-0133 one actual callable in the shared resolver bundle. A
+    // configured source is mandatory at return; stop never produces empties.
+    OwnedTaiwanPkRoomBackend::ReturnSceneSource return_source;
+    if(resolvers->return_scene)return_source=[resolvers](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
+            ->std::optional<cn::SharedActorVisibility::TaiwanReturnScene>{
+        if(resolvers->stopped)return {};
+        auto value=resolvers->return_scene(request);
+        return resolvers->stopped?std::nullopt:std::move(value);
+    };
+    auto driver=std::make_unique<OwnedTaiwanPkBasicDriver>(std::move(game),*rooms,lua,parameters,order,retry,
+        std::move(return_source));
     // CUSTOM-0130 capture actual owners BEFORE argument evaluation can move
     // them into Admission. The genuine Attempt token reaches the same driver.
     const auto departure_visibility=visibility;const auto departure_presence=presence;

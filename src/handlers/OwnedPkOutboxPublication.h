@@ -33,8 +33,21 @@ public:
         std::shared_ptr<SharedWorldPresence> presence;
         cn::SharedActorVisibility::TaiwanPkDeparture token;
     };
-    explicit OwnedPkOutboxPublication(OwnedPkRoomState& rooms)
-        :rooms_(rooms),lifetime_(std::make_shared<Lifetime>(Lifetime{this})){}
+    // CUSTOM-0133 actual return supplier receives the exact saved terminal
+    // lineage, not old visibility edges. Pure game-owner call; it must return
+    // complete current full6F/resource/text/selection material or fail.
+    struct ReturnSceneRequest {
+        Ticket ticket;
+        WorldDeparture departure;
+        std::array<std::shared_ptr<Session>,2> sessions;
+        std::array<Session::NativePkEntryHold,2> holds;
+        std::array<Session::NativePkReturnPreparation,2> preparations;
+        std::array<Session::NativeBattleSkill,2> final_writes;
+        std::array<std::array<std::uint8_t,4>,2> terminal_payloads;
+    };
+    using ReturnSceneSource=std::function<std::optional<cn::SharedActorVisibility::TaiwanReturnScene>(const ReturnSceneRequest&)>;
+    explicit OwnedPkOutboxPublication(OwnedPkRoomState& rooms,ReturnSceneSource return_scene={})
+        :rooms_(rooms),lifetime_(std::make_shared<Lifetime>(Lifetime{this})),return_scene_source_(std::move(return_scene)){}
     ~OwnedPkOutboxPublication(){
         lifetime_->owner=nullptr;
         for(auto& [id,binding]:bindings_)fail(*binding);
@@ -48,7 +61,7 @@ public:
     bool bind(const Ticket& ticket,const std::array<std::shared_ptr<Session>,2>& sessions,
               const std::array<Session::NativePkEntryHold,2>& holds,
               std::optional<WorldDeparture> departure={}){
-        check_thread();
+        check_thread();reject_return_reentry();
         if(bindings_.size()>=256 || bindings_.contains(ticket.id()) || !rooms_.owns_ticket(ticket) ||
            !sessions[0] || !sessions[1] || sessions[0]==sessions[1] ||
            !sessions[0]->same_native_pk_game_executor(*sessions[1]))return false;
@@ -424,6 +437,9 @@ private:
         // CUSTOM-0132 actually consumed by the second accepted callback.
         // Preallocated only: original live initialization/identity/state remain.
         std::optional<std::array<Session::NativePkReturnPreparation,2>> return_preparations;
+        // CUSTOM-0133 private preallocated visibility; never published/current WORLD.
+        std::optional<cn::SharedActorVisibility::TaiwanPkReturnPlan> return_visibility;
+        bool return_preparing=false,return_reentered=false;
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
                 std::array<Session::NativePkEntryHold,2> entries,std::optional<WorldDeparture> world)
@@ -434,12 +450,16 @@ private:
     using SessionIndex=std::map<std::uint64_t,Index>;
     OwnedPkRoomState& rooms_;
     std::shared_ptr<Lifetime> lifetime_;
+    const ReturnSceneSource return_scene_source_;
     Bindings bindings_;
     SessionIndex by_session_;
     const std::thread::id thread_=std::this_thread::get_id();
     std::uint64_t sequence_=0; // Transport correlation, NOT a grant/round permit.
     bool on_thread()const noexcept{return thread_==std::this_thread::get_id();}
-    void check_thread()const{if(!on_thread())throw std::logic_error("PK output game owner mismatch");}
+    void check_thread()const{
+        if(!on_thread())throw std::logic_error("PK output game owner mismatch");
+        reject_return_reentry(); // Owner-wide, including another room/unbound input.
+    }
     static const OwnedPkInvitationService::Peer& peer(const Ticket& ticket,std::size_t viewer)noexcept{
         return viewer==0?ticket.input().pair.challenger:ticket.input().pair.recipient;
     }
@@ -550,6 +570,8 @@ private:
                 binding->sessions[viewer]->native_pk_terminal_barrier_accepted_current(*own->barrier);
         };
         try{
+            if(binding->return_preparing){binding->return_reentered=true;
+                throw DatabaseError("PK return source reentered terminal acceptance");}
             if(flight.accepted_seen||!flight.ready_seen||flight.failed_seen||
                !terminal_exact(*binding,flight,session,value)||
                !session.native_pk_terminal_barrier_accepted_current(value))
@@ -582,6 +604,47 @@ private:
                 if(!binding->sessions[viewer]->native_pk_return_preparation_current(prepared[viewer]))
                     throw DatabaseError("PK preallocated return generation no longer matches its Session");
             if(!pair_current())throw DatabaseError("PK return pair changed before private retention");
+            std::optional<cn::SharedActorVisibility::TaiwanPkReturnPlan> visibility_plan;
+            if(return_scene_source_){
+                // Opt-in only: absence preserves295 preparation-only path.
+                // Once configured, missing/invalid output fails the whole pair.
+                binding->return_preparing=true;binding->return_reentered=false;
+                struct End{bool& busy;~End(){busy=false;}}end{binding->return_preparing};
+                const ReturnSceneRequest request{binding->ticket,*binding->departure,binding->sessions,
+                    binding->holds,prepared,binding->terminal_written,
+                    {binding->terminal_inputs[0]->payload,binding->terminal_inputs[1]->payload}};
+                auto supplied=return_scene_source_(request);
+                if(!supplied||binding->return_reentered||!pair_current())
+                    throw DatabaseError("PK configured return scene lacks its complete current owner");
+                const auto& input=binding->ticket.input();const auto& world=*binding->departure;
+                visibility_plan=world.visibility->prepare_taiwan_pk_return(world.token,
+                    {(*input.entry.owned_appearances())[0].material().lease,
+                     (*input.entry.owned_appearances())[1].material().lease},
+                    {input.pair.challenger.position,input.pair.recipient.position},
+                    binding->sessions,binding->holds,prepared,std::move(*supplied));
+                if(!visibility_plan||!pair_current()||binding->return_reentered)
+                    throw DatabaseError("PK complete return scene failed private paired preallocation");
+                if(!world.visibility->taiwan_pk_return_current(*visibility_plan)||
+                   binding->return_reentered||!pair_current())
+                    throw DatabaseError("PK return scene changed during final source observation");
+                if(rooms_.require_terminal_resources_saved(binding->ticket.id(),
+                       {binding->terminal_written[0]->logical,binding->terminal_written[1]->logical})!=
+                       binding->terminal_written_revision[0]||!pair_current())
+                    throw DatabaseError("PK return scene lost exact prior saved resources");
+                for(std::uint8_t viewer=0;viewer<2;++viewer){
+                    const auto& own=*binding->terminal_inputs[viewer];
+                    if(rooms_.require_terminal_context(binding->ticket.id(),viewer,own.payload,
+                           own.final_write->logical)!=own.revision||!pair_current())
+                        throw DatabaseError("PK return scene changed saved terminal context");
+                }
+                if(!world.visibility->taiwan_pk_return_retained_current(*visibility_plan)||
+                   binding->return_reentered||!pair_current())
+                    throw DatabaseError("PK return scene changed before private retention");
+                for(std::uint8_t viewer=0;viewer<2;++viewer)
+                    if(!binding->sessions[viewer]->native_pk_return_preparation_current(prepared[viewer]))
+                        throw DatabaseError("PK return scene lost exact Session preallocation");
+            }
+            binding->return_visibility=std::move(visibility_plan);
             binding->return_preparations.emplace(std::move(prepared));
             return true; // No publish, state change, marker removal, unlock or input release.
         }catch(...){fail(*binding);return false;}
@@ -592,7 +655,14 @@ private:
         if(flight.failed_seen||!terminal_exact(*binding,flight,session,value))return;
         flight.failed_seen=true;fail(*binding);
     }
-    static void reject_resolver_reentry(Binding& binding){
+    void reject_return_reentry()const{
+        for(const auto& [id,binding]:bindings_)if(binding->return_preparing){
+            binding->return_reentered=true;
+            throw DatabaseError("PK pure return source reentered its publication owner");
+        }
+    }
+    void reject_resolver_reentry(Binding& binding){
+        reject_return_reentry();
         if(binding.resolving){
             binding.resolver_reentered=true;
             throw DatabaseError("PK pure resolver reentered its input/output owner");

@@ -146,7 +146,7 @@ public:
         OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed,
         OwnedTaiwanPkRoomBackend::Parameters,std::array<std::uint8_t,2>,std::chrono::milliseconds,
-        OwnedTaiwanPkEntryPreparation::Companions={});
+        OwnedTaiwanPkEntryPreparation::Companions={},OwnedTaiwanPkRoomBackend::ReturnSceneSource={});
     // CUSTOM-0129 same concrete DB/helper/catalog and genuine private Session
     // normal-entry/fullwrite observations. No connection escapes or new sends.
     // Helper, Database and original game owner must outlive every observation.

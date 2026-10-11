@@ -4850,6 +4850,41 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Preserve real physical entry across future battle generations and supply actual accepted-notification progress with stronger existing-save authority.",
   "replacement": "Complete paired final transport/visibility/resources/durable release and recovery, then comprehensive native acceptance."
+},
+{
+  "id": "CUSTOM-0133",
+  "name": "Owned TW PK paired complete return visibility preparation",
+  "authority": "TW_CUSTOM_OPT_IN_PRIVATE_PREALLOCATION_NOT_WORLD_RETURN_OR_NATIVE_ACK",
+  "implementation": [
+    "src/cn/world/SharedActorVisibility.cpp",
+    "src/cn/world/SharedActorVisibility.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/db/SqliteDatabase.h",
+    "src/handlers/OwnedPkOutboxPublication.h",
+    "src/handlers/OwnedTaiwanPkBasicDriver.h",
+    "src/handlers/OwnedTaiwanPkLuaBasicOwner.h",
+    "src/handlers/OwnedTaiwanPkRoomBackend.h"
+  ],
+  "native_gap": "Actual full-current actor/resource/text/complete-selection issuer, final strand consume/visibility publication and durable release/recovery remain incomplete.",
+  "rules": {
+    "trigger": "Actual second accepted-terminal callback after295 private pair; optional same-instance ReturnSceneSource threaded DB factory→Backend→Driver→LuaOwner→Publication. Absence preserves295; configured missing or invalid complete material fails.",
+    "scene": "Mandatory current ordered incoming/outgoing sets for both participants, explicit empties only by supplier; genuine original departure/leases/savedposes/Sessions/entry holds/returnpreparations. Full81B6F/13B5E/5B73 with exact12bit identity/position/state and current all-three-text/resource/selection provenance.",
+    "union": "Mutual directed edge must agree across both relevant lists and be deduplicated once. Conflicting/repeated inputs reject. Preallocated private mapnodes/records retain strong endpoints; per-recipient existing+new capacity128 and exact baseline fence.",
+    "authority": "Ordinary departed guards unchanged; explicit return qualification only for named pair, surviving endpoints retain same-game/current InWorld/common-ready contract. Common-name-source wrapper unsupported and rejected; actual receiver text witness mandatory, no silent rewrite.",
+    "current": "Callback reentry poisons local preparation. Fullscene Current owns complete readset after all source/resource/text/savedpose observers; final pure private registry/Session/departure fence. Savedledger/contexts and both private preparations rechecked around retention.",
+    "lifetime": "Private preparation only: no model merge/output/liveData/state/identity/marker retirement/readresume/unlock/App. Original finite terminal deadline remains.",
+    "native": "Same original6F manager gets mode0 entry cleanup and mode1 return cleanup freeing identities on bounded ordinary path. Separate15 complete UI/data/skill children2732B796sites+68dataB do not supply companionHP/maxHP; opaque aliases remain.",
+    "phase": "Static source/archive accounting only; execution gates closed."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Do not reuse cleared native pool or old moved scene vectors; retain an explicitly current complete private plan at reachable real callback.",
+  "replacement": "Supply actual current full6F authority and finish paired transport/visibility/resources/durable release/recovery, then comprehensive native acceptance."
 }
 ]
 }

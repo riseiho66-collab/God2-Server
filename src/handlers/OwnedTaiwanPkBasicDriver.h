@@ -23,11 +23,13 @@ class OwnedTaiwanPkBasicDriver final {
 public:
     using Parameters=OwnedTaiwanPkLuaBasicOwner::Parameters;
     using NativeBatch=OwnedTaiwanPkLuaBasicOwner::NativeBatch;
+    using ReturnSceneSource=OwnedPkOutboxPublication::ReturnSceneSource; // CUSTOM-0133
     using WorldDeparture=OwnedTaiwanPkLuaBasicOwner::WorldDeparture;
     OwnedTaiwanPkBasicDriver(asio::any_io_executor game,OwnedPkRoomState& rooms,LuaEngine& lua,
-            Parameters parameters,std::array<std::uint8_t,2> order,std::chrono::milliseconds retry)
+            Parameters parameters,std::array<std::uint8_t,2> order,std::chrono::milliseconds retry,
+            ReturnSceneSource return_scene={})
         :game_(std::move(game)),retry_(checked(retry)),timer_(game_),
-         lifetime_(std::make_shared<Lifetime>(Lifetime{this})),owner_(rooms,lua,parameters,order){}
+         lifetime_(std::make_shared<Lifetime>(Lifetime{this})),owner_(rooms,lua,parameters,order,std::move(return_scene)){}
     ~OwnedTaiwanPkBasicDriver(){lifetime_->owner=nullptr;stop_on_game();}
     OwnedTaiwanPkBasicDriver(const OwnedTaiwanPkBasicDriver&)=delete;
     OwnedTaiwanPkBasicDriver& operator=(const OwnedTaiwanPkBasicDriver&)=delete;

@@ -17,6 +17,7 @@ class OwnedTaiwanPkRoomBackend final:public OwnedPkInvitationService::AsyncRoomA
 public:
     using Preparation=OwnedTaiwanPkEntryPreparation;
     using Parameters=OwnedTaiwanPkBasicDriver::Parameters;
+    using ReturnSceneSource=OwnedTaiwanPkBasicDriver::ReturnSceneSource; // CUSTOM-0133
     using NativeBatch=OwnedTaiwanPkBasicDriver::NativeBatch;
     ~OwnedTaiwanPkRoomBackend() override=default;
     OwnedTaiwanPkRoomBackend(const OwnedTaiwanPkRoomBackend&)=delete;
@@ -58,6 +59,7 @@ private:
         Preparation::Resolve peers;
         Preparation::Seed seed;
         Preparation::Companions companions;
+        ReturnSceneSource return_scene;
         bool stopped=false;
     };
     // Exactly one instance of every potentially mutable callable. Preparation

@@ -18,11 +18,12 @@ public:
     using NativeBatch=OwnedPkOutboxPublication::NativeBatch;
     using Advance=OwnedPkOutboxPublication::BasicAdvance;
     using Ticket=OwnedPkOutboxPublication::Ticket;
+    using ReturnSceneSource=OwnedPkOutboxPublication::ReturnSceneSource; // CUSTOM-0133
     using WorldDeparture=OwnedPkOutboxPublication::WorldDeparture;
 
     OwnedTaiwanPkLuaBasicOwner(OwnedPkRoomState& rooms,LuaEngine& lua,
-            Parameters parameters,std::array<std::uint8_t,2> server_order)
-        :lua_(lua),parameters_(checked(parameters)),order_(checked(server_order)),publication_(rooms){}
+            Parameters parameters,std::array<std::uint8_t,2> server_order,ReturnSceneSource return_scene={})
+        :lua_(lua),parameters_(checked(parameters)),order_(checked(server_order)),publication_(rooms,std::move(return_scene)){}
     OwnedTaiwanPkLuaBasicOwner(const OwnedTaiwanPkLuaBasicOwner&)=delete;
     OwnedTaiwanPkLuaBasicOwner& operator=(const OwnedTaiwanPkLuaBasicOwner&)=delete;
 

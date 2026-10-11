@@ -286,12 +286,62 @@ public:
         const std::array<Lease,2>&,const std::array<RecoveredPosition,2>&,
         const std::array<std::shared_ptr<Session>,2>&,
         const std::array<Session::NativePkEntryHold,2>&,std::uint8_t viewer)const;
+    // CUSTOM-0133 private paired return preallocation, never a WORLD permit.
+    // Supplier owns the COMPLETE current ordered scene, resources and all three
+    // native text fields. Old bindings/DA projections cannot supply this data.
+    struct TaiwanReturnQualification {
+        std::uint64_t revision;
+        // Pure actual issuer: full record/resource/text/selection provenance.
+        std::function<bool()> current;
+        // One actual receiving native profile owner, shared across duplicate
+        // mutual-edge inputs. Legacy native.raw_name_state is not authority.
+        std::shared_ptr<const TaiwanRawNameState> receiver_text;
+    };
+    struct TaiwanReturnActor {
+        Lease source,recipient;
+        RecoveredPosition source_position,recipient_position;
+        std::shared_ptr<Session> source_connection;
+        Taiwan native; // Exact receiving connection plus complete6F/5E/73.
+        std::shared_ptr<const TaiwanReturnQualification> qualification;
+    };
+    enum class TaiwanReturnCheck {Prepare,Retained};
+    struct TaiwanReturnScene {
+        std::array<std::vector<TaiwanReturnActor>,2> incoming,outgoing;
+        // Mandatory pure full readset: exact complete ordered sets (including
+        // deliberate empties), every source/recipient common root/saved pose,
+        // qualification revision/resource availability and receiver_text
+        // profile/all three native texts. Requalifies ALL of them together,
+        // after per-edge observers. No yield/mutation/send/event pumping.
+        std::function<bool(TaiwanReturnCheck)> current;
+    };
+    class TaiwanPkReturnPlan {
+    public:
+        TaiwanPkReturnPlan(const TaiwanPkReturnPlan&)=default;
+        TaiwanPkReturnPlan& operator=(const TaiwanPkReturnPlan&)=default;
+    private:
+        friend class SharedActorVisibility;
+        struct State;
+        explicit TaiwanPkReturnPlan(std::shared_ptr<State> state):state_(std::move(state)){}
+        std::shared_ptr<State> state_;
+    };
+    std::optional<TaiwanPkReturnPlan> prepare_taiwan_pk_return(const TaiwanPkDeparture&,
+        std::array<Lease,2>,std::array<RecoveredPosition,2>,
+        std::array<std::shared_ptr<Session>,2>,std::array<Session::NativePkEntryHold,2>,
+        std::array<Session::NativePkReturnPreparation,2>,TaiwanReturnScene);
+    bool taiwan_pk_return_current(const TaiwanPkReturnPlan&)const;
+    // Registry/Session only, for the final cut after actual read-only ledger
+    // qualification. This does not refresh resource/text/saved-position data.
+    bool taiwan_pk_return_retained_current(const TaiwanPkReturnPlan&)const;
     void reset_recipient(const Lease&); // Actual native pool reset: invalidate incoming bindings, no invented packets.
     // Generation-qualified source/recipient disconnect or failed-entry cleanup.
     // Departing recipients receive nothing; surviving peers get stored73 when
     // still bound to the old scene. No stale cleanup can remove a successor.
     void release(const Lease&);
 private:
+    bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
+    bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck)const;
+    void reject_taiwan_return_reentry()const;
+    bool taiwan_pk_return_pending(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_departed(const Lease&)const noexcept;
     bool taiwan_pk_departure_fence(const std::shared_ptr<TaiwanPkDepartureState>&,
         bool installed,bool held_only)const;
@@ -337,5 +387,6 @@ private:
     std::map<std::uint64_t,std::shared_ptr<TaiwanPkDepartureState>> taiwan_pk_departures_;
     std::shared_ptr<TaiwanPkDepartureState> taiwan_pk_withdrawing_;
     mutable bool taiwan_pk_reading_=false,taiwan_pk_reentered_=false;
+    mutable bool taiwan_return_reading_=false,taiwan_return_reentered_=false;
 };
 }
