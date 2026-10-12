@@ -17,6 +17,15 @@ struct NativePetRoomSourceRecord {
     std::vector<std::uint8_t> normalized_cp950_record;
     bool operator==(const NativePetRoomSourceRecord&) const=default;
 };
+// Meaningful text from the common parser's +8/+2E/+54 C strings, without
+// terminators or fabricated396 padding. This describes the historical source
+// definitions only; it is not a current native-bank or player observation.
+struct NativePetRoomDefinitionText {
+    NativePetRoomSourceRecord source_record;
+    std::vector<std::uint8_t> definition_name_cp950; // token4, record+8
+    std::vector<std::uint8_t> caption_cp950;         // token7, record+2E
+    std::vector<std::uint8_t> description_cp950;     // nonempty tokens8..12, LF between
+};
 class NativePetRoomSourceCatalog final {
 public:
     static constexpr char dataset_id[]="tw149c-historical-spi-petroom-source-window-v1";
@@ -38,6 +47,10 @@ public:
     // A caller's transaction view is source data, not a committed action receipt.
     bool populated() const;
     std::optional<NativePetRoomSourceRecord> lookup(std::uint16_t native_key) const;
+    // Validates the same complete dataset before projecting the exact source
+    // text. The finite22 pins fit the native buffers; arbitrary native overflow,
+    // numeric conversion, RomMaps lookup and full396 output are not modeled.
+    std::optional<NativePetRoomDefinitionText> lookup_definition_text(std::uint16_t native_key) const;
 private:
     std::vector<NativePetRoomSourceRecord> read() const;
     sqlite3* db_;

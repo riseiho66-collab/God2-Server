@@ -1,6 +1,7 @@
 #include "db/NativePetRoomSourceCatalog.h"
 #include "db/SqliteSupport.h"
 #include <array>
+#include <span>
 #include <string_view>
 #include <utility>
 
@@ -53,6 +54,43 @@ std::vector<std::uint8_t> blob(sqlite_detail::Statement& row,int index) {
 }
 void bind(sqlite_detail::Statement& row,int index,const char* text) {
     row.bind(index,std::string(text));
+}
+NativePetRoomDefinitionText project_text(NativePetRoomSourceRecord source) {
+    // Only read()'s exact pinned source records reach this projection. In these
+    // normalized rows every comma is a delimiter, and no NUL/CR/LF is retained
+    // inside a field. Native451BE0 has no quote/escape/codepage transformation.
+    const std::span<const std::uint8_t> raw(source.normalized_cp950_record);
+    std::vector<std::span<const std::uint8_t>> fields;
+    std::size_t start=0;
+    for(std::size_t i=0;i<=raw.size();++i) {
+        if(i<raw.size() && (raw[i]==0 || raw[i]==0x0a || raw[i]==0x0d))
+            throw DatabaseError("PetRoom text source contains a line/NUL boundary");
+        if(i==raw.size() || raw[i]==0x2c) {
+            fields.push_back(raw.subspan(start,i-start));start=i+1;
+        }
+    }
+    if(fields.size()!=26 || source.field_count!=26)
+        throw DatabaseError("PetRoom text source field count differs");
+    // Native451AE0 copies the entire token+NUL before459420 forces BYTE2D/53=0.
+    // These pins' token4/7 lengths fit38 bytes; reject larger input rather than
+    // treating the native unbounded copy as a generally safe truncation rule.
+    if(fields[4].size()>37 || fields[7].size()>37)
+        throw DatabaseError("PetRoom text exceeds qualified native string buffers");
+    std::vector<std::uint8_t> name(fields[4].begin(),fields[4].end());
+    std::vector<std::uint8_t> caption(fields[7].begin(),fields[7].end());
+    std::vector<std::uint8_t> description;
+    for(std::size_t i=8;i<=12;++i) {
+        if(fields[i].empty())continue;
+        // Native common tail appends LF between nonempty tokens, then forces
+        // temp[BDh]=0 after its unbounded copies. The finite pins fit both its
+        // 256-byte token temporary and189-byte final meaningful string.
+        if(fields[i].size()>255 || description.size()+fields[i].size()+
+           (description.empty()?0u:1u)>189)
+            throw DatabaseError("PetRoom description exceeds qualified native buffers");
+        if(!description.empty())description.push_back(0x0a);
+        description.insert(description.end(),fields[i].begin(),fields[i].end());
+    }
+    return {std::move(source),std::move(name),std::move(caption),std::move(description)};
 }
 void source_schema(sqlite3* db,bool require_both) {
     sqlite_detail::Statement objects(db,
@@ -130,6 +168,11 @@ std::optional<NativePetRoomSourceRecord> NativePetRoomSourceCatalog::lookup(std:
     const auto records=read();
     for(const auto& row:records)if(row.native_key==key)return row;
     return {};
+}
+std::optional<NativePetRoomDefinitionText> NativePetRoomSourceCatalog::lookup_definition_text(std::uint16_t key) const {
+    auto source=lookup(key);
+    if(!source)return {};
+    return project_text(std::move(*source));
 }
 void NativePetRoomSourceCatalog::import_pinned_source(sqlite3* db) {
     if(!db || !sqlite3_get_autocommit(db))throw DatabaseError("PetRoom source import requires own transaction");

@@ -3940,3 +3940,33 @@ reply/storage/recovery/Applicationhosting. FullTW/CN/fourWS/sharedtables/
 common64/coin99999999999/qualifiedstack99/nativelevels/fonts/textconversion/
 frozenrequirements persist. PHASE1 static source/hash/PE/Capstone/report only;
 no build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
+
+## Round337 — actual common-parser SPI text projection, 2026-10-12
+
+Previous336 was progress;79f69b9 publication/notification succeeded. Goalactive.
+See research/tw-native-spi-definition-text-20261012.md. Native451AE0 andcommon
+459420 copies token4->record+8/token7->2E thenforces2D/53NUL; common description
+joins nonemptytokens8..12 with LFbetween, noleading/trailingLF, forceBDhafter
+unbounded appends. Actualbyte tokenizer/search/copy hasnoquote/CP950conversion.
+Finite22pins fitnativebuffers: name6..24/caption20..32/allfieldsmax34/join26..89;
+noNUL/CR/LF/comma insidefields. These are meaningfultext, notzero-padded396.
+ExistingC++catalog nowlookup_definition_text validateswhole22dataset before
+projectingexactrawname/caption/description andretainingfullsource_record.
+No numeric/resourcebank/commonID/playerinstance/ownership/eligiblepopulation
+oractionpermission supplied; noAPI/DB/importer execution orMainactivation.
+Native451BA0 initializeslocal0 andrequires scannerreturn1. ActualboundedCRT
+decimalpath qualifiesconditionalaccumulate/write/return only; input/ctype/
+EOF/multibyte dependenciesOPEN. No historicalVMadapter promoted to native.
+Token13 storesWORD112h/459574; separateWORD118h isFFFF/45994A. Rootunsealed
+draft mistaken118h destination corrected andretainedwithreconstructionlabel.
+SPIselector0 doesnotdirectlywrite11C; currentallocation/bank/RomMaps/full396
+remainOPEN. Publicstaticcapture exactcopy1, no rerun/native methodrecredit.
+Frontierv23 byte-identical; TW C2S156/S2C252/world74 partial50/control11/gap13
+independent16/unclassified110; CN C2S156/phaseS2C280/lengthS2C253 unchanged.
+Packet/format/parser/phase/handler/completebidirectional/gameplayincrements0;
+fullTW/game denominator/completionnull. Next numeric/resource/current396,
+eligibleownedpopulation/F4issuer/B1rules/fullorderedreply/storage/recovery/
+Applicationhosting. FullTW/CN/fourWS/sharedtables/common64/coin99999999999/
+qualifiedstack99/nativelevels/fonts/textconversion/frozenrequirements persist.
+PHASE1 static source/hash/PE/Capstone/report only; no build/compiler/tests/
+runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
