@@ -143,6 +143,35 @@ public:
         explicit NormalWorldInitialization(std::shared_ptr<const Data> data):data_(std::move(data)) {}
         std::shared_ptr<const Data> data_;
     };
+    // Private actual normal-entry output recipient, minted only by its OWN
+    // synchronous world callback after local S2A Written. No peer TLS mint,
+    // ACK, native adoption, lease or gameplay entitlement is supplied.
+    class NormalWorldOutputHandle {
+    public:
+        NormalWorldOutputHandle(const NormalWorldOutputHandle&)=default;
+        NormalWorldOutputHandle& operator=(const NormalWorldOutputHandle&)=default;
+        void revoke() const noexcept;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Sync;
+        struct Data;
+        explicit NormalWorldOutputHandle(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
+    enum class NormalWorldOutputStatus {Pending,Queued,Failed};
+    class NormalWorldOutputAttempt {
+    public:
+        NormalWorldOutputAttempt(const NormalWorldOutputAttempt&)=default;
+        NormalWorldOutputAttempt& operator=(const NormalWorldOutputAttempt&)=default;
+        NormalWorldOutputStatus status() const noexcept;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit NormalWorldOutputAttempt(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
     class NativeBattleSkillPublicationOwner {
     public:
         virtual ~NativeBattleSkillPublicationOwner()=default;
@@ -369,6 +398,11 @@ public:
     // The original callback-local TLS APIs above keep their existing contract.
     bool world_records_write_current_on_game(const WorldRecordsWrite&) const;
     bool normal_world_initialization_current_on_game(const NormalWorldInitialization&) const;
+    std::optional<NormalWorldOutputHandle> capture_normal_world_output(const NormalWorldInitialization&);
+    bool normal_world_output_current_on_game(const NormalWorldOutputHandle&) const;
+    // SAME recorded game owner can later enqueue for this recipient. Queued
+    // means actual FIFO insertion only; frames may subsequently fail/close.
+    NormalWorldOutputAttempt send_normal_world_records(const NormalWorldOutputHandle&,std::vector<std::uint8_t> logical);
     // PRIVATE0083 enqueue acceptance ONLY; no native/client ACK or receipt claimed.
     void send_world_records_with_acceptance(std::vector<std::uint8_t> logical,
         std::uint64_t expected_account,std::uint64_t expected_character,

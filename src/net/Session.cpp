@@ -179,6 +179,34 @@ bool Session::NormalWorldInitialization::entry_written() const noexcept {
     return data_->entry->written.load() && !data_->entry->retired.load();
 }
 
+struct Session::NormalWorldOutputHandle::Sync {
+    std::mutex mutex; // Revocation/epoch retirement versus actual FIFO insertion.
+    std::atomic<std::uint64_t> epoch{1}; // Saturates: no old epoch can wrap current.
+};
+struct Session::NormalWorldOutputHandle::Data {
+    const std::shared_ptr<Sync> sync;
+    const std::shared_ptr<const NormalWorldInitialization::Data> initialization;
+    const std::uint64_t epoch,account,character,battle;
+    const SessionState phase;
+    std::atomic<bool> revoked{false};
+    Data(std::shared_ptr<Sync> guard,std::shared_ptr<const NormalWorldInitialization::Data> source,
+         std::uint64_t version,SessionState p)
+        :sync(std::move(guard)),initialization(std::move(source)),epoch(version),
+         account(initialization->entry->account),character(initialization->entry->character),
+         battle(initialization->effective_battle),phase(p) {}
+};
+void Session::NormalWorldOutputHandle::revoke() const noexcept {
+    if(!data_)return;
+    std::lock_guard lock(data_->sync->mutex);
+    data_->revoked.store(true);
+}
+struct Session::NormalWorldOutputAttempt::Data {
+    std::atomic<NormalWorldOutputStatus> status{NormalWorldOutputStatus::Pending};
+};
+Session::NormalWorldOutputStatus Session::NormalWorldOutputAttempt::status() const noexcept {
+    return data_->status.load();
+}
+
 struct Session::NativePkEntryHold::Data {
     enum class Phase {Preparing,Held,Committed,Released,Written,Failed,Aborted};
     const std::weak_ptr<Session> session;
@@ -273,6 +301,14 @@ struct Session::Impl {
         ~WorldResponseAttempt(){fail();}
     };
     std::shared_ptr<WorldResponseAttempt> world_response_callback_capture; // Serial game callback ONLY.
+    struct NormalOutputPending {
+        const std::shared_ptr<NormalWorldOutputAttempt::Data> data;
+        explicit NormalOutputPending(std::shared_ptr<NormalWorldOutputAttempt::Data> value):data(std::move(value)) {}
+        ~NormalOutputPending() {
+            auto pending=NormalWorldOutputStatus::Pending;
+            data->status.compare_exchange_strong(pending,NormalWorldOutputStatus::Failed);
+        }
+    };
     struct SelectionEntry {
         const RecoveredSelectionItemRequest::Request* original;
         std::shared_ptr<const NativeWorldSelectionInput::Data> data;
@@ -407,6 +443,28 @@ struct Session::Impl {
     std::optional<RecoveredWorldReady> world_ready;
     std::atomic<std::shared_ptr<NormalWorldInitialization::Entry>> normal_entry;
     std::atomic<std::shared_ptr<const NormalWorldInitialization::Data>> normal_initialization;
+    const std::shared_ptr<NormalWorldOutputHandle::Sync> normal_output_sync=
+        std::make_shared<NormalWorldOutputHandle::Sync>();
+    void retire_normal_output() noexcept {
+        std::lock_guard lock(normal_output_sync->mutex);
+        const auto old=normal_output_sync->epoch.load();
+        if(old!=std::numeric_limits<std::uint64_t>::max())normal_output_sync->epoch.store(old+1);
+    }
+    // Strand checks only immutable Entry/Data and synchronized/atomic fields.
+    // Caller holds Sync::mutex through final validation and FIFO insertion.
+    bool normal_output_transport_current_locked(const std::shared_ptr<NormalWorldOutputHandle::Data>& data) const {
+        if(!data || data->sync!=normal_output_sync || data->revoked.load() ||
+           data->epoch==std::numeric_limits<std::uint64_t>::max() || data->epoch!=normal_output_sync->epoch.load())return false;
+        const auto init=data->initialization;const auto entry=init->entry;
+        return mode==ProtocolMode::God2CharacterConnection && !close_requested.load() &&
+            owner.recovered_world_ready() && owner.state()==data->phase &&
+            (data->phase==SessionState::CharacterSelected || data->phase==SessionState::InWorld) &&
+            owner.battle_generation()==data->battle && init->effective_battle==data->battle &&
+            normal_entry.load()==entry && normal_initialization.load()==init &&
+            entry->session.lock().get()==&owner && entry->account==data->account && entry->character==data->character &&
+            data->account && data->character && entry->written.load() && !entry->retired.load() && !init->tail.empty() &&
+            !native_pk_pending.load() && !native_battle_pending.load() && !native_pk_terminal.load();
+    }
     std::array<std::uint8_t,23> normal_tail_bytes{}; // Strand only; maximum existing grammar.
     std::size_t normal_tail_size=0;
     bool normal_tail_observable=true;
@@ -1287,7 +1345,10 @@ struct Session::Impl {
             auto complete=[self,response,request](std::uint64_t account,std::exception_ptr error) {
                 auto& s=*self->impl_;
                 if(error) logger("session")->error("session_id={} AUTHENTICATION_SERVICE_ERROR",s.id);
-                if(account && !s.close_requested.load()) self->account_id=account;
+                if(account && !s.close_requested.load()) {
+                    s.retire_normal_output();
+                    self->account_id=account;
+                }
                 if(s.character_handlers.native_select && account && !error && !s.close_requested.load()) {
                     // Observational allocation failure must never rewrite the
                     // frozen login outcome. Missing observation rejects only
@@ -1509,6 +1570,7 @@ struct Session::Impl {
     }
     void select_character(std::uint8_t token,bool created,
                           std::optional<RecoveredPostCreateSelect::Selection> native_input=std::nullopt) {
+        retire_normal_output(); // Before any selection callback or game-owned identity write.
         game_busy=true;
         asio::post(game,[self=owner.shared_from_this(),token,created,native_input=std::move(native_input)] {
             auto& s=*self->impl_;
@@ -1595,6 +1657,7 @@ struct Session::Impl {
                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(frame.begin(),frame.end());
                     if(!s.terminal_write_allowed())return;
                     s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                    s.retire_normal_output(); // Before replacement, not after new identity publication.
                     if(const auto old=s.normal_entry.exchange(normal_entry))old->retired.store(true);
                     s.normal_initialization.store({});
                     s.normal_tail_size=0;s.normal_tail_observable=true;
@@ -1627,10 +1690,12 @@ struct Session::Impl {
         normal_tail_size+=bytes.size();
     }
     void retire_normal_initialization() noexcept {
+        retire_normal_output();
         if(const auto entry=normal_entry.load())entry->retired.store(true);
         normal_initialization.store({});
     }
     void accept_world_tail() {
+        retire_normal_output(); // Before the actual world_ready observer can mutate owner state.
         game_busy=true;
         owner.recovered_client_language_.store(world_ready->config_flag());
         const auto entry=normal_entry.load();
@@ -1666,6 +1731,7 @@ struct Session::Impl {
                 if(!accepted) { s.fail("Recovered world binding rejected");return; }
                 try {
                     s.c2s0002_state=C2S0002State::WorldTailAccepted;
+                    s.retire_normal_output();
                     self->recovered_world_ready_.store(true);
                     if(initialization && s.normal_entry.load()==initialization->entry &&
                        !initialization->entry->retired.load())s.normal_initialization.store(initialization);
@@ -2463,6 +2529,72 @@ bool Session::normal_world_initialization_current_on_game(const NormalWorldIniti
         (state()==SessionState::CharacterSelected || state()==SessionState::InWorld) &&
         entry->account==account_id && entry->character==character_id && data->effective_battle==battle_generation();
 }
+std::optional<Session::NormalWorldOutputHandle> Session::capture_normal_world_output(
+        const NormalWorldInitialization& initialization) {
+    if(observed_world_callback!=this)
+        throw std::logic_error("Normal output recipient requires its own actual world callback");
+    if(!normal_world_initialization_current_on_game(initialization) || !initialization.entry_written())return std::nullopt;
+    std::lock_guard lock(impl_->normal_output_sync->mutex);
+    const auto epoch=impl_->normal_output_sync->epoch.load();
+    if(epoch==std::numeric_limits<std::uint64_t>::max())return std::nullopt;
+    auto data=std::make_shared<NormalWorldOutputHandle::Data>(impl_->normal_output_sync,initialization.data_,epoch,state());
+    if(!impl_->normal_output_transport_current_locked(data) ||
+       !normal_world_initialization_current_on_game(initialization))return std::nullopt;
+    return NormalWorldOutputHandle(std::move(data));
+}
+bool Session::normal_world_output_current_on_game(const NormalWorldOutputHandle& handle) const {
+    const auto data=handle.data_;
+    if(!data || !data->initialization || !data->initialization->entry ||
+       data->initialization->entry->game_thread!=std::this_thread::get_id())return false;
+    const auto actual=data->initialization->entry->session.lock();
+    if(actual.get()!=this)return false; // No game-owned fields before exact thread/Session qualification.
+    std::lock_guard lock(data->sync->mutex);
+    return impl_->normal_output_transport_current_locked(data) &&
+        account_id==data->account && character_id==data->character;
+}
+Session::NormalWorldOutputAttempt Session::send_normal_world_records(
+        const NormalWorldOutputHandle& handle,std::vector<std::uint8_t> logical) {
+    auto data=std::make_shared<NormalWorldOutputAttempt::Data>();
+    const NormalWorldOutputAttempt result(data);
+    const auto pending=std::make_shared<Impl::NormalOutputPending>(data);
+    if(!normal_world_output_current_on_game(handle))return result;
+    if(logical.empty() || logical.size()>RecoveredWorldFrame::max_logical_size) {close();return result;}
+    const auto charge=logical.size()+3;
+    auto budget=impl_->budget;std::shared_ptr<Reservation> reservation;
+    {
+        std::lock_guard lock(budget->mutex);
+        if(charge<=max_buffer-budget->bytes && budget->count<max_writes) {
+            reservation=std::make_shared<Reservation>(budget,charge);
+            budget->bytes+=charge;++budget->count;
+        }
+    }
+    if(!reservation) {close();return result;}
+    // All game-owned capture is complete before post. Strand never reads bare
+    // public account_id/character_id or invokes a game Current/source callback.
+    const auto recipient=handle.data_;
+    asio::post(impl_->strand,[self=shared_from_this(),recipient,logical=std::move(logical),reservation,pending]() mutable {
+        auto& s=*self->impl_;
+        if(s.closing || s.close_requested.load())return;
+        if(s.mode!=ProtocolMode::God2CharacterConnection || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted)return;
+        try {
+            auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(logical));
+            if(bytes->size()>max_buffer-s.write_bytes || s.writes.size()>=max_writes) {
+                s.fail("Normal world output queue limit");return;
+            }
+            if(!s.terminal_write_allowed())return;
+            {
+                std::lock_guard lock(recipient->sync->mutex);
+                if(!s.normal_output_transport_current_locked(recipient))return;
+                s.writes.push_back({bytes,std::move(reservation)});
+                s.write_bytes+=bytes->size();
+                auto expected=NormalWorldOutputStatus::Pending;
+                pending->data->status.compare_exchange_strong(expected,NormalWorldOutputStatus::Queued);
+            }
+            if(s.writes.size()==1)s.write();
+        }catch(...) {s.fail("Normal world output encoding or handoff failed");}
+    });
+    return result;
+}
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         std::shared_ptr<WorldRecordsWrite::Data> observed) {
     const auto attempt=observed?std::make_shared<Impl::WorldWriteAttempt>(std::move(observed)):
@@ -2774,6 +2906,7 @@ void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     auto pending=std::make_shared<Impl::NativeBattlePending>();
     pending->delivery=std::move(delivery);pending->common=common;pending->source=std::move(source);
     std::shared_ptr<Impl::NativeBattlePending> absent;
+    impl_->retire_normal_output(); // Before actual publication/PK hold is installed.
     if(!impl_->native_battle_pending.compare_exchange_strong(absent,pending))
         throw std::logic_error("Native battle publication already pending");
     try {
@@ -2899,6 +3032,7 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     }
     if(!reservation)throw std::length_error("Native PK entry queue reservation failed");
     std::shared_ptr<NativePkEntryHold::Data> absent;
+    impl_->retire_normal_output(); // Before actual publication/PK hold is installed.
     if(!impl_->native_pk_pending.compare_exchange_strong(absent,pending))
         throw std::logic_error("Native PK entry already pending");
     try {asio::post(impl_->strand,[self=shared_from_this(),pending,reservation=std::move(reservation)]()mutable {
@@ -3127,6 +3261,7 @@ void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSk
     pending->delivery=std::move(delivery);pending->common=common;
     pending->source=std::move(source);pending->pk_entry=data;
     std::shared_ptr<Impl::NativeBattlePending> absent;
+    impl_->retire_normal_output(); // Before actual publication/PK hold is installed.
     if(!impl_->native_battle_pending.compare_exchange_strong(absent,pending))
         throw std::logic_error("Native battle publication already pending");
     try {asio::post(impl_->strand,[self=shared_from_this(),pending,reservation=std::move(reservation)]()mutable{
@@ -3257,6 +3392,7 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
     });
 }
 void Session::close() {
+    impl_->retire_normal_output(); // Synchronized retirement before close publication/post.
     if (impl_->close_requested.exchange(true)) return;
     asio::post(impl_->strand, [self = shared_from_this()] { self->impl_->close(); });
 }
@@ -3291,7 +3427,10 @@ std::shared_ptr<const Session::NativeLocalEndpoint> Session::recovered_native_lo
 SessionState Session::state() const noexcept { return state_.load(); }
 void Session::set_state(SessionState state) noexcept {
     auto current = state_.load();
-    while (current != SessionState::Disconnected && !state_.compare_exchange_weak(current, state)) {}
+    while(current!=SessionState::Disconnected) {
+        if(current!=state)impl_->retire_normal_output(); // Before phase/battle mutation, even same final pose.
+        if(state_.compare_exchange_weak(current,state))break;
+    }
     // Preserve the existing state transition; observe only successful battle
     // boundaries. No callback, packet, authentication or battle behavior change.
     if(current!=SessionState::Disconnected && current!=state &&

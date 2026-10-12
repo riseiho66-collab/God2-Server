@@ -1,18 +1,18 @@
 #include "handlers/OwnedBlacklistService.h"
 #include "db/DbTypes.h"
 namespace god2 {
-std::optional<std::vector<std::uint8_t>> OwnedBlacklistService::handle(
+std::optional<SqliteOwnedBlacklistRepository::CommittedChange> OwnedBlacklistService::handle_committed(
         std::uint64_t account,std::uint64_t character,const TaiwanNativeBlacklist::Request& actual,SqliteOwnedBlacklistRepository::Current current) {
     const auto request=actual; // Own original bytes before any storage observer.
-    const auto row=request.adding()?repository_.add(account,character,request.name(),current):
-        repository_.remove(account,character,request.row_id(),current);
-    if(!row)return std::vector<std::uint8_t>{}; // Explicit rejected/no mutation; no invented native error record.
-    // Repository returns only AFTER its outer COMMIT. A delivery allocation/
-    // failure cannot roll back/retry that durable prefix or pretend peer ACK.
-    const auto reply=request.adding()?TaiwanNativeBlacklist::added(row->row_id,row->name):
-        TaiwanNativeBlacklist::removed(row->row_id);
-    if(!reply)throw DatabaseError("Committed owned blacklist projection invalid");
-    return reply;
+    return request.adding()?repository_.add_committed(account,character,request.name(),std::move(current)):
+        repository_.remove_committed(account,character,request.row_id(),std::move(current));
+}
+std::optional<std::vector<std::uint8_t>> OwnedBlacklistService::handle(
+        std::uint64_t account,std::uint64_t character,const TaiwanNativeBlacklist::Request& actual,SqliteOwnedBlacklistRepository::Current current) {
+    auto result=handle_committed(account,character,actual,std::move(current));
+    if(!result)return std::vector<std::uint8_t>{}; // Original rejected/no-mutation behavior.
+    // Move the exact pre-COMMIT original projection; no allocation/re-observation.
+    return std::optional<std::vector<std::uint8_t>>(std::move(result->data_->logical));
 }
 SqliteOwnedBlacklistRepository::Snapshot OwnedBlacklistService::observe(std::uint64_t account,std::uint64_t character,SqliteOwnedBlacklistRepository::Current current) {
     return repository_.load(account,character,std::move(current));

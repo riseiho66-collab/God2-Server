@@ -4539,3 +4539,51 @@ postbattle/fullrouteinventory/nativeacceptance OPEN. FullTWfirst/CN/fourWS/
 common64/coin99999999999/qualifiedstack99/nativelevels/saves/frozen/fonts/
 conversiongoalactive. PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/
 emulator/parser/codec/gameDBSQL/importer/migrate/activate/deploy.
+
+
+## Round351 actual UI output cells and blacklist same-owner source (2026-10-13)
+
+Previous350 published7486b393c5e87a95f57c779d517e2b4727dcc663 with exactHEAD
+notification38272510428success. Authentic known41E710162B/57sites/4branches/
+2RET20/noCALL;14padding. ActualoutC completeDWORD overwrites handle cell,
+outD BYTE overwrites slotlow8 retainingupper24 withoutoldread. OptionaloutE
+skippedactualformal5zero. Subsequentframe/descriptor/global585BD8rereads and
+genericalias effects retained; selecteddistinctvalidstackpremises only. Signed
+actioncount uppergate lacksnegativecheck outsideactualpositiveparent. Return
+resource/descriptoraddress notBool/right; actualallocations/currentglobal and
+otherdescendantsOPEN. Historicalmethodalreadyknown/newmethodcredit0.
+
+ActualCUSTOM0096 TW C89/C8A add/remove retainnativeA5logical21/A4logical5,
+capturedCP950/identity/rowallocator/max10active4096lifetime/135customIDs. Private
+move-onlytransaction ownsactualbefore/after/row/wire/changed beforeCOMMIT;
+sharedimmutablealiases noaftercommitcopy/reobserve. Fixedtotalchanges/autocommit
+guard acrossafter/roots/material/finalroots protectsactualcompleteafter.
+Nooporiginalreply/nofanout; validrejectemptyreplycontinues; noSQLretryrollback
+afterdurablecommit. Arbitrarycommit/finalize observers contract stillbounded.
+
+NewprivateownTickNormalInit/Writtenrecipienthandle hasactualgameowner guards,
+immutable/atomicstrandchecks(no bareIDs), synchronizedrevoke/FIFOinsert/Queued,
+RAIIfailures andsaturatingepoch. Generic sender/FIFO/async/originalresponse exact.
+Mainpreownsstrongpeers/copiedsource/pendingnodes21B beforeSQL; actualchange to
+idle-readysameowner exactbefore/handle only. PendingQueuedprogressrefindsall
+identities/current. SenderafterSUBMITTEDreply; noWritten/nativeACK. Mismatch
+permanentlydisablesincarnation. Actualpending senderhazard closesBEFOREnextSQL;
+pendingpeerchains unsupportedretireclose. Plainineligible peersdisabledwithout
+indiscriminateclose. Oldcontrol/re-ready/disconnect/stop/unwindrevoke before
+borrowedowners. OnlysuccessfulownTickrecaptures. Allvariants/pendinglossless/
+transfers/postbattle/nativeadoptionOPEN.
+
+SevenexistingC++filesmodified, newfiles0; twoactualboundedconnectedsourcebranches
+(A5add/A4removepeerpush), no newopcode/format/parser/phase/handler/fullroute.
+Fiveupstreamseals/exactinverse/independentstaticreview andsuccessfulLFhelpers
+preservedwithoutreexecution. InitialApphelperfailuresno trackedmutation and
+reviewcorrectioncandidatehistory retainedadditive. Oldgoalprefix/priorledger/
+frontierv23/config/customIDs/saves exact. Unique report
+20261013-tw-native-item-ui-blacklist-owner-source-351. TW156C2S/252S2C/world74=
+50partial11control13unconnected; CN156C2S/280phase/253length separate; existing
+frontier/countdeltas0. Whole/TWdenominatorpercentnull/parser67.6%notcompletion.
+Genuinecommonacquisition/full25/full1215/freshfull50/native5D/allvariants/
+fullTW-CN-fourWS/nativeacceptanceOPEN. FullTWfirst/common64/coin99999999999/
+qualifiedstack99/nativelevels/saves/frozen/fonts/conversiongoalactive. PHASE1 no
+compiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/gameDBSQL/
+importer/migrate/activate/deploy.

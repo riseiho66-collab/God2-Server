@@ -1,5 +1,6 @@
 #include "db/SqliteOwnedBlacklistRepository.h"
 #include "db/SqliteSupport.h"
+#include "protocol/TaiwanNativeBlacklist.h"
 #include "text/OwnedCharacterNameText.h"
 #include <algorithm>
 #include <array>
@@ -119,7 +120,38 @@ SqliteOwnedBlacklistRepository::Snapshot SqliteOwnedBlacklistRepository::load(st
     if(result.supported)result.rows=rows(account,character);
     operation.roots(root);transaction.commit();return result;
 }
-std::optional<SqliteOwnedBlacklistRepository::Row> SqliteOwnedBlacklistRepository::add(
+SqliteOwnedBlacklistRepository::CommittedChange SqliteOwnedBlacklistRepository::prepare_committed_change(
+        const Snapshot& before,Row row,bool changed,Operation& operation,const Root& root,const Root* target) {
+    const auto changes=sqlite3_total_changes64(db_); // Fixed after the intended write, including no-op.
+    if(sqlite3_get_autocommit(db_))throw DatabaseError("Blacklist committed material lost transaction");
+    const auto target_root=target?std::optional<Root>(*target):std::nullopt;
+    auto expected=before.rows; // The actual before is never mutated or moved from.
+    const auto at=std::find_if(expected.begin(),expected.end(),[&](const auto& r){return r.row_id==row.row_id;});
+    if(at==expected.end()) {
+        if(!changed || !row.active)throw DatabaseError("Blacklist committed new row invalid");
+        expected.push_back(row);
+    } else {
+        auto same=*at;same.active=row.active;
+        if(same!=row || changed==(at->active==row.active))
+            throw DatabaseError("Blacklist committed row identity/change mismatch");
+        *at=row;
+    }
+    operation.roots(root,target_root);
+    auto after=rows(root.account,root.id); // Actual staged rows, not a post-COMMIT observation.
+    operation.roots(root,target_root);
+    if(!before.supported || after!=expected || (!changed && after!=before.rows))
+        throw DatabaseError("Blacklist complete committed change mismatch");
+    auto logical=row.active?TaiwanNativeBlacklist::added(row.row_id,row.name):TaiwanNativeBlacklist::removed(row.row_id);
+    if(!logical)throw DatabaseError("Committed owned blacklist projection invalid");
+    CommittedChange result(std::make_shared<CommittedChange::Data>(
+        before,Snapshot{true,std::move(after)},std::move(row),std::move(*logical),changed,changes));
+    check_committed_change(result);return result;
+}
+void SqliteOwnedBlacklistRepository::check_committed_change(const CommittedChange& result) {
+    if(sqlite3_get_autocommit(db_) || sqlite3_total_changes64(db_)!=result.data_->staged_changes)
+        throw DatabaseError("Blacklist committed material transaction/storage changed");
+}
+std::optional<SqliteOwnedBlacklistRepository::CommittedChange> SqliteOwnedBlacklistRepository::add_committed(
         std::uint64_t account,std::uint64_t character,std::string_view input,Current current) {
     Operation operation(*this,std::move(current));
     const std::string name(input); // Own bytes and actual Current before SQL.
@@ -128,21 +160,23 @@ std::optional<SqliteOwnedBlacklistRepository::Row> SqliteOwnedBlacklistRepositor
     qualify(true);operation.fence();
     sqlite_detail::Transaction transaction(db_);connection(db_,true,false);operation.fence();const auto root=owner(account,character);
     if(root.codepage!=950 || ascii_equal(root.name,name))return {};
-    auto before=rows(account,character);
-    const auto active=std::count_if(before.begin(),before.end(),[](const Row& r){return r.active;});
-    for(auto& row:before)if(row.name==name) {
-        if(!row.active) {
+    const Snapshot before{true,rows(account,character)};
+    const auto active=std::count_if(before.rows.begin(),before.rows.end(),[](const Row& r){return r.active;});
+    for(const auto& row:before.rows)if(row.name==name) {
+        Row selected=row;const bool changed=!row.active;
+        if(changed) {
             if(active>=10)return {};
             operation.roots(root);
             const auto changes=sqlite3_total_changes64(db_);
             sqlite_detail::Statement reactivate(db_,"UPDATE main.character_blacklist_entries SET active=1 WHERE row_id=? AND account_id=? AND character_id=? AND active=0");
             reactivate.bind_id(1,row.row_id);reactivate.bind_id(2,account);reactivate.bind_id(3,character);operation.roots(root);reactivate.done();
             if(sqlite3_changes(db_)!=1 || sqlite3_total_changes64(db_)!=changes+1)throw DatabaseError("Blacklist reactivation conflict");
-            row.active=true;
+            selected.active=true;
         }
-        std::optional<Row> result(std::move(row));operation.roots(root);transaction.commit();return result;
+        std::optional<CommittedChange> result(prepare_committed_change(before,std::move(selected),changed,operation,root,nullptr));
+        operation.roots(root);check_committed_change(*result);transaction.commit();return result;
     }
-    if(active>=10 || before.size()>=4096)return {}; // CUSTOM-0096, not native permission.
+    if(active>=10 || before.rows.size()>=4096)return {}; // CUSTOM-0096, not native permission.
     std::optional<Root> target_root;
     {
         sqlite_detail::Statement target(db_,"SELECT c.id,c.account_id FROM main.recovered_characters c JOIN main.accounts a ON a.id=c.account_id WHERE c.name_codepage=950 AND c.name_bytes=? ORDER BY c.id");
@@ -170,26 +204,42 @@ std::optional<SqliteOwnedBlacklistRepository::Row> SqliteOwnedBlacklistRepositor
     const auto id=sqlite3_last_insert_rowid(db_);
     if(id<=0 || std::uint64_t(id)>0xfffffffeu || sqlite3_changes(db_)!=1 || sqlite3_total_changes64(db_)!=changes+1)
         throw DatabaseError("Blacklist allocation/write conflict");
-    std::optional<Row> result(Row{std::uint32_t(id),account,character,target_root->id,name,true});
-    operation.roots(root,target_root);transaction.commit();return result;
+    std::optional<CommittedChange> result(prepare_committed_change(before,
+        Row{std::uint32_t(id),account,character,target_root->id,name,true},true,operation,root,&*target_root));
+    operation.roots(root,target_root);check_committed_change(*result);transaction.commit();return result;
 }
-std::optional<SqliteOwnedBlacklistRepository::Row> SqliteOwnedBlacklistRepository::remove(
+std::optional<SqliteOwnedBlacklistRepository::CommittedChange> SqliteOwnedBlacklistRepository::remove_committed(
         std::uint64_t account,std::uint64_t character,std::uint32_t row_id,Current current) {
     Operation operation(*this,std::move(current));operation.fence();
     if(!row_id || row_id==0xffffffffu)return {};
     qualify(true);operation.fence();sqlite_detail::Transaction transaction(db_);connection(db_,true,false);operation.fence();const auto root=owner(account,character);
     if(root.codepage!=950)return {};
-    auto before=rows(account,character);
-    const auto at=std::find_if(before.begin(),before.end(),[&](const auto& row){return row.row_id==row_id;});
-    if(at==before.end())return {};
-    std::optional<Row> result(*at);
-    if(!result->active){operation.roots(root);transaction.commit();return result;}
-    operation.roots(root);
-    const auto changes=sqlite3_total_changes64(db_);
-    sqlite_detail::Statement remove(db_,"UPDATE main.character_blacklist_entries SET active=0 WHERE row_id=? AND account_id=? AND character_id=? AND target_character_id=? AND name_bytes=? AND active=1");
-    remove.bind_id(1,row_id);remove.bind_id(2,account);remove.bind_id(3,character);remove.bind_id(4,result->target_character);
-    remove.bind_blob(5,std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(result->name.data()),result->name.size()));operation.roots(root);remove.done();
-    if(sqlite3_changes(db_)!=1 || sqlite3_total_changes64(db_)!=changes+1)throw DatabaseError("Blacklist deletion ownership conflict");
-    result->active=false;operation.roots(root);transaction.commit();return result;
+    const Snapshot before{true,rows(account,character)};
+    const auto at=std::find_if(before.rows.begin(),before.rows.end(),[&](const auto& row){return row.row_id==row_id;});
+    if(at==before.rows.end())return {};
+    Row selected=*at;const bool changed=selected.active;
+    if(changed) {
+        operation.roots(root);
+        const auto changes=sqlite3_total_changes64(db_);
+        sqlite_detail::Statement remove(db_,"UPDATE main.character_blacklist_entries SET active=0 WHERE row_id=? AND account_id=? AND character_id=? AND target_character_id=? AND name_bytes=? AND active=1");
+        remove.bind_id(1,row_id);remove.bind_id(2,account);remove.bind_id(3,character);remove.bind_id(4,selected.target_character);
+        remove.bind_blob(5,std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(selected.name.data()),selected.name.size()));operation.roots(root);remove.done();
+        if(sqlite3_changes(db_)!=1 || sqlite3_total_changes64(db_)!=changes+1)throw DatabaseError("Blacklist deletion ownership conflict");
+        selected.active=false;
+    }
+    std::optional<CommittedChange> result(prepare_committed_change(before,std::move(selected),changed,operation,root,nullptr));
+    operation.roots(root);check_committed_change(*result);transaction.commit();return result;
+}
+std::optional<SqliteOwnedBlacklistRepository::Row> SqliteOwnedBlacklistRepository::add(
+        std::uint64_t account,std::uint64_t character,std::string_view input,Current current) {
+    auto result=add_committed(account,character,input,std::move(current));
+    if(!result)return {};
+    return std::optional<Row>(std::move(result->data_->row));
+}
+std::optional<SqliteOwnedBlacklistRepository::Row> SqliteOwnedBlacklistRepository::remove(
+        std::uint64_t account,std::uint64_t character,std::uint32_t row_id,Current current) {
+    auto result=remove_committed(account,character,row_id,std::move(current));
+    if(!result)return {};
+    return std::optional<Row>(std::move(result->data_->row));
 }
 }
