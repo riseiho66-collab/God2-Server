@@ -924,9 +924,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 std::optional<TaiwanNativeDeityRosterPrefix> expected_receiving_prefix;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
-            // CUSTOM-0096: source352 ordered submitted endpoints and actual attempt chain.
-            // Same game owner posts deltas and original responses to the same peer strand.
-            // This is neither native cache adoption nor an original-response Queued receipt.
+            // CUSTOM-0096: source353 actual original-response custody plus peer attempt chain.
+            // Original response Queued means its validated final wire entered the FIFO.
+            // Pending endpoints remain provisional, never native adoption or socket Written.
             constexpr std::size_t blacklist_attempt_limit=256; // Existing Session max_writes transport bound.
             struct BlacklistLivePending {
                 const std::shared_ptr<const Session::NormalWorldOutputHandle> output;
@@ -949,21 +949,29 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 bool live_disabled=false; // Never revive a stale incarnation by accidental DB equality.
                 std::shared_ptr<const Session::NormalWorldOutputHandle> output;
                 std::shared_ptr<BlacklistLivePending> live_pending;
+                std::optional<Session::NormalWorldResponseAttempt> own_response;
             };
             std::map<std::uint64_t,BlacklistReplay> blacklist_replays;
             const auto blacklist_lifetime=std::make_shared<std::atomic_bool>(true);
             const auto retire_blacklist_output=[&](BlacklistReplay& replay) noexcept {
                 if(replay.output)replay.output->revoke();
                 if(replay.live_pending && replay.live_pending->output)replay.live_pending->output->revoke();
-                replay.output.reset();replay.live_pending.reset();
+                replay.output.reset();replay.live_pending.reset();replay.own_response.reset();
             };
             const auto stop_blacklist_outputs=[&]() noexcept {
                 blacklist_lifetime->store(false);
                 for(auto& [id,replay]:blacklist_replays)retire_blacklist_output(replay);
             };
+            const auto blacklist_pending_source=[](const BlacklistReplay& replay) {
+                return bool(replay.live_pending) || (replay.own_response &&
+                    replay.own_response->status()==Session::NormalWorldResponseStatus::Pending);
+            };
             // Pure Current: safe inside the existing SQL source callback. Never settle,
             // mutate a map, close a peer or invoke a game/source observer here.
             const auto blacklist_chain_current=[&](const std::shared_ptr<Session>& peer,const BlacklistReplay& replay) {
+                // An original endpoint must not bypass Failed custody merely because
+                // this incarnation has no incoming peer attempt nodes.
+                if(replay.own_response && !peer->normal_world_response_current_on_game(*replay.own_response))return false;
                 if(!replay.live_pending)return true;
                 if(replay.live_disabled || !replay.output || !replay.snapshot || !replay.snapshot->supported ||
                    !peer->normal_world_output_current_on_game(*replay.output))return false;
@@ -978,15 +986,17 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             // Called on this actual game owner. Copy all identities before any close.
             const auto settle_blacklist_output=[&](const std::shared_ptr<Session>& peer) {
                 const auto at=blacklist_replays.find(peer->id());
-                if(at==blacklist_replays.end() || at->second.session.lock()!=peer || !at->second.live_pending)return;
+                if(at==blacklist_replays.end() || at->second.session.lock()!=peer ||
+                   (!at->second.live_pending && !at->second.own_response))return;
                 const auto source=at->second;const auto pending=source.live_pending;
                 bool accepted=blacklist_chain_current(peer,source),queued=accepted;
                 if(accepted)for(std::shared_ptr<const BlacklistLivePending> node=pending;node;node=node->previous)
                     queued=queued && node->attempt->status()==Session::NormalWorldOutputStatus::Queued;
-                if(accepted)accepted=peer->normal_world_output_current_on_game(*source.output);
+                if(accepted && source.live_pending)accepted=peer->normal_world_output_current_on_game(*source.output);
                 const auto now=blacklist_replays.find(peer->id());
                 if(now==blacklist_replays.end() || now->second.session.lock()!=peer || now->second.live_pending!=pending ||
-                   now->second.output!=source.output || now->second.snapshot!=source.snapshot)return;
+                   now->second.output!=source.output || now->second.snapshot!=source.snapshot ||
+                   now->second.own_response!=source.own_response)return;
                 if(!accepted){now->second.live_disabled=true;retire_blacklist_output(now->second);peer->close();}
                 else if(queued)now->second.live_pending.reset(); // Clear attempts only; never rewind the submitted endpoint.
             };
@@ -6762,18 +6772,30 @@ if(guild_officer_runtime && player_guild(session) &&
                                     const auto source=blacklist_replays.at(session.id()); // Own exact map inputs before SQL.
                                     // Earlier admitted peer posts precede this job's original response post.
                                     // Pending may continue only while its entire actual attempt chain is current.
-                                    if(source.live_pending && !blacklist_invocation_current()) {
+                                    if(blacklist_pending_source(source) && !blacklist_invocation_current()) {
                                         auto& now=blacklist_replays.at(session.id());now.live_disabled=true;
                                         retire_blacklist_output(now);session.close();return {};
                                     }
                                     if(!blacklist_chain_current(held,source))return {};
+                                    std::optional<Session::NormalWorldResponseAttempt> response_attempt;
+                                    if(blacklist_invocation_current())
+                                        response_attempt=session.capture_normal_world_response(*blacklist_invocation);
+                                    if(source.own_response && source.own_response->status()==Session::NormalWorldResponseStatus::Pending &&
+                                       (!response_attempt || *source.own_response!=*response_attempt)) {
+                                        auto& now=blacklist_replays.at(session.id());now.live_disabled=true;
+                                        retire_blacklist_output(now);session.close();return {};
+                                    }
+                                    const auto response_current=[&] {
+                                        return response_attempt && session.normal_world_response_callback_current(*response_attempt);
+                                    };
                                     const auto source_current=[&] {
                                         if(!current() || !replay_current())return false;
                                         const auto& now=blacklist_replays.at(session.id());
                                         return now.done==source.done && now.cursor==source.cursor && now.active_phase==source.active_phase &&
                                             now.snapshot==source.snapshot && now.live_disabled==source.live_disabled &&
                                             now.output==source.output && now.live_pending==source.live_pending &&
-                                            (!now.live_pending || blacklist_invocation_current()) && blacklist_chain_current(held,now);
+                                            now.own_response==source.own_response && (!response_attempt || response_current()) &&
+                                            (!blacklist_pending_source(now) || blacklist_invocation_current()) && blacklist_chain_current(held,now);
                                     };
                                     struct PreparedPeer {
                                         std::shared_ptr<Session> session;
@@ -6804,27 +6826,37 @@ if(guild_officer_runtime && player_guild(session) &&
                                     const auto change=owned_blacklist->handle_committed(account,character,*request,source_current);
                                     if(!source_current())return {};
                                     if(!change){++i;continue;} // Preserve old valid rejection: empty reply, continue records.
-                                    append_logical(change->logical()); // Original reply survives no-op; durable COMMIT is never retried.
+                                    const auto reply_begin=wire.size();
+                                    append_logical(change->logical()); // Original no-op reply; durable COMMIT is never retried.
                                     const auto before=change->before_ptr(),after=change->after_ptr();
-                                    // Sender source denotes its submitted reply, never an acknowledgement.
-                                    if(!blacklist_invocation_current() || *source.snapshot!=*before) {
-                                        auto& now=blacklist_replays.at(session.id());const bool hazard=bool(now.live_pending);
+                                    const bool qualified=response_current() && blacklist_invocation_current() && *source.snapshot==*before;
+                                    if(!qualified) {
+                                        auto& now=blacklist_replays.at(session.id());const bool hazard=blacklist_pending_source(source);
                                         now.live_disabled=true;retire_blacklist_output(now);
                                         if(hazard){session.close();return {};}
-                                    } else if(change->changed())blacklist_replays.at(session.id()).snapshot=after;
-                                    if(!change->changed() || !blacklist_invocation_current()){++i;continue;}
+                                    } else {
+                                        // Actual append-owned framed bytes, not a substring claim about later output.
+                                        // Session matches this ordered component at final frame boundaries.
+                                        session.expect_normal_world_response(*response_attempt,
+                                            std::span<const std::uint8_t>(wire).subspan(reply_begin));
+                                        if(!response_current())return {};
+                                        auto& now=blacklist_replays.at(session.id());now.own_response=*response_attempt;
+                                        if(change->changed())now.snapshot=after; // Provisional until actual final FIFO Queued.
+                                    }
+                                    if(!change->changed() || !qualified){++i;continue;}
                                     for(auto& peer:peers) {
                                         const auto at=blacklist_replays.find(peer.session->id());
                                         if(at==blacklist_replays.end() || at->second.session.lock()!=peer.session)continue;
                                         const auto now=at->second; // Never carry an iterator through send/close.
                                         const bool same=now.account==account && now.character==character && now.done==peer.source.done &&
                                             now.snapshot==peer.source.snapshot && now.output==peer.source.output &&
-                                            now.live_pending==peer.source.live_pending && now.live_disabled==peer.source.live_disabled;
+                                            now.live_pending==peer.source.live_pending && now.live_disabled==peer.source.live_disabled &&
+                                            now.own_response==peer.source.own_response;
                                         if(!same)continue;
                                         if(!peer.delivery || !now.snapshot || *now.snapshot!=*before ||
                                            !blacklist_chain_current(peer.session,now) ||
                                            !peer.session->normal_world_output_current_on_game(*peer.delivery->output)) {
-                                            const bool hazard=bool(now.live_pending);
+                                            const bool hazard=blacklist_pending_source(now);
                                             at->second.live_disabled=true;retire_blacklist_output(at->second);
                                             if(hazard)peer.session->close(); // Actual old chain cannot skip this committed edge.
                                             continue;
@@ -6839,7 +6871,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                             const auto posted=blacklist_replays.find(peer.session->id());
                                             if(posted==blacklist_replays.end() || posted->second.session.lock()!=peer.session ||
                                                posted->second.output!=now.output || posted->second.live_pending!=now.live_pending ||
-                                               posted->second.snapshot!=now.snapshot || posted->second.live_disabled ||
+                                               posted->second.snapshot!=now.snapshot || posted->second.own_response!=now.own_response ||
+                                               posted->second.live_disabled ||
                                                !blacklist_chain_current(peer.session,posted->second) ||
                                                !peer.session->normal_world_output_current_on_game(*delivery->output))
                                                 throw std::runtime_error("Blacklist submitted source retired");
@@ -6869,7 +6902,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(!tick_only) {
                                 const auto at=blacklist_replays.find(session.id());
                                 if(at!=blacklist_replays.end() && at->second.session.lock()==held) {
-                                    const bool pending=bool(at->second.live_pending);
+                                    const bool pending=blacklist_pending_source(at->second);
                                     retire_blacklist_output(at->second);
                                     if(pending){at->second.live_disabled=true;session.close();return {};}
                                 }
@@ -6894,18 +6927,36 @@ if(guild_officer_runtime && player_guild(session) &&
                                 const auto cursor=blacklist_replays.at(session.id()).cursor;
                                 const auto active_phase=blacklist_replays.at(session.id()).active_phase;
                                 const auto pinned=blacklist_replays.at(session.id()).snapshot;
+                                const auto prior_response=blacklist_replays.at(session.id()).own_response;
+                                if(!blacklist_chain_current(held,blacklist_replays.at(session.id())))return {};
+                                std::optional<Session::NormalWorldResponseAttempt> replay_response;
+                                if(blacklist_invocation_current())
+                                    replay_response=session.capture_normal_world_response(*blacklist_invocation);
+                                if(prior_response && prior_response->status()==Session::NormalWorldResponseStatus::Pending &&
+                                   (!replay_response || *prior_response!=*replay_response))return {};
+                                const auto replay_response_current=[&] {
+                                    return !replay_response || session.normal_world_response_callback_current(*replay_response);
+                                };
                                 auto observed=owned_blacklist->observe(account,character,[&] {
                                     if(!current() || !replay_current())return false;
                                     const auto& now=blacklist_replays.at(session.id());
-                                    return !now.done && now.cursor==cursor && now.active_phase==active_phase && now.snapshot==pinned;
+                                    return !now.done && now.cursor==cursor && now.active_phase==active_phase && now.snapshot==pinned &&
+                                        now.own_response==prior_response && replay_response_current() && blacklist_chain_current(held,now);
                                 });
                                 if(pinned && observed!=*pinned)return {}; // Another Session changed this replay's complete source.
                                 const auto material=pinned?pinned:std::make_shared<const SqliteOwnedBlacklistRepository::Snapshot>(std::move(observed));
                                 const auto batch=OwnedBlacklistService::restore(*material,cursor,active_phase);
                                 if(!current() || !replay_current() || blacklist_replays.at(session.id()).cursor!=cursor ||
                                    blacklist_replays.at(session.id()).active_phase!=active_phase ||
-                                   blacklist_replays.at(session.id()).snapshot!=pinned)return {};
-                                append_logical(batch.logical);
+                                   blacklist_replays.at(session.id()).snapshot!=pinned ||
+                                   blacklist_replays.at(session.id()).own_response!=prior_response || !replay_response_current())return {};
+                                const auto reply_begin=wire.size();append_logical(batch.logical);
+                                if(replay_response && !batch.logical.empty()) {
+                                    session.expect_normal_world_response(*replay_response,
+                                        std::span<const std::uint8_t>(wire).subspan(reply_begin));
+                                    if(!replay_response_current())return {};
+                                    blacklist_replays.at(session.id()).own_response=*replay_response;
+                                }
                                 auto& pending=blacklist_replays.at(session.id());pending.cursor=batch.last_row;pending.snapshot=material;
                                 if(!material->supported){pending.done=true;continue;} // Valid non950 owner: only this feature unavailable.
                                 if(batch.done && !active_phase){pending.active_phase=true;pending.cursor=0;}

@@ -61,11 +61,16 @@ constexpr auto skill_sequence_timeout = std::chrono::seconds(5);
 thread_local const Session* observed_world_callback=nullptr;
 thread_local bool* observed_response_poison=nullptr;
 thread_local std::atomic<Session::WorldResponseWriteStatus>* observed_response_status=nullptr;
+thread_local std::atomic<Session::NormalWorldResponseStatus>* observed_normal_response_status=nullptr;
 void poison_world_response() noexcept {
     if(observed_response_poison)*observed_response_poison=true;
     if(observed_response_status) {
         auto pending=Session::WorldResponseWriteStatus::Pending;
         observed_response_status->compare_exchange_strong(pending,Session::WorldResponseWriteStatus::Failed);
+    }
+    if(observed_normal_response_status) {
+        auto pending=Session::NormalWorldResponseStatus::Pending;
+        observed_normal_response_status->compare_exchange_strong(pending,Session::NormalWorldResponseStatus::Failed);
     }
 }
 struct WorldRecordsObservationScope {
@@ -76,10 +81,10 @@ struct WorldRecordsObservationScope {
             throw std::logic_error("World observation callback reentry rejected");
         }
         observed_world_callback=&session;observed_response_poison=&response_poisoned;
-        observed_response_status=nullptr;
+        observed_response_status=nullptr;observed_normal_response_status=nullptr;
     }
     ~WorldRecordsObservationScope(){
-        observed_response_status=nullptr;observed_response_poison=nullptr;observed_world_callback=nullptr;
+        observed_response_status=nullptr;observed_normal_response_status=nullptr;observed_response_poison=nullptr;observed_world_callback=nullptr;
     }
     WorldRecordsObservationScope(const WorldRecordsObservationScope&)=delete;
     WorldRecordsObservationScope& operator=(const WorldRecordsObservationScope&)=delete;
@@ -207,6 +212,20 @@ Session::NormalWorldOutputStatus Session::NormalWorldOutputAttempt::status() con
     return data_->status.load();
 }
 
+struct Session::NormalWorldResponseAttempt::Data {
+    const std::thread::id game_thread=std::this_thread::get_id();
+    const std::shared_ptr<NormalWorldOutputHandle::Data> recipient;
+    std::atomic<NormalWorldResponseStatus> status{NormalWorldResponseStatus::Pending};
+    std::atomic<bool> armed{false},retired{false};
+    // Game callback writes these before handoff; strand receives frozen values.
+    std::vector<std::vector<std::uint8_t>> components;
+    std::size_t component_bytes=0;
+    explicit Data(std::shared_ptr<NormalWorldOutputHandle::Data> source):recipient(std::move(source)) {}
+};
+Session::NormalWorldResponseStatus Session::NormalWorldResponseAttempt::status() const noexcept {
+    return data_->status.load();
+}
+
 struct Session::NativePkEntryHold::Data {
     enum class Phase {Preparing,Held,Committed,Released,Written,Failed,Aborted};
     const std::weak_ptr<Session> session;
@@ -309,6 +328,28 @@ struct Session::Impl {
             data->status.compare_exchange_strong(pending,NormalWorldOutputStatus::Failed);
         }
     };
+    struct NormalResponsePending {
+        const std::shared_ptr<NormalWorldResponseAttempt::Data> receipt;
+        explicit NormalResponsePending(std::shared_ptr<NormalWorldResponseAttempt::Data> data):receipt(std::move(data)) {}
+        void fail() noexcept {
+            auto pending=NormalWorldResponseStatus::Pending;
+            receipt->status.compare_exchange_strong(pending,NormalWorldResponseStatus::Failed);
+            // TLS poison may already have changed status; still retire exactly once.
+            if(receipt->status.load()!=NormalWorldResponseStatus::Failed || !receipt->armed.load() ||
+               receipt->retired.exchange(true))return;
+            const auto recipient=receipt->recipient;
+            {
+                std::lock_guard lock(recipient->sync->mutex);
+                recipient->revoked.store(true);
+                const auto epoch=recipient->sync->epoch.load();
+                if(epoch!=std::numeric_limits<std::uint64_t>::max())recipient->sync->epoch.store(epoch+1);
+            }
+            if(const auto actual=recipient->initialization->entry->session.lock())
+                actual->impl_->close_requested.store(true); // No post/source callback on failure.
+        }
+        ~NormalResponsePending(){fail();}
+    };
+    std::shared_ptr<NormalResponsePending> normal_response_callback_capture; // Serial game callback ONLY.
     struct SelectionEntry {
         const RecoveredSelectionItemRequest::Request* original;
         std::shared_ptr<const NativeWorldSelectionInput::Data> data;
@@ -463,6 +504,21 @@ struct Session::Impl {
             normal_entry.load()==entry && normal_initialization.load()==init &&
             entry->session.lock().get()==&owner && entry->account==data->account && entry->character==data->character &&
             data->account && data->character && entry->written.load() && !entry->retired.load() && !init->tail.empty() &&
+            !native_pk_pending.load() && !native_battle_pending.load() && !native_pk_terminal.load();
+    }
+    // Own ORIGINAL response needs the actual INIT/epoch, not S2A Written.
+    // Caller holds Sync::mutex; no public account/character reads or callbacks.
+    bool normal_response_transport_current_locked(const std::shared_ptr<NormalWorldOutputHandle::Data>& data) const {
+        if(!data || data->sync!=normal_output_sync || data->revoked.load() ||
+           data->epoch==std::numeric_limits<std::uint64_t>::max() || data->epoch!=normal_output_sync->epoch.load())return false;
+        const auto init=data->initialization;const auto entry=init->entry;
+        return mode==ProtocolMode::God2CharacterConnection && !close_requested.load() &&
+            owner.recovered_world_ready() && owner.state()==data->phase &&
+            (data->phase==SessionState::CharacterSelected || data->phase==SessionState::InWorld) &&
+            owner.battle_generation()==data->battle && init->effective_battle==data->battle &&
+            normal_entry.load()==entry && normal_initialization.load()==init &&
+            entry->session.lock().get()==&owner && entry->account==data->account && entry->character==data->character &&
+            data->account && data->character && !entry->retired.load() &&
             !native_pk_pending.load() && !native_battle_pending.load() && !native_pk_terminal.load();
     }
     std::array<std::uint8_t,23> normal_tail_bytes{}; // Strand only; maximum existing grammar.
@@ -1838,6 +1894,28 @@ struct Session::Impl {
         }
         return true;
     }
+    // Final wire has already passed existing complete-frame validation. Match
+    // exact registered components at frame boundaries, in order/nonoverlapping.
+    static bool normal_response_components_match(const NormalWorldResponseAttempt::Data& receipt,
+            std::span<const std::uint8_t> wire) {
+        if(!receipt.armed.load() || receipt.components.empty())return false;
+        std::size_t at=0;
+        for(const auto& component:receipt.components) {
+            bool found=false;
+            while(at<wire.size()) {
+                if(component.size()<=wire.size()-at &&
+                   std::equal(component.begin(),component.end(),wire.begin()+static_cast<std::ptrdiff_t>(at))) {
+                    at+=component.size();found=true;break;
+                }
+                if(wire.size()-at<2)return false;
+                const auto length=static_cast<std::size_t>(wire[at])+256u*wire[at+1];
+                if(length<4 || length>wire.size()-at)return false;
+                at+=length;
+            }
+            if(!found)return false;
+        }
+        return true;
+    }
     void resume_world_input(bool awaiting_skill=false) {
         if(native_pk_terminal.load()) {stage_native_pk_terminal();return;}
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
@@ -2047,9 +2125,13 @@ struct Session::Impl {
             auto& s=*self->impl_;
             s.native_pk_terminal_callback_capture.reset(); // This exact serial input callback only.
             s.world_response_callback_capture.reset(); // Previous unhanded attempt retires Failed.
+            s.normal_response_callback_capture.reset(); // Independent private original-response attempt.
             struct ResponseCaptureEnd {
                 Impl& state;
-                ~ResponseCaptureEnd(){state.world_response_callback_capture.reset();}
+                ~ResponseCaptureEnd(){
+                    state.world_response_callback_capture.reset();
+                    state.normal_response_callback_capture.reset();
+                }
             } response_capture_end{s}; // Unhanded attempt fails on every exceptional unwind.
             std::vector<std::uint8_t> response;
             bool accepted=false;
@@ -2099,10 +2181,12 @@ struct Session::Impl {
                     }
                 }
             } catch(const std::exception& error) {
-                if(s.native_pk_terminal_callback_capture || s.world_response_callback_capture)accepted=false;
+                if(s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
+                   (s.normal_response_callback_capture && s.normal_response_callback_capture->receipt->armed.load()))accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason={}",s.id,error.what());
             } catch(...) {
-                if(s.native_pk_terminal_callback_capture || s.world_response_callback_capture)accepted=false;
+                if(s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
+                   (s.normal_response_callback_capture && s.normal_response_callback_capture->receipt->armed.load()))accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason=unknown",s.id);
             }
             // The game-owned incarnation survives deadline/close retirement.
@@ -2110,11 +2194,17 @@ struct Session::Impl {
             // can qualify it; rejection/throw never acknowledges acceptance.
             const auto terminal_ack=std::exchange(s.native_pk_terminal_callback_capture,{});
             const auto response_write=std::exchange(s.world_response_callback_capture,{});
+            auto normal_response=std::exchange(s.normal_response_callback_capture,{});
+            if(normal_response && !normal_response->receipt->armed.load())normal_response.reset(); // Unarmed legacy reply unchanged.
+            if(normal_response && (!accepted || normal_response->receipt->status.load()!=NormalWorldResponseStatus::Pending ||
+               !normal_response_components_match(*normal_response->receipt,response))) {
+                normal_response->fail();accepted=false;
+            }
             if(response_write && (!accepted || response_write->receipt->wire!=response ||
                response_write->receipt->status.load()!=WorldResponseWriteStatus::Pending)) {
                 response_write->fail();accepted=false;
             }
-            try {asio::post(s.strand,[self,accepted,terminal_ack,response_write,response=std::move(response),
+            try {asio::post(s.strand,[self,accepted,terminal_ack,response_write,normal_response,response=std::move(response),
                                  count=records.size(),movement_count=requests.size()]() mutable {
                 auto& s=*self->impl_;
                 s.game_busy=false;
@@ -2134,8 +2224,23 @@ struct Session::Impl {
                             response_write->fail();s.fail("Observed original world response identity mismatch");return;
                         }
                         if(response_write)response_write->frame=bytes;
-                        s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
-                        s.writes.back().observed_response=response_write;
+                        if(normal_response) {
+                            bool queued=false;
+                            {
+                                std::lock_guard lock(normal_response->receipt->recipient->sync->mutex);
+                                if(s.normal_response_transport_current_locked(normal_response->receipt->recipient) &&
+                                   normal_response->receipt->status.load()==NormalWorldResponseStatus::Pending) {
+                                    s.writes.push_back({bytes,{}});s.write_bytes+=bytes->size();
+                                    s.writes.back().observed_response=response_write;
+                                    auto pending=NormalWorldResponseStatus::Pending;
+                                    queued=normal_response->receipt->status.compare_exchange_strong(pending,NormalWorldResponseStatus::Queued);
+                                }
+                            }
+                            if(!queued){normal_response->fail();s.fail("Normal original response retired before FIFO insertion");return;}
+                        } else {
+                            s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                            s.writes.back().observed_response=response_write;
+                        }
                         if(s.writes.front().bytes==bytes) s.write();
                     }
                     if(s.character_handlers.world_records)
@@ -2147,6 +2252,7 @@ struct Session::Impl {
                     s.resume_world_input();
                 } catch(...) { s.fail("Recovered world response failed"); }
             });}catch(...) {
+                if(normal_response)normal_response->fail(); // Before preserving the existing rethrow/context-abort path.
                 if(!terminal_ack)throw; // Existing nonterminal handoff semantics.
                 // The actual callback returned; this is failure, never its ACK.
                 terminal_ack->ack_handoff_failed.store(true);
@@ -2594,6 +2700,64 @@ Session::NormalWorldOutputAttempt Session::send_normal_world_records(
         }catch(...) {s.fail("Normal world output encoding or handoff failed");}
     });
     return result;
+}
+std::optional<Session::NormalWorldResponseAttempt> Session::capture_normal_world_response(
+        const NormalWorldInitialization& initialization) {
+    if(observed_world_callback!=this || !observed_response_poison)
+        throw std::logic_error("Normal original response requires own actual callback");
+    if(*observed_response_poison)return std::nullopt;
+    if(!normal_world_initialization_current(initialization))return std::nullopt;
+    if(const auto existing=impl_->normal_response_callback_capture) {
+        const NormalWorldResponseAttempt result(existing->receipt);
+        if(existing->receipt->recipient->initialization==initialization.data_ &&
+           normal_world_response_callback_current(result))return result;
+        poison_world_response();existing->fail();
+        throw std::logic_error("Normal original response callback identity changed");
+    }
+    std::lock_guard lock(impl_->normal_output_sync->mutex);
+    const auto epoch=impl_->normal_output_sync->epoch.load();
+    if(epoch==std::numeric_limits<std::uint64_t>::max())return std::nullopt;
+    auto recipient=std::make_shared<NormalWorldOutputHandle::Data>(impl_->normal_output_sync,initialization.data_,epoch,state());
+    if(!impl_->normal_response_transport_current_locked(recipient))return std::nullopt;
+    auto data=std::make_shared<NormalWorldResponseAttempt::Data>(std::move(recipient));
+    impl_->normal_response_callback_capture=std::make_shared<Impl::NormalResponsePending>(data);
+    observed_normal_response_status=&data->status;
+    return NormalWorldResponseAttempt(std::move(data));
+}
+void Session::expect_normal_world_response(const NormalWorldResponseAttempt& attempt,
+        std::span<const std::uint8_t> framed_component) {
+    if(!normal_world_response_callback_current(attempt)) {
+        poison_world_response();
+        if(impl_->normal_response_callback_capture)impl_->normal_response_callback_capture->fail();
+        throw std::logic_error("Normal original component requires its own current callback");
+    }
+    if(framed_component.empty())return;
+    const auto pending=impl_->normal_response_callback_capture;
+    pending->receipt->armed.store(true); // Every following failure retires the actual live source.
+    try {
+        if(pending->receipt->components.size()>=8192 ||
+           framed_component.size()>max_buffer-pending->receipt->component_bytes ||
+           !Impl::valid_world_response(framed_component))
+            throw std::invalid_argument("Normal original response component bounds or frame invalid");
+        pending->receipt->components.emplace_back(framed_component.begin(),framed_component.end());
+        pending->receipt->component_bytes+=framed_component.size();
+    } catch(...) {poison_world_response();pending->fail();throw;}
+}
+bool Session::normal_world_response_current_on_game(const NormalWorldResponseAttempt& attempt) const {
+    const auto data=attempt.data_;
+    if(!data || data->game_thread!=std::this_thread::get_id() || data->status.load()==NormalWorldResponseStatus::Failed)return false;
+    const auto recipient=data->recipient;
+    if(!recipient || !recipient->initialization || !recipient->initialization->entry ||
+       recipient->initialization->entry->game_thread!=std::this_thread::get_id() ||
+       recipient->initialization->entry->session.lock().get()!=this)return false;
+    std::lock_guard lock(recipient->sync->mutex);
+    return data->status.load()!=NormalWorldResponseStatus::Failed && impl_->normal_response_transport_current_locked(recipient) &&
+        account_id==recipient->account && character_id==recipient->character;
+}
+bool Session::normal_world_response_callback_current(const NormalWorldResponseAttempt& attempt) const {
+    if(observed_world_callback!=this || !observed_response_poison || *observed_response_poison)return false;
+    const auto capture=impl_->normal_response_callback_capture;
+    return capture && capture->receipt==attempt.data_ && normal_world_response_current_on_game(attempt);
 }
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         std::shared_ptr<WorldRecordsWrite::Data> observed) {

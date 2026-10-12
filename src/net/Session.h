@@ -172,6 +172,22 @@ public:
         explicit NormalWorldOutputAttempt(std::shared_ptr<Data> data):data_(std::move(data)) {}
         std::shared_ptr<Data> data_;
     };
+    // Actual ORIGINAL callback response FIFO custody, independent of push
+    // attempts and WorldResponseWrite. Queued never means Written/native ACK.
+    enum class NormalWorldResponseStatus {Pending,Queued,Failed};
+    class NormalWorldResponseAttempt {
+    public:
+        NormalWorldResponseAttempt(const NormalWorldResponseAttempt&)=default;
+        NormalWorldResponseAttempt& operator=(const NormalWorldResponseAttempt&)=default;
+        NormalWorldResponseStatus status() const noexcept;
+        bool operator==(const NormalWorldResponseAttempt& other) const noexcept {return data_==other.data_;}
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit NormalWorldResponseAttempt(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
     class NativeBattleSkillPublicationOwner {
     public:
         virtual ~NativeBattleSkillPublicationOwner()=default;
@@ -403,6 +419,12 @@ public:
     // SAME recorded game owner can later enqueue for this recipient. Queued
     // means actual FIFO insertion only; frames may subsequently fail/close.
     NormalWorldOutputAttempt send_normal_world_records(const NormalWorldOutputHandle&,std::vector<std::uint8_t> logical);
+    // Own actual callback only; reuse one private Data through split inner runs.
+    // Original response custody requires current INIT, not prior S2A Written.
+    std::optional<NormalWorldResponseAttempt> capture_normal_world_response(const NormalWorldInitialization&);
+    void expect_normal_world_response(const NormalWorldResponseAttempt&,std::span<const std::uint8_t> framed_component);
+    bool normal_world_response_current_on_game(const NormalWorldResponseAttempt&) const;
+    bool normal_world_response_callback_current(const NormalWorldResponseAttempt&) const;
     // PRIVATE0083 enqueue acceptance ONLY; no native/client ACK or receipt claimed.
     void send_world_records_with_acceptance(std::vector<std::uint8_t> logical,
         std::uint64_t expected_account,std::uint64_t expected_character,

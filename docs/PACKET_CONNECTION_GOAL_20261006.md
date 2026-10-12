@@ -4632,3 +4632,42 @@ notcompletion. Unique report20261013-tw-native-item-row-alias-blacklist-chain-so
 FullTWfirst/CN/fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/
 fonts/conversiongoalactive. PHASE1 no compiler/build/tests/runtime/native/API/
 CRT/VM/emulator/parser/codec/gameDBSQL/importer/migrate/activate/deploy.
+
+
+## Round353 native computed banks and original response custody (2026-10-13)
+
+Previous352618eb9cbce52632f984b45f7409407a4e465c234 published; exactHEAD
+notification38278789301success. Genuine sixwholebodies1418B+twoleaves12B+
+fourpartials114B=1544codeB454sites/24dataB, mapped/PEequal.177rawhits/201
+unalignedcandidates are scopeddiscovery notglobalabsence.497290 actual2A
+6payload bytes allinitialized/no newcredit.49E440 full24OUT toaux866E8 then
+prefix1=live855F0slot; postqueue reread lacksrepeatguard.49DF10 incoming50
+full24topeeraux867A8 signedbody1index0..7. Neither bank iscanonical8560C.
+Rollback/close directauxcount/key/purse/UI effects do notrecovercanonicalprefix.
+Opaquechildren/affinity/computedindirectbulk writersOPEN. Existing5DAuthority
+fullBYTE required; goldenonlyseed/loginfalse, OriginalServer2E/full5DissuerOPEN.
+
+ThreeexistingCppchange; repository/service/config/135customIDs frozen/defaultoff.
+Fourconditional custodybranches committedA5/A4 andnonemptytombstone/active
+replay. ActualSessionINIT/thread/epoch/phase/battle/TLS receipt independent of
+WorldResponseWrite; ownEntryWritten notrequired, peerWrittenstillrequired.
+SamecallbackDatareuse/exactrefind identity; pureCurrent checksevenwithnopeer
+nodes. Actualframedcomponentregistration precedesreceipt/snapshot/cursor.
+Finalvalidwire orderedframeboundary match+privateguard+FIFO+Queued underSync;
+write/log/resume/fail outside. ObservedpushbeforebyteDebit, legacyELSEexact.
+RAII/drop/reject/unwind/postthrow failure retiresepoch andatomiccloserequest.
+PostCOMMITcomponentallocation canfail/noSQLretryrollback. Empty/unarmed and
+noINIT replay historical/notnewcustody. QueuedlocalFIFO notWritten/nativeACK.
+Generalundestroyedcontextabort/control/transfer/postbattle/allvariants OPEN.
+
+Fiveupstreamseals individuallyverified; exactthreeCppinverses; Sessionfailed
+prewritehelpers/506candidate/emptyindexdraft+correction retainedadditive.
+SuccessfulLFhelpers copiedexactwithoutreexecution; finalcanonicalreview.
+PriorGoalbinaryprefix/ledgerfields/frontierv23 exact. Newnative method/opcode/
+format/parser/handler/phase/fullroutecredits0/globaldeltas0. TW156/252/world74
+=50partial11control13unconnected; CN156/280phase/253length separate.
+Whole/TWdenominatorpercentnull/parser67.6% notcompletion. Unique report
+20261013-tw-native-item-writer-original-response-source-353. FullTWfirst/CN/
+fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/fonts/conversion
+active. PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/
+codec/gameDBSQL/importer/migration/activation/deploy.
