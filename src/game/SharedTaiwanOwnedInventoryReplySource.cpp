@@ -164,4 +164,45 @@ std::optional<SharedTaiwanOwnedInventoryReplySource::Component> SharedTaiwanOwne
        !reader_->ready_current(session,selection_) || !local(session)) {invalidated_=true;return std::nullopt;}
     return Component(std::move(wire_));
 }
+bool SharedTaiwanOwnedInventoryReplySource::entry_current(
+    Session& session,const SqliteOwnedEquipmentTransaction::EntryCommitted& committed) {
+    owner();
+    // Retain every owner/token BEFORE a virtual ready observer. An observer
+    // may release the caller's last source/component/receipt reference.
+    const auto self=shared_from_this();
+    const auto receipt=committed;
+    const auto connection=connection_.lock();
+    if(!connection || connection.get()!=&session) {invalidated_=true;return false;}
+    if(observing_entry_) {invalidated_=true;return false;}
+    observing_entry_=true;
+    struct Leave {bool& active;~Leave(){active=false;}} leave{observing_entry_};
+    try {
+        const auto& material=receipt.material();
+        const bool valid=consumed_ && local(session) && reader_->ready_current(session,selection_) && local(session) &&
+            material.inventory().snapshot()==after_.inventory && material.equipment().snapshot()==after_.equipment &&
+            transaction_->committed_current(receipt) && local(session) &&
+            reader_->ready_current(session,selection_) && local(session) &&
+            // Recheck ALL three tuples after the last ready observer. The
+            // material() access above only compares the prepared projection;
+            // durable Current always selects the complete receipt overload.
+            transaction_->committed_current(receipt) && local(session);
+        if(!valid)invalidated_=true;
+        return valid;
+    }catch(...) {invalidated_=true;throw;}
+}
+std::optional<SharedTaiwanOwnedInventoryReplySource::EntryComponent> SharedTaiwanOwnedInventoryReplySource::take(
+    Session& session,const SqliteOwnedEquipmentTransaction::EntryCommitted& committed) {
+    owner();
+    const auto self=shared_from_this();
+    const auto receipt=committed;
+    if(consumed_) {invalidated_=true;return std::nullopt;}
+    consumed_=true;
+    if(!entry_current(session,receipt))return std::nullopt;
+    // The source and wire were allocated by prepare(), before COMMIT. Receipt
+    // copies keep their immutable shared snapshots, including the full entry.
+    return EntryComponent(std::move(wire_),self,receipt);
+}
+bool SharedTaiwanOwnedInventoryReplySource::EntryComponent::current(Session& session) const {
+    return source_ && source_->entry_current(session,committed_);
+}
 }

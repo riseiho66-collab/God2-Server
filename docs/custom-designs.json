@@ -3559,6 +3559,33 @@
     "activate": false,
     "deploy": false
   }
+},
+      "source_extension_20261012_round321": {
+  "round": 321,
+  "implementation": [
+    "src/game/SharedTaiwanOwnedInventoryReplySource.h",
+    "src/game/SharedTaiwanOwnedInventoryReplySource.cpp"
+  ],
+  "authority": "CUSTOM-0092_INTERNAL_STORAGE_CONSUMER_COORDINATION_ONLY",
+  "operation": "Explicit EntryComponent keeps original prepared inventory bytes and full private three-store receipt; same token can feed existing entry-aware DA factory.",
+  "current": "Full EntryCommitted Current after each ready-observer boundary; terminal shared invalidation, source/receipt/Session retained before observers. Material-only snapshots only compare prepared projection.",
+  "preparation_limit": "Existing two-store before/next inventory preparation unchanged; full entry intent/CAS belongs to the actual three-store writer, not to this component.",
+  "activation": "PHASE1 conditional source only; no complete C28 rules/reply or Main/Session/lifecycle/schema activation.",
+  "tests": [],
+  "execution": {
+    "build": false,
+    "compiler": false,
+    "tests": false,
+    "runtime": false,
+    "native": false,
+    "VM": false,
+    "emulator": false,
+    "resource_codec": false,
+    "game_database_SQL": false,
+    "migrate": false,
+    "activate": false,
+    "deploy": false
+  }
 }
     },
     {

@@ -3583,3 +3583,14 @@ Mandatory source提供完整nextframe，不DA生成body；只准logical13..20及
 新增同Context三writer binding與publicationfactory；原heldDA source持有EntryCommitted，Prepare/Before/After/queue的每次Current同consistent read核完整三tuple，不降成二tuple。Old兩store/publicentrywriter/Main/packetgrammar保持。
 
 7existing C++ modified/1added，新atomic storage sourceedge1，完整branch/opcode/route新增0。TW world50/74=67.6%只是部分解析；wholegame分母/百分比null。Mixed282/CUSTOM135/CN不變，0092只追加當輪來源provenance。無build/tests/runtime/native/gameDBSQL/deploy。下一步：將真正phase-bound原equip規則與完整nextState供給現有C28 Action及新三tuple source；依原角色owned selector來源追firstentry，不再重做已解兩次publictransaction seam或genericgetter。再處理實際storedEntry/common64-to-scene-handle mapping與正常入場收據生命周期，不猜識別或重新發fakebootstrap。
+
+
+## Round321: entry-preserving inventory component
+
+Existing pre-COMMIT inventory projection now has explicit take(Session&,EntryCommitted), producing an EntryComponent which retains the complete three-store receipt and the original allocated source.
+
+EntryComponent.current observes the same actual Session/private C28 occurrence/lease/phase and all three durable tuples. Material is compared to the prepared projection; durable Current always selects EntryCommitted and rechecks after the last ready observer.
+
+Retain source/receipt/actual Session before virtual observers, terminalize nested observation or stale data, consume once without encoding/rebuilding a reply. Expose the same complete token for the existing entry-aware DA factory.
+
+Two existing C++ files changed; conditional consumer extension1, atomic writer/native opcode/complete gameplay routes0. Prepare remains two-material-before only; full entry CAS belongs to320 issuer. Same-action use is a caller contract; private occurrence retirement is at whole records batch boundary. Actual independent scene-ID remedy must span Application movement, lifecycle lease and Session tail; not implemented here. World50/74 parser coverage only; whole-game completion null. Phase1: no builds/tests/runtime/native/DBSQL/deploy. Next: Supply original full equip after-state/rules to actual C28 Action, preserve the same EntryCommitted through inventory and DA composition, and wire ordered native replies. For independent scene identity, implement a consumed qualified prepared-lease handle path spanning real HostPlan/Application movement and Session tail, rather than loosening only stored-source equality.
