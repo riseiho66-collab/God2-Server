@@ -41,7 +41,8 @@ struct Owner {
     bool entry_taken=false,entered_taken=false,movement_taken=false,records_taken=false;
     bool characters_taken=false;
 
-    Owner(const Context& context,Plan::Sources sources,Plan::Dispatch dispatch,bool native_characters)
+    Owner(const Context& context,Plan::Sources sources,Plan::Dispatch dispatch,bool native_characters,
+          TaiwanWorldEntryIdentity identity)
         :characters(&context.characters),maps(&context.maps),native_skills(context.native_skills),
          native_world_entries(context.native_world_entries),
          accounts(context.accounts),native_character_summaries(context.native_character_summaries),
@@ -54,7 +55,9 @@ struct Owner {
          companions(context.companions),
          game(context.game),common(context.common_world),
          records(std::move(sources.records)),characters_source(std::move(sources.characters)),capacity(sources.actual_session_capacity) {
-        if(!common || !common->owns_repository(*characters) || !sources.entry ||
+        if(!valid_taiwan_world_entry_identity(identity) ||
+           (identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle && !native_characters) ||
+           !common || !common->owns_repository(*characters) || !sources.entry ||
            !sources.entered || !sources.movement_rules || !sources.movement_resources ||
            !sources.actual_session_capacity)
             throw std::invalid_argument("TW native host plan requires complete actual common-world suppliers");
@@ -73,8 +76,8 @@ struct Owner {
         auto presence=common->presence();auto visibility=common->visibility();
         entry=SharedTaiwanWorldEntrySource::create(*characters,*maps,std::move(sources.entry),
             characters_source?characters_source->selected:SharedTaiwanNativeCharacterListSource::SelectedSource{},
-            std::move(sources.entry_prepare),characters_source?presence:nullptr);
-        entered=SharedTaiwanWorldEntered::create(presence,visibility,std::move(sources.entered));
+            std::move(sources.entry_prepare),characters_source?presence:nullptr,identity);
+        entered=SharedTaiwanWorldEntered::create(presence,visibility,std::move(sources.entered),identity);
         if(sources.movement_custody && (!accounts || !owned_inventory_writer || !native_equipment_snapshot_writer ||
            !sources.movement_custody->owns_sources(*accounts,*characters) ||
            !sources.movement_custody->owns_writers(*owned_inventory_writer,*native_equipment_snapshot_writer)))
@@ -142,9 +145,10 @@ struct Factory {
     Plan::SourceFactory supply;
     const Plan::Dispatch dispatch;
     const bool native_characters;
+    const TaiwanWorldEntryIdentity identity;
     std::weak_ptr<Owner> bound;
-    Factory(Plan::SourceFactory source,Plan::Dispatch mode,bool characters)
-        :supply(std::move(source)),dispatch(mode),native_characters(characters){}
+    Factory(Plan::SourceFactory source,Plan::Dispatch mode,bool characters,TaiwanWorldEntryIdentity entry_identity)
+        :supply(std::move(source)),dispatch(mode),native_characters(characters),identity(entry_identity){}
     std::shared_ptr<Owner> get(const Context& context) {
         Plan::SourceFactory source;
         std::shared_ptr<Owner> existing;
@@ -174,7 +178,7 @@ struct Factory {
                 if(stage!=Stage::Preparing)
                     throw std::logic_error("TW native host plan supplier caught rejected reentry");
             }
-            auto owner=std::make_shared<Owner>(context,std::move(sources),dispatch,native_characters);
+            auto owner=std::make_shared<Owner>(context,std::move(sources),dispatch,native_characters,identity);
             {
                 std::lock_guard lock(mutex);
                 if(stage!=Stage::Preparing)
@@ -538,15 +542,17 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::owned_inventory_reply_factory(
     };
 }
 SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
-        std::string client,StoredSourceFactory supply,Dispatch dispatch,bool native_characters,bool native_equipment,bool owned_inventory) {
+        std::string client,StoredSourceFactory supply,Dispatch dispatch,bool native_characters,bool native_equipment,bool owned_inventory,
+        TaiwanWorldEntryIdentity identity) {
     const auto digest=client.size()==64 && std::all_of(client.begin(),client.end(),[](char c) {
         return (c>='0' && c<='9') || (c>='a' && c<='f');
     });
-    if(!digest || !supply)
+    if(!digest || !supply || !valid_taiwan_world_entry_identity(identity) ||
+       (identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle && !native_characters))
         throw std::invalid_argument("TW stored host requires actual build and complete source factory");
     if(owned_inventory && client!=SharedTaiwanOwnedItemSelectionSource::client_pin)
         throw std::invalid_argument("TW owned selection requires the exact recovered native build");
-    auto plan=create([client=std::move(client),supply=std::move(supply),native_characters](const Context& context) {
+    auto plan=create([client=std::move(client),supply=std::move(supply),native_characters,identity](const Context& context) {
         // Check exact borrowed reader before invoking any external supplier.
         // Existing Factory::get owns construction/reentry/lifetime qualification.
         if(!context.native_world_entries || !context.native_world_entries->owns_characters(context.characters))
@@ -583,30 +589,35 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
         if(context.native_world_entries!=reader || !reader->owns_characters(context.characters) || !actual.entry_qualify)
             throw std::invalid_argument("TW stored host source changed or lacks actual full material qualification");
         auto entry=SharedTaiwanStoredWorldEntrySource::create(*context.native_world_entries,context.characters,
-            context.maps,client,std::move(actual.entry_qualify));
+            context.maps,client,std::move(actual.entry_qualify),identity);
         SharedTaiwanWorldEntrySource::Prepare entry_prepare;
         if(actual.entry_offer) {
             if(!native_characters || !characters || !context.accounts || !context.native_world_entry_writer ||
                static_cast<NativeWorldEntrySnapshotRepository*>(context.native_world_entry_writer)!=context.native_world_entries)
                 throw std::invalid_argument("TW entry offer requires actual native selection and identical writer/reader");
             entry_prepare=SharedTaiwanNativeWorldEntryOfferSource::create(*context.native_world_entry_writer,
-                *context.accounts,context.characters,context.maps,client,std::move(actual.entry_offer));
+                *context.accounts,context.characters,context.maps,client,std::move(actual.entry_offer),identity);
         }
         return Sources{std::move(entry),std::move(actual.entered),std::move(actual.movement_rules),
             std::move(actual.movement_resources),actual.actual_session_capacity,std::move(actual.records),std::move(characters),
             std::move(entry_prepare),std::move(actual.movement_custody)};
-    },dispatch,native_characters);
+    },dispatch,native_characters,identity);
     plan.requires_native_world_entry_snapshots=true;
     plan.requires_native_character_summaries=native_characters;
     plan.requires_native_equipment_snapshots=native_equipment;
     plan.requires_owned_inventory_storage=owned_inventory;
     return plan;
 }
-SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source,Dispatch dispatch,bool native_characters) {
+SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source,Dispatch dispatch,bool native_characters,
+        TaiwanWorldEntryIdentity identity) {
     if(!source)throw std::invalid_argument("TW native host plan requires an actual source factory");
     if(dispatch!=Dispatch::MovementOnly && dispatch!=Dispatch::MixedRecords)
         throw std::invalid_argument("TW native host plan dispatch is not a qualified selection");
-    auto factory=std::make_shared<Factory>(std::move(source),dispatch,native_characters);SharedWorldHostPlan plan;
+    if(!valid_taiwan_world_entry_identity(identity) ||
+       (identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle && !native_characters))
+        throw std::invalid_argument("Independent TW entry identity requires the complete native selection source");
+    auto factory=std::make_shared<Factory>(std::move(source),dispatch,native_characters,identity);SharedWorldHostPlan plan;
+    plan.taiwan_entry_identity=identity;
     plan.requires_native_character_summaries=native_characters;
     if(native_characters)plan.make_taiwan_native_characters=[factory](const Context& context) {
         auto owner=factory->get(context);

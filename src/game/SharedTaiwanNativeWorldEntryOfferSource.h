@@ -19,16 +19,19 @@ public:
     using Issuer=SqliteNativeWorldEntrySnapshotRepository::Issuer;
     class Offer {
     public:
-        static std::optional<Offer> from_actual_source(Snapshot,Issuer);
+        static std::optional<Offer> from_actual_source(Snapshot,Issuer,
+            TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
         Offer(const Offer&)=delete;
         Offer& operator=(const Offer&)=delete;
         Offer(Offer&&) noexcept=default;
         Offer& operator=(Offer&&)=delete;
     private:
         friend class SharedTaiwanNativeWorldEntryOfferSource;
-        Offer(Snapshot next,Issuer current):next_(std::move(next)),current_(std::move(current)) {}
+        Offer(Snapshot next,Issuer current,TaiwanWorldEntryIdentity identity)
+            :next_(std::move(next)),current_(std::move(current)),identity_(identity) {}
         Snapshot next_;
         Issuer current_;
+        const TaiwanWorldEntryIdentity identity_;
     };
     // Actual complete native resources/rules/phase producer, not geometry-only
     // permission. No SQL writes, pumping or retention of borrowed arguments.
@@ -106,7 +109,8 @@ public:
     // never prepare. Repositories outlive the actual game-owner facade drain.
     static Source::Prepare create(SqliteNativeWorldEntrySnapshotRepository&,
         AccountRepository&,RecoveredCharacterRepository&,const NativeMapCatalog&,
-        std::string client_sha256,Supply);
+        std::string client_sha256,Supply,
+        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
 private:
     static SceneBinding bind_scene_content(const NativeEnemyDisplayCatalog&,
         std::shared_ptr<const TaiwanNativeNpcSceneGroups>,

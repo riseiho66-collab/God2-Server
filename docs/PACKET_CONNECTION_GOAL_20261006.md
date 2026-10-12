@@ -3594,3 +3594,14 @@ EntryComponent.current observes the same actual Session/private C28 occurrence/l
 Retain source/receipt/actual Session before virtual observers, terminalize nested observation or stale data, consume once without encoding/rebuilding a reply. Expose the same complete token for the existing entry-aware DA factory.
 
 Two existing C++ files changed; conditional consumer extension1, atomic writer/native opcode/complete gameplay routes0. Prepare remains two-material-before only; full entry CAS belongs to320 issuer. Same-action use is a caller contract; private occurrence retirement is at whole records batch boundary. Actual independent scene-ID remedy must span Application movement, lifecycle lease and Session tail; not implemented here. World50/74 parser coverage only; whole-game completion null. Phase1: no builds/tests/runtime/native/DBSQL/deploy. Next: Supply original full equip after-state/rules to actual C28 Action, preserve the same EntryCommitted through inventory and DA composition, and wire ordered native replies. For independent scene identity, implement a consumed qualified prepared-lease handle path spanning real HostPlan/Application movement and Session tail, rather than loosening only stored-source equality.
+
+
+## Round322: qualified scene identity through actual entry callers
+
+Explicit QualifiedSceneHandle source mode keeps common character/storage identity64-bit and obtains the separate scene handle only from a fully qualified complete native2A and the actual prepared private lease.
+
+Same immutable mode spans HostPlan actual selection/entry/stored/Offer/Current, Application movement bookkeeping, lifecycle preparation and the game-owner vault callback; Session strand receives the qualified handle value for its existing1C tail parser.
+
+New-mode activation copies the qualified lease and refinds its exact prepared registry after virtual repository observations. New-mode lifecycle/Entered retain ownership and registry/Session/phase qualifications after observers; old default activation, movement and tail behavior remain selected-character based.
+
+20 existing C++ modified/1 header added; identity source handoff1, complete gameplay branches/routes/native opcodes0. Vault forwards the actual prepared lease handle to the game-side Session before strand tail creation. Original full producers/suppliers remain mandatory; frozen unrelated bounded-ID adapters remain open. TW50/74=67.6% only partial parser coverage; full-game denominator/percentagesnull. CN/mixed282/CUSTOM135 unchanged; Phase1 no build/tests/runtime/native/DBSQL/deploy. Next: Recover the actual owned first-entry producer and complete source rules; supply real C28 full next material and compose existing three-store receipt with native ordered replies. Trace per-feature scene-handle consumers separately before extending frozen gameplay adapters.

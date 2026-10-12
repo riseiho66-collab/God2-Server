@@ -1,6 +1,7 @@
 #include "game/SharedTaiwanWorldEntrySource.h"
 #include "protocol/RecoveredWorldEntryView.h"
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <thread>
@@ -32,11 +33,13 @@ struct State {
     SharedTaiwanNativeCharacterListSource::SelectedSource selection;
     SharedTaiwanWorldEntrySource::Prepare prepare;
     std::shared_ptr<SharedWorldPresence> presence;
+    const TaiwanWorldEntryIdentity identity;
     const std::thread::id thread=std::this_thread::get_id();
     bool active=false,reentered=false;
 
     bool unchanged(const SharedTaiwanWorldEntrySource::Scope& scope,
                    const RecoveredCharacter& expected) {
+        if(scope.identity!=identity)return false;
         if(presence && (!presence->owns_repository(characters) || presence->character_reserved(scope.character)))return false;
         const auto character=owned_character(characters,scope.account,scope.character);
         const auto position=characters.load_position(scope.account,scope.character);
@@ -59,9 +62,11 @@ struct State {
             State& owner;
             ~Exit() {owner.active=false;owner.reentered=false;}
         } exit{*this};
-        // Frozen TW tail/lifecycle compare the FULL selected character ID to
-        // the decoded14-bit actor handle. Never truncate or alias large IDs.
-        if(!session || !account || !character || character>0x3fff)
+        // The default keeps its full selected-ID/native-handle rule. Explicit
+        // scene mode still preserves the full positive common storage identity.
+        if(!session || !account || !character ||
+           (identity==TaiwanWorldEntryIdentity::SelectedCharacter?character>0x3fff:
+            character>static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())))
             throw std::invalid_argument("TW entry source requires actual representable identities");
         const auto selected=owned_character(characters,account,character);
         const auto position=characters.load_position(account,character);
@@ -83,7 +88,7 @@ struct State {
                 throw std::invalid_argument("TW entry differs from the actual full selected common root");
         }
         const SharedTaiwanWorldEntrySource::Scope scope{session,account,character,*position,*map,selected,
-            lineage?lineage->selected:nullptr};
+            lineage?lineage->selected:nullptr,identity};
         const auto current=[&] {
             if(reentered || !unchanged(scope,selected) || reentered)return false;
             if(lineage && (!lineage->current() || reentered))return false;
@@ -96,7 +101,8 @@ struct State {
         if(reentered || !material || !material->current || !current())
             throw std::invalid_argument("TW entry source changed during native supply");
         const auto full=RecoveredWorldEntryView::read(material->frame);
-        if(!full || character!=full->actor_handle || full->area!=position->area ||
+        if(!full || (identity==TaiwanWorldEntryIdentity::SelectedCharacter?
+           character!=full->actor_handle:!qualified_taiwan_scene_handle(full->actor_handle)) || full->area!=position->area ||
            full->scene!=position->scene || full->x!=position->x || full->y!=position->y)
             throw std::invalid_argument("TW native entry does not match actual saved character geometry");
         // Map.kind is independent source material; no proven relation licenses
@@ -114,11 +120,12 @@ SharedTaiwanWorldEntrySource::Native::Native(Frame frame_value,Current current_v
 SharedTaiwanWorldEntrySource::Entry SharedTaiwanWorldEntrySource::create(
         RecoveredCharacterRepository& characters,const NativeMapCatalog& maps,NativeSource native,
         SharedTaiwanNativeCharacterListSource::SelectedSource selection,Prepare prepare,
-        std::shared_ptr<SharedWorldPresence> presence) {
-    if(!native || (prepare && !selection) || bool(selection)!=bool(presence) ||
+        std::shared_ptr<SharedWorldPresence> presence,TaiwanWorldEntryIdentity identity) {
+    if(!valid_taiwan_world_entry_identity(identity) || !native || (prepare && !selection) || bool(selection)!=bool(presence) ||
+       (identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle && (!selection || !presence)) ||
        (presence && !presence->owns_repository(characters)))
         throw std::invalid_argument("TW entry source requires actual supplier, selected lineage and identical common presence");
-    auto state=std::make_shared<State>(State{characters,maps,std::move(native),std::move(selection),std::move(prepare),std::move(presence)});
+    auto state=std::make_shared<State>(State{characters,maps,std::move(native),std::move(selection),std::move(prepare),std::move(presence),identity});
     return [state=std::move(state)](std::uint64_t session,std::uint64_t account,std::uint64_t character) {
         // Keep invocation ownership local before calling any external supplier.
         const auto owner=state;

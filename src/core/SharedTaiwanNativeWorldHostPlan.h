@@ -242,13 +242,15 @@ public:
     // calling this metadata-only function does not read/install/write storage.
     static SharedWorldHostPlan create_from_stored_entry(std::string client_sha256,
         StoredSourceFactory,Dispatch=Dispatch::MovementOnly,bool native_characters=false,
-        bool native_equipment_snapshots=false,bool owned_inventory_storage=false);
+        bool native_equipment_snapshots=false,bool owned_inventory_storage=false,
+        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
     // Pass the result to an existing run_server overload taking a world plan.
     // One plan binds one Application lifetime. Main remains explicitly opted
     // out until actual full native suppliers are available. This is source
     // composition, not an activated server or a completed gameplay route.
     // MixedRecords requires actual nonmovement suppliers and full Current;
     // MovementOnly preserves the prior exclusive movement plan unchanged.
-    static SharedWorldHostPlan create(SourceFactory,Dispatch=Dispatch::MovementOnly,bool native_characters=false);
+    static SharedWorldHostPlan create(SourceFactory,Dispatch=Dispatch::MovementOnly,bool native_characters=false,
+        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
 };
 }

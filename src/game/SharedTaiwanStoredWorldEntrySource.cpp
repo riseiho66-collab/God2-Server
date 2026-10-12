@@ -11,7 +11,7 @@ namespace {
 using Source=SharedTaiwanStoredWorldEntrySource;
 bool same_scope(const Source::Scope& a,const Source::Scope& b) {
     return a.session==b.session && a.account==b.account && a.character==b.character &&
-        a.position==b.position && a.map==b.map && a.selection==b.selection &&
+        a.position==b.position && a.map==b.map && a.selection==b.selection && a.identity==b.identity &&
         Source::Snapshot::same_root(a.selected,b.selected);
 }
 struct State {
@@ -20,6 +20,7 @@ struct State {
     const NativeMapCatalog& maps;
     const std::string client;
     Source::Qualify qualify;
+    const TaiwanWorldEntryIdentity identity;
     const std::thread::id thread=std::this_thread::get_id();
     bool active=false,reentered=false;
     struct Lease {
@@ -32,8 +33,19 @@ struct State {
         ~Lease(){state.active=false;state.reentered=false;}
     };
     bool common_current(const Source::Scope& scope) {
-        if(!storage.owns_characters(characters) || !scope.session || !scope.account || !scope.character ||
+        if(scope.identity!=identity || !storage.owns_characters(characters) || !scope.session || !scope.account || !scope.character ||
            scope.selected.account_id!=scope.account || scope.selected.id!=scope.character)return false;
+        if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle &&
+           (!scope.selection || !scope.selection->source_alive() || scope.selection->scope().session!=scope.session ||
+            scope.selection->scope().account!=scope.account || scope.selection->character()!=scope.character))return false;
+        if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle) {
+            std::size_t selected_found=0;
+            for(const auto& root:scope.selection->roots())if(root.id==scope.character) {
+                if(!Source::Snapshot::same_root(root,scope.selected))return false;
+                ++selected_found;
+            }
+            if(selected_found!=1)return false;
+        }
         std::size_t found=0;
         for(const auto& root:characters.list_for_account(scope.account))if(root.id==scope.character) {
             if(!Source::Snapshot::same_root(root,scope.selected))return false;
@@ -52,13 +64,13 @@ struct State {
 }
 SharedTaiwanWorldEntrySource::NativeSource SharedTaiwanStoredWorldEntrySource::create(
         NativeWorldEntrySnapshotRepository& storage,RecoveredCharacterRepository& characters,
-        const NativeMapCatalog& maps,std::string client,Qualify qualify) {
+        const NativeMapCatalog& maps,std::string client,Qualify qualify,TaiwanWorldEntryIdentity identity) {
     const auto digest=client.size()==64 && std::all_of(client.begin(),client.end(),[](char c) {
         return (c>='0' && c<='9') || (c>='a' && c<='f');
     });
-    if(!digest || !qualify || !storage.owns_characters(characters))
+    if(!valid_taiwan_world_entry_identity(identity) || !digest || !qualify || !storage.owns_characters(characters))
         throw std::invalid_argument("TW stored entry needs actual same-owner material and qualification");
-    auto state=std::make_shared<State>(State{storage,characters,maps,std::move(client),std::move(qualify)});
+    auto state=std::make_shared<State>(State{storage,characters,maps,std::move(client),std::move(qualify),identity});
     return [state=std::move(state)](const Scope& input)->std::optional<SharedTaiwanWorldEntrySource::Native> {
         const auto owner=state;
         State::Lease lease(*owner);
@@ -72,7 +84,8 @@ SharedTaiwanWorldEntrySource::NativeSource SharedTaiwanStoredWorldEntrySource::c
         Frame frame;
         std::copy(material->record.begin(),material->record.end(),frame.begin());
         const auto view=RecoveredWorldEntryView::read(frame);
-        if(!view || scope.character!=view->actor_handle || scope.position.area!=view->area ||
+        if(!view || (owner->identity==TaiwanWorldEntryIdentity::SelectedCharacter?
+           scope.character!=view->actor_handle:!qualified_taiwan_scene_handle(view->actor_handle)) || scope.position.area!=view->area ||
            scope.position.scene!=view->scene || scope.position.x!=view->x || scope.position.y!=view->y ||
            !owner->current(*material,scope))return std::nullopt;
         if(!owner->qualify(*material,scope,frame,Check::Supply) || !owner->current(*material,scope))return std::nullopt;

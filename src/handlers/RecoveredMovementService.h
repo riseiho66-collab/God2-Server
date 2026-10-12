@@ -42,6 +42,11 @@ public:
     // Existing cell_available navigation remains its labelled CUSTOM policy.
     void prepare_native(std::uint64_t session,std::uint64_t account,std::uint64_t character,
                         const RecoveredWorldEntry::Frame&);
+    // Explicit native scene plan: actual full entry supplies the independent
+    // twelve-bit scene handle; ownership/persistence continue using common64.
+    // Bookkeeping only, not the legacy movement reply builder or scene admission.
+    void prepare_native_scene(std::uint64_t session,std::uint64_t account,std::uint64_t character,
+                              const RecoveredWorldEntry::Frame&);
     void bind(std::uint64_t session,std::uint64_t account,std::uint64_t character);
     // Includes authenticated prepared leases before world-tail readiness.
     [[nodiscard]] bool character_active(std::uint64_t account,std::uint64_t character) const noexcept;

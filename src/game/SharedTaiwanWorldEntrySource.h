@@ -4,6 +4,7 @@
 #include "net/Session.h"
 #include "game/SharedTaiwanNativeCharacterListSource.h"
 #include "game/SharedWorldPresence.h"
+#include "game/TaiwanWorldEntryIdentity.h"
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -23,6 +24,7 @@ public:
         // Complete selected common root; geometry alone cannot qualify profile.
         RecoveredCharacter selected;
         SharedTaiwanNativeCharacterListSource::SelectedPtr selection;
+        TaiwanWorldEntryIdentity identity{TaiwanWorldEntryIdentity::SelectedCharacter};
     };
     using Current=std::function<bool(const Scope&,const Frame&)>;
     struct Native {
@@ -45,7 +47,11 @@ public:
     // Failures throw to Session's existing character-selection rejection path.
     static Entry create(RecoveredCharacterRepository&,const NativeMapCatalog&,NativeSource,
         SharedTaiwanNativeCharacterListSource::SelectedSource actual_selection={},Prepare actual_issuer={},
-        std::shared_ptr<SharedWorldPresence> actual_native_presence={});
+        std::shared_ptr<SharedWorldPresence> actual_native_presence={},
+        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
+    // Explicit scene mode retains the genuine selected common owner separately
+    // from the full native frame's qualified1..FFF handle. No ID allocation or
+    // guessed frame fields; actual selected lineage/presence are mandatory.
     // Selected native entry uses the SAME common registry as its later actual
     // lifecycle preparation. Reject an already reserved character before
     // issuer writes, including prepared/stale unreleased leases. This observes

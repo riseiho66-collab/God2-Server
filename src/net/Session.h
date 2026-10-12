@@ -226,7 +226,8 @@ public:
         std::uint16_t port;
     };
     // Explicit per-connection dual-world extension. Both callbacks run on the
-    // serial game executor; the existing entry builder/world_ready remain intact.
+    // serial game executor. The native ready parser/layout remains intact;
+    // an explicit preparation receipt may supply its scene-handle identity.
     struct CommonWorldLifecycle {
         std::function<bool(Session&,const RecoveredWorldEntry::Frame&)> prepared;
         // Runs only after the transport accepted the native tail and set its
@@ -237,6 +238,10 @@ public:
         // Completion and cancellation run on the serial game owner, once.
         std::function<void(Session&,ReadyCompletion)> ready_async;
         std::function<void(Session&)> cancel;
+        // Explicit scene-handle mode only, after successful prepared on game.
+        // Returns the same retained lease's handle for this complete frame;
+        // absence preserves the selected-character native tail contract.
+        std::function<std::optional<std::uint16_t>(Session&,const RecoveredWorldEntry::Frame&)> prepared_actor;
     };
     using CommonWorldLifecycleFactory=std::function<std::shared_ptr<const CommonWorldLifecycle>(Session&)>;
     struct CommonWorldPublication {

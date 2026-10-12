@@ -23,6 +23,7 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     std::shared_ptr<SharedWorldPresence> presence;
     std::shared_ptr<Visibility> visibility;
     Entered::Source source;
+    TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter;
     const std::thread::id thread=std::this_thread::get_id();
     std::map<std::uint64_t,std::shared_ptr<Pending>> pending;
     bool supplying=false,reentered=false;
@@ -41,6 +42,12 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
            session->id()!=lease.session || session->account_id!=lease.account || session->character_id!=lease.character ||
            !session->recovered_world_ready() || session->recovered_client_language()!=state->scope.tail_language ||
            !presence->preparation_current(lease) || presence->ready(lease)!=active)return false;
+        if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle &&
+           (state->cancelled || !state->native || session->closing() || session->id()!=lease.session ||
+            session->account_id!=lease.account || session->character_id!=lease.character ||
+            !session->recovered_world_ready() || session->recovered_client_language()!=state->scope.tail_language ||
+            !pending.contains(lease.session) || pending.at(lease.session)!=state ||
+            (active?!presence->retained_ready_current(lease):!presence->retained_preparation_current(lease))))return false;
         if(active)return session->state()==SessionState::InWorld &&
             session->common_world_delivery_current(lease.account,lease.character,lease.generation);
         return (session->state()==SessionState::CharacterSelected || session->state()==SessionState::InWorld) &&
@@ -74,13 +81,23 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     bool publish(const std::shared_ptr<Pending>& state) {
         owner();if(!state || state->published || !current(state,false,Entered::Check::BeforePublish))return false;
         const auto session=state->connection.lock();const auto& lease=state->scope.lease;
-        if(!visibility->taiwan_initial_current(state->incoming,session,lease,false))return false;
+        std::shared_ptr<Visibility::TaiwanInitialPublication> retained_incoming;
+        if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle) {
+            retained_incoming=state->incoming;
+            if(!visibility->taiwan_initial_current(retained_incoming,session,lease,false) ||
+               !bound(state,false) || state->incoming!=retained_incoming)return false;
+        }else if(!visibility->taiwan_initial_current(state->incoming,session,lease,false))return false;
         const auto install=state->native->install;
         if(!install(*session,state->scope) || state->cancelled ||
            !current(state,false,Entered::Check::AfterInstall) || session->state()!=SessionState::InWorld ||
-           !presence->activate(lease,state->scope.entry.actor_handle))return false;
+           !(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle?
+             presence->activate_qualified_scene(lease,state->scope.entry.actor_handle):
+             presence->activate(lease,state->scope.entry.actor_handle)))return false;
         session->bind_common_world_delivery_identity(lease.account,lease.character,lease.generation);
-        if(!bound(state,true) || !visibility->publish_initial_taiwan(state->incoming,session,lease))return false;
+        if(!bound(state,true) || !visibility->publish_initial_taiwan(
+           identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle?retained_incoming:state->incoming,session,lease))return false;
+        if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle &&
+           (!bound(state,true) || state->incoming!=retained_incoming))return false;
         state->published=true;return bound(state,true);
     }
     void queued(const std::shared_ptr<Pending>& state,bool accepted) {
@@ -192,11 +209,12 @@ SharedTaiwanWorldEntered::Native::Native(ReplyDecision selected,std::vector<std:
     if(!current || !install || !cleanup)throw std::invalid_argument("TW entered requires actual Current/scene install/cleanup");
 }
 SharedTaiwanWorldLifecycle::AsyncOwner SharedTaiwanWorldEntered::create(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<Visibility> visibility,Source source) {
-    if(!presence || !visibility || !source || !visibility->owns_presence(presence))
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<Visibility> visibility,Source source,
+    TaiwanWorldEntryIdentity identity) {
+    if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !source || !visibility->owns_presence(presence))
         throw std::invalid_argument("TW entered requires exact common owners and actual native scene supplier");
     auto state=std::make_shared<SceneOwner>();state->presence=std::move(presence);
-    state->visibility=std::move(visibility);state->source=std::move(source);
+    state->visibility=std::move(visibility);state->source=std::move(source);state->identity=identity;
     return {
         [state](Session& session,const Lease& lease,const RecoveredWorldEntryView& entry,
                 SharedTaiwanWorldLifecycle::ReadyCompletion done) {state->enter(session,lease,entry,std::move(done));},

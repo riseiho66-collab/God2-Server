@@ -106,5 +106,8 @@ struct SharedWorldHostPlan {
     bool requires_native_character_summaries=false;
     bool requires_native_equipment_snapshots=false;
     bool requires_owned_inventory_storage=false;
+    // Explicit complete native-source plan only. Common character keys stay
+    // uint64; the full entry and prepared private lease supply the scene handle.
+    TaiwanWorldEntryIdentity taiwan_entry_identity=TaiwanWorldEntryIdentity::SelectedCharacter;
 };
 }

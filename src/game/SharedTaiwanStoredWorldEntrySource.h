@@ -21,6 +21,7 @@ public:
     // does not create fake shared ownership of a borrowed Database/Context.
     // Build digest supplied explicitly; no historical/current-client default.
     static SharedTaiwanWorldEntrySource::NativeSource create(NativeWorldEntrySnapshotRepository&,
-        RecoveredCharacterRepository&,const NativeMapCatalog&,std::string client_sha256,Qualify);
+        RecoveredCharacterRepository&,const NativeMapCatalog&,std::string client_sha256,Qualify,
+        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
 };
 }

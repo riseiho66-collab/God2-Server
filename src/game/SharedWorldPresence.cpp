@@ -1,4 +1,5 @@
 #include "game/SharedWorldPresence.h"
+#include "game/TaiwanWorldEntryIdentity.h"
 #include <algorithm>
 #include <limits>
 #include <set>
@@ -65,10 +66,24 @@ std::optional<SharedWorldPresence::Lease> SharedWorldPresence::prepare_geometry(
 bool SharedWorldPresence::preparation_current(const Lease& lease) const {
     owner();return current(lease) && stored(lease);
 }
+bool SharedWorldPresence::retained_preparation_current(const Lease& lease) const {
+    owner();const auto found=sessions_.find(lease.session);
+    return found!=sessions_.end() && !found->second.active && found->second.lease==lease;
+}
 bool SharedWorldPresence::activate(const Lease& lease,std::uint16_t handle) {
     owner();if(snapshot_busy_)snapshot_reentered_=true;
     const auto found=sessions_.find(lease.session);
     if(found==sessions_.end() || found->second.active || handle!=lease.actor_handle || !preparation_current(lease))return false;
+    found->second.active=true;return true;
+}
+bool SharedWorldPresence::activate_qualified_scene(const Lease& input,std::uint16_t handle) {
+    owner();if(snapshot_busy_)snapshot_reentered_=true;
+    const auto lease=input;
+    if(!qualified_taiwan_scene_handle(handle) || handle!=lease.actor_handle ||
+       !retained_preparation_current(lease) || !preparation_current(lease))return false;
+    // No iterator or borrowed lease crosses the virtual repository reads.
+    const auto found=sessions_.find(lease.session);
+    if(found==sessions_.end() || found->second.active || found->second.lease!=lease)return false;
     found->second.active=true;return true;
 }
 bool SharedWorldPresence::ready(const Lease& lease) const {

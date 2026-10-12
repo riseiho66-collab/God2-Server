@@ -15,6 +15,8 @@
 #include "protocol/RecoveredPostCreateSelect.h"
 #include "protocol/RecoveredCharacterBootstrap.h"
 #include "protocol/RecoveredWorldReady.h"
+#include "protocol/RecoveredWorldEntryView.h"
+#include "game/TaiwanWorldEntryIdentity.h"
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include "protocol/RecoveredBattleBootstrap.h"
 #include "protocol/RecoveredBattlePlayerAppearance.h"
@@ -1468,6 +1470,7 @@ struct Session::Impl {
             auto& s=*self->impl_;
             std::uint64_t selected=0;
             std::optional<RecoveredWorldEntry::Frame> world_frame;
+            std::optional<std::uint16_t> prepared_actor;
             std::uint64_t entry_account=0,entry_battle=0;
             try {
                 if(!s.close_requested.load()) {
@@ -1503,8 +1506,23 @@ struct Session::Impl {
                                 throw std::invalid_argument("Common world lifecycle factory returned incomplete hooks");
                             s.character_handlers.common_world_lifecycle=std::move(lifecycle);
                         }
-                        if(s.close_requested.load() || (s.character_handlers.common_world_lifecycle &&
-                           !s.character_handlers.common_world_lifecycle->prepared(*self,*world_frame)))selected=0;
+                        const auto lifecycle=s.character_handlers.common_world_lifecycle;
+                        const auto supplied=*world_frame;
+                        if(s.close_requested.load() || (lifecycle && !lifecycle->prepared(*self,lifecycle->prepared_actor?supplied:*world_frame)))selected=0;
+                        if(selected && lifecycle && lifecycle->prepared_actor) {
+                            const auto full=RecoveredWorldEntryView::read(supplied);
+                            const auto unchanged=[&] {
+                                return !s.close_requested.load() && !self->closing() && self->account_id==entry_account &&
+                                    self->character_id==selected && self->battle_generation()==entry_battle &&
+                                    world_frame && *world_frame==supplied && s.character_handlers.common_world_lifecycle==lifecycle;
+                            };
+                            if(!full || !qualified_taiwan_scene_handle(full->actor_handle) || !unchanged())
+                                throw std::invalid_argument("Qualified world entry identity changed before preparation receipt");
+                            const auto actor=lifecycle->prepared_actor(*self,supplied);
+                            if(!actor || !qualified_taiwan_scene_handle(*actor) || *actor!=full->actor_handle || !unchanged())
+                                throw std::invalid_argument("Qualified world entry preparation receipt rejected");
+                            prepared_actor=*actor;
+                        }
                     }
                 }
             } catch(...) { selected=0; }
@@ -1521,7 +1539,7 @@ struct Session::Impl {
                             entry_account,selected,entry_battle,*world_frame,std::move(*logical));
                 }
             } catch(...) {}
-            asio::post(s.strand,[self,selected,created,world_frame,normal_entry=std::move(normal_entry)] {
+            asio::post(s.strand,[self,selected,created,world_frame,prepared_actor,normal_entry=std::move(normal_entry)] {
                 auto& s=*self->impl_;
                 s.game_busy=false;
                 if(s.closing) { s.finish();return; }
@@ -1543,7 +1561,10 @@ struct Session::Impl {
                         s.writes.back().normal_entry=normal_entry;
                     }
                     s.c2s0002_state=world_frame?C2S0002State::WorldEntrySent:C2S0002State::CharacterSelected;
-                    if(world_frame) s.world_ready.emplace(selected);
+                    if(world_frame) {
+                        if(prepared_actor)s.world_ready.emplace(*prepared_actor);
+                        else s.world_ready.emplace(selected);
+                    }
                     self->set_state(SessionState::CharacterSelected);
                     logger("session")->info("session_id={} {} character_id={}; world_candidate={}; InWorld not established",s.id,
                         created?"POST_CREATE_CHARACTER_BOUND":"EXISTING_CHARACTER_BOUND",selected,world_frame.has_value());

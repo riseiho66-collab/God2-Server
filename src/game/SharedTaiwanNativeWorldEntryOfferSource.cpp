@@ -13,13 +13,14 @@ using OfferSource=SharedTaiwanNativeWorldEntryOfferSource;
 bool positive(std::uint64_t value) {
     return value && value<=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
 }
-bool shape(const OfferSource::Snapshot& next) {
+bool shape(const OfferSource::Snapshot& next,TaiwanWorldEntryIdentity identity) {
     const auto digest=[](std::string_view value) {
         return value.size()==64 && std::all_of(value.begin(),value.end(),[](char c) {
             return (c>='0' && c<='9') || (c>='a' && c<='f');
         });
     };
-    if(!positive(next.root.account_id) || !next.root.id || next.root.id>0x3fff || next.root.slot>=2 ||
+    if(!valid_taiwan_world_entry_identity(identity) || !positive(next.root.account_id) || !positive(next.root.id) ||
+       (identity==TaiwanWorldEntryIdentity::SelectedCharacter && next.root.id>0x3fff) || next.root.slot>=2 ||
        next.root.created_at.empty() || next.root.created_at.size()>2048 || next.root.created_at.find('\0')!=std::string::npos ||
        (next.root.name_codepage!=0 && next.root.name_codepage!=936 && next.root.name_codepage!=950) ||
        next.root.streamer_privilege>3 || !positive(next.revision) || !positive(next.position.revision) ||
@@ -30,7 +31,8 @@ bool shape(const OfferSource::Snapshot& next) {
     OfferSource::Source::Frame frame;
     std::copy(next.record.begin(),next.record.end(),frame.begin());
     const auto native=RecoveredWorldEntryView::read(frame);
-    return native && next.root.id==native->actor_handle && next.position.area==native->area &&
+    return native && (identity==TaiwanWorldEntryIdentity::SelectedCharacter?
+        next.root.id==native->actor_handle:qualified_taiwan_scene_handle(native->actor_handle)) && next.position.area==native->area &&
         next.position.scene==native->scene && next.position.x==native->x && next.position.y==native->y;
 }
 struct State {
@@ -40,6 +42,7 @@ struct State {
     const NativeMapCatalog& maps;
     const std::string client;
     OfferSource::Supply supply;
+    const TaiwanWorldEntryIdentity identity;
     const std::thread::id thread=std::this_thread::get_id();
     bool busy=false,reentered=false;
     void check() const {
@@ -57,7 +60,7 @@ struct State {
     };
     bool common_current(const OfferSource::Source::Scope& scope) {
         check();
-        if(!writer.owns_sources(accounts,characters) || !scope.session || !scope.account || !scope.character ||
+        if(scope.identity!=identity || !writer.owns_sources(accounts,characters) || !scope.session || !scope.account || !scope.character ||
            !scope.selection || !scope.selection->source_alive() || scope.selection->scope().session!=scope.session ||
            scope.selection->scope().account!=scope.account || scope.selection->character()!=scope.character ||
            scope.selected.account_id!=scope.account || scope.selected.id!=scope.character)return false;
@@ -138,9 +141,9 @@ struct SceneState {
 };
 }
 std::optional<SharedTaiwanNativeWorldEntryOfferSource::Offer>
-SharedTaiwanNativeWorldEntryOfferSource::Offer::from_actual_source(Snapshot next,Issuer current) {
-    if(!current || !shape(next))return std::nullopt;
-    return Offer(std::move(next),std::move(current));
+SharedTaiwanNativeWorldEntryOfferSource::Offer::from_actual_source(Snapshot next,Issuer current,TaiwanWorldEntryIdentity identity) {
+    if(!current || !shape(next,identity))return std::nullopt;
+    return Offer(std::move(next),std::move(current),identity);
 }
 SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldEntryOfferSource::with_scene_content(
         const NativeEnemyDisplayCatalog& enemies,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
@@ -180,7 +183,8 @@ SharedTaiwanNativeWorldEntryOfferSource::SceneBinding SharedTaiwanNativeWorldEnt
         std::move(supply),std::move(qualify)});
     const auto observe=[state](const Source::Scope& scope)->SceneContentPtr {
         const auto owner=state;owner->check();
-        if(scope.position.area<1 || scope.position.area>16 || scope.position.scene>1023)return {};
+        if(!valid_taiwan_world_entry_identity(scope.identity) ||
+           scope.position.area<1 || scope.position.area>16 || scope.position.scene>1023)return {};
         auto enemies=owner->enemies.read_scene(scope.position.area,scope.position.scene);owner->check();
         if(!enemies)return {}; // Whole catalog absent is not an empty scene.
         // The qualified reader pins149c/70a4/75c3; NPC constructor independently
@@ -197,17 +201,19 @@ SharedTaiwanNativeWorldEntryOfferSource::SceneBinding SharedTaiwanNativeWorldEnt
         if(!content || !owner->current(*content))return std::nullopt;
         const auto producer=owner->supply;
         auto supplied=producer(scope,expected,content);owner->check();
-        if(!supplied || !owner->current(*content) || supplied->next_.position!=scope.position ||
+        if(!supplied || supplied->identity_!=scope.identity || !shape(supplied->next_,scope.identity) ||
+           !owner->current(*content) || supplied->next_.position!=scope.position ||
            !Snapshot::same_root(supplied->next_.root,scope.selected))return std::nullopt;
         SceneState::TargetScene target;
         if(!owner->card_target(supplied->next_,target) || !owner->current(*content,target))return std::nullopt;
         const auto issuer=supplied->current_;
         const auto issued=supplied->next_;
-        supplied->current_=[owner,content,target,issuer,issued](const std::optional<Snapshot>& previous,
+        const auto identity=scope.identity;
+        supplied->current_=[owner,content,target,issuer,issued,identity](const std::optional<Snapshot>& previous,
                 const Snapshot& next,SqliteNativeWorldEntrySnapshotRepository::WriteCheck check) {
             const auto retained=owner;const auto actual_content=content;const auto actual_issuer=issuer;
             SceneState::Guard guard(*retained);
-            if(next!=issued || !retained->current(*actual_content,target))return false;
+            if(next!=issued || !shape(next,identity) || !retained->current(*actual_content,target))return false;
             const bool accepted=actual_issuer(previous,next,check);retained->check();
             return accepted && retained->current(*actual_content,target);
         };
@@ -220,7 +226,7 @@ SharedTaiwanNativeWorldEntryOfferSource::SceneBinding SharedTaiwanNativeWorldEnt
         // Own the exact post-COMMIT material before calling any external owner.
         // No new frame serialization and no retained borrowed callback inputs.
         const auto snapshot=input;const auto scope=input_scope;const auto frame=input_frame;
-        if(!shape(snapshot) || !Snapshot::same_root(snapshot.root,scope.selected) ||
+        if(!shape(snapshot,scope.identity) || !Snapshot::same_root(snapshot.root,scope.selected) ||
            snapshot.position!=scope.position || !std::equal(snapshot.record.begin(),snapshot.record.end(),frame.begin()))
             return false;
         const auto content=observe(scope);
@@ -234,10 +240,12 @@ SharedTaiwanNativeWorldEntryOfferSource::SceneBinding SharedTaiwanNativeWorldEnt
 }
 SharedTaiwanWorldEntrySource::Prepare SharedTaiwanNativeWorldEntryOfferSource::create(
         SqliteNativeWorldEntrySnapshotRepository& writer,AccountRepository& accounts,
-        RecoveredCharacterRepository& characters,const NativeMapCatalog& maps,std::string client,Supply supply) {
-    if(!writer.owns_sources(accounts,characters) || client!=TaiwanNativeClientGroupConfiguration::client_sha256 || !supply)
+        RecoveredCharacterRepository& characters,const NativeMapCatalog& maps,std::string client,Supply supply,
+        TaiwanWorldEntryIdentity identity) {
+    if(!valid_taiwan_world_entry_identity(identity) || !writer.owns_sources(accounts,characters) ||
+       client!=TaiwanNativeClientGroupConfiguration::client_sha256 || !supply)
         throw std::invalid_argument("TW entry offer requires exact shared writer/readers/build and actual issuer");
-    auto state=std::make_shared<State>(State{writer,accounts,characters,maps,std::move(client),std::move(supply)});
+    auto state=std::make_shared<State>(State{writer,accounts,characters,maps,std::move(client),std::move(supply),identity});
     return [state](const Source::Scope& input,const std::function<bool()>& parent_current) {
         const auto owner=state;State::Guard guard(*owner);
         const auto scope=input;const auto current=parent_current;
@@ -254,7 +262,7 @@ SharedTaiwanWorldEntrySource::Prepare SharedTaiwanNativeWorldEntryOfferSource::c
         if(!supplied || !ready())return false;
         const auto offer=std::make_shared<Offer>(std::move(*supplied));
         const auto next=offer->next_;
-        if(!shape(next) || !Snapshot::same_root(next.root,scope.selected) || next.position!=scope.position ||
+        if(offer->identity_!=scope.identity || !shape(next,scope.identity) || !Snapshot::same_root(next.root,scope.selected) || next.position!=scope.position ||
            next.client_sha256!=owner->client || (expected && next.revision<=expected->revision))return false;
         // Expected may witness an older profile/position. Only next must match
         // the current root. BeforeCommit observes staged next, so this parent

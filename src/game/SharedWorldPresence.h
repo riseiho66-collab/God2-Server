@@ -47,7 +47,13 @@ public:
         std::uint16_t scene,std::uint16_t x,std::uint16_t y);
     bool current(const Lease&) const;
     bool preparation_current(const Lease&) const;
+    // CUSTOM-0130 exact retained prepared registry, after the caller's actual
+    // repository qualification. No observer, admission or activation occurs.
+    bool retained_preparation_current(const Lease&) const;
     bool activate(const Lease&,std::uint16_t claimed_handle);
+    // Explicit independent native scene path. Copy the lease before repository
+    // observers, then find the same prepared generation again before activation.
+    bool activate_qualified_scene(const Lease&,std::uint16_t claimed_handle);
     bool ready(const Lease&) const;
     // CUSTOM-0130 exact retained registry only. No repository observer or
     // resource/position refresh; callers retain their separately qualified data.

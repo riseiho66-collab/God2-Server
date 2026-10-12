@@ -54,6 +54,7 @@ public:
     // native material, including explicit empty decisions. Absence rejects.
     // Providers must not retain Session/Scope references, yield or pump events.
     static SharedTaiwanWorldLifecycle::AsyncOwner create(
-        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,Source);
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,Source,
+        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
 };
 }

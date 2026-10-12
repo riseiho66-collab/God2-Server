@@ -2,6 +2,7 @@
 #include "protocol/RecoveredCharacterListCandidate.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include "protocol/RecoveredWorldEntryView.h"
+#include "game/TaiwanWorldEntryIdentity.h"
 #include <algorithm>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -258,6 +259,32 @@ void RecoveredMovementService::prepare_native(std::uint64_t session,std::uint64_
         throw std::invalid_argument("Native movement saved baseline changed during preparation");
     if(!active_.emplace(session,std::move(position)).second)
         throw std::invalid_argument("Native movement Session already prepared");
+}
+void RecoveredMovementService::prepare_native_scene(std::uint64_t session,std::uint64_t account,std::uint64_t character,
+                                                   const RecoveredWorldEntry::Frame& frame) {
+    if(!session || !account || !character || active_.contains(session))
+        throw std::invalid_argument("Native scene movement binding rejected");
+    for(const auto& [id,position]:active_) {
+        (void)id;
+        if(position.character==character)throw std::invalid_argument("Native scene movement character already online");
+    }
+    const auto full=RecoveredWorldEntryView::read(frame);
+    if(!full || !qualified_taiwan_scene_handle(full->actor_handle))
+        throw std::invalid_argument("Native scene movement full entry handle rejected");
+    const auto owned=characters_.list_for_account(account);
+    if(std::none_of(owned.begin(),owned.end(),[&](const auto& row){return row.id==character && row.account_id==account;}))
+        throw std::invalid_argument("Native scene movement character ownership rejected");
+    const auto saved=characters_.load_position(account,character);
+    if(!saved || !saved->revision || saved->area!=full->area || saved->scene!=full->scene ||
+       saved->x!=full->x || saved->y!=full->y ||
+       !cell_available(full->area,full->scene,full->x,full->y))
+        throw std::invalid_argument("Native scene movement actual saved geometry unavailable or mismatched");
+    Position position{account,character,static_cast<int>(full->x),static_cast<int>(full->y),
+        0,false,false,full->scene,full->kind,full->area,*saved};
+    if(characters_.load_position(account,character)!=saved)
+        throw std::invalid_argument("Native scene movement saved baseline changed during preparation");
+    if(!active_.emplace(session,std::move(position)).second)
+        throw std::invalid_argument("Native scene movement Session already prepared");
 }
 void RecoveredMovementService::bind(std::uint64_t session,std::uint64_t account,std::uint64_t character) {
     const auto it=active_.find(session);

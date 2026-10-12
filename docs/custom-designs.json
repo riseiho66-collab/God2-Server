@@ -4849,8 +4849,34 @@
   "tests": [],
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Keep the actual private world-departure ownership through terminal input instead of dropping it at admission Bind or widening a pre-release guard into return authority.",
-  "replacement": "Complete genuine return/input/visibility/durable release/recovery and companion resource supplier, then comprehensive final-phase acceptance before production activation."
-},
+  "replacement": "Complete genuine return/input/visibility/durable release/recovery and companion resource supplier, then comprehensive final-phase acceptance before production activation.",
+      "source_extension_20261012_round322": {
+  "round": 322,
+  "implementation": [
+    "src/game/SharedWorldPresence.h",
+    "src/game/SharedWorldPresence.cpp"
+  ],
+  "authority": "CUSTOM-0130_INTERNAL_RETAINED_REGISTRY_COORDINATION_ONLY",
+  "operation": "Additional exact inactive retained lease observation and opt-in qualified activation with post-repository exact registry refind.",
+  "native_limit": "Does not allocate actor handles, infer original server identity policy, create opaque entry bytes or certify real native gameplay.",
+  "activation": "QualifiedSceneHandle source mode only; old default activation and frozen features unchanged.",
+  "tests": [],
+  "execution": {
+    "build": false,
+    "compiler": false,
+    "tests": false,
+    "runtime": false,
+    "native": false,
+    "VM": false,
+    "emulator": false,
+    "resource_codec": false,
+    "game_database_SQL": false,
+    "migrate": false,
+    "activate": false,
+    "deploy": false
+  }
+}
+    },
 {
   "id": "CUSTOM-0131",
   "name": "Owned TW PK terminal input transport barrier",

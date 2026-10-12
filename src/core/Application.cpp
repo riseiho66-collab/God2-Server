@@ -145,7 +145,7 @@ ScriptTimes script_times(const std::filesystem::path& root) {
 // Only the explicit common-world Application path uses this owner. Network
 // templates/Session copies retain facades, never the real affine callbacks.
 class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifecycleVault> {
-    enum class Operation {Idle,Factory,Preparing,Ready,Cleanup,Entry,Publication,Movement,Records,Characters};
+    enum class Operation {Idle,Factory,Preparing,PreparedActor,Ready,Cleanup,Entry,Publication,Movement,Records,Characters};
     struct Slot {
         Session* session;
         std::shared_ptr<const Session::CommonWorldLifecycle> hooks;
@@ -160,16 +160,22 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
     Operation operation_=Operation::Idle;
     std::uint64_t active_id_=0;
     Session::CommonWorldLifecycleFactory factory_;
+    TaiwanWorldEntryIdentity entry_identity_=TaiwanWorldEntryIdentity::SelectedCharacter;
     SharedTaiwanWorldEntrySource::Entry entry_;
     SharedTaiwanMovementSource::Binding movement_;
     SharedTaiwanWorldRecordSource::Binding records_;
     SharedTaiwanNativeCharacterListSource::Binding characters_;
     bool entry_reentered_=false;
+    bool actor_reentered_=false;
     std::map<std::uint64_t,Slot> slots_;
     void owner() const {
         if(thread_!=std::this_thread::get_id())throw std::logic_error("World lifecycle vault game owner mismatch");
     }
     void reject_movement_reentry() {
+        if(operation_==Operation::PreparedActor) {
+            actor_reentered_=true;
+            throw std::logic_error("World lifecycle prepared actor source reentered");
+        }
         if(operation_==Operation::Entry && characters_.selected) {
             entry_reentered_=true;
             if(characters_.invalidate_selection)characters_.invalidate_selection(active_id_);
@@ -232,7 +238,8 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
             OperationGuard guard(*this,Operation::Factory,id);actual=factory_(session);
         }
         if(!actual || !actual->prepared || bool(actual->ready)==bool(actual->ready_async) ||
-           bool(actual->ready_async)!=bool(actual->cancel))
+           bool(actual->ready_async)!=bool(actual->cancel) ||
+           (entry_identity_==TaiwanWorldEntryIdentity::QualifiedSceneHandle && !actual->prepared_actor))
             throw std::invalid_argument("World lifecycle vault requires complete actual hooks");
         auto facade=std::make_shared<Session::CommonWorldLifecycle>();
         const auto self=shared_from_this();
@@ -250,6 +257,28 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
             if(failure) {self->consume(id);std::rethrow_exception(failure);}
             if(!accepted)self->consume(id);
             return accepted;
+        };
+        if(actual->prepared_actor)facade->prepared_actor=[self,id](Session& current,const RecoveredWorldEntry::Frame& input) {
+            self->available();
+            const auto found=self->slots_.find(id);
+            if(!id || current.id()!=id || found==self->slots_.end() || found->second.session!=&current ||
+               !found->second.hooks->prepared_actor)
+                throw std::invalid_argument("World lifecycle prepared actor Session identity mismatch");
+            const auto hooks=found->second.hooks;const auto pinned=current.shared_from_this();const auto frame=input;
+            const auto account=current.account_id,character=current.character_id,battle=current.battle_generation();
+            std::optional<std::uint16_t> actor;std::exception_ptr failure;
+            {
+                OperationGuard guard(*self,Operation::PreparedActor,id);self->actor_reentered_=false;
+                try {actor=hooks->prepared_actor(current,frame);}catch(...) {failure=std::current_exception();}
+            }
+            const auto retained=self->slots_.find(id);
+            if(self->actor_reentered_ || self->closed_ || retained==self->slots_.end() ||
+               retained->second.session!=pinned.get() || retained->second.hooks!=hooks || current.closing() ||
+               current.account_id!=account || current.character_id!=character || current.battle_generation()!=battle ||
+               !actor || !qualified_taiwan_scene_handle(*actor))actor.reset();
+            if(failure) {self->consume(id);std::rethrow_exception(failure);}
+            if(!actor)self->consume(id);
+            return actor;
         };
         if(actual->ready)facade->ready=[self,id](Session& current) {
             self->available();
@@ -319,9 +348,11 @@ public:
     explicit WorldLifecycleVault(std::size_t capacity):capacity_(capacity) {
         if(!capacity_)throw std::invalid_argument("World lifecycle vault requires explicit Session capacity");
     }
-    void install(Session::CommonWorldLifecycleFactory factory) {
-        available();if(!factory || factory_)throw std::invalid_argument("World lifecycle vault factory already set or incomplete");
-        factory_=std::move(factory);
+    void install(Session::CommonWorldLifecycleFactory factory,
+                 TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter) {
+        available();if(!valid_taiwan_world_entry_identity(identity) || !factory || factory_)
+            throw std::invalid_argument("World lifecycle vault factory already set or incomplete");
+        factory_=std::move(factory);entry_identity_=identity;
     }
     void install_entry(SharedTaiwanWorldEntrySource::Entry entry) {
         available();if(!entry || entry_)throw std::invalid_argument("World lifecycle vault entry already set or incomplete");
@@ -524,6 +555,7 @@ struct WorldLifecycleVaultGuard {
 }
 static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_plan,const WebServerPlan* web_plan,unsigned run_for_seconds,
                            const SharedWorldHostPlan* world_plan=nullptr) {
+    const auto taiwan_entry_identity=world_plan?world_plan->taiwan_entry_identity:TaiwanWorldEntryIdentity::SelectedCharacter;
     if(world_plan && (bool(world_plan->make_taiwan_entered)==bool(world_plan->make_taiwan_entered_async) || !config.recovered_account_auth || config.mock_login ||
        config.protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate || !config.recovered_character_creation ||
        !config.recovered_dual_connection || !config.recovered_world_entry || !config.recovered_movement))
@@ -535,6 +567,11 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
         throw std::invalid_argument("Explicit native TW movement requires the actual async scene and full native entry sources");
     if(world_plan && world_plan->make_taiwan_world_records && !world_plan->make_taiwan_movement)
         throw std::invalid_argument("Explicit native TW mixed records require the actual same-host movement source");
+    if(world_plan && (!valid_taiwan_world_entry_identity(taiwan_entry_identity) ||
+       (taiwan_entry_identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle &&
+        (!world_plan->make_taiwan_native_characters || !world_plan->make_taiwan_world_entry ||
+         !world_plan->make_taiwan_entered_async || !world_plan->make_taiwan_movement))))
+        throw std::invalid_argument("Independent TW scene identity requires complete native selection, entry, scene and movement owners");
     if(world_plan && world_plan->requires_native_world_entry_snapshots && !world_plan->make_taiwan_world_entry)
         throw std::invalid_argument("Stored native TW material requires the explicit complete entry factory");
     if(world_plan && world_plan->requires_native_character_summaries && !world_plan->make_taiwan_native_characters)
@@ -703,6 +740,17 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                        !taiwan_native_characters.current || !taiwan_native_characters.complete)
                         throw std::invalid_argument("Shared world host requires complete actual Taiwan list/token sources");
                 }
+                // Check the actual constructed owners after all external factories.
+                // An explicit independent handle must never fall through to the
+                // legacy selected-character movement when a supplier changes plan metadata.
+                if(taiwan_entry_identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle &&
+                   (!taiwan_world_entry || !taiwan_entered_async.entered || !taiwan_entered_async.cancel ||
+                    !taiwan_movement.movement || !taiwan_movement.release || !taiwan_movement.invalidate_active ||
+                    !taiwan_movement.retire || !taiwan_native_characters.list || !taiwan_native_characters.select ||
+                    !taiwan_native_characters.current || !taiwan_native_characters.complete ||
+                    !taiwan_native_characters.invalidate_active || !taiwan_native_characters.selected ||
+                    !taiwan_native_characters.invalidate_selection))
+                    throw std::invalid_argument("Independent TW scene identity lacks complete actual constructed native owners");
             }
             if(config.owned_beast_panel_enabled)database.install_beast_snapshot_schema();
             // Keep persisted player-created identity available when writes are
@@ -6489,16 +6537,20 @@ if(guild_officer_runtime && player_guild(session) &&
                         throw std::invalid_argument("Shared world host requires exclusive complete actual Taiwan handlers");
                     if(taiwan_entered_async.entered)
                         common_world_lifetime.vault->install(SharedTaiwanWorldLifecycle::factory_async(
-                            common_world->presence(),common_world->visibility(),std::move(taiwan_entered_async),common_world->transports()));
+                            common_world->presence(),common_world->visibility(),std::move(taiwan_entered_async),common_world->transports(),
+                            taiwan_entry_identity),taiwan_entry_identity);
                     else common_world_lifetime.vault->install(SharedTaiwanWorldLifecycle::factory(
-                            common_world->presence(),common_world->visibility(),std::move(taiwan_entered),common_world->transports()));
+                            common_world->presence(),common_world->visibility(),std::move(taiwan_entered),common_world->transports(),
+                            taiwan_entry_identity),taiwan_entry_identity);
                     if(taiwan_world_entry) {
                         if(!recovered_movement)throw std::invalid_argument("Full native TW entry requires actual movement bookkeeping");
                         common_world_lifetime.vault->install_entry(std::move(taiwan_world_entry));
-                        game_handlers.world_entry=[&,entry=common_world_lifetime.vault->entry_facade()](
+                        game_handlers.world_entry=[&,entry=common_world_lifetime.vault->entry_facade(),identity=taiwan_entry_identity](
                             std::uint64_t session,std::uint64_t account,std::uint64_t character) {
                             const auto frame=entry(session,account,character);
-                            recovered_movement->prepare_native(session,account,character,frame);
+                            if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle)
+                                recovered_movement->prepare_native_scene(session,account,character,frame);
+                            else recovered_movement->prepare_native(session,account,character,frame);
                             return frame; // Same actual full frame; no candidate builder side effects.
                         };
                     }
