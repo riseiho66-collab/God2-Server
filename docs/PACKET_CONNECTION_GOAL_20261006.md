@@ -4756,3 +4756,53 @@ notcompletion. Unique report20261013-tw-native-route-authority-source-355.
 FullTWfirst/CN/fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/
 fonts/conversion active. PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/
 emulator/parser/codec/resource/gameDBSQL/importer/migrate/activate/deploy.
+
+
+## Round356 actual C91 peer preview transport custody (2026-10-13)
+
+Previous3556c2d3412e22316d1537323bc13e449f87ddfd03a exactHEAD notification
+38285659697 success. Native432BB0..432C3A138B/49sites/RET12/two branches
+forwards unsignedfullBYTE231 from known467BBA debug path to opaque formatter/
+renderer with known3B `%d` literal. Known5D46930A fullBYTE store/unconditional
+ring pop and4678D8 entry reset referenced only. Prior137members4737817B and
+27 mapped/physical spans unchanged. Twelve raw literal matches/thirteen windows
+discovery only; no server ACK value/timing/permission issuer or global absence.
+
+Actual hosted trade2A/both2C repo.commit251..308 is a two-owner legacy seam;
+common stage_replace139..145 permanently registers incoming global identities.
+Two one-owner replaces cannot transfer an existing ID without forbidden remint
+and split settlement. Genuine donor common instance/definition/original
+acquisition/full25/cache50x24+DA must qualify before one atomic two-owner common/
+witness/legacy settlement. No donor supplier/fake factory/SQL implementation.
+
+ThreeexistingCpp App/SessionH/CPP plusnew headeronly OwnedPartyPreviewTransport.
+Old capture retains owncallback TLS check; explicit game capture uses actual
+private Written INIT/thread/exact Session/epoch and existing transport guards.
+Actual C91 courier owns full sources/exact strong peers/fresh handles/complete
+projections/registry node beforeCAS, bounded config.max_sessions. Final pure
+freshhandle/source fence after all observers plus355oldABQueued admission.
+Immediately afterDirectoryCAS markcommitted noexcept beforeNativeParty/wire move.
+Uncommitted cancel onlyfreshrevoke/release nopeerclose; after both commits actual
+send_normal_world_records attempts retained. Send/post mayallocate/throw then
+freshrevoke+closeall exact heldflight sources; no rollback/retry/consentduplicate.
+Existing50msScheduler settles Pending/current/Failed; no new timer/timeout.
+AllcurrentQueued retires withoutrevoke, queuedWrite ownsData; notWritten/ACK.
+Close/stale detected via privatecurrent and nextsettle/stop, no new direct
+disconnect registryhook. stop/destructor ownsunfinished beforeScheduler/network.
+CallerfinaloriginalC91callback rejection remainsOPEN; emptyownreply no fakeFIFO
+ticket. Nativeadoption/allpartyvariants/mixedtransfer/postbattle OPEN.
+
+Defaultoff owned_party_directory_enabled unchanged; NativeParty/C90permission/
+Directory/Service/protocol/config/storage/custom135/frozenchat/Scheduler exact.
+Fourfinalpins/threeexistingexactinverses/newheaderadditive containmentinverse,
+fiveupstreamseals plus independentsemantic and canonical current reviews.
+SuccessfulLFhelpers copiedwithoutreexecution; failedproposalcaptures immutable.
+Goalbinaryprefix/priorledgerfields/frontierv23 exact; R exactlytwoLF keylines.
+Oneconditional C91peer-projection custody branch; nativeopcode/format/method/
+parser/handler/phase/fullroute0 and globalcountdeltas0. TW156/252/world74=
+50partial11control13unconnected; CN156/280phase/253length separate. Whole/TW
+denominatorpercentnull; parser67.6% notcompletion. Unique report
+20261013-tw-native-party-preview-transport-source-356. FullTWfirst/CN/fourWS/
+common64/coin99999999999/stack99/nativelevels/saves/frozen/fonts/conversion active.
+PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/
+resource/gameDBSQL/import/migrate/activate/deploy.

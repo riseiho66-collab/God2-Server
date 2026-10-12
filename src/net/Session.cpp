@@ -2639,6 +2639,10 @@ std::optional<Session::NormalWorldOutputHandle> Session::capture_normal_world_ou
         const NormalWorldInitialization& initialization) {
     if(observed_world_callback!=this)
         throw std::logic_error("Normal output recipient requires its own actual world callback");
+    return capture_normal_world_output_on_game(initialization);
+}
+std::optional<Session::NormalWorldOutputHandle> Session::capture_normal_world_output_on_game(
+        const NormalWorldInitialization& initialization) {
     if(!normal_world_initialization_current_on_game(initialization) || !initialization.entry_written())return std::nullopt;
     std::lock_guard lock(impl_->normal_output_sync->mutex);
     const auto epoch=impl_->normal_output_sync->epoch.load();

@@ -18,6 +18,7 @@
 #include "handlers/RecoveredFruitQuests.h"
 #include "handlers/OwnedBlacklistService.h"
 #include "handlers/OwnedPartyDirectoryService.h"
+#include "game/OwnedPartyPreviewTransport.h"
 #include "game/OwnedClientOptions.h"
 #include "protocol/RecoveredWorldEntryView.h"
 #include "text/OwnedCharacterNameText.h"
@@ -1400,6 +1401,8 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             std::unique_ptr<OwnedClientOptions> owned_client_options; // CUSTOM-0100, never gameplay permissions.
             if(config.owned_client_options_enabled)owned_client_options=std::make_unique<OwnedClientOptions>();
             std::map<std::uint64_t,std::weak_ptr<Session>> party_sessions;
+            std::unique_ptr<OwnedPartyPreviewTransport> party_preview_transport;
+            if(owned_party_directory)party_preview_transport=std::make_unique<OwnedPartyPreviewTransport>(config.max_sessions);
             std::map<std::uint64_t,std::weak_ptr<Session>> trade_sessions;
             std::set<std::uint64_t> trade_wallet_sent;
             std::optional<ChineseText> trade_text;
@@ -7353,8 +7356,18 @@ if(guild_officer_runtime && player_guild(session) &&
                                            !OwnedPartyDirectoryService::captured_entry_current(d.target))qualified=false;
                                         for(const auto& member:d.members)if(!OwnedPartyDirectoryService::captured_entry_current(member))qualified=false;
                                     }
+                                    // Actual C91 peer output custody; no own-response ticket.
+                                    // All source/bytes/registry allocations precede both commits.
+                                    std::optional<OwnedPartyPreviewTransport::Prepared> preview;
+                                    if(request.opcode()==0x91) {
+                                        auto sources=members;
+                                        if(std::none_of(sources.begin(),sources.end(),[&](const auto& actor){return actor.same_owner(*owner);}))sources.push_back(*owner);
+                                        auto prepared=party_preview_transport->prepare(sources,recipients,projections);
+                                        if(!prepared)continue;
+                                        preview.emplace(std::move(*prepared));
+                                    }
                                     if(!qualified || dispatch->reentered || !native_parties.same_state(*party_before) ||
-                                       owned_party_directory->snapshot()!=before)continue;
+                                       owned_party_directory->snapshot()!=before || (preview && !preview->current()))continue;
                                     if(response) {
                                         if(!session.normal_world_response_callback_current(*response) ||
                                            !OwnedPartyDirectoryService::captured_entry_current(*owner))continue;
@@ -7366,11 +7379,15 @@ if(guild_officer_runtime && player_guild(session) &&
                                            !native_parties.same_state(*party_before) || owned_party_directory->snapshot()!=before)continue;
                                     }
                                     if(!owned_party_directory->publish(before,std::move(next_directory)))continue;
+                                    if(preview)preview->mark_committed(); // No allocation, immediately after successful CAS.
                                     if(next_party)native_parties=std::move(*next_party); // No callback between the two ephemeral commits.
                                     wire=std::move(merged);
-                                    // Submission only: a transport failure cannot be called
-                                    // consent or rolled back as if the pending prefix never existed.
-                                    for(auto& [id,bytes]:projections)recipients.at(id)->send_world_records(std::move(bytes));
+                                    // Actual peer FIFO custody only. Caller final rejection,
+                                    // consent, Written/native ACK and all variants remain OPEN.
+                                    // A postcommit exception retires/closes exact held peers;
+                                    // committed state is never rolled back or retried.
+                                    if(preview)preview->submit();
+                                    else for(auto& [id,bytes]:projections)recipients.at(id)->send_world_records(std::move(bytes));
                                     continue;
                                 }
                                 const auto prepared_sources=live; // Own every source referenced by the caller A7 before reobservation.
@@ -7779,6 +7796,7 @@ if(guild_officer_runtime && player_guild(session) &&
             unsigned ticks=0;
             auto trade_checked=std::chrono::steady_clock::now();
             auto scheduler=std::make_shared<Scheduler>(game.get_executor(),std::chrono::milliseconds(50),[&] {
+                if(party_preview_transport)party_preview_transport->settle(); // Pending has no native timeout.
                 world.update(0.05f);
                 const auto clock_now=std::chrono::steady_clock::now();
                 if(!fixture_mode && clock_now-trade_checked>=std::chrono::seconds(1)) {
@@ -7814,6 +7832,7 @@ if(guild_officer_runtime && player_guild(session) &&
             bool stopping=false;
             auto stop=[&] {
                 if(stopping) return;
+                if(party_preview_transport)party_preview_transport->stop(); // Before scheduler/network and borrowed game teardown.
                 guild_delivery_lifetime->store(false);
                 stop_blacklist_outputs();
                 stopping=true;

@@ -415,6 +415,10 @@ public:
     bool world_records_write_current_on_game(const WorldRecordsWrite&) const;
     bool normal_world_initialization_current_on_game(const NormalWorldInitialization&) const;
     std::optional<NormalWorldOutputHandle> capture_normal_world_output(const NormalWorldInitialization&);
+    // Trusted SAME game owner, exact private Written INIT for this Session.
+    // Recipient transport custody only; no callback permission/consent/ACK.
+    // The own-callback capture above retains its actual TLS requirement.
+    std::optional<NormalWorldOutputHandle> capture_normal_world_output_on_game(const NormalWorldInitialization&);
     bool normal_world_output_current_on_game(const NormalWorldOutputHandle&) const;
     // SAME recorded game owner can later enqueue for this recipient. Queued
     // means actual FIFO insertion only; frames may subsequently fail/close.
