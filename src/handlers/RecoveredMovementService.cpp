@@ -1,4 +1,6 @@
 #include "handlers/RecoveredMovementService.h"
+#include "db/SqliteOwnedEquipmentTransaction.h"
+#include "net/Session.h"
 #include "protocol/RecoveredCharacterListCandidate.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include "protocol/RecoveredWorldEntryView.h"
@@ -9,6 +11,7 @@
 #include <cstdlib>
 #include <utility>
 #include <limits>
+#include <string_view>
 #ifdef _WIN32
 #include <windows.h>
 #include <bcrypt.h>
@@ -201,6 +204,7 @@ bool RecoveredMovementService::qualifies_transfer_destination(
         cell_available(scene,x,y);
 }
 RecoveredWorldEntry::Frame RecoveredMovementService::prepare(std::uint64_t session,std::uint64_t account,std::uint64_t character) {
+    reject_owned_movement_mutation();
     if(!session || !account || !character || active_.contains(session))
         throw std::invalid_argument("Movement binding rejected");
     for(const auto& [id,position]:active_) {
@@ -234,6 +238,7 @@ RecoveredWorldEntry::Frame RecoveredMovementService::prepare(std::uint64_t sessi
 }
 void RecoveredMovementService::prepare_native(std::uint64_t session,std::uint64_t account,std::uint64_t character,
                                              const RecoveredWorldEntry::Frame& frame) {
+    reject_owned_movement_mutation();
     if(!session || !account || !character || active_.contains(session))
         throw std::invalid_argument("Native movement binding rejected");
     for(const auto& [id,position]:active_) {
@@ -262,6 +267,7 @@ void RecoveredMovementService::prepare_native(std::uint64_t session,std::uint64_
 }
 void RecoveredMovementService::prepare_native_scene(std::uint64_t session,std::uint64_t account,std::uint64_t character,
                                                    const RecoveredWorldEntry::Frame& frame) {
+    reject_owned_movement_mutation();
     if(!session || !account || !character || active_.contains(session))
         throw std::invalid_argument("Native scene movement binding rejected");
     for(const auto& [id,position]:active_) {
@@ -287,6 +293,7 @@ void RecoveredMovementService::prepare_native_scene(std::uint64_t session,std::u
         throw std::invalid_argument("Native scene movement Session already prepared");
 }
 void RecoveredMovementService::bind(std::uint64_t session,std::uint64_t account,std::uint64_t character) {
+    reject_owned_movement_mutation();
     const auto it=active_.find(session);
     if(it==active_.end() || it->second.account!=account || it->second.character!=character || it->second.ready)
         throw std::invalid_argument("Movement world-ready binding rejected");
@@ -306,6 +313,22 @@ std::optional<std::uint16_t> RecoveredMovementService::scene(
 }
 std::optional<RecoveredPosition> RecoveredMovementService::current_location(
     std::uint64_t session,std::uint64_t account,std::uint64_t character) const {
+    if(owned_movement_busy_) {
+        const auto snapshot=[&]()->std::optional<Position> {
+            const auto found=active_.find(session);
+            if(found==active_.end())return std::nullopt;
+            return found->second;
+        }();
+        if(owned_movement_invalid_ || !snapshot || !snapshot->ready || snapshot->transfer_pending ||
+           snapshot->account!=account || snapshot->character!=character)return std::nullopt;
+        const auto saved=characters_.load_position(account,character);
+        const auto now=active_.find(session);
+        if(owned_movement_invalid_ || now==active_.end() || now->second!=*snapshot || saved!=snapshot->saved)
+            return std::nullopt;
+        return RecoveredPosition{snapshot->area,snapshot->scene,
+            static_cast<std::uint16_t>(snapshot->x),static_cast<std::uint16_t>(snapshot->y),
+            snapshot->saved?snapshot->saved->revision:0};
+    }
     const auto it=active_.find(session);
     if(it==active_.end() || !it->second.ready || it->second.transfer_pending ||
        it->second.account!=account || it->second.character!=character ||
@@ -321,6 +344,7 @@ std::vector<std::uint8_t> RecoveredMovementService::move(std::uint64_t session,s
     return move_committed(session,account,character,requests).reply;
 }
 void RecoveredMovementService::resume_after_battle(std::uint64_t session,std::uint64_t account,std::uint64_t character) {
+    reject_owned_movement_mutation();
     const auto it=active_.find(session);
     if(it==active_.end() || !it->second.ready || it->second.transfer_pending || it->second.account!=account ||
        it->second.character!=character || characters_.load_position(account,character)!=it->second.saved)
@@ -331,15 +355,18 @@ void RecoveredMovementService::resume_after_battle(std::uint64_t session,std::ui
 std::vector<std::uint8_t> RecoveredMovementService::begin_town_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     return begin_transfer(session,account,character,expected,4,4,x,y);
 }
 std::vector<std::uint8_t> RecoveredMovementService::begin_indoor_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     return begin_transfer(session,account,character,expected,4,15,x,y);
 }
 std::vector<std::uint8_t> RecoveredMovementService::begin_initial_indoor_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     const auto it=active_.find(session);
     if(it==active_.end() || it->second.saved || it->second.scene!=4 ||
        it->second.x!=initial_x_ || it->second.y!=initial_y_)
@@ -349,16 +376,19 @@ std::vector<std::uint8_t> RecoveredMovementService::begin_initial_indoor_transfe
 std::vector<std::uint8_t> RecoveredMovementService::begin_outdoor_return(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     return begin_transfer(session,account,character,expected,15,4,x,y);
 }
 std::vector<std::uint8_t> RecoveredMovementService::begin_island_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     return begin_transfer(session,account,character,expected,4,0,x,y);
 }
 std::vector<std::uint8_t> RecoveredMovementService::begin_island_return(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     return begin_transfer(session,account,character,expected,0,4,x,y);
 }
 RecoveredMovementService::OwnedIslandReturnPlan RecoveredMovementService::prepare_owned_island_return(
@@ -382,6 +412,7 @@ RecoveredMovementService::OwnedIslandReturnPlan RecoveredMovementService::prepar
 }
 void RecoveredMovementService::commit_owned_island_return(
     const OwnedIslandReturnPlan& plan,const RecoveredPosition& persisted) noexcept {
+    if(owned_movement_busy_){owned_movement_invalid_=true;return;}
     const auto found=active_.find(plan.session);
     if(found==active_.end() || !found->second.ready || found->second.transfer_pending ||
        found->second.account!=plan.account || found->second.character!=plan.character ||
@@ -396,6 +427,7 @@ void RecoveredMovementService::commit_owned_island_return(
 std::vector<std::uint8_t> RecoveredMovementService::begin_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const std::optional<RecoveredPosition>& expected,std::uint16_t source_scene,std::uint16_t scene,std::uint16_t x,std::uint16_t y,std::uint16_t area) {
+    reject_owned_movement_mutation();
     const auto it=active_.find(session);
     if(!town_ || !town_source_consensus_ || it==active_.end() || !it->second.ready ||
        it->second.transfer_pending || it->second.account!=account || it->second.character!=character ||
@@ -434,6 +466,7 @@ bool RecoveredMovementService::registered_door_pair(std::uint16_t area,std::uint
 std::vector<std::uint8_t> RecoveredMovementService::begin_registered_door_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected,std::uint16_t scene,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     if(!registered_door_pair(expected.area,expected.scene,scene))
         throw std::invalid_argument("Unregistered current doorway pair");
     return begin_transfer(session,account,character,expected,expected.scene,scene,x,y,expected.area);
@@ -456,6 +489,7 @@ bool RecoveredMovementService::registered_parent_pair(std::uint16_t area,std::ui
 std::vector<std::uint8_t> RecoveredMovementService::begin_registered_parent_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected,std::uint16_t scene,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
     // CUSTOM-0053: exact native mutual placement anchors, custom point2/point0
     // trigger/arrival choice. The server cannot admit an arbitrary Lua landing.
     const bool outward=expected.scene==3 && expected.x==50 && expected.y==124 && scene==0 && x==318 && y==363;
@@ -466,6 +500,7 @@ std::vector<std::uint8_t> RecoveredMovementService::begin_registered_parent_tran
 }
 void RecoveredMovementService::finish_town_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character) {
+    reject_owned_movement_mutation();
     const auto it=active_.find(session);
     if(it==active_.end() || !it->second.ready || !it->second.transfer_pending ||
        it->second.account!=account || it->second.character!=character ||
@@ -475,15 +510,15 @@ void RecoveredMovementService::finish_town_transfer(
     it->second.slot=0;
     it->second.transfer_pending=false;
 }
-RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed(
-    std::uint64_t session,std::uint64_t account,std::uint64_t character,
-    std::span<const RecoveredMovement::Request> requests,
-    const std::function<void(const MovePreview&)>& precommit) {
-    auto it=active_.find(session);
-    if(it==active_.end() || !it->second.ready || it->second.transfer_pending || it->second.account!=account || it->second.character!=character || requests.empty())
-        throw std::invalid_argument("Unbound movement rejected");
-    auto next=it->second;
-    const auto before=next.saved;
+void RecoveredMovementService::reject_owned_movement_mutation() const {
+    if(owned_movement_busy_) {
+        owned_movement_invalid_=true;
+        throw std::logic_error("Owned normal-entry movement reentered by a mutation");
+    }
+}
+RecoveredMovementService::PreparedMove RecoveredMovementService::prepare_move_batch(
+    const Position& position,std::span<const RecoveredMovement::Request> requests) const {
+    auto next=position;
     std::size_t displaced_steps=0;
     std::vector<std::uint8_t> response;
     std::vector<CommittedMove::Step> path;
@@ -501,6 +536,22 @@ RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed
         }
         next.x=request.x;next.y=request.y;next.slot=request.sequence;
     }
+    return {std::move(next),std::move(response),std::move(path),displaced_steps};
+}
+RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed(
+    std::uint64_t session,std::uint64_t account,std::uint64_t character,
+    std::span<const RecoveredMovement::Request> requests,
+    const std::function<void(const MovePreview&)>& precommit) {
+    reject_owned_movement_mutation();
+    auto it=active_.find(session);
+    if(it==active_.end() || !it->second.ready || it->second.transfer_pending || it->second.account!=account || it->second.character!=character || requests.empty())
+        throw std::invalid_argument("Unbound movement rejected");
+    auto prepared=prepare_move_batch(it->second,requests);
+    auto& next=prepared.next;
+    const auto before=next.saved;
+    auto& response=prepared.response;
+    auto& path=prepared.path;
+    const auto displaced_steps=prepared.displaced_steps;
     // Validate the entire batch, then commit before publishing state or ACKs.
     if(precommit) precommit(MovePreview{next.area,next.scene,
         static_cast<std::uint16_t>(it->second.x),static_cast<std::uint16_t>(it->second.y),
@@ -510,7 +561,100 @@ RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed
     it->second=next;
     return {std::move(response),before,*next.saved,displaced_steps,std::move(path)};
 }
-void RecoveredMovementService::remove(std::uint64_t session) noexcept { active_.erase(session); }
+RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed_with_owned_material(
+    Session& session,SqliteOwnedEquipmentTransaction& custody,
+    std::span<const RecoveredMovement::Request> requests) {
+    if(owned_movement_thread_!=std::this_thread::get_id())
+        throw std::logic_error("Owned normal-entry movement requires its game owner");
+    reject_owned_movement_mutation();
+    owned_movement_busy_=true;owned_movement_invalid_=false;
+    struct End {RecoveredMovementService& self;~End(){self.owned_movement_busy_=self.owned_movement_invalid_=false;}} end{*this};
+    if(&custody.characters_repository()!=&characters_)
+        throw std::invalid_argument("Owned movement requires the exact common character repository");
+    const auto connection=session.shared_from_this();
+    const auto initialization=session.normal_world_initialization();
+    if(!initialization || !initialization->entry_written() ||
+       !session.normal_world_initialization_current_on_game(*initialization))
+        throw std::invalid_argument("Owned movement requires actual current normal initialization");
+    const auto id=session.id(),account=session.account_id,character=session.character_id;
+    const auto phase=session.state();const auto battle=session.battle_generation();
+    if(!id || !account || !character || requests.empty() ||
+       (phase!=SessionState::CharacterSelected && phase!=SessionState::InWorld))
+        throw std::invalid_argument("Owned movement normal owner/batch rejected");
+    const auto local=[&] {
+        return owned_movement_busy_ && !owned_movement_invalid_ && connection.get()==&session &&
+            session.normal_world_initialization_current_on_game(*initialization) && initialization->entry_written() &&
+            !session.closing() && session.recovered_world_ready() && session.id()==id &&
+            session.account_id==account && session.character_id==character &&
+            session.state()==phase && session.battle_generation()==battle;
+    };
+    const auto old=[&] {
+        const auto found=active_.find(id);
+        if(found==active_.end() || !found->second.ready || found->second.transfer_pending ||
+           found->second.account!=account || found->second.character!=character)
+            throw std::invalid_argument("Unbound owned movement rejected");
+        return found->second;
+    }();
+    // Pure in-memory owner check, including exact queue/geometry/saved state.
+    // No iterator is retained across a repository or Session observation.
+    const auto active_current=[&](const Position& wanted) {
+        if(!local())return false;
+        const auto found=active_.find(id);
+        return found!=active_.end() && found->second==wanted && local();
+    };
+    if(!old.saved || !old.saved->revision || old.area!=old.saved->area || old.scene!=old.saved->scene ||
+       old.x!=old.saved->x || old.y!=old.saved->y || !active_current(old))
+        throw std::invalid_argument("Owned movement lacks exact positive saved active pose");
+    const auto pose_current=[&](const Position& wanted) {
+        return active_current(wanted) && current_location(id,account,character)==wanted.saved && active_current(wanted);
+    };
+    const auto entry=RecoveredWorldEntryView::read(initialization->entry_frame());
+    if(!entry || !pose_current(old))throw std::invalid_argument("Owned movement entry/current pose rejected");
+    const auto before=custody.observe_before(account,character);
+    if(!before || !before->inventory || !before->equipment ||
+       before->inventory->root.account_id!=account || before->inventory->root.id!=character ||
+       !NativeEquipmentSnapshot::same_root(before->inventory->root,before->equipment->root) ||
+       before->equipment->actor_handle!=entry->actor_handle || before->equipment->position!=*old.saved || !pose_current(old))
+        throw std::invalid_argument("Owned movement requires both genuine current complete banks");
+    // Reuse the entire legacy batch recipe. All allocation/ACK/path generation
+    // completes while live queue and both persisted populations are still OLD.
+    auto prepared=prepare_move_batch(old,requests);
+    const auto limit=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    if(old.saved->revision>=limit || !before->equipment->revision || before->equipment->revision>=limit)
+        throw std::invalid_argument("Owned movement revision overflow");
+    auto expected_equipment=*before->equipment;
+    expected_equipment.position.x=static_cast<std::uint16_t>(prepared.next.x);
+    expected_equipment.position.y=static_cast<std::uint16_t>(prepared.next.y);
+    ++expected_equipment.position.revision;++expected_equipment.revision;
+    constexpr std::string_view marker=";CUSTOM-0095:ordinary-move-preserves-material";
+    if(expected_equipment.source_record.find(marker)==std::string::npos) {
+        if(expected_equipment.source_record.size()>2048-marker.size())
+            throw std::invalid_argument("Owned movement provenance exceeds bounded storage");
+        expected_equipment.source_record.append(marker);
+    }
+    if(!pose_current(old))throw std::invalid_argument("Owned movement before pose became stale");
+    // Only this pure OLD owner predicate runs inside the joint transaction.
+    // No current_location, repository reader, callback, send or SQL reentry.
+    const auto committed=custody.move_position_from_current(*before,entry->actor_handle,
+        expected_equipment.position.x,expected_equipment.position.y,[&]{return active_current(old);});
+    if(!committed)throw std::runtime_error("Owned movement authority rejected before commit");
+    if(!active_current(old) || committed->inventory().snapshot()!=*before->inventory ||
+       committed->equipment().snapshot()!=expected_equipment || !custody.committed_current(*committed) || !active_current(old))
+        throw std::runtime_error("Owned movement committed but old local publication became stale");
+    // Storage is now NEW. Publishing this trivially copied Position allocates
+    // nothing; old current_location would reject until saved becomes NEW too.
+    prepared.next.saved=committed->equipment().snapshot().position;
+    {
+        const auto found=active_.find(id);
+        if(found==active_.end() || found->second!=old || !local())
+            throw std::runtime_error("Owned movement committed but active incarnation was retired");
+        found->second=prepared.next;
+    }
+    if(!pose_current(prepared.next) || !custody.committed_current(*committed) || !pose_current(prepared.next))
+        throw std::runtime_error("Owned movement committed but ACK delivery became stale");
+    return {std::move(prepared.response),old.saved,*prepared.next.saved,prepared.displaced_steps,std::move(prepared.path)};
+}
+void RecoveredMovementService::remove(std::uint64_t session) noexcept { if(owned_movement_busy_)owned_movement_invalid_=true;active_.erase(session); }
 bool RecoveredMovementService::character_active(std::uint64_t account,std::uint64_t character) const noexcept {
     if(!account || !character)return false;
     for(const auto& [session,position]:active_) {

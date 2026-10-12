@@ -10,6 +10,16 @@ void Config::validate_owned_whole_bag_moves() const {
        mock_login || !recovered_character_creation || !recovered_dual_connection ||
        !recovered_world_entry || !recovered_movement || recovered_navigation.empty())
         throw std::invalid_argument("Whole bag moves require actual authenticated native TW normal entry and movement");
+    // The dedicated same-map joint movement source does not run legacy
+    // transfer/probe or visibility publication hooks. Their Tick handoffs and
+    // postmove callbacks require a separate complete material/lifecycle owner.
+    if(diagnostic_town_map_probe || diagnostic_town_scene_probe || diagnostic_town_scene_relocate ||
+       diagnostic_town_scene_indoor_probe || diagnostic_town_scene_indoor_transfer ||
+       diagnostic_town_scene_return_probe || diagnostic_town_scene_return_commit ||
+       diagnostic_town_door_routes || diagnostic_town_all_door_routes || diagnostic_kunlun_door_routes ||
+       diagnostic_kunlun_parent_routes || diagnostic_town_island_routes || diagnostic_player_visibility ||
+       diagnostic_town_player_visibility || diagnostic_remote_actor || diagnostic_owned_weapon_appearance)
+        throw std::invalid_argument("Whole bag joint movement cannot combine legacy transfer/probe or diagnostic visibility/appearance experiments");
     // Other inventory populations/projections and diagnostic settlements have
     // independent custody policies. Do not combine their scalar/typed banks.
     if(owned_map_views_enabled || owned_supply_enabled || owned_weapon_transfers_enabled ||

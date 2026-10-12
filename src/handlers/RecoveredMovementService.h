@@ -12,8 +12,11 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <thread>
 
 namespace god2 {
+class Session;
+class SqliteOwnedEquipmentTransaction;
 // Serial game-executor state, deliberately separate from fixture World/map 1.
 class RecoveredMovementService {
 public:
@@ -127,6 +130,11 @@ public:
                                  std::uint64_t character,
                                  std::span<const RecoveredMovement::Request> requests,
                                  const std::function<void(const MovePreview&)>& precommit={});
+    // CUSTOM-0095: actual normal-entry callback only, one atomic whole-batch
+    // saved-pose/native-witness update. Complete current banks are mandatory;
+    // no fallback, grant, stale-witness rebase or recovered native5D claim.
+    CommittedMove move_committed_with_owned_material(Session&,SqliteOwnedEquipmentTransaction&,
+        std::span<const RecoveredMovement::Request> requests);
     std::vector<std::uint8_t> move(std::uint64_t session,std::uint64_t account,
                                  std::uint64_t character,
                                  std::span<const RecoveredMovement::Request> requests);
@@ -141,7 +149,18 @@ private:
         std::uint16_t scene=15,kind=2;
         std::uint16_t area=2;
         std::optional<RecoveredPosition> saved;
+        bool operator==(const Position&) const = default;
     };
+    struct PreparedMove {
+        Position next;
+        std::vector<std::uint8_t> response;
+        std::vector<CommittedMove::Step> path;
+        std::size_t displaced_steps{};
+    };
+    PreparedMove prepare_move_batch(const Position&,std::span<const RecoveredMovement::Request>) const;
+    void reject_owned_movement_mutation() const;
+    const std::thread::id owned_movement_thread_=std::this_thread::get_id();
+    mutable bool owned_movement_busy_=false,owned_movement_invalid_=false;
     RecoveredCharacterRepository& characters_;
     [[nodiscard]] bool cell_available(int x,int y) const noexcept;
     [[nodiscard]] bool cell_available(std::uint16_t scene,int x,int y) const noexcept;

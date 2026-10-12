@@ -3679,7 +3679,11 @@
         "src/game/SharedTaiwanMovement.cpp",
         "src/game/SharedTaiwanMovementSource.cpp",
         "src/game/SharedTaiwanNativeMovementHost.cpp",
-        "src/core/SharedTaiwanNativeWorldHostPlan.cpp"
+        "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+        "src/handlers/RecoveredMovementService.h",
+        "src/handlers/RecoveredMovementService.cpp",
+        "src/core/Application.cpp",
+        "src/core/Config.cpp"
       ],
       "native_gap": "Original server inventory-witness lifecycle across ordinary walking is not recovered. This policy retains qualified full material; it does not claim a fresh native afterstate capture.",
       "rules": {
@@ -3690,7 +3694,14 @@
         "compatibility": "Null/default and borrowed movement APIs retain existing behavior; opt-in passes actual transaction strongly through host/source/controller. No CN/web/frozen feature rewrite."
       },
       "reason": "Connect ordinary walking to subsequent owned-bag requests without leaving the existing native delivery witness at an obsolete saved position.",
-      "activation": "PHASE1 explicit Sources/StoredSources.with_owned_inventory_movement on actual Application Context only. Main, populations, schema installation, runtime and deployment remain unselected.",
+      "activation": "PHASE1 existing common Sources/StoredSources opt-in and default-off world.owned_whole_bag_moves normal-entry Main joint movement. Actual Session/entry/actor and positive full bank pose required; full batch final position committed once with witness. Initial populations, schema installation, runtime and deployment remain unselected.",
+      "normal_entry_source_variant": {
+        "scope": "Separate bounded normal-entry source variant; preceding rules describe the existing common-owner variant.",
+        "authority": "Actual private Session entry/current/write receipt, native entry actor, same-Database current full material and positive exact saved pose; existing legacy batch geometry/ring validation.",
+        "custody": "One joint final-position/native-witness commit per complete batch, stationary included; inventory/full native bytes retained; pure OLD active/Session Current and allocated receipts.",
+        "projection": "Original legacy ACK recipe retained unchanged. No full native5D/pending/helper/peer authority or new native variant is qualified.",
+        "limits": "No initial population/grant/rebase, freshclient fullbank, transfer/battle-return continuity, original server policy or native acceptance; default-off Main source integration only."
+      },
       "production_activated": false,
       "native_tw_cn_web_profile_activated": false,
       "tests": [],

@@ -4276,3 +4276,47 @@ continues. Heavy evidence external, every package member checked individually.
 Goal binary prefix/prior ledger fields/v23 preserved. Static source only;
 PHASE1 no build/compiler/tests/runtime/native/API/CRT/VM/parser/codec/gameDBSQL/
 migrate/activate/deploy. Baseline capture correction candidates stay preserved.
+
+
+## Round345 actual normal-entry joint movement custody source (2026-10-12)
+
+Prior344 was progress: pushed1b9bccaf29915afb37d7ee3379f5261b141eba2c,
+notification38261399611 success; full objective remains active. Normal-entry
+C24 now has a real Main owner, but legacy movement made its native witness
+stale by committing only saved position. New concrete MovementService typed
+Session+samejointtransaction API shares the exact existing batch sequence/
+step/navigation/ACK preparation. It commits finalxy once perbatch, including
+stationary revision advance, and retains all inventory/native material bytes.
+
+Actual private initialization/entrywritten/currentgame/actor/root/phase/battle
+andpositive existing saved pose/full bank are checked, no common fakelease or
+supplied Current/commit callback. Owned old active snapshot and poison guard
+close opted reentry/remove/rebind; no mapiterator spans observer calls. Joint
+Current runs pure OLDactive+Session only beforestaging, noSQLreader reentry.
+AfterCOMMIT validate receipt/oldactive then publishnew saved/queue/geometry,
+then freshcurrent_location/jointcurrent before returningprebuiltACK. Missing
+or stale material refuses opt path, never legacy fallback/default/rebase/grant.
+
+Mainexistingdefaultoff wholebagprofile retains SAME tx for C24 andmovement.
+Final outerwrapper sends wholebatch anyC24/move to real service beforeother
+mutators/observers: movements+ticks ORoneC24+ticks only; mixedreject prewrite.
+Postcommitfacade stale throwsforbothsources. Weakcaptures/revocation before
+borrowedmovement/DB remain; Configadditionaltransfer/probe/visibility conflicts
+are explicit for same-mapprofile. Defaultfalse/frozen native movement/chat/
+auth/CN/fourWS/sourcefonts/conversion remain unchanged. Sourcepolicy0095 is
+materialretention, not nativeafterstatecapture/originalwitness lifecycle.
+
+Genuine initialfullbank/full25 acquisition/clientfresh50, generalmixedrun,
+transfer/battle-return continuity, fullnative5D pending/helper/authority and
+native3B opaque/originalmove rules remain OPEN. No freshsourcebytes or native
+variant/method inferred from custody.
+Unique report20261012-tw-native-normal-entry-movement-custody-source-345;
+newMainjointmovementbranch1, nativeopcode/
+format/parser/phase/fullroutecredits0. TW156C2S/252S2C,world74=50partial/
+11control/13unconnected;CN156C2S/280phase/253length scopesunchanged;67.6%
+remains parser-sourcecoverage, wholegame/TWdenominatorandpercentnull.
+Full TW-first/CN/fourWS/sharedcore/common tables/common64/coin99999999999/
+qualifiedstack99/nativelevels/saves/frozen/fonts/conversion goalcontinues.
+Heavyartifacts outsideGod2, individualsealmembers exact. Oldgoalbinaryprefix,
+priorledgerfields/v23 preserved. PHASE1: no compiler/build/tests/runtime/
+native/API/CRT/VM/parser/codec/gameDBSQL/migrate/activate/deploy.
