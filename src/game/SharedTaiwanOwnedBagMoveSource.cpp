@@ -42,6 +42,14 @@ std::optional<State> plan(const Transaction::Before& before,Request request,bool
        next.equipment.record_kind!=NativeEquipmentSnapshot::kind ||
        next.equipment.record.size()!=NativeEquipmentSnapshot::record_bytes ||
        !advances(next.inventory.revision) || !advances(next.equipment.revision))return std::nullopt;
+    // A generic native alias BYTE admits0..255. Validate every exact TW
+    // item20 alias, including cells outside the two requested bag locations;
+    // the per-row checks below cannot see aliases outside the50-row bank.
+    for(const auto& cell:next.inventory.cells)if(cell.instance)
+        for(const auto& alias:cell.instance->aliases)
+            if(alias.client_sha256==NativeEquipmentSnapshot::client_pin &&
+               alias.profile==SharedTaiwanOwnedItemSelectionSource::alias_profile &&
+               alias.native_slot>=50)return std::nullopt;
     for(std::size_t slot=0;slot<50;++slot)if(!alias_row(next,slot))return std::nullopt;
     // Explicit CUSTOM-0093 location mapping. Missing cells are not capacity.
     auto source=next.inventory.cells.end(),destination=source;

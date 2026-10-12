@@ -4194,3 +4194,42 @@ common64/coins99999999999/qualifiedstack99/nativelevels/frozen/fonts/conversion
 objective continues. PHASE1: no compiler/build/tests/runtime/native/API/CRT/
 VM/codec/parser/gameDBSQL/migrate/activate/deploy. Seal/member/source accounting
 and static symbolic source reasoning only. Heavy artifacts remain external.
+
+
+## Round343 actual C24 full native bank alias integrity repair (2026-10-12)
+
+Prior342 was progress, pushed43f4d294b8f017d2b00d697aa68a9c2e3726d8d5 with
+notification38256817514 success; full objective remains active. This round
+repairs the actual C24 planner's missing exact-TW alias bank bound. Generic
+alias BYTE/schema permits0..255; old/next50-row checks only visited0..49 and
+could ignore an extra149c/tw149c-item20 alias at50..255 in another owned cell.
+The new whole-population scan rejects only that exact pair outside50 before
+either0093/0094 mode prepares native output or invokes joint CAS/issuer replay.
+All in-bank matching aliases and otherclient/profile retain downstream behavior.
+Single562B source insertion preserves every old C++ byte; one existing C++
+file changed, no new C++ file/binding/schema/provider/default grant added.
+
+Concrete C24 planner/ready-owner/full joint CAS/two41 result already exist;
+its move policy stays CUSTOM-0093, full25 mode stays CUSTOM-0094. Bank-source
+audit finds conditional same-connection existing full-pair read closure, not
+initial population/acquisition. Legacy/diagnostic/raw definitions cannot create
+ownership/native1215 or pad missing witnesses. Host-source audit requires actual
+2A/initialscene/direction/ROMprefix/generations/full5D pending Authority/records
+Current/real Others, plus existing CUSTOM-0095 movement custody for walk→C24.
+Main still selects no world plan. No new placeholder Main factory is installed.
+
+Native preview4D68D0 is control22's alternative prefix, not after49B820/common
+deferred send; local20 gets type-only masks and control22 exits without direct
+B1. External source evidence/13 gameplay gap inventory/50 reviewed-opcode
+crosswalk and precise-line correction remain scoped, immutable and credits0.
+
+Unique report20261012-tw-native-c24-fullbank-alias-source-343. New full routes,
+opcode/format/method/parser/phase credits0; TW156C2S/252S2C, world74=50partial/
+11control/13unconnected. CN156C2S/280phase/253length scopes unchanged. Parser
+source coverage67.6% is not game completion; whole TW/game denominator/percent
+stay null. Full TW-first/CN/fourWS/sharedtables/common64/coin99999999999/
+qualifiedstack99/nativelevels/frozen/fonts/conversion objective continues.
+Five exact LF helpers copied once, no capture reruns; previous ledger fields,
+goal binary prefix and immutablev23 preserved. Heavy artifacts remain external.
+PHASE1 forbids build/compiler/tests/runtime/native/API/CRT/VM/codec/parser/
+gameDBSQL/migrate/activate/deploy; none occurred. Static source/custody only.
