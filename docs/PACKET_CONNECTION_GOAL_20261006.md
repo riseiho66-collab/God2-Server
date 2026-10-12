@@ -4462,3 +4462,43 @@ full1215/freshclientfull50/native5D/allvariants/transfer/postbattle/acceptance
 OPEN. FullTWfirst/CN/fourWS/common64/coin99999999999/qualifiedstack99/nativelevels/
 saves/frozen/fonts/conversiongoalactive. PHASE1 no compiler/build/tests/runtime/
 native/API/CRT/VM/emulator/parser/codec/SQL/importer/migrate/activate/deploy.
+
+
+## Round349 actual item helper outputs and primary UI boundary (2026-10-12)
+
+Previous348 source progress publisheda5e3a01603e77f9707efaaadcd37722dd7729eca,
+exactHEADnotification38270660071success; immutable receipt/custody remain.
+Actual49B850 outputs now qualify two known helpers within audited opaque frontier:
+49B72072B/18sites/2RET0C;49B77059B/18sites/2RET8. First readsWORD116/storesout1,
+then reloadsout2pointer/readsWORD118/storesout2; genericalias mustpreserveorder.
+Missinglookup WORD0041/FFFF. Actualcaller usesdistinctstackWORDs/signextension.
+EAXmixedpointer/field oroutputpointer, notstatus. Second BYTE11Bbit0→NEGCF/SBB/
+AND29/INC→WORD1or30; null→1. Nativeformatterthreshold notserverstackability,
+acquisitionorqualifiedcommon99. Known459A60 acceptsunsignedlowWORD0..32599,
+key0inclusive; highbitsmasked; currentpopulatedrecord/allocation/loadconditions
+notproved. Generic396records/key/rowcount/token5 distinctfromProgramMsglabels.
+
+Primaryknown5068C0112B/36sites/4closedbranches/soleRET16 hasno directobject/
+queuewrites; only41EA00delegate remainsopaque. ActualthisU+E2170. Widgetformal1
+onlysignedlowWORD used:nonnegativeg→offset10760*g;groupWORD818nonzero required.
+No maximumgroup/allocationextentguard. FullslotDWORD loadedESI, signedSI<106
+indexes100*signExtend16(SI); calleeownnegativeguard absent, actualparentDI0..49
+qualifiesselectedpaths. Byte8B8nonzero needed. SlotfullESI stillforwardedchild.
+MOVAXhandleWORD81C retainscomputedgroupoffsethigh16; childECX=this8, actualargs
+(offsetHigh16|handleWORD,originalfullslot,fullformal2,fullformal4). Formal2/4
+positiveparentMOVSXoutputs orclear31/-1; nofullchainhighbitirrelevanceclaim.
+KnownhistoricalUIcontinuation gets0methodcredit; no nativeauthority/policyadded.
+
+Twoexternalpackages48members101585B individuallychecked; overlappingpriorcustody
+isnotuniquenativecoverage. FourpublicLF exactsuccessful capture/custody stages,
+none rerun; discoveryfailuresretained. Oldgoalbinaryprefix/priorledgerfields/
+frontierv23/custom135/C++/config/rulesunchanged. Newcoveredknownhelpers2/131B
+boundedfrontieronly; opcode/format/parser/phase/handler/source/fullroutecredits0.
+Unique report20261012-tw-native-item-helper-output-ui-source-349. TW156C2S/
+252S2C/world74=50partial11control13unconnected;CN156C2S/280phase/253length
+separateunchanged; parser67.6%notcompletion; whole/TWdenominatorpercentnull.
+41EA00/5077C0effects/currentwidget/catalog andgenuinecommonacquisition/full25/
+full1215/freshfull50/native5D/transfer/postbattle/nativeacceptance OPEN. Full
+TWfirst/CN/fourWS/common64/coin99999999999/qualifiedstack99/nativelevels/saves/
+frozen/fonts/conversiongoalactive. PHASE1 no compiler/build/tests/runtime/native/
+API/CRT/VM/emulator/parser/codec/SQL/importer/migrate/activate/deploy.
