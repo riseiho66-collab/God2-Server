@@ -39,6 +39,9 @@ struct RecoveredE5Update {
         FieldWrite field;
     };
     struct WorldScalarWrite {
+        // Legacy member name: relative to primary UI context WORLD+A7F2F6C,
+        // not the WORLD root. E6 initially copies these scalars, but its
+        // conditional child effects can change them before later E5 reads.
         std::uint8_t world_offset;
         std::uint32_t mask,inserted_bits;
     };

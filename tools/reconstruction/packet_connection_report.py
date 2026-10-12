@@ -100,7 +100,7 @@ def report(round_name, catalog_name=None, round_directory=None):
     wrapper = json.loads(wrapper_path.read_text(encoding='utf-8'))
     wrapper_frontier_path = ROOT / 'c2s-wrapper-frontier-v1.json'
     wrapper_frontier = json.loads(wrapper_frontier_path.read_text(encoding='utf-8'))
-    s2c_frontier_path = ROOT / 's2c-world-consumer-frontier-v18.json'
+    s2c_frontier_path = ROOT / 's2c-world-consumer-frontier-v19.json'
     s2c_frontier = json.loads(s2c_frontier_path.read_text(encoding='utf-8'))
     battle_frontier_path = ROOT / 's2c-battle-dispatch-frontier-v1.json'
     battle_frontier = json.loads(battle_frontier_path.read_text(encoding='utf-8'))
@@ -167,6 +167,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    {p for row in ledger.get('dual_client_source_segments', []) for p in row['source_paths']} |
                    set(ledger.get('tw_native_pet2_e5_update326', {}).get('source_paths', [])) |
                    set(ledger.get('tw_native_e5_family_source327', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_native_e6_petegg_input_source328', {}).get('source_paths', [])) |
                    {'src/core/Application.cpp', 'src/protocol/RecoveredWorldRecords.h'})
     # A missing file is a report error, never silent qualification/completion.
     digests = {p: hashlib.sha256((SERVER / p).read_bytes()).hexdigest() for p in paths}
@@ -310,6 +311,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_owned_quantity64_equipment_state325': ledger.get('tw_owned_quantity64_equipment_state325'),
         'tw_native_pet2_e5_update326': ledger.get('tw_native_pet2_e5_update326'),
         'tw_native_e5_family_source327': ledger.get('tw_native_e5_family_source327'),
+        'tw_native_e6_petegg_input_source328': ledger.get('tw_native_e6_petegg_input_source328'),
         'current_catalog_supplied':current_catalog is not None,
         'tw_supplemental_producer_evidence': ledger.get('tw_supplemental_producer_evidence'),
         'cn_unresolved_receiver_evidence': ledger.get('cn_unresolved_receiver_evidence'),

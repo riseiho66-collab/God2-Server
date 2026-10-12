@@ -3728,3 +3728,23 @@ append-only frontierv18只加獨立format E5：independent9→10、ledger-unclas
 補上原生E5其餘direct family：0的signedslot無範圍guard／inventory property WORD；1的slot45→world44/48/4C精確mask、marker／flag／clock／control與其後current context BYTE8/scalar重新讀取；2的existing E3 52B及metadata guards／34selector masks。新增唯讀operands到既有C++ codec；family1 final inventory不得由V推測，root未封存草稿已修正為currentread descriptor。沒有真正issuer、joint mutation／規則／儲存／C2S因果或Application接通。
 
 修正326文件及worker countDWORD文句：58EC*24=85620，family3 S2實際inventory24B row14h DWORD bits8..14（20Bmetadata10h），不是row0/count；原326seal/原始source/report與全部舊parsedledgerfields保留，另加獨立勘誤封存。family3 selector19依序雙寫仍保留。three native/correction packages與finalheader獨立靜態review通過；nativeopcode／phase／完整bidirectional新增0，TW C2S156/world74=partial50/control11/unconnected13、S2C252／independent10/unclassified116/reply48/push11/gated4及CN/mixed282/groups26/pending10/CUSTOM135保持。分母／TW與全遊戲百分比null，goal active。未build/test/native/runtime/VM/resourcecodec/gameDBSQL/migrate/activate/deploy或clientchange。全TW/CN/web、sharedtables/common64/coin99999999999/stack99/nativelevels及所有凍結要求不縮減。見[第327輪](research/tw-native-e5-family-source-20261012.md)。
+
+
+## Round328 — actual E6 scalar input, 2026-10-12
+
+Previous327 was source progress; goal remains active, not paused/complete/blocked.
+See research/tw-native-e6-petegg-input-source-20261012.md. Actual E6 length13
+table and WORLD4691EB qualify body0/4/8 direct copies into primary UI U44/48/4C
+at U=WORLD+A7F2F6C, shared with E5. New RecoveredPetEggStatus is lossless and
+read-only. Existing4D5970 can clear U44 low28 after opaque children, so incoming
+values are not final current state or E5 input. PetEgg_Open's full20 item reads
+do not establish scalar generation; incoming3B slot45 does not initialize U8.
+Native source20cuts3474codeB/286dataB; historical methods receive no new novelty.
+Frontier v19 independent10->11/unclassified116->115; new opcode/phase/handler/
+complete bidirectional routes0, all other scoped counts unchanged. Denominator,
+TW completion and whole-game completion null. Full TW/CN/web/shared-table/common64/
+coin99999999999/stack99/native levels/frozen requirements remain active.
+PHASE1 source/hash/PE/Capstone/static report only; no build/test/native/runtime/VM/
+codec/game DB or SQL/migration/activation/deployment. Next recover actual U8
+lifecycle and true E6 current-state issuer/rules/persistence/ordered replies,
+retaining postcopy child effects rather than assuming final values.
