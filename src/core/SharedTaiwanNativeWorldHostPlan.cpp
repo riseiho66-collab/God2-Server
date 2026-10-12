@@ -325,6 +325,23 @@ SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldHostPlan:
     return SharedTaiwanNativeWorldEntryOfferSource::with_scene_content(*context.native_enemy_displays,
         std::move(npcs),std::move(cards),std::move(supply));
 }
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_scene_entry_content(
+        const Context& context,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
+        std::shared_ptr<const TaiwanNativeTransformCards> cards,
+        SharedTaiwanNativeWorldEntryOfferSource::SceneSupply supply,StoredSources sources) {
+    if(!context.common_world || !context.common_world->owns_repository(context.characters) ||
+       !context.accounts || !context.native_world_entries || !context.native_world_entry_writer ||
+       !context.native_enemy_displays || !sources.entry_qualify || sources.entry_offer ||
+       static_cast<NativeWorldEntrySnapshotRepository*>(context.native_world_entry_writer)!=context.native_world_entries ||
+       !context.native_world_entry_writer->owns_sources(*context.accounts,context.characters))
+        throw std::invalid_argument("TW paired scene entry requires actual Context and unbound complete qualifier");
+    auto binding=SharedTaiwanNativeWorldEntryOfferSource::with_scene_content_and_qualification(
+        *context.native_enemy_displays,std::move(npcs),std::move(cards),std::move(supply),
+        std::move(sources.entry_qualify));
+    sources.entry_offer=std::move(binding.offer);sources.entry_qualify=std::move(binding.qualify);
+    return sources;
+}
 SharedTaiwanNativeWorldHostPlan::StoredSources::EquipmentPublicationFactory
 SharedTaiwanNativeWorldHostPlan::StoredSources::equipment_publication_factory(const Context& context) {
     if(!context.common_world || !context.common_world->owns_repository(context.characters) ||

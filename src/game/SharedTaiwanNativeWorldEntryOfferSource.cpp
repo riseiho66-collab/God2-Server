@@ -82,6 +82,7 @@ struct SceneState {
     std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs;
     std::shared_ptr<const TaiwanNativeTransformCards> cards;
     OfferSource::SceneSupply supply;
+    SharedTaiwanStoredWorldEntrySource::Qualify qualify;
     const std::thread::id thread=std::this_thread::get_id();
     bool busy=false,reentered=false;
     void check() const {
@@ -143,32 +144,47 @@ SharedTaiwanNativeWorldEntryOfferSource::Offer::from_actual_source(Snapshot next
 SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldEntryOfferSource::with_scene_content(
         const NativeEnemyDisplayCatalog& enemies,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
         SceneSupply supply) {
-    return bind_scene_content(enemies,std::move(npcs),{},std::move(supply));
+    return bind_scene_content(enemies,std::move(npcs),{},std::move(supply)).offer;
 }
 SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldEntryOfferSource::with_scene_content(
         const NativeEnemyDisplayCatalog& enemies,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
         std::shared_ptr<const TaiwanNativeTransformCards> cards,SceneSupply supply) {
     if(!cards)throw std::invalid_argument("TW card-aware entry requires actual pinned card source");
-    return bind_scene_content(enemies,std::move(npcs),std::move(cards),std::move(supply));
+    return bind_scene_content(enemies,std::move(npcs),std::move(cards),std::move(supply)).offer;
 }
-SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldEntryOfferSource::bind_scene_content(
+SharedTaiwanNativeWorldEntryOfferSource::SceneBinding
+SharedTaiwanNativeWorldEntryOfferSource::with_scene_content_and_qualification(
         const NativeEnemyDisplayCatalog& enemies,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
-        std::shared_ptr<const TaiwanNativeTransformCards> cards,SceneSupply supply) {
+        std::shared_ptr<const TaiwanNativeTransformCards> cards,SceneSupply supply,
+        SharedTaiwanStoredWorldEntrySource::Qualify qualify) {
+    if(!cards || !qualify)
+        throw std::invalid_argument("TW paired entry requires actual card source and complete qualifier");
+    return bind_scene_content(enemies,std::move(npcs),std::move(cards),std::move(supply),std::move(qualify));
+}
+SharedTaiwanNativeWorldEntryOfferSource::SceneBinding SharedTaiwanNativeWorldEntryOfferSource::bind_scene_content(
+        const NativeEnemyDisplayCatalog& enemies,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
+        std::shared_ptr<const TaiwanNativeTransformCards> cards,SceneSupply supply,
+        SharedTaiwanStoredWorldEntrySource::Qualify qualify) {
     if(!npcs || !supply)throw std::invalid_argument("TW entry scene content requires actual full sources and producer");
-    auto state=std::make_shared<SceneState>(SceneState{enemies,std::move(npcs),std::move(cards),std::move(supply)});
-    return [state](const Source::Scope& input,const std::optional<Snapshot>& before)->std::optional<Offer> {
-        const auto owner=state;SceneState::Guard guard(*owner);
-        const auto scope=input;const auto expected=before;
-        if(scope.position.area<1 || scope.position.area>16 || scope.position.scene>1023)return std::nullopt;
+    auto state=std::make_shared<SceneState>(SceneState{enemies,std::move(npcs),std::move(cards),
+        std::move(supply),std::move(qualify)});
+    const auto observe=[state](const Source::Scope& scope)->SceneContentPtr {
+        const auto owner=state;owner->check();
+        if(scope.position.area<1 || scope.position.area>16 || scope.position.scene>1023)return {};
         auto enemies=owner->enemies.read_scene(scope.position.area,scope.position.scene);owner->check();
-        if(!enemies)return std::nullopt; // Whole catalog absent is not an empty scene.
+        if(!enemies)return {}; // Whole catalog absent is not an empty scene.
         // The qualified reader pins149c/70a4/75c3; NPC constructor independently
         // pins the complete same75c3 bytes. No encoded-present assertion follows.
         if(enemies->source.native_image_sha256!=TaiwanNativeNpcSceneGroups::native_image_sha256 ||
            enemies->source.decoded_sha256!=TaiwanNativeNpcSceneGroups::decoded_sha256 ||
-           enemies->source.source_sha256!=TaiwanNativeNpcSceneGroups::historical_encoded_sha256)return std::nullopt;
-        SceneContentPtr content(new SceneContent(owner->npcs,std::move(*enemies),owner->cards));
-        if(!owner->current(*content))return std::nullopt;
+           enemies->source.source_sha256!=TaiwanNativeNpcSceneGroups::historical_encoded_sha256)return {};
+        return SceneContentPtr(new SceneContent(owner->npcs,std::move(*enemies),owner->cards));
+    };
+    Supply offer=[state,observe](const Source::Scope& input,const std::optional<Snapshot>& before)->std::optional<Offer> {
+        const auto owner=state;SceneState::Guard guard(*owner);
+        const auto scope=input;const auto expected=before;
+        const auto content=observe(scope);
+        if(!content || !owner->current(*content))return std::nullopt;
         const auto producer=owner->supply;
         auto supplied=producer(scope,expected,content);owner->check();
         if(!supplied || !owner->current(*content) || supplied->next_.position!=scope.position ||
@@ -187,6 +203,24 @@ SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldEntryOffe
         };
         return supplied;
     };
+    SharedTaiwanStoredWorldEntrySource::Qualify stored;
+    if(state->qualify)stored=[state,observe](const Snapshot& input,const Source::Scope& input_scope,
+            const Source::Frame& input_frame,SharedTaiwanStoredWorldEntrySource::Check check) {
+        const auto owner=state;SceneState::Guard guard(*owner);
+        // Own the exact post-COMMIT material before calling any external owner.
+        // No new frame serialization and no retained borrowed callback inputs.
+        const auto snapshot=input;const auto scope=input_scope;const auto frame=input_frame;
+        if(!shape(snapshot) || !Snapshot::same_root(snapshot.root,scope.selected) ||
+           snapshot.position!=scope.position || !std::equal(snapshot.record.begin(),snapshot.record.end(),frame.begin()))
+            return false;
+        const auto content=observe(scope);
+        SceneState::TargetScene target;
+        if(!content || !owner->card_target(snapshot,target) || !owner->current(*content,target))return false;
+        const auto actual_qualifier=owner->qualify;
+        const bool accepted=actual_qualifier(snapshot,scope,frame,check);owner->check();
+        return accepted && owner->current(*content,target);
+    };
+    return SceneBinding{std::move(offer),std::move(stored)};
 }
 SharedTaiwanWorldEntrySource::Prepare SharedTaiwanNativeWorldEntryOfferSource::create(
         SqliteNativeWorldEntrySnapshotRepository& writer,AccountRepository& accounts,

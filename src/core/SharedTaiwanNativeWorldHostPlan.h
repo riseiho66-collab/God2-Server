@@ -171,6 +171,13 @@ public:
             const SharedWorldHostPlan::Context&,std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
             std::shared_ptr<const TaiwanNativeTransformCards>,
             SharedTaiwanNativeWorldEntryOfferSource::SceneSupply);
+        // Install paired issuer and post-COMMIT Supply/Current resource checks
+        // from the same actual Context. Existing full qualifier is required;
+        // refuse replacement of an already selected entry issuer.
+        static StoredSources with_scene_entry_content(const SharedWorldHostPlan::Context&,
+            std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
+            std::shared_ptr<const TaiwanNativeTransformCards>,
+            SharedTaiwanNativeWorldEntryOfferSource::SceneSupply,StoredSources);
         // Construct on startup's game owner without writes. The returned
         // game-only closure accepts a future real post-COMMIT token; retain it
         // in the later request owner, never retain this borrowed Context.

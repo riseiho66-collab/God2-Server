@@ -3504,3 +3504,16 @@ SceneContent wrapper只提供actual current-world area/scene的NPCList及EnyName
 Remote actual S2CDA nonself46938F→4FC990是128×268 identity pointer lookup，不是setter，並有self503D30分流。實際appearance→wholeactor4FD160直接寫A79，在其條件分支才呼叫4FF8E0；C=A224直接寫WORD C26=A24A，opaqueAction children仍open，不能由此填full6F DWORD9/17或A220。
 
 新增C++2／修改4，source材料元件1；完整玩法branch/opcode/fullroute0。decoded plaintext未恢復，encoded現讀pin吻合；factory要求未来actual owner提供原bytes，不聲稱已載入資料。Strict39fields是原pin的歷史subset。TW156/world74=50部分/11control/13未接；S2C252=230fixed/22variable；CN156/phase280/length253各scope不合併，本輪CN增量0。mixed282/CUSTOM135/groups26/pending10未改。全遊戲總數／完整路徑分母／TW及全遊戲百分比null；無build/tests/runtime/native/VM/codec/SQL/migrate/activate/deploy。保留凍結功能／shared64／TW/CN/web。下一步：恢復不執行codec的既有original card plaintext或獨立完整來源證據，將實際2A供應者及後續Current/Entered接到新catalog；沿actual4FD160→4FF8E0已知Action children及full6F original sources追opaque9/17，避免重跑identity lookup/localoptions/genericallocator。
+
+
+## 第314輪：入口Supply/Current資源資格與原明文恢復
+
+恢复verified=true历史封存内两份精确原明文：ChangeDollCard15455B/0f04与GameData2783008B/75c3，完整bytes保持。只恢复这两份外部输入，不恢复整个历史客户端或建置树。
+
+with_scene_entry_content在实际Application Context一次安装paired offer与stored entry_qualify，两者同一SceneState强持NPC/card，借用同一catalog到所有issuer/Native/Current drain。实际完整SceneSupply和原qualifier仍必需，拒绝覆盖已有entry_offer。
+
+Stored Supply/Current先拥有Snapshot/Scope/Frame，检查exact frame/root/position，读取完整worldScene与非零transform的exact card targetScene/ordinal；真正原qualifier(Check不变)前后比较完整观察。零key保留原45C000 bypass，不生成opaque2A bytes；原writer/CAS语义保留。
+
+Actual6F旧actor replacement进入C=A224的4FFCF0 cleanup四handle，全部73B旧资格重叠，新增native bytes0。Actionowner/record不是A220/bodypointer；不继续无指向的Action树，不把未知DWORD9/17填成零或已恢复。
+
+修改C++4、新增0、資源資格延伸1，精確恢復原檔2；完整branch/opcode/fullroute增量0，TW156/world74=50部分/11control/13未接，S2C252=230fixed/22variable；CN156/phase280/length253各scope分列。mixed282/CUSTOM135不變。全遊戲總數/完整路徑分母/百分比null。未build/tests/runtime/resourcecodec/gameDBSQL/deploy；只允許一般archive恢復及唯讀tool index。下一步：将两份现已精确恢复的输入供给后续真实游戏资源owner；追完整2A frame issuer的剩余字段及post-entry publication，远端仅追实际full6F bodypointer/A220 read custody，避免重跑known cleanup/allocator/lookups。

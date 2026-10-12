@@ -1,5 +1,6 @@
 #pragma once
 #include "game/SharedTaiwanWorldEntrySource.h"
+#include "game/SharedTaiwanStoredWorldEntrySource.h"
 #include "db/SqliteNativeWorldEntrySnapshotRepository.h"
 #include "db/NativeEnemyDisplayCatalog.h"
 #include "game/TaiwanNativeNpcSceneGroups.h"
@@ -76,14 +77,27 @@ public:
     static Supply with_scene_content(const NativeEnemyDisplayCatalog&,
         std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
         std::shared_ptr<const TaiwanNativeTransformCards>,SceneSupply);
+    struct SceneBinding {
+        Supply offer;
+        SharedTaiwanStoredWorldEntrySource::Qualify qualify;
+    };
+    // One resource owner for both the issuer/CAS and stored Supply/Current.
+    // The real complete qualifier stays mandatory and receives Check unchanged.
+    // After durable COMMIT, stale resources suppress delivery, not undo storage.
+    // Catalog must outlive every copied issuer, Native and Current closure.
+    static SceneBinding with_scene_content_and_qualification(const NativeEnemyDisplayCatalog&,
+        std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
+        std::shared_ptr<const TaiwanNativeTransformCards>,SceneSupply,
+        SharedTaiwanStoredWorldEntrySource::Qualify);
     // Only the explicit Entry Prepare invokes the writer. Native/Current reads
     // never prepare. Repositories outlive the actual game-owner facade drain.
     static Source::Prepare create(SqliteNativeWorldEntrySnapshotRepository&,
         AccountRepository&,RecoveredCharacterRepository&,const NativeMapCatalog&,
         std::string client_sha256,Supply);
 private:
-    static Supply bind_scene_content(const NativeEnemyDisplayCatalog&,
+    static SceneBinding bind_scene_content(const NativeEnemyDisplayCatalog&,
         std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
-        std::shared_ptr<const TaiwanNativeTransformCards>,SceneSupply);
+        std::shared_ptr<const TaiwanNativeTransformCards>,SceneSupply,
+        SharedTaiwanStoredWorldEntrySource::Qualify={});
 };
 }
