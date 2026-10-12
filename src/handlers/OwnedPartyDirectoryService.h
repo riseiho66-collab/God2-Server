@@ -19,6 +19,17 @@ struct OwnedPartyDirectoryService {
         return peer && actor.initialization.entry_written() &&
             peer->normal_world_initialization_current_on_game(actor.initialization);
     }
+    static bool retained_response_current(const OwnedPartyDirectory::Actor& actor,
+        const std::optional<Session::NormalWorldResponseAttempt>& response) {
+        const auto peer=actor.session.lock();
+        return peer && response && response->status()!=Session::NormalWorldResponseStatus::Failed &&
+            peer->normal_world_response_current_on_game(*response);
+    }
+    static bool detail_response_queued(const OwnedPartyDirectory::Detail& detail) {
+        return detail.response && detail.response->status()==Session::NormalWorldResponseStatus::Queued &&
+            retained_response_current(detail.owner,detail.response) &&
+            detail.response->status()==Session::NormalWorldResponseStatus::Queued;
+    }
     static bool description_valid(const std::array<std::uint8_t,24>& raw) {
         const auto end=std::find(raw.begin()+2,raw.end(),0);
         if(end==raw.end() || end-(raw.begin()+2)>20)return false;
@@ -138,7 +149,8 @@ struct OwnedPartyDirectoryService {
                 // The read-only planner also qualifies each retained private
                 // receipt on its recorded game owner. Equal entry bytes do
                 // not establish that an old issued-AB epoch is still current.
-                invalid_detail=!captured_entry_current(p.owner) || !captured_entry_current(p.target) ||
+                invalid_detail=!retained_response_current(p.owner,p.response) ||
+                    !captured_entry_current(p.owner) || !captured_entry_current(p.target) ||
                     !p.owner.same_detail_identity(q.actor) || !target ||
                     !p.target.same_detail_identity(*target) ||
                     p.participants!=parties.participants(p.target.session_id) ||
@@ -152,7 +164,8 @@ struct OwnedPartyDirectoryService {
             if(q.detail) {
                 const auto& d=*q.detail;
                 const auto target=find(d.target);
-                invalid_detail=invalid_detail || !d.party || !captured_entry_current(d.owner) || !captured_entry_current(d.target) ||
+                invalid_detail=invalid_detail || !d.party || !retained_response_current(d.owner,d.response) ||
+                    !captured_entry_current(d.owner) || !captured_entry_current(d.target) ||
                     !d.owner.same_detail_identity(q.actor) || !target ||
                     !d.target.same_detail_identity(*target) ||
                     d.party->participants(d.target.session_id)!=parties.participants(d.target.session_id) ||

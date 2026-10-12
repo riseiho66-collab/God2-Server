@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <utility>
 namespace god2 {
@@ -46,6 +47,8 @@ public:
         std::vector<Actor> members; // Complete actual group; display prefix alone is not authority.
         std::shared_ptr<const NativeParty> party;
         std::vector<std::uint8_t> raw_request; // Full C90, including opaque highWORD.
+        // Exact original AB response; only current Queued may grant C91.
+        std::optional<Session::NormalWorldResponseAttempt> response;
     };
     // CUSTOM-0101 actual issued AB presentation only. This readset is NOT
     // C91 permission and is never consumed as an invitation/join authority.
@@ -55,6 +58,8 @@ public:
         std::vector<Actor> members; // Complete group, including undisplayed fifth member.
         std::vector<std::uint64_t> participants;
         std::size_t party_size;
+        // Provisional native presentation, never C91 authority by itself.
+        std::optional<Session::NormalWorldResponseAttempt> response;
     };
     struct Query {
         Actor actor;std::array<std::uint8_t,24> raw;std::size_t page{};

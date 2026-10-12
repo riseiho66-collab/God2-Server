@@ -4711,3 +4711,48 @@ notcompletion. Unique report20261013-tw-native-world-control-authority-frontier-
 FullTWfirst/CN/fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/
 fonts/conversion active. PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/
 emulator/parser/codec/resource/gameDBSQL/importer/migrate/activate/deploy.
+
+
+## Round355 native child lineage and actual party permission custody (2026-10-13)
+
+Previous354b934e539e9d0cb279e2d6b58678afdb7b555dcf9 published with exactHEAD
+notification38283720696success. Actualwhole49D2E0..49D365133B/42sites/data0
+resets savedUI85AC0..85AE7, notcanonical8560D..F. Sameobject child lineage,
+mapped149c/PE5fcfequal; DF0/span/faultfree premises. Prior142members476077B
+individuallyunchanged. Existing49B850 no demonstrated rowdestination forwarded;
+23rawREPwindows+refinements discoveryonly, notwholewritercensus/globalabsence.
+Canonicalprefix/full25/full1215/acquisition/issuer OPEN, no methodcredit.
+
+Actualmaterial C24/jointmovement alreadyhosted; earliestmissing genuine
+definition-instance-acquisition/full25/cache50x24+DA owner BEFOREmint; syntactic
+validity/historical396 is notauthority. Full5D externalAuthority mandatory.
+PKpairedterminal/preparedfutureINIT/completeReturnScene remains preparationonly;
+no coupled visibilitymerge/socketwrite/liveINIT/markerunlock/inputrelease yet.
+No fakefactory/rebase/emptycache or nativeformula added.
+
+ThreeCpp App/Directory/Service change; Session/protocol/config/core/custom135
+frozen/defaultoffCUSTOM0097/98/101. ActualC90->AB privateowncallback receipt
+captured beforeprogress, exactframedAB expect BEFOREstateCAS; state/frame/merged
+alreadyallocated, componentregistrationitselfmayallocate. Detail/Presentation
+share actual353Data withoptions/blacklist; owningData cannot preventRAIIfailure.
+C91 ONLY currentQueued oldDetail grants privateconsentpermission, bothpreaction
+and afterallobservers; Pending (includingnewC90+C91samecallback), Failed/absent/
+staleepoch denied. Queued localfinalvalidFIFO notWritten/delivery/nativeACK.
+NewC90oldpermissionretirement unchanged; Pendingpresentation can remaincurrent
+provisional, missing/Failed/currentfalse invalidates watcherreadset. Finalretained
+AB fence qualifies privatecurrent receipt. ready/disconnect/windowrelease never
+revokes sharedData. ArmedactualABlaterreject/phase/drop/postfailure failsclosed;
+unobservedgeneric/frozenchat bytesexact. C91peerpreview transport/nativeadoption,
+allparty variants/mixedtransfer/postbattle/universalcontextabort stillOPEN.
+
+Fiveupstreamseals+threeexactCppinverses+independentsemanticreview+finalcanonical
+review. FailedprewriteLF/CRLF literal draft/correction retained additive, no tracked
+mutation onfailure. TenexactsuccessfulLFhelpers copiedwithoutreexecution.
+Oldgoalbinaryprefix/priorledgerfields/frontierv23 exact. Twoconditionalsource
+custody/admissionbranches, native method/opcode/format/parser/handler/phase/
+fullroute0/globaldeltas0. TW156/252/world74=50partial11control13unconnected;
+CN156/280phase/253length separate. Whole/TWdenominatorpercentnull; parser67.6%
+notcompletion. Unique report20261013-tw-native-route-authority-source-355.
+FullTWfirst/CN/fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/
+fonts/conversion active. PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/
+emulator/parser/codec/resource/gameDBSQL/importer/migrate/activate/deploy.

@@ -7076,7 +7076,8 @@ if(guild_officer_runtime && player_guild(session) &&
                         // prepared A7 is deliberately absent from this fence.
                         for(const auto& [id,q]:plan.state->queries)if(q.presentation) {
                             const auto& p=*q.presentation;
-                            if(!OwnedPartyDirectoryService::captured_entry_current(p.owner) ||
+                            if(!OwnedPartyDirectoryService::retained_response_current(p.owner,p.response) ||
+                               !OwnedPartyDirectoryService::captured_entry_current(p.owner) ||
                                !OwnedPartyDirectoryService::captured_entry_current(p.target))return false;
                             for(const auto& member:p.members)if(!OwnedPartyDirectoryService::captured_entry_current(member))return false;
                         }
@@ -7230,6 +7231,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                            !handles.emplace(member.native_actor,member.session_id).second){qualified=false;break;}
                                     }
                                     if(!qualified)continue;
+                                    std::optional<Session::NormalWorldResponseAttempt> response;
+                                    if(request.opcode()==0x90) {
+                                        response=session.capture_normal_world_response(owner->initialization);
+                                        if(!response)continue; // Actual own callback, never copied facade/IDs.
+                                    }
                                     auto next_directory=std::make_shared<OwnedPartyDirectory::State>(*before);
                                     auto& next_query=next_directory->queries.at(session.id());
                                     next_query.actor=*owner;
@@ -7251,13 +7257,14 @@ if(guild_officer_runtime && player_guild(session) &&
                                         const auto detail=TaiwanNativePartyMenu::detail(target->native_actor,rows);if(!detail)continue;
                                         logical=*detail;
                                         next_query.detail=std::make_shared<const OwnedPartyDirectory::Detail>(OwnedPartyDirectory::Detail{
-                                            *owner,*target,members,party_before,request.logical});
+                                            *owner,*target,members,party_before,request.logical,*response});
                                         next_query.presentation=std::make_shared<const OwnedPartyDirectory::Presentation>(OwnedPartyDirectory::Presentation{
-                                            *owner,*target,members,participants,party_before->party_size(target->session_id)});
+                                            *owner,*target,members,participants,party_before->party_size(target->session_id),*response});
                                         next_query.last_join_request.clear();
                                     } else {
                                         const auto detail=query->second.detail;
-                                        if(!detail || !detail->party || !OwnedPartyDirectoryService::captured_entry_current(detail->owner) ||
+                                        if(!detail || !detail->party || !OwnedPartyDirectoryService::detail_response_queued(*detail) ||
+                                           !OwnedPartyDirectoryService::captured_entry_current(detail->owner) ||
                                            !OwnedPartyDirectoryService::captured_entry_current(detail->target) ||
                                            !detail->owner.same_detail_identity(*owner) ||
                                            !detail->target.same_detail_identity(*target) || detail->target.native_actor!=request.target() ||
@@ -7341,12 +7348,24 @@ if(guild_officer_runtime && player_guild(session) &&
                                         // CUSTOM-0101 final old-permission epoch fence
                                         // after every observer, independent of AB presentation.
                                         const auto& d=*query->second.detail;
-                                        if(!OwnedPartyDirectoryService::captured_entry_current(d.owner) ||
+                                        if(!OwnedPartyDirectoryService::detail_response_queued(d) ||
+                                           !OwnedPartyDirectoryService::captured_entry_current(d.owner) ||
                                            !OwnedPartyDirectoryService::captured_entry_current(d.target))qualified=false;
                                         for(const auto& member:d.members)if(!OwnedPartyDirectoryService::captured_entry_current(member))qualified=false;
                                     }
                                     if(!qualified || dispatch->reentered || !native_parties.same_state(*party_before) ||
-                                       !owned_party_directory->publish(before,std::move(next_directory)))continue;
+                                       owned_party_directory->snapshot()!=before)continue;
+                                    if(response) {
+                                        if(!session.normal_world_response_callback_current(*response) ||
+                                           !OwnedPartyDirectoryService::captured_entry_current(*owner))continue;
+                                        // Full state/frame/merged bytes precede registration.
+                                        // Registration may allocate; an omitted armed AB fails closed.
+                                        session.expect_normal_world_response(*response,framed);
+                                        if(dispatch->reentered || !session.normal_world_response_callback_current(*response) ||
+                                           !OwnedPartyDirectoryService::captured_entry_current(*owner) ||
+                                           !native_parties.same_state(*party_before) || owned_party_directory->snapshot()!=before)continue;
+                                    }
+                                    if(!owned_party_directory->publish(before,std::move(next_directory)))continue;
                                     if(next_party)native_parties=std::move(*next_party); // No callback between the two ephemeral commits.
                                     wire=std::move(merged);
                                     // Submission only: a transport failure cannot be called
