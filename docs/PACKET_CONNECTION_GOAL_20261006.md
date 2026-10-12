@@ -3550,3 +3550,14 @@ actual普通2A CALL4684EB：formal1 unsigned B6控制461270四component zero/pos
 fresh verified=true archive receipt精確恢復HeroDoll37189B與Drv3899B、共41088B，外置God2；釘8HeroDoll rows與Drv原row0。普通archive zlib與readonly archive-tool SQL，不執行遊戲resourcecodec或gameDBSQL。DrvDoll第三原明文尚未恢復，98fresh conditional domain不當owned2A default。
 
 TW world50/74=67.6%限定部分分支，完整route新增0，全遊戲分母/百分比null。CN無增量，mixed282/CUSTOM135保持；無build/tests/native/gameDBSQL/deploy。下一步：精確恢復獨立DrvDoll原明文並釘ordinal grammar到463AD0的136B bank；接著追actual149c owned2A creation/mutation完整來源，不重查既有cache/allocator或以fresh preview/fixture推權威。
+
+
+## 第318輪：DrvDoll exact來源與paired入口接入
+
+精確恢復DrvDoll decoded7620B/de9510e0...，145CRLF lines、first26/count120、每row7rawfields。Ordinals0..119來自native count，不以col0 label索引；field1真正空的0沿451B50/451BA0/451B60實證，原第0行filename空，非有效ROM或owned default。
+
+新增immutable TaiwanNativeDrvDoll h/cpp：exactSHA＋全原bytes/header/120rawrows/7fields/offset/line，原col1低WORD、col3 signed32原int、filename原bytes；float multiplier bits只是metadata，不算FPU值／cachehandles／ROM結果。源表不變成怪物屬性或角色所有權。
+
+在既有SceneContent/SceneSupply及paired offer/Issuer/CAS與stored Qualify共享同一strong immutable來源；新增sameContext HostPlan overload保留完整producer和qualifier mandatory。4existing modified/2newsource，resource source extension1；原overloads/current null契約保持，不推Main或完整route。
+
+TW world50/74=67.6%限定部分分支，完整branch/opcode/route新增0；全遊戲分母/百分比null。CN無增量，mixed282/CUSTOM135保持；无build/tests/native/gameDBSQL/deploy。下一步：已排除DrvDoll availability與ordinal混淆，沿current角色profile/owned equipment真實write chain與2A B0/B4 consumer差額追完整owned entry issuer；先匹配真source字段與state lifecycle，不重跑已知rowloader/allocator/ROM，不能用col0/emptyrow/fresh preview推所有權。

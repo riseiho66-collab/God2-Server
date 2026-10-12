@@ -178,6 +178,12 @@ public:
             std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
             std::shared_ptr<const TaiwanNativeTransformCards>,
             SharedTaiwanNativeWorldEntryOfferSource::SceneSupply,StoredSources);
+        // Same Application writer/read lifecycle, with full immutable DrvDoll
+        // source facts available to the mandatory actual complete producer.
+        static StoredSources with_scene_entry_content(const SharedWorldHostPlan::Context&,
+            std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
+            std::shared_ptr<const TaiwanNativeTransformCards>,std::shared_ptr<const TaiwanNativeDrvDoll>,
+            SharedTaiwanNativeWorldEntryOfferSource::SceneSupply,StoredSources);
         // Construct on startup's game owner without writes. The returned
         // game-only closure accepts a future real post-COMMIT token; retain it
         // in the later request owner, never retain this borrowed Context.
