@@ -4,6 +4,30 @@
 #include <asio/ip/address.hpp>
 #include <nlohmann/json.hpp>
 namespace god2 {
+void Config::validate_owned_whole_bag_moves() const {
+    if(!owned_whole_bag_moves_enabled)return;
+    if(protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate || !recovered_account_auth ||
+       mock_login || !recovered_character_creation || !recovered_dual_connection ||
+       !recovered_world_entry || !recovered_movement || recovered_navigation.empty())
+        throw std::invalid_argument("Whole bag moves require actual authenticated native TW normal entry and movement");
+    // Other inventory populations/projections and diagnostic settlements have
+    // independent custody policies. Do not combine their scalar/typed banks.
+    if(owned_map_views_enabled || owned_supply_enabled || owned_weapon_transfers_enabled ||
+       owned_armor_transfers_enabled || owned_beast_panel_enabled || owned_foreign_bank_enabled ||
+       owned_mixed_bank_enabled || owned_instance_discard_enabled || owned_instance_trade_enabled ||
+       owned_armor_bank_enabled || owned_teleport_gem_enabled || fruit_village_quests_enabled ||
+       diagnostic_world_supply || diagnostic_town_quest_progress || diagnostic_quest_dialogue ||
+       fixture_battle || diagnostic_battle_transition || diagnostic_battle_after_movement ||
+       diagnostic_battle_participants || diagnostic_battle_player_appearance || diagnostic_battle_animations ||
+       diagnostic_battle_skill_seed || diagnostic_shunying_manual || diagnostic_thousand_bulls_manual ||
+       diagnostic_recording_fixed_damage || diagnostic_battle_skill_kind || diagnostic_battle_revival ||
+       diagnostic_battle_skill_settlement || diagnostic_battle_mp_refusal || diagnostic_battle_resources ||
+       diagnostic_battle_experience || diagnostic_role_progress || diagnostic_level_snapshot ||
+       diagnostic_character_growth || diagnostic_resume_checkpoint || diagnostic_progress_span ||
+       diagnostic_battle_terminal || diagnostic_visibility_battle || diagnostic_visibility_skill_recovery ||
+       diagnostic_town_battle_after_quest || diagnostic_town_return_after_battle || diagnostic_town_door_after_battle)
+        throw std::invalid_argument("Whole bag moves cannot combine scalar/typed inventory populations or diagnostic battle/quest settlements");
+}
 Config Config::load(const std::filesystem::path& path) {
     std::ifstream stream(path);
     if (!stream) throw std::runtime_error("Cannot open config: " + path.string());
@@ -665,6 +689,12 @@ Config Config::load(const std::filesystem::path& path) {
         if(c.fruit_village_quests_enabled && (!c.recovered_account_auth || !c.recovered_world_entry || !c.recovered_movement || c.mock_login || !c.diagnostic_town || !c.diagnostic_town_source_consensus))
             throw std::runtime_error("Fruit quests require authenticated world and source consensus navigation");
     }
+    if(j.contains("world") && j.at("world").contains("owned_whole_bag_moves")) {
+        const auto& moves=j.at("world").at("owned_whole_bag_moves");
+        if(!moves.is_object() || !moves.at("enabled").is_boolean())
+            throw std::runtime_error("Whole bag moves bool required");
+        c.owned_whole_bag_moves_enabled=moves.at("enabled").get<bool>();
+    }
     const auto addr=asio::ip::make_address(c.host);
     if(j.contains("world") && j.at("world").contains("owned_player_appearance")) {
         const auto& appearance=j.at("world").at("owned_player_appearance");
@@ -682,6 +712,7 @@ Config Config::load(const std::filesystem::path& path) {
        c.diagnostic_remote_actor))
         throw std::runtime_error("Diagnostic appearance requires loopback owned appearance and weapons without synthetic remote actor");
     if(c.mock_login && !addr.is_loopback()) throw std::runtime_error("Mock authentication requires a loopback bind address");
+    c.validate_owned_whole_bag_moves();
     return c;
 }
 }

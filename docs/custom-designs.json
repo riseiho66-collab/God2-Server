@@ -3647,7 +3647,10 @@
         "src/game/SharedTaiwanOwnedBagMoveSource.h",
         "src/game/SharedTaiwanOwnedBagMoveSource.cpp",
         "src/core/SharedTaiwanNativeWorldHostPlan.h",
-        "src/core/SharedTaiwanNativeWorldHostPlan.cpp"
+        "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+        "src/core/Application.cpp",
+        "src/core/Config.h",
+        "src/core/Config.cpp"
       ],
       "native_gap": "Original S3B opaqueWORD producer and cross-slot helper compatibility not recovered. Direct consumer does not read the WORD, but EBX retains payload across opaque calls; do not infer global padding.",
       "rules": {
@@ -3658,12 +3661,12 @@
         "commit": "Existing actual full joint before/internal plan/fulltuple CAS, same actual Session/lease/root/position/pending battle and durable receipt. No fallback to0093 on missing full25."
       },
       "reason": "Connect genuine retained full25 material directly from the actual private whole-population read to a concrete optional mutation/reply source, instead of inventing the missing WORD or adding an Action placeholder.",
-      "activation": "PHASE1 explicit create_with_item_material/with_owned_bag_move_material only. Existing0093/default unchanged; material/acquisition issuers, Main, schema installation and native acceptance remain OPEN.",
+      "activation": "PHASE1 existing shared factories and default-off world.owned_whole_bag_moves normal-entry Main source branch. Real private Session entry, same DB full bank and positive live pose; competing scalar/typed profiles excluded. No configured activation, population/schema installation or native acceptance.",
       "production_activated": false,
       "native_tw_cn_web_profile_activated": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
-      "deferred_qualification": "Native opaque/helper effects and original server producer; real full25/custody/native1215 issuance, movement witness progression, operational Main, original policies/all variants/full native acceptance.",
+      "deferred_qualification": "Native opaque/helper effects and original server producer; real full25/custody/native1215 initial issuance and client cache, legacy movement witness progression, runtime Main acceptance, original policies/all variants/full native acceptance.",
       "replacement": "Replace retention/destination/order policy with independently qualified original server source. Preserve exact source originals, identities, saves and native bytes."
     },
     {

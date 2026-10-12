@@ -25,6 +25,7 @@ struct Config {
     bool owned_guild_membership_enabled=false; // CUSTOM-0078: explicit formal player admission.
     std::string owned_guild_entry_resource_bundle; // Qualified two-locale append2996 bundle.
     bool streamer_privileges_enabled=false; // CUSTOM-0054 requires the matching embedded client.
+    bool owned_whole_bag_moves_enabled=false; // CUSTOM-0094 existing-owner full25 only; no population/import.
     bool owned_supply_enabled=false;
     bool owned_beast_panel_enabled=false; // CUSTOM-0085 display only; source-phase opt-in
     bool owned_pk_invitation_enabled=false; // CUSTOM-0086 incomplete until shared room authority exists
@@ -123,6 +124,7 @@ struct Config {
     bool owned_party_directory_enabled=false; // CUSTOM-0097 transient discovery opt-in
     bool owned_client_options_enabled=false; // CUSTOM-0100 opaque preference WORD; no gameplay authority
     bool owned_battle_pose_enabled=false; // CUSTOM-0103 actual diagnostic battle symbol source only
+    void validate_owned_whole_bag_moves() const;
     static Config load(const std::filesystem::path& path);
 };
 }

@@ -32,6 +32,7 @@
 #include "handlers/RecoveredPlayerPresence.h"
 #include "handlers/DiagnosticSupplyService.h"
 #include "handlers/InventoryMoveService.h"
+#include "game/SharedTaiwanOwnedBagMoveSource.h"
 #include "handlers/InventoryDiscardService.h"
 #include "handlers/OwnedInstanceDiscardService.h"
 #include "handlers/RecoveredTradeService.h"
@@ -548,6 +549,24 @@ public:
         slots.clear();characters_={};records_={};movement_={};factory_={};entry_={}; // All source captures die on game, with DB alive.
     }
 };
+// Game-owned source callbacks borrow movement/storage. Network copies retain
+// only weak facades; revocation runs before those borrowed owners are destroyed.
+struct WholeBagMoveHost {
+    std::optional<SharedTaiwanWorldRecordSource::InventoryMoveBinding> binding;
+    std::shared_ptr<RecoveredWorldService> service;
+    bool live=true,accepting=true;
+    void stop_dispatch() noexcept {
+        accepting=false;
+        try {if(binding)binding->invalidate_active();}catch(...) {}
+    }
+    void revoke() noexcept {
+        live=false;stop_dispatch();service.reset();binding.reset();
+    }
+};
+struct WholeBagMoveHostGuard {
+    std::shared_ptr<WholeBagMoveHost> host;
+    ~WholeBagMoveHostGuard(){if(host)host->revoke();}
+};
 struct WorldLifecycleVaultGuard {
     std::shared_ptr<WorldLifecycleVault> vault;
     ~WorldLifecycleVaultGuard() {if(vault)vault->revoke();}
@@ -555,6 +574,9 @@ struct WorldLifecycleVaultGuard {
 }
 static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_plan,const WebServerPlan* web_plan,unsigned run_for_seconds,
                            const SharedWorldHostPlan* world_plan=nullptr) {
+    config.validate_owned_whole_bag_moves();
+    if(config.owned_whole_bag_moves_enabled && world_plan)
+        throw std::invalid_argument("Normal-entry whole bag moves cannot borrow or compete with an explicit shared world plan");
     const auto taiwan_entry_identity=world_plan?world_plan->taiwan_entry_identity:TaiwanWorldEntryIdentity::SelectedCharacter;
     if(world_plan && (bool(world_plan->make_taiwan_entered)==bool(world_plan->make_taiwan_entered_async) || !config.recovered_account_auth || config.mock_login ||
        config.protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate || !config.recovered_character_creation ||
@@ -605,6 +627,8 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             const auto* native_lab_environment=std::getenv("GOD2_NATIVE_WORLD_RECORDS_LAB");
             native_records_lab=native_lab_environment && std::string_view(native_lab_environment)=="1";
 #endif
+            if(config.owned_whole_bag_moves_enabled && native_records_lab)
+                throw std::invalid_argument("Whole bag moves cannot combine native record lab fixture populations");
             if(native_records_lab && (config.host!="127.0.0.1" || config.port!=2598 ||
                 !config.database.parent_path().filename().string().starts_with("private-native-blackbox-")))
                 throw std::runtime_error("Native record lab requires disposable private-native-blackbox DB and loopback2598");
@@ -1211,6 +1235,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                             config.character_birthplace_x,config.character_birthplace_y);
                 } else recovered_movement=std::make_unique<RecoveredMovementService>(database.recovered_characters(),config.recovered_navigation);
             }
+            auto whole_bag_moves=config.owned_whole_bag_moves_enabled?std::make_shared<WholeBagMoveHost>():nullptr;
             Session::RecoveredCharacterHandlers character_handlers;
             std::unique_ptr<RecoveredWorldService> recovered_world;
             if(config.recovered_character_creation) {
@@ -2288,6 +2313,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             std::unique_ptr<TcpServer> character_server;
             // Declared AFTER character_server: revoke real callbacks first on
             // every unwind. Its later destructor post retains only an empty vault.
+            WholeBagMoveHostGuard whole_bag_move_lifetime{whole_bag_moves};
             WorldLifecycleVaultGuard common_world_lifetime{
                 common_world?std::make_shared<WorldLifecycleVault>(config.max_sessions):nullptr};
             std::vector<std::uint8_t> character_routes;
@@ -7216,6 +7242,80 @@ if(guild_officer_runtime && player_guild(session) &&
                         return wire;
                     };
                 }
+                if(whole_bag_moves) {
+                    if(!recovered_movement || !recovered_login || !game_handlers.authenticate_async ||
+                       !game_handlers.world_entry || !game_handlers.world_ready || !game_handlers.world_records ||
+                       game_handlers.movement || game_handlers.common_world_lifecycle_factory)
+                        throw std::invalid_argument("Whole bag moves require complete exclusive actual normal-entry TW handlers");
+                    // Exact same migrated Database connection; both explicit
+                    // custody schemas/material must already exist. No installer.
+                    auto transaction=std::make_shared<SqliteOwnedEquipmentTransaction>(
+                        database.owned_inventory_writer(),database.native_equipment_snapshot_writer());
+                    whole_bag_moves->binding=SharedTaiwanOwnedBagMoveSource::create_for_normal_entry_with_item_material(
+                        std::move(transaction),database.accounts(),database.recovered_characters(),*recovered_movement);
+                    const auto& binding=*whole_bag_moves->binding;
+                    if(!binding.dispatch || !binding.release || !binding.invalidate_active)
+                        throw std::invalid_argument("Whole bag moves require a complete actual inventory binding");
+                    const std::weak_ptr<WholeBagMoveHost> weak=whole_bag_moves;
+                    whole_bag_moves->service=std::make_shared<RecoveredWorldService>(
+                        RecoveredWorldService::Movement{},RecoveredWorldService::Battle{},RecoveredWorldService::Supply{},
+                        RecoveredWorldService::Quest{},RecoveredWorldService::SelectionItem{},RecoveredWorldService::Teleport{},
+                        [weak](Session& session,const RecoveredInventoryMoveRequest::Request& request)
+                                ->std::optional<std::vector<std::uint8_t>> {
+                            const auto host=weak.lock();
+                            if(!host || !host->live || !host->accepting || !host->binding)return {};
+                            const auto dispatch=host->binding->dispatch;
+                            const auto reply=dispatch(session,request);
+                            if(!reply || !host->live || !host->accepting)return {};
+                            if(reply->native_no_reply())throw std::runtime_error("Whole bag move requires its full native material reply");
+                            return reply->bytes(); // Already-framed wire through the existing Session sender.
+                        });
+                    const auto original=game_handlers.world_records;
+                    game_handlers.world_records=[weak,original](Session& session,
+                            std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
+                        const auto host=weak.lock();
+                        if(!host || !host->live || !host->accepting)return {};
+                        // Entire original batch, before every typed consumer or
+                        // unrelated observer. Existing admission allows precisely
+                        // one C24 plus idle ticks and commits no mixed request.
+                        if(std::any_of(records.begin(),records.end(),[](const auto& record){
+                            return std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record);
+                        })) {
+                            const auto service=host->service;
+                            return service?service->handle(session,records):std::nullopt;
+                        }
+                        // These always-present legacy services use independent
+                        // scalar/typed populations. Whole-batch rejection occurs
+                        // before any of their callbacks can mutate or publish.
+                        if(std::any_of(records.begin(),records.end(),[](const auto& record){
+                            return std::holds_alternative<RecoveredInventoryItemRequest::Request>(record) ||
+                                std::holds_alternative<RecoveredTargetItemRequest::Request>(record) ||
+                                std::holds_alternative<RecoveredSelectionItemRequest::Request>(record) ||
+                                std::holds_alternative<RecoveredInventoryDiscard::Request>(record) ||
+                                std::holds_alternative<RecoveredTrade::Request>(record) ||
+                                std::holds_alternative<RecoveredBank::Request>(record) ||
+                                std::holds_alternative<RecoveredBankItems::Request>(record) ||
+                                std::holds_alternative<RecoveredPet2Revert::Request>(record) ||
+                                std::holds_alternative<RecoveredBattleCommand::BasicAttackRequest>(record) ||
+                                std::holds_alternative<RecoveredBattleCommand::ControlRequest>(record) ||
+                                std::holds_alternative<RecoveredBattleCommand::Action2Request>(record) ||
+                                std::holds_alternative<RecoveredSkillCommand::Record>(record) ||
+                                std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record);
+                        }))return {};
+                        return original(session,records); // Normal movement/chat/ready Tick behavior.
+                    };
+                    const auto previous=on_disconnect;
+                    on_disconnect=[weak,previous](std::shared_ptr<Session> session) {
+                        if(!session)return;
+                        const auto host=weak.lock();
+                        if(!host || !host->live)return;
+                        std::exception_ptr failure;
+                        try {if(host->binding)host->binding->release(*session);}catch(...) {failure=std::current_exception();}
+                        try {if(previous)previous(std::move(session));}catch(...) {if(!failure)failure=std::current_exception();}
+                        if(failure)std::rethrow_exception(failure);
+                    };
+                    spdlog::warn("OWNED_WHOLE_BAG_MOVES_SOURCE CUSTOM-0094 full25 only existing_owner no_grants stale_pose_rejected");
+                }
                 character_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),
                     config.host,config.character_port,config.max_sessions,config.packet_dump,
                     on_packet,on_disconnect,ProtocolMode::God2CharacterConnection,recovered_login,std::move(game_handlers));
@@ -7316,7 +7416,9 @@ if(guild_officer_runtime && player_guild(session) &&
             auto stop=[&] {
                 if(stopping) return;
                 guild_delivery_lifetime->store(false);
-                stopping=true; spdlog::info("Stopping server and draining sessions");
+                stopping=true;
+                if(whole_bag_moves)whole_bag_moves->stop_dispatch();
+                spdlog::info("Stopping server and draining sessions");
                 scheduler->stop(); signals.cancel(); deadline.cancel();
                 if(web_gateway)web_gateway->stop();
                 server.stop();

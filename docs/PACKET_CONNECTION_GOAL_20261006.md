@@ -4233,3 +4233,46 @@ Five exact LF helpers copied once, no capture reruns; previous ledger fields,
 goal binary prefix and immutablev23 preserved. Heavy artifacts remain external.
 PHASE1 forbids build/compiler/tests/runtime/native/API/CRT/VM/codec/parser/
 gameDBSQL/migrate/activate/deploy; none occurred. Static source/custody only.
+
+
+## Round344 concrete normal-entry C24 owner and Main source host (2026-10-12)
+
+Prior343 was progress: dd7524e842479f4ca534f1f0a5291d93c3412c34 pushed;
+notification38259615521 success; full goal remains active. New concrete normal
+owner uses private actual Session initialization/current_on_game/entry_written,
+captured CharacterSelected/InWorld phase/root/battle, actual full2A actor and
+existing RecoveredMovementService positive live saved pose. It reuses the exact
+full-instance planner, out-of-bank alias guard, prepared native result and full
+joint CAS. Pure issuer checks no reader reentry; postcommit stale delivery throws.
+
+Only full25 CUSTOM-0094 is exposed on this legacy owner, never count-only0093
+from scalar projected flags. Main's default-off world.owned_whole_bag_moves
+creates real same-Database writers/transaction and the actual movement binding.
+Final outer world_records wrapper precedes typed consumers/observers; dedicated
+existing service admits exactly oneC24+idleTicks before any mutation. Competing
+inventory/battle request batches and scalar/typed projection/population options
+are excluded. Config-load and programmatic Config share the validation; explicit
+shared plan/native-records lab conflict. Original default routing and normal
+movement/chat remain. Weak facade stops/invalidate before drain, disconnect
+releases before observers, game-owner guard revokes before borrowed DB/movement.
+
+Genuine existing full common/native50 bank, full25 aliases/current actor/pose
+remain mandatory, not populated/granted/padded/imported. Two affected rows alone
+receive clear/full3B/final41; other48 initial cache and remote execution unknown.
+Legacy movement does not advance equipment witness pose; stale bank refuses,
+no automatic rebase. Existing common CUSTOM0095 is separate unselected frontier.
+Opaque helper/original swap rules/full mixed provider remain OPEN. This closes
+one actual Main source-connection gap, not full gameplay, freshclient initial
+population or all C24 variants. Shared normal/common factory policies retain
+CUSTOM0093/0094 provenance; no compiler/runtime acceptance claimed.
+
+Unique report20261012-tw-native-c24-normal-entry-source-344. New source Main
+branch1; opcode/format/parser/phase/full-route credits0. TW156C2S/252S2C;
+world74=50partial/11control/13unconnected; CN156C2S/280phase/253length scopes
+unchanged.67.6% remains parser-source coverage; whole TW/game denominator and
+percentnull. Full TW-first/CN/fourWS/commoncore/sharedtables/common64/coin
+99999999999/qualifiedstack99/nativelevels/saves/frozen/fonts/conversion goal
+continues. Heavy evidence external, every package member checked individually.
+Goal binary prefix/prior ledger fields/v23 preserved. Static source only;
+PHASE1 no build/compiler/tests/runtime/native/API/CRT/VM/parser/codec/gameDBSQL/
+migrate/activate/deploy. Baseline capture correction candidates stay preserved.
