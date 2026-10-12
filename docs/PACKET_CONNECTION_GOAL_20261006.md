@@ -3886,3 +3886,28 @@ completebidirectional/gameplayincrements0, denominator/TW/wholecompletionnull.
 FullTW/CN/web/sharedtables/common64/coin99999999999/stack99/nativelevels/frozen
 requirements persist. PHASE1 source/hash/PE/Capstone/report only; no build/
 compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
+
+## Round335 — actual PetRoom catalog namespace and source boundary, 2026-10-12
+
+Previous334 was progress;12bba54 publication/notification succeeded. Goalactive.
+See research/tw-native-petroom-catalog-source-boundary-20261012.md. Actual
+459A60 reads lowWORD-indexed shared pointer table; full4599B0 registers token0
+keys to396-byte rows, complete459420 puts token5 inmetadataDWORD0/token4 at+8.
+Actual459150/459380/456130 distinguish category selection duringload fromlookup;
+4591C0/459A20 are interior instructions. F4 list andfull20PetEgg reader share
+catalog pointer, butactual6177..6200 bank/rows/loadorder remainOPEN. Historical
+four-family observation cannot stand for currentbank/eligibleownedpopulation.
+ExistingF3/F5 codecs agree; establishedF3 TOTALframing remainsqualified. New
+receiver continuity retains F5storedgate/bodyWORD0reread andF3partialAX caveats;
+no duplicatecodec/class/consumer credit. ActualC28/companion sources cannot
+supplyF4population/B1operationowner. No newprovider/handler/activation.
+Newpublic staticcapture sources2; existingC++ provenancecomment3lines only.
+Frontierv23 byte-identical; TW C2S156/S2C252/world74 partial50/control11/gap13;
+independent16/unclassified110; CN C2S156/phaseS2C280/lengthS2C253 unchanged.
+All packetcount/phase/authority/completegameplay increments0; fullTW/game
+denominator andcompletionnull. Next exact source: actualbank-qualified rows,
+eligibleownedpopulation/issuer/actionselection/rules/fullorderedreply/storage
+andApplicationhosting. FullTW/CN/fourWS/sharedtables/common64/coin99999999999/
+qualifiedstack99/nativelevels/fonts/textconversion/frozenrequirements persist.
+PHASE1 static source/hash/PE/Capstone/report only; no build/compiler/tests/
+runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.

@@ -10,6 +10,9 @@ class SqliteOwnedInventoryRepository;
 // Owned observation of the pinned historical full catalogs, whose parser image
 // is149c. This is not a current-ROM re-extraction, common definition ID mapping,
 // instance/acquisition, equipment entitlement, final ROM binding or stat rule.
+// Native459A60 reads a shared token0-indexed pointer table, independently of
+// category. This observation selects only historical TWP/WPN/EQU/TEQ rows;
+// the shared lookup namespace does not qualify other banks or PetRoom ownership.
 class NativeItemDefinitionObservation final {
 public:
     static constexpr const char* parser_image_sha256="149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763";
