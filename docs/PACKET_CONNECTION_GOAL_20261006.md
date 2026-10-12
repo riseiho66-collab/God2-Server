@@ -3748,3 +3748,26 @@ PHASE1 source/hash/PE/Capstone/static report only; no build/test/native/runtime/
 codec/game DB or SQL/migration/activation/deployment. Next recover actual U8
 lifecycle and true E6 current-state issuer/rules/persistence/ordered replies,
 retaining postcopy child effects rather than assuming final values.
+
+
+## Round329 — PetEgg actual index and B1 action source, 2026-10-12
+
+Previous328 was progress; goal active, not complete/paused/blocked. See
+research/tw-native-petegg-selection-and-b1-source-20261012.md. Actual Main setup
+forms U=Main+A7F2F6C ->4817C0 ->4D4B80, which directly setsU8=45,
+U44/48/4C=0 andU52=FFFF; later opaquechildren do not establish finalstate.
+Actual primary actiondispatch ->complete4D6940/table/guardleaves ->4D6BA0
+qualifies B1logical2/body1 selectors0..6/9. It carries no slot/key/full20 and
+no E5/E6 causal reply is recovered. New readonly RecoveredPetEggControl is
+standalone; existing Options7/8/CUSTOM0100 and worldparser stay unchanged.
+4/5/6 needWORD52predicate RETURN0 and currentU44bit29; common opaqueprefix
+precedes live reads. Source final17cuts7028codeB/66dataB; historicalmethods
+gain no globalnovelty. Ledger appends eightunresolved gameplayvariants under
+unique329field while old B1control7/8 scope remains historical.
+All scopedcounts unchanged, completebidirectional/handler/opcode/phase increments0;
+whole denominator/TWcompletion/wholecompletion null. FullTW/CN/web/sharedtables/
+common64/coin99999999999/stack99/nativelevels/frozenrequirements remain active.
+PHASE1 source/hash/PE/Capstone/staticreport only, no build/test/native/runtime/VM/
+codec/gameDB/SQL/migrate/activate/deploy. Next exactmissingedges: currentU8/owned45
+instance acrosschildren, realUI504620input, genuineB1 operation/rules/storage/
+orderedreply/recovery and any E5/E6 pairing; no empty supplier closes these.

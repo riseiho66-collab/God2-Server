@@ -35,7 +35,8 @@ struct RecoveredE5Update {
     enum class InventoryIndexSource { IncomingSignedByte, ContextSignedByte8 };
     struct InventoryWrite {
         InventoryIndexSource index_source;
-        // Relative to native24-byte row at world+8560C, not20-byte metadata.
+        // Relative to native24-byte row at inventory owner+8560C, not20-byte
+        // metadata. Family3 rereads that owner from pet2 context+DC.
         FieldWrite field;
     };
     struct WorldScalarWrite {
