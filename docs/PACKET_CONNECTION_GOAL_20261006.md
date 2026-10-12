@@ -4158,3 +4158,39 @@ denominator/TW/wholepercentnull. No build/compiler/test/runtime/native/CRT/VM/
 codec/parser/gameDBSQL/migration/activation/deploy. ContinuefullTW/CN/fourWS/
 sharedtables/common64/coin99999999999/qualifiedstack99/nativelevels/fonts/
 conversion/saves/frozenfeatures objective, not a local-projection substitute.
+
+
+## Round342 actual selected presend absolute storage source (2026-10-12)
+
+Round341 was progress, pushed44140eb925f71db5aed45b84e20276ef1c4a0bdf with
+notification38255307049 success; full-game goal stays active. Round342 adds
+RecoveredPetRoomPresendStorageSource, an actual conditional client source
+description of ten ordered global WORD/DWORD writes before optional505230 UI
+delegation, and a separate WORD overwrite only after normal return. No native
+pointer or storage mutation is performed and no Application gameplay is hosted.
+
+Authentic complete49B82035B maps six-zero incoming to(0,0,12h,0,0,0); large
+4B5BE0 has85B authentic entry +294B selected null-input tail, not full-method
+qualification. Opaque547B50 frame1184/argument/direction/ordinary-storage
+premises are explicit. Complete4BC2E017B and necessary4BC2A055B preserve actual
+same-U path. Nine selected absolute writes precede wrapper WORD5926B0=FFFF.
+The child gate reduces to signed livehandle>=0 only under the stableFFFF read
+premise. Actual composed OR EAX,FFFFFFFF then MOV AX handle/PUSH EAX yields
+FFFF0000|handlelowWORD; generic child upperEAX alone stays unknown.505230 uses
+U+E2170 with opaque side effects, so no U8 preservation or final-state claim.
+
+Absolute field semantics/pending request/requestID/serverissuer/owned B1F4
+causality are unknown. Later caller operations may modify these globals. Old
+C++/catalog/SQLv1 NULL pins/importers and immutable v23 are unchanged; decoded
+historical data is not relabeled as current client state. No guessed success,
+packet variant, parser/control/reject or unhosted source counts as completion.
+
+Unique report round20261012-tw-native-petroom-presend-storage-source-342; all
+opcode/format/method/parser/phase/handler/full-route credits0. TW156C2S/252S2C,
+world74=50partial/11control/13unconnected;67.6% remains parser source coverage.
+CN156C2S/280phase entries/253length entries are separate scopes. Whole TW/game
+denominator and percentage remain null. Full TW-first/CN/shared core/fourWS/
+common64/coins99999999999/qualifiedstack99/nativelevels/frozen/fonts/conversion
+objective continues. PHASE1: no compiler/build/tests/runtime/native/API/CRT/
+VM/codec/parser/gameDBSQL/migrate/activate/deploy. Seal/member/source accounting
+and static symbolic source reasoning only. Heavy artifacts remain external.
