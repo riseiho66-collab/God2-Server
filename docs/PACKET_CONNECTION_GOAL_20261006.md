@@ -3421,3 +3421,20 @@ Original123member nativeopaque seal omitted3nestedhistoricalseals; immutable128m
 Native限定metrics與完整修正版closure見本輪research capsule；source-custody9完整inputs280577B。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整双向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
 
 下一來源：Trace actualregistered nativeDispatch windowprocedure and rawV28 descriptor/global5A0B60 setter forphysicalU18; obtain truecaller of4FC6E0 or otheractor/bodypointer indirectchild seekingoriginalopaque9/17 supplier, notzero/cache/unfedcallbacks.
+
+
+## 第309輪：registered callback／remote pool owner與world source缺口
+
+Actualstartup531ECA→532070 registersliteral532360 atclassarg+4; sameclass59E024 CreateWindowreturn6F4CA0. Complete532360→root5E00F8/40E3B0 qualifies4A selector→40E557→40E2E0. CurrentMSGwindowmatch/lateroverride/OSsuccessnotproven; originalregisteredcallbackrecoveredstatically.
+
+Newrootbridge descriptorformalarg2 israwV2C, not308preDispatchV28. Complete547B80 count1 provesoneBYTE percopyiteration; stableL localbase..base+L-1, D4reread andnouper400boundselected. CurrentL/descriptorlifetime/OSstackdepth unknown; no actualoverflow/U18supplier. NewlocalcleanupstillusesopaqueglobalP.
+
+Actualmsg403predicate throughnon-nullroot440 Main→467DF0→Main15383410→4FC6E0 qualifieschangedDWORDflag128slotsstride268 toknown4FC720 andpool1341Cstore, equalflagreturns. Former308exploratoryloopnowhasactualcaller/base, notgloballyfreshbytes. Adjunct256recordsstride1D8/lowBYTEflag separate; no remoteopaque9/17issuer.
+
+Concrete403producer nextcut4828D2→4F4B50 WORDselector table4F4FE4/bit2case4F4E12/403sender4F4E52, plus475D60 raw4CFsenders. Unqualifiedcaller/import/currentobject/purpose stayopen; no UI-only/skill/checkbox or networkopcode semantics inferred.
+
+ActualD8 sharedApplication bound172B list/account/character/area/scene/nativeNPCpair/firstbag18CA logsunresolvedonly. Issuedcontext hasno coordinates/revision/placement; separatebagreads notatomicconsumption. NPCprefix4043/NPCList451rows251groups1509codes/72two retainedspawns/customfruithints do notsupply generalDaily destination/cost/reward. No unfedreader/no-op acceptance orcurrentdatagrants added.
+
+Native限定metrics與三完整closure pins見本輪research capsule；source-world12完整inputs719981B，manualscope分列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整双向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
+
+下一來源：Trace actualraw4A descriptor sender forregisteredclass59E024/currentwindow6F4CA0 andglobalPsetter; qualify4828D2→4F4B50 jumpcase4F4E12/403send and475D60, keepingpoolflag distinctfromfull81B opaque9/17. Recover actualdaily NPC placement/eligibility beforetransactionaloperation.
