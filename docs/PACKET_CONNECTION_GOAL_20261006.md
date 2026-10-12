@@ -4368,3 +4368,49 @@ coin99999999999/qualifiedstack99/nativelevels/saves/frozen/fonts/conversion
 objectiveactive. Heavy evidenceexternal/permemberexact, oldgoalbinaryprefix/
 priorledgerfields/frontierv23 preserved. PHASE1 no compiler/build/tests/runtime/
 native/API/CRT/VM/emulator/parser/codec/gameDBSQL/migrate/activate/deploy.
+
+
+## Round347 actual normal-entry readiness and initial authority (2026-10-12)
+
+Previous346 progress published8431708cd2654e419e8a1409f74bc512bc992016,
+notification38267614964 success, exactsource/ledger/seal/receipt. Seven actual
+C++ changes connected same-operation aftertuple/originalresponse/localwrite;
+Pending retainedadmission; Writtenlocalonly. Fullgoal remainsactive.
+
+347 readonly native/body/source increment narrows actual2A readiness:
+parentG+2CB8selectsstorednameorNULL; flag!=0 doesnotprovenamepointer!=NULL.
+468160independentformal1NULLbranchreturn1skip415690/Ureset but separately
+initializesactor. Qualifiednonnull/415690return0/map1..16/normalchildren path
+468827→468120(Main,actor)→canonicalU=Main+A7F2F6C→497FE0 forwardREP300DWORDs
+underDFclear/writablepreconditions. No blankettail/ready/Written⇒clientreset.
+Known468160complete1988B/596sites/4RET12/eightentrytable; old311selectedlabels
+remaincorrect. Mechanicalunion1778→1988(+210B), newmethodcredit0. Sixexisting
+wholemethods4178B+fourparent/tail486B, total4664code/162data, allcurrentPEequal.
+Distinct465323→4817C0→498030 sameU reset/catalog setup; actualcontext+20h
+feedsU+CFF70. CorrectedstableESP: S465274/P=S+24 captured4652FB; EDX4652DA
+readsMainAA36480; twoPUSH465303/465310 makeESP=S-8;465317[ESP+4C]=S+44=P+20.
+ActualsupplierMainAA36480 nowclosed, distinctMainAA36478context18. Initial
+native347sealedclaimOPEN missedPUSHheight; originalpreserved+exclusivecatalog
+correction supersedesclaim beforepublication. Tableallocation/lifetime/current
+bounds/eligibility/remoteacceptance remainOPEN; no newmethod/route/authority.
+
+ExistingTW37/85 privateconversation→LuaCUSTOM0021→atomicCUSTOM0022quest/
+scalarrewardreceipt atSqliteRecoveredCharacterRepo225 isconcretelead, not
+commondefinition/instance/full20/full25/native1215issuer. Mapcatalogdisplay
+importerinventory_grants0; charcreation/entry/CAS/PKserialization cannotgrant
+firstbank. Needactualoriginalsave/importproducer orseparatelydocumentedpolicy
+mappingevent tocommonidentities+authentic sameeventmaterialbeforemint143.
+No conditionalreplay/gate/newcustompolicy/sourcefactory/grant/schema/rebase.
+
+C++changes0/newnativeopcode/format/method/parser/phase/sourceconnection/full
+routes0. Unique report20261012-tw-native-normal-entry-readiness-authority-source-347.
+TW156C2S/252S2C/world74=50partial11control13unconnected;CN156C2S/280phase/
+253lengthseparate scopes unchanged; parser67.6% notcompletion. Allwhole/TW
+percent+denominatornull. Threeexternalpackages124members371541B plusindependent
+review; sixpublicsuccessfulLFhelpers exactnotrerun. Alloldgoalbinaryprefix,
+priorledgerfields/frontierv23/custom135IDs/sourcebytes preserved. Initial
+bank/full25/freshclientfull50/DA/catalog/helpers/native5D/allvariants/transfer/
+postbattle/nativeacceptance OPEN. FullTWfirst/CN/fourWS/common64/coin99999999999/
+qualifiedstack99/nativelevels/saves/frozen/fonts/conversiongoalactive. PHASE1
+no compiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/SQL/
+importer/migrate/activate/deploy.
