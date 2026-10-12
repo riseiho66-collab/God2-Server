@@ -3816,3 +3816,26 @@ PHASE1source/hash/PE/Capstone/staticreport only, no build/tests/runtime/native/
 VM/codec/gameDB/SQL/migrate/activate/deploy. Nextnonzeroarraywriter/actualinput
 lineage and originalissuer/rules/currentownedstate/persistence/orderedreplies;
 B1/E5/E6/E7 pairing must be independentlyproven, notsameUI/similarstatus.
+
+
+## Round332 — actual E8/E9 byte sources and UI event lineage, 2026-10-12
+
+Previous331 wasprogress;0f01cd9 publishedandnotification succeeded. Goalactive.
+See research/tw-native-e8-e9-ui-byte-sources-20261012.md. ActualWORLDcells
+46B974/78 identifyE8/E9 at46B46E/46B480, notPetEggadjacentcase. Bothlogical2
+body1, fullrawBYTE writes: E8indirectP15E thenrereadP8688C+90 child;E9U8B747
+thenWORD8B744/BYTE8B746zero before2opaquechildren. Newreadonlyraw2codec keeps
+eachopcode and allBYTEbits withoutBooleanclamp/currentowner/resultguesses.
+Actualfull504620 source qualifies primaryU+E2170 polloutput localWORDcontrol,
+localBYTEevents and AXwidget feeding realdeferredcontrolbranches; these are
+localUI, notreceivedpacket/ownership/phase/gameauthority. Arraynonzero fill
+and originalissuers/causalB1 pairing remainopen. No newstatewrapper/handler.
+Frontierv21 onlyaddsE8/E9independentformats12->14/unclassified114->112 while
+retainingallnative/historyrows. Allothercountsunchanged: TW C2S156/S2C252/
+world74 partial50/control11/gap13; CN C2S156/phaseS2C280/lengthS2C253. No new
+opcode/parser/phase/authority/completebidirectional/gameplaycredit; denominator/
+TW/wholecompletionnull. FullTW/CN/web/sharedtables/common64/coin99999999999/
+stack99/nativelevels/frozenrequirements persist. PHASE1static source/hash/PE/
+Capstone/reportonly, no build/tests/runtime/native/VM/codec/gameDB/SQL/migrate/
+activate/deploy. Next actualnonzeroarraywriter, originalP/issuers and genuine
+currentownedstate/rules/storage/orderedreplies/recovery, noUIasauthority.
