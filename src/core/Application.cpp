@@ -6991,7 +6991,11 @@ if(guild_officer_runtime && player_guild(session) &&
                     if(!game_handlers.world_records || !game_handlers.world_ready)throw std::invalid_argument("Party directory requires actual world and ready handlers");
                     game_handlers.owned_party_directory=true;
                     const auto original=game_handlers.world_records;
-                    struct DirectoryDispatch {bool reading=false,reentered=false;};
+                    struct DirectoryDispatch {
+                        bool reading=false,reentered=false,committed_preview=false;
+                        std::optional<Session::NormalWorldCallbackAdmission> admission;
+                        void reject_admission() noexcept {if(admission)admission->reject();}
+                    };
                     const auto dispatch=std::make_shared<DirectoryDispatch>();
                     const auto observe_source=[&,dispatch](const std::shared_ptr<Session>& peer,
                             const OwnedPartyDirectory::Actor* previous,const Session* caller)->std::optional<OwnedPartyDirectory::Actor> {
@@ -7096,6 +7100,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 // this exact recipient, never roll back other prefixes.
                                 try{owned_party_directory->disconnect(*peer);}catch(...){}
                                 try{peer->close();}catch(...){}
+                                if(dispatch->committed_preview){dispatch->reject_admission();return false;}
                                 spdlog::warn("PARTY_DIRECTORY_WATCH_SUBMIT_FAILED reason={}",error.what());
                             }
                         }
@@ -7127,8 +7132,16 @@ if(guild_officer_runtime && player_guild(session) &&
                         return plan && publish_watchers(before,*plan,live,party_before,caller,caller_wire);
                     };
                     owned_party_directory_retire=[&,dispatch,reconcile](Session& session) {
-                        if(dispatch->reading) {dispatch->reentered=true;owned_party_directory->disconnect(session);return;}
-                        struct Reading {DirectoryDispatch& state;explicit Reading(DirectoryDispatch& s):state(s){state.reading=true;state.reentered=false;}~Reading(){state.reading=false;}} reading(*dispatch);
+                        if(dispatch->reading) {dispatch->reentered=true;dispatch->reject_admission();owned_party_directory->disconnect(session);return;}
+                        struct Reading {
+                            DirectoryDispatch& state;
+                            Reading(DirectoryDispatch& s,Session& session):state(s){
+                                if(state.admission && session.normal_world_callback_admission_callback_current_on_game(*state.admission))state.reject_admission();
+                                state.admission.reset();state.committed_preview=false;
+                                state.reading=true;state.reentered=false;
+                            }
+                            ~Reading(){state.reading=false;}
+                        } reading(*dispatch,session);
                         if(!reconcile(&session,nullptr,nullptr))owned_party_directory->disconnect(session);
                     };
                     const auto directory_ready=game_handlers.world_ready;
@@ -7139,8 +7152,18 @@ if(guild_officer_runtime && player_guild(session) &&
                     };
                     game_handlers.world_records=[&,original,dispatch,observe_source,publish_watchers,reconcile](Session& session,
                         std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
-                        if(dispatch->reading){dispatch->reentered=true;return {};}
-                        struct Reading {DirectoryDispatch& state;explicit Reading(DirectoryDispatch& s):state(s){state.reading=true;state.reentered=false;}~Reading(){state.reading=false;}} reading(*dispatch);
+                        if(dispatch->reading){dispatch->reentered=true;dispatch->reject_admission();return {};}
+                        struct Reading {
+                            DirectoryDispatch& state;
+                            Reading(DirectoryDispatch& s,Session& session):state(s){
+                                // Options can split one actual callback into several Directory runs.
+                                if(!state.admission || !session.normal_world_callback_admission_callback_current_on_game(*state.admission)) {
+                                    state.admission.reset();state.committed_preview=false;
+                                }
+                                state.reading=true;state.reentered=false;
+                            }
+                            ~Reading(){state.reading=false;}
+                        } reading(*dispatch,session);
                         const auto self=session.shared_from_this();std::vector<std::uint8_t> wire;
                         const auto observe=[&](const std::shared_ptr<Session>& peer,const OwnedPartyDirectory::Actor* previous) {
                             return observe_source(peer,previous,&session);
@@ -7151,7 +7174,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 const auto reply=original(session,records.subspan(at,end-at));
                                 if(!reply || dispatch->reentered)return {};
                                 wire.insert(wire.end(),reply->begin(),reply->end());
-                                try{(void)reconcile(nullptr,&session,&wire);}catch(const std::exception& error){spdlog::warn("PARTY_DIRECTORY_WATCH_REFRESH_FAILED reason={}",error.what());}
+                                try{(void)reconcile(nullptr,&session,&wire);}catch(const std::exception& error){if(dispatch->committed_preview){dispatch->reject_admission();return {};}spdlog::warn("PARTY_DIRECTORY_WATCH_REFRESH_FAILED reason={}",error.what());}
                                 if(dispatch->reentered)return {};at=end;continue;
                             }
                             const auto request=std::get<TaiwanNativePartyMenu::Request>(records[at++]);
@@ -7362,7 +7385,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                     if(request.opcode()==0x91) {
                                         auto sources=members;
                                         if(std::none_of(sources.begin(),sources.end(),[&](const auto& actor){return actor.same_owner(*owner);}))sources.push_back(*owner);
-                                        auto prepared=party_preview_transport->prepare(sources,recipients,projections);
+                                        auto admission=session.capture_normal_world_callback_admission(owner->initialization);
+                                        if(!admission)continue;
+                                        dispatch->admission=*admission; // Same complete actual callback Data for every prefix flight.
+                                        auto prepared=party_preview_transport->prepare(sources,recipients,projections,self,*admission);
                                         if(!prepared)continue;
                                         preview.emplace(std::move(*prepared));
                                     }
@@ -7379,14 +7405,14 @@ if(guild_officer_runtime && player_guild(session) &&
                                            !native_parties.same_state(*party_before) || owned_party_directory->snapshot()!=before)continue;
                                     }
                                     if(!owned_party_directory->publish(before,std::move(next_directory)))continue;
-                                    if(preview)preview->mark_committed(); // No allocation, immediately after successful CAS.
+                                    if(preview) {preview->mark_committed();dispatch->committed_preview=true;} // No allocation, immediately after actual CAS.
                                     if(next_party)native_parties=std::move(*next_party); // No callback between the two ephemeral commits.
                                     wire=std::move(merged);
-                                    // Actual peer FIFO custody only. Caller final rejection,
+                                    // Own registry waits for the COMPLETE actual callback
+                                    // admission before any peer write. No fake empty FIFO.
+                                    // Committed model prefix is never rolled back/retried;
                                     // consent, Written/native ACK and all variants remain OPEN.
-                                    // A postcommit exception retires/closes exact held peers;
-                                    // committed state is never rolled back or retried.
-                                    if(preview)preview->submit();
+                                    if(preview)preview->hand_off();
                                     else for(auto& [id,bytes]:projections)recipients.at(id)->send_world_records(std::move(bytes));
                                     continue;
                                 }
@@ -7429,8 +7455,9 @@ if(guild_officer_runtime && player_guild(session) &&
                                 (void)publish_watchers(before,*plan,live,party_before,&session,&wire);
 
                             } catch(const std::exception&) {
-                                // Unsupported/missing source rejects this feature's
-                                // request without breaking unrelated world/chat runs.
+                                // Before a committed prefix keep old feature availability.
+                                // After one, caught failure rejects its whole admission.
+                                if(dispatch->committed_preview){dispatch->reject_admission();return {};}
                                 if(dispatch->reentered)return {};
                             }
                         }

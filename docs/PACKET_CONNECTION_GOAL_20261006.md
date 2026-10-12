@@ -4806,3 +4806,56 @@ denominatorpercentnull; parser67.6% notcompletion. Unique report
 common64/coin99999999999/stack99/nativelevels/saves/frozen/fonts/conversion active.
 PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/
 resource/gameDBSQL/import/migrate/activate/deploy.
+
+
+## Round357 actual whole-callback admission before party preview (2026-10-13)
+
+Previous356b5a2afd1364c50613525f07757ba31350dad9882 exactHEAD notification
+38288004028 success. Owner requests stop at this round end: finish357 publication/
+receipt then pause fullgoal; no358. Fullobjective unchanged, no completionclaim.
+
+New distinct NormalWorldCallbackAdmission Pending/Admitted/Failed uses actualown
+world_records TLS/private Written INIT/exact Session/Sync epoch. Sameactualcallback
+Data shared by allC91prefixflights; retainedData cannotprevent separateprivate
+Pending Attempt failure on scope/unhanded/postthrow/drop. Real wholecallback result
+has_value includesempty; empty no frame/dummyWrite/FIFOmarker. Existing normal
+response components/raw response exactwire/finalvalidwholeprefix retained. Final
+gameexceptions/poison rejectcapture; strandsource guarded originalnonemptyFIFO
+insertion, then allthrowinglogger/resume work before finalprivateSync Admitted.
+Admitted onlyactualwholecallback admission, not Queued(empty)/Written/nativeACK.
+
+FourexistingCpp files with exactwholeinverses, no newCpp. Actualdirectory twoReading
+reentries rejectstoredsameadmission even otherSession/caughtobserver; featurecatch
+aftercommittedC91 rejectswhole admission. Existing355oldABQueued/privatepermission
+and356freshrecipient/fullprivate fences remain. Owningregistry preCAS, mark immediately
+afteractualDirectoryCAS, noalloc/noexcept handoff Deferred aftertwoModelcommits.
+Nopeerwrite beforeAdmitted/current. Existing50msScheduler waitsPending no timeout,
+Failed/stale revokesfresh andclosesexactstrongsources, Admitted submitsonce then
+existingPending/Failed/allQueued settling. SuccessfulQueued retirewithoutrevoke.
+All samecallbackprefixes fail together onlaternull/throw/outerreject/poison/epoch/
+phase/close/postdrop; no rollback/retry/rebase/SQL. Retainedrole/position/HUD only
+preparation snapshots; pureSessionchecks notliveDB/modelrefresh. Generalexecutor
+convergence/Schedulerrearm/contextabort/nativeadoption/fullvariants remainOPEN.
+
+Actualupstream20-byte private-clone seed writers explicit synthetic/CUSTOM_TEST_NOT_NATIVE;
+NATIVE_CAPTURE_VERIFIED contractlabels/catalog396/hexwidth not acquisition evidence.
+Common/witness constructors don't populate genuine tuple; normalC24 consumes existing
+sameDB beforetuple. Genuine donor instance/definition/originalacquisition/full25/
+full50cache+DA missing BEFOREseed/mint, then oneatomic twoownercommon/witness/legacy
+settlement; no fakefactory/grant/import/newSQL. Nativebounded32historicalrowLEA
+candidates/sevenraw windows discoveryonly; selectedrowptrforwards known49B850 or
+outwardfull20 savedUI85AD4. Newwhole/code/data/qualifiedsites0, no globalabsence.
+Prior355N70/77600+356N54/92377 individuallyunchanged; canonicalprefix/full25/1215OPEN.
+
+Fiveupstreamseals/independentfourcurrentsemanticreview/finalcanonicalreview;
+successfulLFhelpers copiedwithoutreexecution, failures/partials additive.
+Defaultoffconfig/protocol/custom135/NativeParty/Directory/Service/Scheduler/frozenchat
+exact. Oldgoalbinaryprefix/priorledgerfields/frontierv23 exact; R twoLFkeylines/K3.
+Oneconditional actualC91wholecallback-admitted peertransportbranch; nativeopcode/
+format/method/parser/handler/phase/fullroute0/globalcountdeltas0. TW156/252/world74=
+50partial11control13unconnected; CN156/280phase/253length separate. Whole/TWpercent
+denominatornull; parser67.6% notcompletion. Unique report
+20261013-tw-native-party-callback-admission-source-357. FullTWfirst/CN/fourWS/common64/
+coin99999999999/stack99/nativelevels/saves/frozen/fonts/conversion preserved.
+PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/resource/
+gameDBSQL/import/migrate/activate/deploy. Ownerrequestedpause applies afterreceipt.

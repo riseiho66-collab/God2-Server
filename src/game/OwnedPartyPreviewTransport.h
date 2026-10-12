@@ -42,9 +42,13 @@ class OwnedPartyPreviewTransport final {
     struct Flight {
         std::vector<Source> sources;
         std::vector<Recipient> recipients;
-        bool committed=false,submitted=false,retired=false;
+        std::shared_ptr<Session> admission_owner;
+        std::optional<Session::NormalWorldCallbackAdmission> admission;
+        bool committed=false,deferred=false,submitted=false,retired=false;
         bool current() const {
-            return !retired && std::all_of(sources.begin(),sources.end(),[](const auto& s){return s.current();}) &&
+            return !retired && admission_owner && admission &&
+                admission_owner->normal_world_callback_admission_current_on_game(*admission) &&
+                std::all_of(sources.begin(),sources.end(),[](const auto& s){return s.current();}) &&
                 std::all_of(recipients.begin(),recipients.end(),[](const auto& r){
                     return r.peer->normal_world_output_current_on_game(r.handle);
                 });
@@ -55,6 +59,20 @@ class OwnedPartyPreviewTransport final {
             for(const auto& r:recipients)r.handle.revoke();
             // Exact held objects only. No successor lookup, model rollback or retry.
             if(close)for(const auto& s:sources)try{s.peer->close();}catch(...){}
+        }
+        void submit() {
+            if(!committed || !deferred || submitted || !current() ||
+               admission->status()!=Session::NormalWorldCallbackAdmissionStatus::Admitted)
+                throw std::logic_error("Party preview requires actual complete callback admission");
+            for(auto& recipient:recipients) {
+                if(!current() || recipient.logical!=recipient.expected)
+                    throw std::logic_error("Party preview exact deferred projection changed");
+                recipient.attempt=recipient.peer->send_normal_world_records(recipient.handle,std::move(recipient.logical));
+                if(recipient.attempt->status()==Session::NormalWorldOutputStatus::Failed)
+                    throw std::logic_error("Party preview deferred submission failed");
+            }
+            if(!current())throw std::logic_error("Party preview source changed during deferred submission");
+            submitted=true;
         }
         ~Flight(){if(!retired)retire(committed);}
     };
@@ -86,7 +104,7 @@ public:
         Prepared& operator=(Prepared&&)=delete;
         ~Prepared() {
             if(!flight_)return;
-            if(!flight_->committed || !flight_->submitted) {
+            if(!flight_->committed || !flight_->deferred) {
                 flight_->retire(flight_->committed);state_->erase(flight_);
             }
         }
@@ -95,23 +113,9 @@ public:
         }
         // Immediately after actual Directory CAS, before the NativeParty move.
         void mark_committed() noexcept {flight_->committed=true;}
-        void submit() {
-            try {
-                if(!flight_->committed || flight_->submitted || !current())
-                    throw std::logic_error("Party preview committed source is not current");
-                for(auto& recipient:flight_->recipients) {
-                    if(!current() || recipient.logical!=recipient.expected)
-                        throw std::logic_error("Party preview exact projection changed");
-                    recipient.attempt=recipient.peer->send_normal_world_records(recipient.handle,std::move(recipient.logical));
-                    if(recipient.attempt->status()==Session::NormalWorldOutputStatus::Failed)
-                        throw std::logic_error("Party preview submission failed");
-                }
-                if(!current())throw std::logic_error("Party preview source changed during submission");
-                flight_->submitted=true; // Remaining Pending is owned by registry.
-            } catch(...) {
-                flight_->retire(flight_->committed);state_->erase(flight_);throw;
-            }
-        }
+        // Actual two models committed; registry owns Pending admission.
+        // No allocation, send, callback or peer close at this handoff.
+        void hand_off() noexcept {flight_->deferred=true;}
     private:
         friend class OwnedPartyPreviewTransport;
         std::shared_ptr<State> state_;
@@ -124,10 +128,14 @@ public:
     ~OwnedPartyPreviewTransport(){stop();}
     std::optional<Prepared> prepare(const std::vector<OwnedPartyDirectory::Actor>& actors,
             const std::map<std::uint64_t,std::shared_ptr<Session>>& peers,
-            const std::map<std::uint64_t,std::vector<std::uint8_t>>& projections) {
+            const std::map<std::uint64_t,std::vector<std::uint8_t>>& projections,
+            const std::shared_ptr<Session>& caller,const Session::NormalWorldCallbackAdmission& admission) {
         if(state_->stopped || state_->game_thread!=std::this_thread::get_id() || projections.empty() ||
            state_->flights.size()>=state_->capacity)return std::nullopt;
+        if(!caller || !caller->normal_world_callback_admission_current_on_game(admission) ||
+           admission.status()!=Session::NormalWorldCallbackAdmissionStatus::Pending)return std::nullopt;
         auto flight=std::make_shared<Flight>();
+        flight->admission_owner=caller;flight->admission=admission;
         for(const auto& actor:actors) {
             const auto peer=actor.session.lock();
             if(!peer)return std::nullopt;
@@ -135,6 +143,7 @@ public:
             if(at!=flight->sources.end()){if(!at->actor.same(actor))return std::nullopt;continue;}
             flight->sources.push_back({actor,peer});
         }
+        if(std::none_of(flight->sources.begin(),flight->sources.end(),[&](const auto& s){return s.peer==caller;}))return std::nullopt;
         if(flight->sources.empty() || flight->sources.size()>state_->capacity-state_->held_sources ||
            !std::all_of(flight->sources.begin(),flight->sources.end(),[](const auto& s){return s.current();}))return std::nullopt;
         if(projections.size()>flight->sources.size())return std::nullopt;
@@ -162,8 +171,14 @@ public:
         for(auto it=state_->flights.begin();it!=state_->flights.end();) {
             const auto f=*it;
             if(!f->committed){++it;continue;}
-            bool failed=!f->submitted;
+            bool failed=!f->deferred;
             try {if(!f->current())failed=true;}catch(...) {failed=true;}
+            if(!failed && !f->submitted) {
+                const auto status=f->admission->status();
+                if(status==Session::NormalWorldCallbackAdmissionStatus::Pending){++it;continue;}
+                if(status!=Session::NormalWorldCallbackAdmissionStatus::Admitted)failed=true;
+                else try {f->submit();}catch(...) {failed=true;}
+            }
             bool queued=!failed;
             for(const auto& r:f->recipients) {
                 if(!r.attempt || r.attempt->status()==Session::NormalWorldOutputStatus::Failed)failed=true;

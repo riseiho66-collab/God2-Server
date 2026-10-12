@@ -143,9 +143,9 @@ public:
         explicit NormalWorldInitialization(std::shared_ptr<const Data> data):data_(std::move(data)) {}
         std::shared_ptr<const Data> data_;
     };
-    // Private actual normal-entry output recipient, minted only by its OWN
-    // synchronous world callback after local S2A Written. No peer TLS mint,
-    // ACK, native adoption, lease or gameplay entitlement is supplied.
+    // Private actual Written normal-entry output recipient, minted by its OWN
+    // callback or the trusted SAME game owner from its exact private INIT.
+    // No peer TLS impersonation, ACK, adoption or gameplay entitlement.
     class NormalWorldOutputHandle {
     public:
         NormalWorldOutputHandle(const NormalWorldOutputHandle&)=default;
@@ -170,6 +170,22 @@ public:
         friend struct Impl;
         struct Data;
         explicit NormalWorldOutputAttempt(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
+    // Whole actual OWN callback admission, independent of response/push FIFO.
+    // Empty accepted response has no Write. Admitted is never Written/ACK.
+    enum class NormalWorldCallbackAdmissionStatus {Pending,Admitted,Failed};
+    class NormalWorldCallbackAdmission {
+    public:
+        NormalWorldCallbackAdmission(const NormalWorldCallbackAdmission&)=default;
+        NormalWorldCallbackAdmission& operator=(const NormalWorldCallbackAdmission&)=default;
+        NormalWorldCallbackAdmissionStatus status() const noexcept;
+        void reject() const noexcept; // May only fail Pending, never admit.
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit NormalWorldCallbackAdmission(std::shared_ptr<Data> data):data_(std::move(data)) {}
         std::shared_ptr<Data> data_;
     };
     // Actual ORIGINAL callback response FIFO custody, independent of push
@@ -423,6 +439,11 @@ public:
     // SAME recorded game owner can later enqueue for this recipient. Queued
     // means actual FIFO insertion only; frames may subsequently fail/close.
     NormalWorldOutputAttempt send_normal_world_records(const NormalWorldOutputHandle&,std::vector<std::uint8_t> logical);
+    // One actual OWN complete callback Data, reused by its C91 prefix flights.
+    std::optional<NormalWorldCallbackAdmission> capture_normal_world_callback_admission(const NormalWorldInitialization&);
+    bool normal_world_callback_admission_current_on_game(const NormalWorldCallbackAdmission&) const;
+    // Exact active callback membership only, independent of status/owner currentness.
+    bool normal_world_callback_admission_callback_current_on_game(const NormalWorldCallbackAdmission&) const noexcept;
     // Own actual callback only; reuse one private Data through split inner runs.
     // Original response custody requires current INIT, not prior S2A Written.
     std::optional<NormalWorldResponseAttempt> capture_normal_world_response(const NormalWorldInitialization&);
