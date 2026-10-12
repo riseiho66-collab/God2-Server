@@ -4587,3 +4587,48 @@ fullTW-CN-fourWS/nativeacceptanceOPEN. FullTWfirst/common64/coin99999999999/
 qualifiedstack99/nativelevels/saves/frozen/fonts/conversiongoalactive. PHASE1 no
 compiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/gameDBSQL/
 importer/migrate/activate/deploy.
+
+
+## Round352 row alias/material custody and ordered blacklist source (2026-10-13)
+
+Previous35131d79bad16484d0a2021a938cb1a99b58231ba14 published with exactHEAD
+notification38275802935success. Actual498D30 getter/514AC0 alias reader/514890
+hotkey parent retain776whole+214explicitpartial=990codeB348sites/data0.
+Getter signedWORD0..37/keynonzero/no count; control+20 canonicalU affinity
+unproved. Alias loop dynamic bank/key/count; finaluncheckedESI; general30..37
+counter29 mismatch. Writes other-control fields only. Actual518E50 FOUR stack
+args5,second5156E0EAX,1,&control44C; numeric5 notwire. Candidatebulk4CA158 OUT
+to866E8+24slot not8560C.318literal/102materialization candidates/0directprefix
+stores are scoped mappedphysicalintersection discoveries; omittedoriginalPE
+.imprec11776B separate rawliteral0 cannot prove absence. PrefixwriterOPEN.
+
+ActualCUSTOM0069 trade conserves preexisting privatelegacy20/origin through
+PreparePlan/pairedCAS/transfer/receipt/readback/COMMIT, no firstcommonissuer.
+Pre-overlay instance sources explicit syntheticfixtures; importer396definitions
+instances_created0 not acquisition. Genuine sameeventfull25/opaqueWORD+20/
+commondefinition/globalstableinstance/acquisition/full50/DA/full1215 OPEN.
+Independent fullnative5DACKbyte/timing/index/pending issuer stillOPEN.
+
+One existingApp changes; relatedsixcore/Session exact. Four newconditional
+sourcevariants PeerPriorPendingA5/A4 and SenderPriorIncomingPendingA5/A4.
+PureprivatechainCurrent, preSQLstrongpeers/21Bnodes and actualtypedbefore/after;
+successfulsamegame/sameconcreteStrand post precedes tail/endpointpublication.
+Map endpoint newestOrderedSubmitted notQueued/Written/nativeACK. AllQueued
+clearsattemptlist withoutendpointadvance. Cap256 actualpeerattempts reflects
+localmax_writes; no pernodesnapshots/fictitiousownreplynodes/unboundedsender
+retention. OwnNormalInit/TLSqualifies senderpending and fanout; copiedfacade
+no livechainprogress. Noop/rejectoriginalsemantics exact; actualmissedchanged
+edge closes onlyoldpendinghazard. No postCOMMITSQLretry/rollback. Ownreply
+appended beforeendpointadvance, SubmittednotACK. Outerfailure/finalvalidation/
+terminalpost/contextabort/allvariants/transfer/postbattle/adoption remainOPEN.
+
+Four upstreamseals, exactinverse and separatefinalcanonicalreview; fourteen
+successfulLFhelpers copiedexactwithoutreexecution. Failednative/material
+helpers/partialcuts/corrections additive. PriorGoalprefix/ledger/frontierv23/
+config/135customIDs exact. Newmethod/opcode/format/parser/handler/phase/fullroute
+credits0/globalcountdeltas0. TW156C2S252S2Cworld74=50partial11control13open;
+CN156C2S280phase253length distinct. Whole/TWdenominatorpercentnull; parser67.6%
+notcompletion. Unique report20261013-tw-native-item-row-alias-blacklist-chain-source-352.
+FullTWfirst/CN/fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/
+fonts/conversiongoalactive. PHASE1 no compiler/build/tests/runtime/native/API/
+CRT/VM/emulator/parser/codec/gameDBSQL/importer/migrate/activate/deploy.
