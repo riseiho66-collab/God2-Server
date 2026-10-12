@@ -3387,3 +3387,20 @@ timer23spans1117B/394sites，限定4sets比較new938B/336sites/overlap179B/58sit
 990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71，CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
 
 下一來源：Qualify actual outerESP18 writer and reached36 enable/disable caller lifecycle; originalserver36 controlpurpose/phase before privateconsumer; continue root/phase opaquechildcustody and originalcurrent6F issuer before actualApphost/pairedReturnHold/fullwrites/normalpublication.
+
+
+## 第307輪：36 physical-local來源與82 packedcontext實際consumer
+
+Actual4655E0 U=entryESP-A24 makesworker88 sourceU18=entryESP-A0C local. EarlyliteralESP18 isU20, output18 isU250, ctx_bU264. Exactselector3/result4 tables and receiveractual547B50 stackprobe establishoutputU238 provenance. Producerstillopen, no nativegarbage/uninitialised/ctx_b/clock/ACK semantics.
+
+ActualouterinitialwriterU20=scratchU238 andstructU1C establishinput+4slot; conditionalonpointercurrentacrossopaquechildren,82ctx_a/ctx_b scratch28/2C reachesphase3C/40/currentblock; ctx_a also feedsconditionalnative resource selection and initialC2S35body8 storage. Full518E50 target quotient14 maskloop can overwritecontext lowWORD for targets>=28. Initialcopy is notguaranteed eventualecho ororiginalserverauthority.
+
+Ctx_b lowbyteFF selectsphaseflag/selected180000tick timeoutskip; bits8..15 zeroextendinitialcountdown, selectedtickelapsed/1000 subtraction anddecimaldigits. Literal1400 yields20 inthatbyte, but originalserverdefault/turnauthority/spectatorwholebehaviourremainunproven.
+
+Actualworld/guildnotification predicates do notgrantTimerpayload/room/writeauthority. FullWorldService rejectsTimer beforebattlecallback ormovelesssuccess; privateOutbox unsupportedTimer isclassifiedbeforedurablemutation. ExistingdiagnosticTimeracceptance isnotauthoritative originalgameplay. ActualAppworldcallback/privatepolicy remainseparate.
+
+PrivateCUSTOM0111 checkedSessiongenerationand1400 source pluscommandcontext policy exactentry/revision/grant/profilechecks stayexplicitlyprivate. No sourcepromotion guessedfromnativecopies; preciseaddress/fielduseschangesnexttrace while allcompletegameplaymetricsremainunknown.
+
+Native限定metrics與四worker完整closure pins見本輪research capsule及externalarchive，不合計全域coverage。Source-routing9完整inputs838744B；source-command3完整inputs73352B，manualscope分開。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71，CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
+
+下一來源：Trace actualreceiver467860/466B00/468AE0 message/callback outputaliases thatcanreachphysicalU18 (negative220 fromoutputU238), andlater5112C0 structnegative4 users; continue current81Bissuer andqualified82contextpolicy beforeactualApp/Timerowner promotion.
