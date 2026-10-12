@@ -3457,3 +3457,20 @@ Native限定metrics與三完整closure pins見本輪research capsule；source-wo
 三份證據完整closure與限定metrics見本輪research capsule；source-world15完整inputs1039959B，人工閱讀scope分列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。網頁v102僅收到peerreported交接，無ACK／adoption／wireacceptance或目前容量現讀宣稱。
 
 下一來源：沿既有S2C1B→4F5030→4F55F0/4F5670及I+86888真實constructor/lifetime追449E寫入者，保持bodyWORD與flag分開；追cleanup55B42F/5463B5及原始5A0B60/64初始化與currentwriters，不能將refcount形狀冒稱gametimer supplier。GM outgoing IPC同步descriptor/wrapper不是incoming遊戲producer；完整2A/6F issuer與Current/install具備後才選定Main factory。保持NPC model geometry／NPCList／Daily association分開。
+
+
+## 第311輪：本地選項來源、2A初始化與配置生命期
+
+實際local current pointer setter已定位：465BC0 trueentry以I=W+A7F2F6C、R=W1539683C呼叫481C20 mode0；481C81把R+90傳向4E7C80及4A7D60/4A97E0，寫I86888。因此這條current O=R+90 local aggregate alias，不是remote6F，亦不把其他mode/後續pointer lifetime視為已完成。289既有方法沿用並列重疊，無global新coverage宣稱。
+
+在資格化的468160 nonnull-name/成功2A路徑，4681A3呼叫415690複製body36B；packet2A與原map等guard成立後，468315..326以EAX0/ECX1141清[R+90,R+4594)（末端不含），即[O,O+4504)，涵蓋449C及449E。這是local memory initializer，不是2A多一個449E wirefield，不以全0替代服務端profile或不明opaque欄位。
+
+既有1B→4F5030直接bodyWORD寫O449C..449D。actual4F55F0/4F5670完整方法直接修改另兩個WORD44A0/44A2，以16-bit wrapping lowWORD加法後signed16 clamp0..10；selected directwrites不改449E，但opaquechildren仍可能改。完整4F5150重讀當前I86888而無直接讀formalpointer arg，子呼叫副作用未展開；local403與405的scalar來源及不同field/base保持分開，未提供server1B issuer或完整玩法規則。
+
+配置／回收鏈追清55ABA2 live header (1,length,capacity)、55AC24→5463B5 release把首DWORD重用為free-listlink、55ABC4→546326 allocation彈回同pool後重設；55B42F→5479FF fallback有declaredHeapFree及opaqueheapbranch。5A0B60/64→74/68与header(-1,0,0)只historicalPE initializer，沒有currentglobalwriter／P=U24／physicalTimer36U18供應者。
+
+實際source-options追到C1D全WORD種子、B1 selectors7/8→bit0200、CUSTOM0100 exact owner/current Written-entry receipt/replay及S1B普通回傳。disabled C1D仍是ready-world transport-only無state/reply；default-off與CUSTOM causal policy保留，既有ordinaryreturnedwire不當Written/ACK/原子delivery。正常entry receipt只local transcript，非remoteconstructor/commonlease/遊戲權威。
+
+三份完整closure及限定metrics見本輪research capsule；source-options10完整inputs1029187B，人工閱讀scope另列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。網頁v103僅peerreported，無ACK/adoption/wireacceptance/rootcapacityclaim。
+
+下一來源：沿實際468160 successful2A→R current local alias與其他初始化/後續write集合，把完整2A body欄位和local derived/defaultmemory區分；再追完整6F81B opaque9/17的實際producer/consumer。I86888其他setter與角色pool binding lifecycle分開；僅在有真正currentP=U24或相關currentglobalwriter證據時才將genericallocator延伸為Timer36供應者。保持CUSTOM0100/原生1B/C1D/B1各自來源，不啟用未完成Main sourcefactory。
