@@ -3528,3 +3528,14 @@ Actual6F旧actor replacement进入C=A224的4FFCF0 cleanup四handle，全部73B�
 Remote4FC1C0的body base、directloads與各actual formalarg逐點追蹤；&原body slot在449330前已被改成另一scalar cell，不能當wholebody傳入。沒有恢復新body8 reader或A220權威來源；disp220候選不具actualremotebase資格，維持boundednegative而不說全域unused。
 
 C++新增/修改0、新完整branch/opcode/route0。TW156/world74=50部分/11control/13未接，S2C252=230fixed/22variable；CN156/phase280/length253各scope獨立，CN增量0。mixed282/CUSTOM135保持。全遊戲總數/route分母/百分比null；不build/tests/runtime/VM/codec/gameDBSQL/deploy，不用歷史fixture/defaultkind或0補來源。下一步：依有效方向更正排除knownpacketcopy與knowncomponentreader；追actual2A B0/B4/B8 source及真正scene/publication供應者，遠端只追完整body或A220真實owner的讀取／生成來源，避免generic Action/allocator/lookup及同一negative掃描重跑。
+
+
+## 第316輪：實際場景WORD消費與owned profile writer來源
+
+接續315 actual461B05→4619D0完整leaf：formalarea／scene在入口讀低WORD，兩個cache bank使用WORD比較／儲存。Q高16不参与此直接consumer；不由此宣稱全461AD0 children/global或原wire B26..27無用／應為0。
+
+45AA70 actual2A caller以area低BYTE、scene低WORD查NPCList；scene WORD與row首BYTE零擴展比較，scene>255是無匹配，不是截成BYTE別名。返回ptr+1 count是無符號BYTE零擴展，僅resource membership／loading來源，非NPC instance／座標／戰鬥權威。既有20260927／223方法保留歷史credit，只計named-reference限定差額。
+
+追實際native create前40B→共同角色profile BLOB來源與current owned appearance writer；SqlitePlayerAppearanceRepository釘6bf/CUSTOM0047、transform0，Application diagnostic fixture writer及單純DA尾快照不能升格actual149c完整2A issuer。Profile局部已知投影保持；缺少真實持久外觀mutation/resource與完整欄位來源，不新增fixture/defaultkind完整成功。
+
+C++新增/修改0；完整branch/opcode/route增量0。TW156/world74=50部分/11control/13未接，S2C252=230fixed/22variable；CN156/phase280/length253各scope独立，本輪CN增量0。mixed282/CUSTOM135保持，全遊戲總數/完整分母/百分比null；無build/tests/runtime/native/VM/codec/gameDBSQL/deploy。下一步：依已排除scene-cache高位直接使用與舊6bf fixture來源，定點追真正actual149c owned appearance mutation／完整2A issuer，NPC／EnyName只保留來源membership，不把resourcecount或名字當worldinstance；需要時追實際B0/B4狀態與下一個確實使用的欄位，而非已知cache/lookup/allocator重查。
