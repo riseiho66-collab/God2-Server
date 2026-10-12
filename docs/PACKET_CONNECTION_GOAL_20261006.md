@@ -3911,3 +3911,32 @@ andApplicationhosting. FullTW/CN/fourWS/sharedtables/common64/coin99999999999/
 qualifiedstack99/nativelevels/fonts/textconversion/frozenrequirements persist.
 PHASE1 static source/hash/PE/Capstone/report only; no build/compiler/tests/
 runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
+
+## Round336 — exact SPI raw-source catalog, 2026-10-12
+
+Previous335 was progress;68cd74a publication/notification succeeded. Goalactive.
+See research/tw-native-petroom-spi-raw-source-20261012.md. Actualretained SPI
+records6177..6180/6183..6200 total22, ordinals517..538/lines8695..8716,
+normalizedCP9503512bytes with all rawfields/hash provenance. Sourceinventory
+16127/SPI737 and ItemType9/line20/categoryoffset1213 independentlyqualified.
+6181/6182 absence is bounded to that historicalinventory, not currentbank.
+Decodedrowoffsets remainNULL; full396 unavailable. Categoryselector0 requires
+historicalzeroallocation. EGG/SPP labels cannot substitute for actual SPI.
+NewC++ files2 implement exact22-row catalog/checkedconsistentread and explicit
+atomic/idempotent importer into common rawsource tables. No gameDB was opened
+or queried/imported/migrated; no Main/Migration/requestactivation. Existing
+MapItem twoSPIrows/C28/custody/companion behavior unchanged; source data is not
+eligibleownedpopulation, actionpermission or an authoritative gameplay value.
+Actualoperationcontrollers13cuts2433code/46paddingbytes retain sourceoperands
+row11h/full20+0Dh androw15h/full20+11h; opaqueUIcalls yield no neweligibility.
+Signedremainder+30 permits28..32 withoutproducer qualification. Report18h
+correctedseparately to PUSH12h/decimal18; sealedoriginal retained intact.
+Publiccapture copies2 exact, not rerun. Frontierv23 byte-identical; TW
+C2S156/S2C252/world74 partial50/control11/gap13 independent16/unclassified110;
+CN C2S156/phaseS2C280/lengthS2C253 unchanged. Packet/format/parser/phase/handler/
+completebidirectional/gameplayincrements0; fullTW/game denominator/completionnull.
+Next currentbank/full396, eligibleownedpopulation/F4issuer/B1rules/fullordered
+reply/storage/recovery/Applicationhosting. FullTW/CN/fourWS/sharedtables/
+common64/coin99999999999/qualifiedstack99/nativelevels/fonts/textconversion/
+frozenrequirements persist. PHASE1 static source/hash/PE/Capstone/report only;
+no build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
