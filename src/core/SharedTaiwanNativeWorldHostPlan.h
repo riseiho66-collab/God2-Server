@@ -167,6 +167,10 @@ public:
         static SharedTaiwanNativeWorldEntryOfferSource::Supply scene_entry_offer(
             const SharedWorldHostPlan::Context&,std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
             SharedTaiwanNativeWorldEntryOfferSource::SceneSupply);
+        static SharedTaiwanNativeWorldEntryOfferSource::Supply scene_entry_offer(
+            const SharedWorldHostPlan::Context&,std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
+            std::shared_ptr<const TaiwanNativeTransformCards>,
+            SharedTaiwanNativeWorldEntryOfferSource::SceneSupply);
         // Construct on startup's game owner without writes. The returned
         // game-only closure accepts a future real post-COMMIT token; retain it
         // in the later request owner, never retain this borrowed Context.

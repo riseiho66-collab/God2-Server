@@ -312,6 +312,19 @@ SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldHostPlan:
     return SharedTaiwanNativeWorldEntryOfferSource::with_scene_content(*context.native_enemy_displays,
         std::move(npcs),std::move(supply));
 }
+SharedTaiwanNativeWorldEntryOfferSource::Supply SharedTaiwanNativeWorldHostPlan::StoredSources::scene_entry_offer(
+        const Context& context,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
+        std::shared_ptr<const TaiwanNativeTransformCards> cards,
+        SharedTaiwanNativeWorldEntryOfferSource::SceneSupply supply) {
+    if(!context.common_world || !context.common_world->owns_repository(context.characters) ||
+       !context.accounts || !context.native_world_entries || !context.native_world_entry_writer ||
+       !context.native_enemy_displays ||
+       static_cast<NativeWorldEntrySnapshotRepository*>(context.native_world_entry_writer)!=context.native_world_entries ||
+       !context.native_world_entry_writer->owns_sources(*context.accounts,context.characters))
+        throw std::invalid_argument("TW card-aware entry requires the actual Application Context readers");
+    return SharedTaiwanNativeWorldEntryOfferSource::with_scene_content(*context.native_enemy_displays,
+        std::move(npcs),std::move(cards),std::move(supply));
+}
 SharedTaiwanNativeWorldHostPlan::StoredSources::EquipmentPublicationFactory
 SharedTaiwanNativeWorldHostPlan::StoredSources::equipment_publication_factory(const Context& context) {
     if(!context.common_world || !context.common_world->owns_repository(context.characters) ||

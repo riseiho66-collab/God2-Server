@@ -3491,3 +3491,16 @@ SceneContent wrapper只提供actual current-world area/scene的NPCList及EnyName
 本輪三份固定封存closure/metrics見research doc；source-entry19完整inputs824429B，manual scopes另列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21；TW chains3/bindings38unique34；CN chains35/bindings93unique71，historical C2S156/S2C phaseopcode280/length253 distinctscope。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null；所有execution false。保留shared64/CN/web/nativefonts/帳號存檔/其他凍結功能。前goal status-only turn no progress已revalidate並採取本輪newbounded trace，goal active。
 
 下一來源：用實際2A非零transform path的精確card lookup owner/row/target EnyName resource資格，補完整issuer所需原始資料；沿native-remote312已資格的actual other-opcode escaped pointer consumer追其直接writers及未展開子呼叫，保持full6F body8/10 opaque來源獨立，不再重跑已知local option或generic allocator。
+
+
+## 第313輪：原變身卡catalog與入口target來源串接
+
+新增TaiwanNativeTransformCards，持有呼叫者提供的完整原decoded0f04 bytes，先own再SHA／解析。保留101筆原始key0..100、raw行／offset／39欄及selected原始整數；field0/1/3/4/5與8..22按實際45BB10的BYTE／WORD stores投影，不生成pointer／padding或怪物combat值。
+
+明確card-aware scene_entry_offer接入原Application同Context的EnyName reader與原entry supply／CAS。供給完整2A後只在nonzero transformkey找exactcard row，再讀其可能不同於world的target area／scene／one-based ordinal；完整Scene witness保留到actual Issuer各CASboundary的前後來源檢查。原producer仍mandatory，不改下一快照bytes或啟用Main。
+
+完整45BB10 loader／numerichelper／tokenizer資格與來源reader設定分開。Native col0作48B索引及WORD0，col3/4/5→BYTEC/WORDE/WORD10；cols8..22→WORD12..2E。Loadedbound舊值未在loader清零，maxacceptedkey+1是有條件結論。Native token count由owner指定，actual source reader配置52再clamp5..52；39欄只是歷史decodedsource的strictsubset，不是固定native grammar。
+
+Remote actual S2CDA nonself46938F→4FC990是128×268 identity pointer lookup，不是setter，並有self503D30分流。實際appearance→wholeactor4FD160直接寫A79，在其條件分支才呼叫4FF8E0；C=A224直接寫WORD C26=A24A，opaqueAction children仍open，不能由此填full6F DWORD9/17或A220。
+
+新增C++2／修改4，source材料元件1；完整玩法branch/opcode/fullroute0。decoded plaintext未恢復，encoded現讀pin吻合；factory要求未来actual owner提供原bytes，不聲稱已載入資料。Strict39fields是原pin的歷史subset。TW156/world74=50部分/11control/13未接；S2C252=230fixed/22variable；CN156/phase280/length253各scope不合併，本輪CN增量0。mixed282/CUSTOM135/groups26/pending10未改。全遊戲總數／完整路徑分母／TW及全遊戲百分比null；無build/tests/runtime/native/VM/codec/SQL/migrate/activate/deploy。保留凍結功能／shared64／TW/CN/web。下一步：恢復不執行codec的既有original card plaintext或獨立完整來源證據，將實際2A供應者及後續Current/Entered接到新catalog；沿actual4FD160→4FF8E0已知Action children及full6F original sources追opaque9/17，避免重跑identity lookup/localoptions/genericallocator。
