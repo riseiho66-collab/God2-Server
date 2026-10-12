@@ -3474,3 +3474,20 @@ Native限定metrics與三完整closure pins見本輪research capsule；source-wo
 三份完整closure及限定metrics見本輪research capsule；source-options10完整inputs1029187B，人工閱讀scope另列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。網頁v103僅peerreported，無ACK/adoption/wireacceptance/rootcapacityclaim。
 
 下一來源：沿實際468160 successful2A→R current local alias與其他初始化/後續write集合，把完整2A body欄位和local derived/defaultmemory區分；再追完整6F81B opaque9/17的實際producer/consumer。I86888其他setter與角色pool binding lifecycle分開；僅在有真正currentP=U24或相關currentglobalwriter證據時才將genericallocator延伸為Timer36供應者。保持CUSTOM0100/原生1B/C1D/B1各自來源，不啟用未完成Main sourcefactory。
+
+
+## 第312輪：2A卡片resource條件與遠端actual consumer
+
+2A變身resource的新實際caller cut把45C100資格與45C000 rowmatch及45A0A0結果分開。45C100只是lowWORD key與signextended catalog WORD bound的inclusive比較；45C000只有rowWORD0==key分支先寫selected8B local，common join仍複製local到output，BYTE3未資格。Eligibility成功不是完整record來源或任意有效resource。
+
+實際2A caller從card-derived outputBYTE2/WORD4/WORD6供給45A0A0；leaf可返回0，而selected caller立刻解參考結果BYTE。完整issuer必須資格exact card row與target EnyName selector/非空lookup，不把ChangeDollCard增益或resource label當wild怪物能力。World場景與card target場景必須分開。
+
+實際S2C36/37 table46B5D4→469C6B/469C09，packet+1是各自body。36 low14identity等於W1539683C時走local5038A0並bypass；只有nonself36及37所選支路CALL4FBC30。它lookup bodyWORD6&3FFF→A=P18+slot268，N=A1EC→完整50DF20/50E150。body9 conditional寫A265，body8非零conditional寫A264；直接children寫N E/10/12/14 WORD或N22 scalar，不碰N34/A220。它不是C2STimer36或full6F body8/opaque9/17。ESI完整DWORD只資格selected低BYTE來源，opaque4614A0/其他children未展；body0/1 masking非完整Afterstate。原REPORT eachcalls phrase以外部immutable effectivecorrection限定，原seal/metrics不改。
+
+實際stored entry來源已對到Application同Database reader/writer→HostPlan→Prepare/Offer→CAS→Native/Current。完整raw frame40保持，不臆補opaque；Prepared/BeforeWrite及staged-next BeforeCommit與來源不變檢查既有。COMMIT後不重跑provider/reload/retry，後來Current可壓掉發送但不能撤銷已存快照，不宣稱Written/ACK或完整worldpublication。
+
+SceneContent wrapper只提供actual current-world area/scene的NPCList及EnyName觀察，不能替代card-derived另一target場景資格；完整SceneSupply與entry_qualify仍mandatory。current Main86只呼叫無explicitworldplan的run_server(config,seconds)。缺口是實際資料/規則/scene owner，不新增重複泛用factory或啟用空owner。
+
+本輪三份固定封存closure/metrics見research doc；source-entry19完整inputs824429B，manual scopes另列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21；TW chains3/bindings38unique34；CN chains35/bindings93unique71，historical C2S156/S2C phaseopcode280/length253 distinctscope。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null；所有execution false。保留shared64/CN/web/nativefonts/帳號存檔/其他凍結功能。前goal status-only turn no progress已revalidate並採取本輪newbounded trace，goal active。
+
+下一來源：用實際2A非零transform path的精確card lookup owner/row/target EnyName resource資格，補完整issuer所需原始資料；沿native-remote312已資格的actual other-opcode escaped pointer consumer追其直接writers及未展開子呼叫，保持full6F body8/10 opaque來源獨立，不再重跑已知local option或generic allocator。
