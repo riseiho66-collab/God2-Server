@@ -3572,3 +3572,14 @@ TW world50/74=67.6%限定部分分支，完整branch/opcode/route新增0；全�
 定位兩writer的實際交易邊界：joint只stage inventory/equipment，entry自有transaction，joint Current也要求autocommit。禁止把publicwriter/current嵌入另一transaction的Issuer；純observe或順序兩次commit不能代替atomic source。
 
 C++/完整branch/opcode/route新增0；TW world50/74=67.6%只是部分解析。全遊戲分母/百分比null，CN/mixed282/CUSTOM135不變；無build/tests/runtime/native/gameDBSQL/deploy。下一步：依actual current-selector與producer差額，從原角色／裝備所有者的真正mutation來源及完整phase-bound入場供應者追字段；對已證明兩store seam不再新增重複adapter。若處理existing-entry＋DA持久同步，必須是same-connection完整tuple的實際source機制，並保留完整原opaque、身份與currentness，不靠public Current嵌入transaction。
+
+
+## 第320輪：existing-entry與裝備三tuple共同保存
+
+新增existing-entry appearance三population實際同步：同一connection inventory/equipment/full2A在one outer IMMEDIATE、全expected CAS與三phase完整issuer下stage及COMMIT，完整immutable receipt於COMMIT前配置。
+
+Mandatory source提供完整nextframe，不DA生成body；只准logical13..20及33..36改變且nextbaseline等nextDA，其餘selectors/opaque全部exactexpected不變。actor只比較scene handle/DA，common64 root身份保持獨立。
+
+新增同Context三writer binding與publicationfactory；原heldDA source持有EntryCommitted，Prepare/Before/After/queue的每次Current同consistent read核完整三tuple，不降成二tuple。Old兩store/publicentrywriter/Main/packetgrammar保持。
+
+7existing C++ modified/1added，新atomic storage sourceedge1，完整branch/opcode/route新增0。TW world50/74=67.6%只是部分解析；wholegame分母/百分比null。Mixed282/CUSTOM135/CN不變，0092只追加當輪來源provenance。無build/tests/runtime/native/gameDBSQL/deploy。下一步：將真正phase-bound原equip規則與完整nextState供給現有C28 Action及新三tuple source；依原角色owned selector來源追firstentry，不再重做已解兩次publictransaction seam或genericgetter。再處理實際storedEntry/common64-to-scene-handle mapping與正常入場收據生命周期，不猜識別或重新發fakebootstrap。

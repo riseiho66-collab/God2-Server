@@ -22,6 +22,12 @@ public:
         std::shared_ptr<SqliteOwnedEquipmentTransaction>,AccountRepository&,RecoveredCharacterRepository&,
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
         SqliteOwnedEquipmentTransaction::Committed);
+    // CUSTOM-0092 explicit three-population receipt. Every held publication
+    // requalifies the complete stored entry as well as inventory/equipment.
+    static std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> create(
+        std::shared_ptr<SqliteOwnedEquipmentTransaction>,AccountRepository&,RecoveredCharacterRepository&,
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
+        SqliteOwnedEquipmentTransaction::EntryCommitted);
     void publish(const cn::SharedActorVisibility::Binding&,
         cn::SharedActorVisibility::TaiwanAppearanceCompletion);
 private:
@@ -38,6 +44,7 @@ private:
     SqliteNativeEquipmentSnapshotRepository::Committed committed_;
     std::shared_ptr<SqliteOwnedEquipmentTransaction> joint_repository_;
     std::optional<SqliteOwnedEquipmentTransaction::Committed> joint_committed_;
+    std::optional<SqliteOwnedEquipmentTransaction::EntryCommitted> joint_entry_committed_;
     const std::thread::id thread_=std::this_thread::get_id();
     bool reading_=false,reentered_=false;
 };

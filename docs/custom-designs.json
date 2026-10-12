@@ -3526,7 +3526,40 @@
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
       "deferred_qualification": "Genuine original acquisition/custody/definition mapping supplier; native full before/after inventory and appearance; real C28 handler and ordered replies; atomic canonical mutation plus native display checkpoint; all mutation variants and later full build/runtime/native acceptance.",
-      "replacement": "Replace only storage identity/transfer policy when authoritative server instance/receipt semantics become available, retaining owned IDs and saves through an explicit reversible migration. Do not relabel this internal model as native."
+      "replacement": "Replace only storage identity/transfer policy when authoritative server instance/receipt semantics become available, retaining owned IDs and saves through an explicit reversible migration. Do not relabel this internal model as native.",
+      "source_extension_20261012_round320": {
+  "round": 320,
+  "implementation": [
+    "src/db/SqliteNativeWorldEntrySnapshotRepository.h",
+    "src/db/SqliteNativeWorldEntrySnapshotRepository.cpp",
+    "src/db/SqliteOwnedEquipmentTransaction.h",
+    "src/core/SharedTaiwanNativeWorldHostPlan.h",
+    "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+    "src/game/SharedTaiwanNativeEquipmentPublicationSource.h",
+    "src/game/SharedTaiwanNativeEquipmentPublicationSource.cpp",
+    "src/db/SqliteOwnedEquipmentEntryTransaction.cpp"
+  ],
+  "authority": "CUSTOM-0092_INTERNAL_STORAGE_COORDINATION_ONLY",
+  "operation": "Explicit existing-entry appearance-only synchronization in same-connection full inventory/equipment/entry CAS; original full next source issuer mandatory at all phases.",
+  "native_field_scope": "Only logical13..20 and33..36 may differ; complete next frame supplied, never generated from DA. All other bytes retained exactly. Actual scene handle and common64 identity remain separate.",
+  "current_and_delivery": "Private EntryCommitted retains complete triple tuple; held native DA source uses one consistent triple-current read at all existing publication boundaries. COMMIT is not a network ACK or atomic network delivery.",
+  "activation": "PHASE1 opt-in source only. Main/flags/schema/writers existing defaults unchanged; native equip rules/fresh-entry supplier/hosting/acceptance remain OPEN.",
+  "tests": [],
+  "execution": {
+    "build": false,
+    "compiler": false,
+    "tests": false,
+    "runtime": false,
+    "native": false,
+    "VM": false,
+    "emulator": false,
+    "resource_codec": false,
+    "game_database_SQL": false,
+    "migrate": false,
+    "activate": false,
+    "deploy": false
+  }
+}
     },
     {
       "id": "CUSTOM-0093",

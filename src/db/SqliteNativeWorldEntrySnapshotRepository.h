@@ -26,11 +26,18 @@ public:
     // Does not mutate character/save, invent first material, or activate release.
     std::optional<Snapshot> replace_from_issuer(std::optional<Snapshot> expected,Snapshot next,Issuer);
 private:
+    friend class SqliteOwnedEquipmentTransaction;
+    // Internal only: the joint owner guards this writer and owns the outer
+    // transaction/current readset. No issuer, COMMIT or public receipt here.
+    void validate_change(const std::optional<Snapshot>&,const Snapshot&) const;
+    void stage_replace(const std::optional<Snapshot>&,const Snapshot&);
     void owner() const;
     sqlite3* db_;
     const SqliteAccountRepository& accounts_;
     SqliteRecoveredCharacterRepository& characters_;
     const std::thread::id owner_=std::this_thread::get_id();
-    bool writing_=false,reentered_=false;
+    // Only the joint phase enables this flag; the existing public writer's
+    // issuer/read behavior remains unchanged.
+    bool writing_=false,reentered_=false,issuer_active_=false;
 };
 }

@@ -1,7 +1,10 @@
 #pragma once
 #include "db/SqliteOwnedInventoryRepository.h"
 #include "db/SqliteNativeEquipmentSnapshotRepository.h"
+#include "db/SqliteNativeWorldEntrySnapshotRepository.h"
 #include <functional>
+#include <memory>
+#include <utility>
 
 namespace god2 {
 // CUSTOM-0092 storage coordination, not recovered equip/unequip rules. A real
@@ -46,11 +49,41 @@ public:
         SqliteOwnedInventoryRepository::Committed inventory_;
         SqliteNativeEquipmentSnapshotRepository::Committed equipment_;
     };
+    // CUSTOM-0092: explicit appearance-only synchronization of an EXISTING
+    // full entry witness with complete inventory/equipment after-state.
+    // Entry bytes are supplied by the real issuer, never generated from DA.
+    struct WithEntryBefore {Before material;NativeWorldEntrySnapshot entry;};
+    struct WithEntryState {
+        State material;NativeWorldEntrySnapshot entry;
+        bool operator==(const WithEntryState&) const=default;
+    };
+    using EntryIssuer=std::function<std::optional<WithEntryState>(
+        const WithEntryBefore&,const WithEntryState&,Check)>;
+    class EntryCommitted {
+    public:
+        EntryCommitted(const EntryCommitted&)=default;
+        EntryCommitted& operator=(const EntryCommitted&)=default;
+        EntryCommitted(EntryCommitted&& v) noexcept:material_(v.material_),entry_(v.entry_) {}
+        EntryCommitted& operator=(EntryCommitted&& v) noexcept {
+            material_=v.material_;entry_=v.entry_;return *this;
+        }
+        const Committed& material() const noexcept{return material_;}
+        const NativeWorldEntrySnapshot& entry() const noexcept{return *entry_;}
+    private:
+        friend class SqliteOwnedEquipmentTransaction;
+        EntryCommitted(Committed material,std::shared_ptr<const NativeWorldEntrySnapshot> entry) noexcept
+            :material_(std::move(material)),entry_(std::move(entry)) {}
+        Committed material_;
+        std::shared_ptr<const NativeWorldEntrySnapshot> entry_;
+    };
     SqliteOwnedEquipmentTransaction(SqliteOwnedInventoryRepository&,SqliteNativeEquipmentSnapshotRepository&);
+    SqliteOwnedEquipmentTransaction(SqliteOwnedInventoryRepository&,SqliteNativeEquipmentSnapshotRepository&,
+        SqliteNativeWorldEntrySnapshotRepository&);
     SqliteOwnedEquipmentTransaction(const SqliteOwnedEquipmentTransaction&)=delete;
     SqliteOwnedEquipmentTransaction& operator=(const SqliteOwnedEquipmentTransaction&)=delete;
     bool owns_sources(const AccountRepository&,const RecoveredCharacterRepository&) const noexcept;
     bool owns_writers(const SqliteOwnedInventoryRepository&,const SqliteNativeEquipmentSnapshotRepository&) const noexcept;
+    bool owns_entry_writer(const SqliteNativeWorldEntrySnapshotRepository&) const noexcept;
     SqliteNativeEquipmentSnapshotRepository& equipment_writer() const noexcept{return equipment_;}
     SqliteOwnedInventoryRepository& inventory_writer() const noexcept{return inventory_;}
     const RecoveredCharacterRepository& characters_repository() const noexcept{return inventory_.characters_;}
@@ -58,6 +91,17 @@ public:
     // failure rolls back both; no borrowed transaction/savepoint/public staged
     // tokens. Allocate the joint immutable receipt BEFORE the only COMMIT.
     std::optional<Committed> replace_from_issuer(Before,State,Issuer);
+    // One outer IMMEDIATE transaction over all THREE full tuples. Complete
+    // expected material/entry required; no first entry creation. Same actor,
+    // current root/pose and native149c kind. Freeze every decoded entry byte
+    // except component8/transformWORD/rawscalar2. Expected entry may predate
+    // current DA; next entry must match next DA. Mandatory pure synchronous
+    // issuer returns full equal WithEntryState at all three Check phases;
+    // BeforeCommit sees all staged next tuples. Allocate receipt before COMMIT.
+    std::optional<EntryCommitted> replace_with_entry_from_issuer(WithEntryBefore,WithEntryState,EntryIssuer);
+    // One consistent read scope checks joint identity and all three tuples.
+    // The material-only overload remains the existing two-store contract.
+    bool committed_current(const EntryCommitted&);
     // CUSTOM-0095 ordinary SAME-MAP persistence policy: retain every complete
     // inventory/native byte and identity, advance only saved x/y+position
     // revision and native witness revision/provenance. Not native after-state
@@ -86,8 +130,11 @@ private:
     void owner() const;
     bool common_current(const RecoveredCharacter&,const RecoveredPosition&);
     bool stored_current(const Before&,const State&);
+    void entry_owner() const;
+    bool entry_stored_current(const WithEntryBefore&,const WithEntryState&);
     SqliteOwnedInventoryRepository& inventory_;
     SqliteNativeEquipmentSnapshotRepository& equipment_;
+    SqliteNativeWorldEntrySnapshotRepository* worlds_=nullptr;
     const std::shared_ptr<const Identity> identity_=std::make_shared<const Identity>();
 };
 }

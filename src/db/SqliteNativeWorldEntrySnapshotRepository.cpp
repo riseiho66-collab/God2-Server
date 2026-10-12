@@ -45,6 +45,10 @@ bool SqliteNativeWorldEntrySnapshotRepository::owns_characters(const RecoveredCh
 std::optional<NativeWorldEntrySnapshot> SqliteNativeWorldEntrySnapshotRepository::load(
         std::uint64_t account,std::uint64_t character,std::string_view client,std::string_view kind) {
     owner();
+    if(writing_ && issuer_active_) {
+        reentered_=true;
+        throw DatabaseError("Native world entry joint issuer reentered reader");
+    }
     if(!positive(account) || !positive(character) || !digest(client) || !text(kind,64))
         throw DatabaseError("Invalid native world entry key");
     // One cursor owns both the stored witness and actual account/character
@@ -74,6 +78,36 @@ std::optional<NativeWorldEntrySnapshot> SqliteNativeWorldEntrySnapshotRepository
        v.client_sha256!=client || v.record_kind!=kind || q.row())
         throw DatabaseError("Invalid or ambiguous native world entry observation");
     return v;
+}
+void SqliteNativeWorldEntrySnapshotRepository::validate_change(
+    const std::optional<Snapshot>& expected,const Snapshot& next) const {
+    if(!valid(next) || (expected && (!valid(*expected) ||
+        expected->root.account_id!=next.root.account_id || expected->root.id!=next.root.id ||
+        expected->client_sha256!=next.client_sha256 || expected->record_kind!=next.record_kind ||
+        expected->revision>=next.revision)))throw DatabaseError("Invalid native world entry CAS");
+}
+void SqliteNativeWorldEntrySnapshotRepository::stage_replace(
+    const std::optional<Snapshot>& expected,const Snapshot& next) {
+    owner();
+    if(!writing_ || issuer_active_ || reentered_ || sqlite3_get_autocommit(db_))
+        throw DatabaseError("Native world entry stage needs its guarded outer transaction");
+    validate_change(expected,next);
+    sqlite_detail::Statement write(db_,expected?
+        "UPDATE main.character_native_world_entries SET record=?,revision=?,source_sha256=?,source_record=?,root_slot=?,root_profile=?,"
+        "root_created_at=?,root_name_codepage=?,root_streamer_privilege=?,area=?,scene=?,x=?,y=?,position_revision=? "
+        "WHERE account_id=? AND character_id=? AND client_sha256=? AND record_kind=? AND revision=?":
+        "INSERT INTO main.character_native_world_entries(record,revision,source_sha256,source_record,root_slot,root_profile,"
+        "root_created_at,root_name_codepage,root_streamer_privilege,area,scene,x,y,position_revision,account_id,character_id,client_sha256,record_kind) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    write.bind_blob(1,next.record);write.bind_id(2,next.revision);write.bind(3,next.source_sha256);write.bind(4,next.source_record);
+    write.bind(5,next.root.slot);write.bind_blob(6,next.root.profile);write.bind(7,next.root.created_at);
+    write.bind(8,next.root.name_codepage);write.bind(9,next.root.streamer_privilege);
+    write.bind(10,next.position.area);write.bind(11,next.position.scene);write.bind(12,next.position.x);write.bind(13,next.position.y);
+    write.bind_id(14,next.position.revision);write.bind_id(15,next.root.account_id);write.bind_id(16,next.root.id);
+    write.bind(17,next.client_sha256);write.bind(18,next.record_kind);if(expected)write.bind_id(19,expected->revision);
+    write.done();if(sqlite3_changes(db_)!=1)throw DatabaseError("Native world entry CAS write failed");
+    const auto result=load(next.root.account_id,next.root.id,next.client_sha256,next.record_kind);
+    if(result!=std::optional{next})throw DatabaseError("Native world entry staged readback differs");
 }
 std::optional<SqliteNativeWorldEntrySnapshotRepository::Snapshot>
 SqliteNativeWorldEntrySnapshotRepository::replace_from_issuer(std::optional<Snapshot> expected,Snapshot next,Issuer issuer) {

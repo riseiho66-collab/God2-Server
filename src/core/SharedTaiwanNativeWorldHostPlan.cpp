@@ -479,6 +479,43 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::owned_equipment_publication_fact
             common->presence(),common->visibility(),std::move(committed));
     };
 }
+std::shared_ptr<SqliteOwnedEquipmentTransaction>
+SharedTaiwanNativeWorldHostPlan::StoredSources::owned_equipment_entry_transaction(const Context& context) {
+    if(!context.common_world||!context.common_world->owns_repository(context.characters)||!context.accounts||
+       !context.owned_inventory||!context.owned_inventory_writer||!context.native_equipment_snapshots||
+       !context.native_equipment_snapshot_writer||!context.native_world_entries||!context.native_world_entry_writer||
+       static_cast<OwnedInventoryRepository*>(context.owned_inventory_writer)!=context.owned_inventory||
+       static_cast<NativeEquipmentSnapshotRepository*>(context.native_equipment_snapshot_writer)!=context.native_equipment_snapshots||
+       static_cast<NativeWorldEntrySnapshotRepository*>(context.native_world_entry_writer)!=context.native_world_entries||
+       !context.owned_inventory_writer->owns_sources(*context.accounts,context.characters)||
+       !context.native_equipment_snapshot_writer->owns_sources(*context.accounts,context.characters)||
+       !context.native_world_entry_writer->owns_sources(*context.accounts,context.characters))
+        throw std::invalid_argument("TW entry/equipment requires all three actual Application writers");
+    return std::make_shared<SqliteOwnedEquipmentTransaction>(*context.owned_inventory_writer,
+        *context.native_equipment_snapshot_writer,*context.native_world_entry_writer);
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources::OwnedEquipmentEntryPublicationFactory
+SharedTaiwanNativeWorldHostPlan::StoredSources::owned_equipment_entry_publication_factory(
+    const Context& context,std::shared_ptr<SqliteOwnedEquipmentTransaction> transaction) {
+    if(!transaction||!context.accounts||!context.common_world||
+       !context.common_world->owns_repository(context.characters)||!context.owned_inventory_writer||
+       !context.native_equipment_snapshot_writer||!context.native_world_entry_writer||
+       static_cast<OwnedInventoryRepository*>(context.owned_inventory_writer)!=context.owned_inventory||
+       static_cast<NativeEquipmentSnapshotRepository*>(context.native_equipment_snapshot_writer)!=context.native_equipment_snapshots||
+       static_cast<NativeWorldEntrySnapshotRepository*>(context.native_world_entry_writer)!=context.native_world_entries||
+       !transaction->owns_writers(*context.owned_inventory_writer,*context.native_equipment_snapshot_writer)||
+       !transaction->owns_entry_writer(*context.native_world_entry_writer)||
+       !transaction->owns_sources(*context.accounts,context.characters))
+        throw std::invalid_argument("TW entry/equipment publication requires exact three-writer Context");
+    auto* accounts=context.accounts;auto* characters=&context.characters;
+    auto common=context.common_world;const auto thread=std::this_thread::get_id();
+    return [transaction=std::move(transaction),accounts,characters,common=std::move(common),thread](
+        SqliteOwnedEquipmentTransaction::EntryCommitted committed) {
+        if(std::this_thread::get_id()!=thread)throw std::logic_error("TW entry/equipment publication game owner mismatch");
+        return SharedTaiwanNativeEquipmentPublicationSource::create(transaction,*accounts,*characters,
+            common->presence(),common->visibility(),std::move(committed));
+    };
+}
 SharedTaiwanNativeWorldHostPlan::StoredSources::OwnedInventoryReplyFactory
 SharedTaiwanNativeWorldHostPlan::StoredSources::owned_inventory_reply_factory(
     const Context& context,std::shared_ptr<SqliteOwnedEquipmentTransaction> transaction,bool definitions,bool deity_equipment) {

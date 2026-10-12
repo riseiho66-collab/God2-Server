@@ -199,6 +199,15 @@ public:
             SqliteOwnedEquipmentTransaction::Committed)>;
         static OwnedEquipmentPublicationFactory owned_equipment_publication_factory(
             const SharedWorldHostPlan::Context&,std::shared_ptr<SqliteOwnedEquipmentTransaction>);
+        // Explicit existing-entry appearance synchronization. Requires all
+        // three actual reader/writer pairs in the same Application Context.
+        // No first entry, item/equip rule, native field defaults or Main opt-in.
+        static std::shared_ptr<SqliteOwnedEquipmentTransaction> owned_equipment_entry_transaction(
+            const SharedWorldHostPlan::Context&);
+        using OwnedEquipmentEntryPublicationFactory=std::function<std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource>(
+            SqliteOwnedEquipmentTransaction::EntryCommitted)>;
+        static OwnedEquipmentEntryPublicationFactory owned_equipment_entry_publication_factory(
+            const SharedWorldHostPlan::Context&,std::shared_ptr<SqliteOwnedEquipmentTransaction>);
         // Actual same-Context transaction and owned reader retained on game.
         // Invocation prepares explicit inventory bytes BEFORE mutation. The
         // returned component cannot stand in for full equip rules/replies.

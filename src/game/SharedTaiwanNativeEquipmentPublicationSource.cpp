@@ -34,6 +34,21 @@ std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNative
         throw std::invalid_argument("TW joint equipment source changed during construction");
     return source;
 }
+// Keep the complete entry receipt: extracting its material token here would
+// silently downgrade every later queue check to a two-population observation.
+std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNativeEquipmentPublicationSource::create(
+    std::shared_ptr<SqliteOwnedEquipmentTransaction> repository,AccountRepository& accounts,
+    RecoveredCharacterRepository& characters,std::shared_ptr<SharedWorldPresence> presence,
+    std::shared_ptr<cn::SharedActorVisibility> visibility,SqliteOwnedEquipmentTransaction::EntryCommitted committed) {
+    if(!repository||!repository->owns_sources(accounts,characters)||!repository->committed_current(committed))
+        throw std::invalid_argument("TW entry/equipment requires all three current committed populations");
+    auto source=create(repository->equipment_writer(),accounts,characters,std::move(presence),std::move(visibility),
+        committed.material().equipment());
+    source->joint_repository_=std::move(repository);source->joint_entry_committed_=std::move(committed);
+    if(!source->joint_repository_->committed_current(*source->joint_entry_committed_))
+        throw std::invalid_argument("TW entry/equipment source changed during construction");
+    return source;
+}
 std::optional<cn::SharedActorVisibility::TaiwanAppearanceAfterState>
 SharedTaiwanNativeEquipmentPublicationSource::current(const SharedWorldPresence::Lease& original) {
     owner();if(reading_){reentered_=true;return std::nullopt;}
@@ -51,9 +66,13 @@ SharedTaiwanNativeEquipmentPublicationSource::current(const SharedWorldPresence:
         return !reentered_ && position && *position==snapshot.position;
     };
     const auto durable_current=[&] {
-        if(joint_repository_)return joint_committed_ && joint_repository_->owns_sources(accounts_,characters_) &&
-            joint_repository_->committed_current(*joint_committed_);
-        return !joint_committed_ && repository_.committed_current(committed_);
+        if(joint_repository_) {
+            if(!joint_repository_->owns_sources(accounts_,characters_))return false;
+            if(joint_entry_committed_)return !joint_committed_ &&
+                joint_repository_->committed_current(*joint_entry_committed_);
+            return joint_committed_ && joint_repository_->committed_current(*joint_committed_);
+        }
+        return !joint_committed_ && !joint_entry_committed_ && repository_.committed_current(committed_);
     };
     if(!qualify() || !durable_current() || !qualify())return std::nullopt;
     const auto update=snapshot.appearance();if(!update || update->actor_identity()!=lease.actor_handle)return std::nullopt;
