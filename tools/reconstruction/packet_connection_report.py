@@ -185,6 +185,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_native_c24_fullbank_alias_source343', {}).get('source_paths', [])) |
                    set(ledger.get('tw_native_c24_normal_entry_source344', {}).get('source_paths', [])) |
                    set(ledger.get('tw_native_normal_entry_movement_custody_source345', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_native_owned_mutation_response_custody_source346', {}).get('source_paths', [])) |
                    {'src/core/Application.cpp', 'src/protocol/RecoveredWorldRecords.h'})
     # A missing file is a report error, never silent qualification/completion.
     digests = {p: hashlib.sha256((SERVER / p).read_bytes()).hexdigest() for p in paths}
@@ -346,6 +347,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_native_c24_fullbank_alias_source343': ledger.get('tw_native_c24_fullbank_alias_source343'),
         'tw_native_c24_normal_entry_source344': ledger.get('tw_native_c24_normal_entry_source344'),
         'tw_native_normal_entry_movement_custody_source345': ledger.get('tw_native_normal_entry_movement_custody_source345'),
+        'tw_native_owned_mutation_response_custody_source346': ledger.get('tw_native_owned_mutation_response_custody_source346'),
         'current_catalog_supplied':current_catalog is not None,
         'tw_supplemental_producer_evidence': ledger.get('tw_supplemental_producer_evidence'),
         'cn_unresolved_receiver_evidence': ledger.get('cn_unresolved_receiver_evidence'),

@@ -105,6 +105,23 @@ public:
         explicit WorldRecordsWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
         std::shared_ptr<Data> data_;
     };
+    // Passive ORIGINAL callback-response wire custody, distinct from logical
+    // push records. One token per actual world-records callback; no ACK/native
+    // cache adoption, input barrier or gameplay permission is inferred.
+    enum class WorldResponseWriteStatus {Pending,Written,Failed};
+    class WorldResponseWrite {
+    public:
+        WorldResponseWrite(const WorldResponseWrite&)=default;
+        WorldResponseWrite& operator=(const WorldResponseWrite&)=default;
+        WorldResponseWriteStatus status() const noexcept;
+        const std::vector<std::uint8_t>& wire() const noexcept;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit WorldResponseWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
     // Actual local normal-entry transcript: exact issued S2A, accepted raw tail
     // and successful existing world_ready hook. A private copy can be Pending
     // while that S2A's async_write completes. Neither state attests the remote
@@ -335,6 +352,12 @@ public:
     // private observation. No new callback, held frame or input barrier.
     WorldRecordsWrite send_world_records_observed(std::vector<std::uint8_t> logical);
     bool world_records_write_current(const WorldRecordsWrite&) const;
+    // Capture only the exact ORIGINAL complete framed callback return. This
+    // No sending/reframing; existing complete-frame validation applies.
+    // Double capture/reentry poisons the first token even if caught.
+    WorldResponseWrite observe_world_response(std::span<const std::uint8_t> wire);
+    bool world_response_write_current(const WorldResponseWrite&) const;
+    bool world_response_write_current_on_game(const WorldResponseWrite&) const;
     // Only the actual synchronous world-records game callback can obtain or
     // requalify this transcript. Missing metadata leaves the old sender intact.
     std::optional<NormalWorldInitialization> normal_world_initialization() const;

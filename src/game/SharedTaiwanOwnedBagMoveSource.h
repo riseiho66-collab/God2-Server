@@ -25,5 +25,38 @@ public:
     static SharedTaiwanWorldRecordSource::InventoryMoveBinding create_for_normal_entry_with_item_material(
         std::shared_ptr<SqliteOwnedEquipmentTransaction>,AccountRepository&,
         RecoveredCharacterRepository&,RecoveredMovementService&);
+    // Passive transport of this actual normal-entry C24 mutation receipt and
+    // its ORIGINAL already-framed response. No acquisition, initial replay,
+    // native timing/final-cache authority or caller-minted source is implied.
+    class MutationResult final {
+    public:
+        MutationResult(const MutationResult&)=delete;
+        MutationResult& operator=(const MutationResult&)=delete;
+        MutationResult(MutationResult&&) noexcept=default;
+        MutationResult& operator=(MutationResult&&) noexcept=default;
+        const SqliteOwnedEquipmentTransaction::Committed& committed() const noexcept{return committed_;}
+        const std::vector<std::uint8_t>& wire() const noexcept{return wire_;}
+        bool native_no_reply() const noexcept{return no_reply_;}
+        std::vector<std::uint8_t> take_wire() && noexcept{return std::move(wire_);}
+    private:
+        friend class SharedTaiwanOwnedBagMoveSource;
+        MutationResult(bool no_reply,std::vector<std::uint8_t> wire,
+            SqliteOwnedEquipmentTransaction::Committed committed) noexcept
+            :no_reply_(no_reply),wire_(std::move(wire)),committed_(std::move(committed)) {}
+        bool no_reply_;
+        std::vector<std::uint8_t> wire_;
+        SqliteOwnedEquipmentTransaction::Committed committed_;
+    };
+    struct MutationBinding {
+        std::function<std::optional<MutationResult>(Session&,const RecoveredInventoryMoveRequest::Request&)> dispatch;
+        std::function<void(Session&)> release;
+        std::function<void()> invalidate_active;
+    };
+    // Same concrete CUSTOM-0094 operation/owner; only the return carrier differs.
+    // Output storage is allocated before its one joint COMMIT. Receipt/wire
+    // move afterwards; no re-observation, decoding, repacking or mint callback.
+    static MutationBinding create_for_normal_entry_with_item_material_and_receipt(
+        std::shared_ptr<SqliteOwnedEquipmentTransaction>,AccountRepository&,
+        RecoveredCharacterRepository&,RecoveredMovementService&);
 };
 }

@@ -554,11 +554,30 @@ public:
 struct WholeBagMoveHost {
     std::shared_ptr<SqliteOwnedEquipmentTransaction> transaction;
     RecoveredMovementService* movement=nullptr; // Actual game-owned service; cleared before borrowed owner destruction.
-    std::optional<SharedTaiwanWorldRecordSource::InventoryMoveBinding> binding;
+    std::optional<SharedTaiwanOwnedBagMoveSource::MutationBinding> binding;
     std::shared_ptr<RecoveredWorldService> service;
+    struct MutationDraft {
+        std::weak_ptr<Session> session;
+        Session::NormalWorldInitialization initialization;
+        std::optional<SqliteOwnedEquipmentTransaction::Committed> after;
+        bool invalid=false;
+        MutationDraft(std::weak_ptr<Session> actual,Session::NormalWorldInitialization entry)
+            :session(std::move(actual)),initialization(std::move(entry)) {}
+    };
+    struct MutationResponse {
+        std::weak_ptr<Session> session;
+        SqliteOwnedEquipmentTransaction::Committed after;
+        Session::NormalWorldInitialization initialization;
+        Session::WorldResponseWrite write;
+    };
+    std::shared_ptr<MutationDraft> active;
+    std::map<std::uint64_t,std::shared_ptr<const MutationResponse>> mutations;
+    std::size_t actual_session_capacity=0;
     bool live=true,accepting=true;
     void stop_dispatch() noexcept {
         accepting=false;
+        if(active)active->invalid=true;
+        mutations.clear();
         try {if(binding)binding->invalidate_active();}catch(...) {}
     }
     void revoke() noexcept {
@@ -1238,6 +1257,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 } else recovered_movement=std::make_unique<RecoveredMovementService>(database.recovered_characters(),config.recovered_navigation);
             }
             auto whole_bag_moves=config.owned_whole_bag_moves_enabled?std::make_shared<WholeBagMoveHost>():nullptr;
+            if(whole_bag_moves)whole_bag_moves->actual_session_capacity=config.max_sessions;
             Session::RecoveredCharacterHandlers character_handlers;
             std::unique_ptr<RecoveredWorldService> recovered_world;
             if(config.recovered_character_creation) {
@@ -7254,7 +7274,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     whole_bag_moves->transaction=std::make_shared<SqliteOwnedEquipmentTransaction>(
                         database.owned_inventory_writer(),database.native_equipment_snapshot_writer());
                     whole_bag_moves->movement=recovered_movement.get();
-                    whole_bag_moves->binding=SharedTaiwanOwnedBagMoveSource::create_for_normal_entry_with_item_material(
+                    whole_bag_moves->binding=SharedTaiwanOwnedBagMoveSource::create_for_normal_entry_with_item_material_and_receipt(
                         whole_bag_moves->transaction,database.accounts(),database.recovered_characters(),*recovered_movement);
                     const auto& binding=*whole_bag_moves->binding;
                     if(!binding.dispatch || !binding.release || !binding.invalidate_active)
@@ -7267,31 +7287,53 @@ if(guild_officer_runtime && player_guild(session) &&
                                 return std::vector<std::uint8_t>{};
                             const auto transaction=host->transaction;
                             auto* const movement=host->movement;
-                            auto committed=movement->move_committed_with_owned_material(session,*transaction,requests);
-                            // A committed move may never be silently discarded
-                            // because its facade was retired during publication.
-                            if(!host->live || !host->accepting || host->transaction!=transaction || host->movement!=movement)
+                            const auto draft=host->active;
+                            if(!draft || draft->invalid || draft->session.lock().get()!=&session || draft->after) {
+                                if(draft)draft->invalid=true;
+                                if(host->binding)host->binding->invalidate_active();
+                                throw std::logic_error("Owned movement lacks its one actual response batch");
+                            }
+                            auto committed=movement->move_committed_with_owned_material_and_receipt(session,*transaction,requests);
+                            // Actual aftertuple and original per-frame ACKs only;
+                            // never observe/rebase a bank after this mutation.
+                            if(!host->live || !host->accepting || host->transaction!=transaction || host->movement!=movement ||
+                               host->active!=draft || draft->invalid || draft->after)
                                 throw std::runtime_error("Normal-entry movement committed but host facade became stale");
-                            return std::move(committed.reply); // Actual prebuilt ACKs, no wrapper repack.
+                            draft->after.emplace(committed.committed());
+                            return std::move(committed).take_movement().reply; // Actual prebuilt ACKs, no wrapper repack.
                         },RecoveredWorldService::Battle{},RecoveredWorldService::Supply{},
                         RecoveredWorldService::Quest{},RecoveredWorldService::SelectionItem{},RecoveredWorldService::Teleport{},
                         [weak](Session& session,const RecoveredInventoryMoveRequest::Request& request)
                                 ->std::optional<std::vector<std::uint8_t>> {
                             const auto host=weak.lock();
                             if(!host || !host->live || !host->accepting || !host->binding)return {};
+                            const auto draft=host->active;
+                            if(!draft || draft->invalid || draft->session.lock().get()!=&session || draft->after) {
+                                if(draft)draft->invalid=true;
+                                host->binding->invalidate_active();
+                                throw std::logic_error("Owned bag move lacks its one actual response batch");
+                            }
+                            const auto transaction=host->transaction;
                             const auto dispatch=host->binding->dispatch;
-                            const auto reply=dispatch(session,request);
+                            auto reply=dispatch(session,request);
                             if(!reply)return {};
-                            if(!host->live || !host->accepting)
+                            if(!host->live || !host->accepting || host->transaction!=transaction ||
+                               host->active!=draft || draft->invalid || draft->after)
                                 throw std::runtime_error("Whole bag move committed but host facade became stale");
                             if(reply->native_no_reply())throw std::runtime_error("Whole bag move requires its full native material reply");
-                            return reply->bytes(); // Already-framed wire through the existing Session sender.
+                            draft->after.emplace(reply->committed());
+                            return std::move(*reply).take_wire(); // Original prebuilt wire, no repack.
                         });
                     const auto original=game_handlers.world_records;
                     game_handlers.world_records=[weak,original](Session& session,
                             std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
                         const auto host=weak.lock();
                         if(!host || !host->live || !host->accepting)return {};
+                        if(host->active) {
+                            host->active->invalid=true;
+                            if(host->binding)host->binding->invalidate_active();
+                            throw std::logic_error("Owned mutation response facade reentered");
+                        }
                         // Entire original batch before typed consumers/observers.
                         // Admit movements plus ticks OR one C24 plus ticks through
                         // the existing service. A mixed C24/move batch rejects
@@ -7300,8 +7342,62 @@ if(guild_officer_runtime && player_guild(session) &&
                             return std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record) ||
                                 std::holds_alternative<RecoveredMovement::Request>(record);
                         })) {
+                            const auto initialization=session.normal_world_initialization();
+                            const auto actual=session.weak_from_this().lock();
+                            if(!initialization || !initialization->entry_written() || actual.get()!=&session ||
+                               !session.normal_world_initialization_current(*initialization) || !host->transaction)
+                                return {};
+                            if(!host->mutations.contains(session.id()) && host->mutations.size()>=host->actual_session_capacity)
+                                return {};
+                            // Allocate the game-owned draft before any mutation.
+                            // No borrowed records/span survives this callback.
+                            const auto draft=std::make_shared<WholeBagMoveHost::MutationDraft>(actual,*initialization);
+                            host->active=draft;
+                            struct End {
+                                std::shared_ptr<WholeBagMoveHost> host;
+                                std::shared_ptr<WholeBagMoveHost::MutationDraft> draft;
+                                ~End(){if(host->active==draft)host->active.reset();}
+                            } end{host,draft};
+                            const auto transaction=host->transaction;
+                            const auto local=[&] {
+                                return host->live && host->accepting && host->transaction==transaction && host->active==draft &&
+                                    !draft->invalid && draft->session.lock().get()==&session && !session.closing() &&
+                                    session.normal_world_initialization_current(draft->initialization) && draft->initialization.entry_written();
+                            };
+                            std::shared_ptr<const WholeBagMoveHost::MutationResponse> previous;
+                            if(const auto at=host->mutations.find(session.id());at!=host->mutations.end())previous=at->second;
+                            if(previous) {
+                                // Pending is allowed: this passive token neither
+                                // imposes a wait/Tick barrier nor grants authority.
+                                if(previous->session.lock().get()!=&session ||
+                                   previous->write.status()==Session::WorldResponseWriteStatus::Failed ||
+                                   !session.world_response_write_current(previous->write) ||
+                                   !session.normal_world_initialization_current(previous->initialization) ||
+                                   !previous->initialization.entry_written() || !transaction->committed_current(previous->after) || !local())
+                                    return {};
+                                const auto at=host->mutations.find(session.id());
+                                if(at==host->mutations.end() || at->second!=previous ||
+                                   previous->write.status()==Session::WorldResponseWriteStatus::Failed)
+                                    throw std::runtime_error("Owned mutation response source changed during preparation");
+                            }
+                            if(!local())return {};
                             const auto service=host->service;
-                            return service?service->handle(session,records):std::nullopt;
+                            auto response=service?service->handle(session,records):std::nullopt;
+                            if(!local())throw std::runtime_error("Owned mutation response facade retired during callback");
+                            if(!draft->after)return response; // Admission rejection never invents a receipt.
+                            if(!response || response->empty() || !local() || !transaction->committed_current(*draft->after) || !local())
+                                throw std::runtime_error("Owned mutation committed without current original response");
+                            // This is the ORIGINAL complete callback return,
+                            // including each native ACK5B frame unchanged.
+                            // Allocation/validation failure after COMMIT throws;
+                            // no retry/rollback or native adoption is implied.
+                            const auto observation=session.observe_world_response(*response);
+                            const auto candidate=std::make_shared<const WholeBagMoveHost::MutationResponse>(
+                                WholeBagMoveHost::MutationResponse{actual,*draft->after,draft->initialization,observation});
+                            if(!local() || observation.status()==Session::WorldResponseWriteStatus::Failed)
+                                throw std::runtime_error("Owned mutation response capture became stale");
+                            host->mutations.insert_or_assign(session.id(),candidate);
+                            return response; // Session consumes this exact raw vector through its old FIFO.
                         }
                         // These always-present legacy services use independent
                         // scalar/typed populations. Whole-batch rejection occurs
@@ -7328,6 +7424,10 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(!session)return;
                         const auto host=weak.lock();
                         if(!host || !host->live)return;
+                        // Revoke passive per-incarnation custody before any
+                        // observer may throw or borrowed movement is removed.
+                        if(host->active && host->active->session.lock().get()==session.get())host->active->invalid=true;
+                        host->mutations.erase(session->id());
                         std::exception_ptr failure;
                         try {if(host->binding)host->binding->release(*session);}catch(...) {failure=std::current_exception();}
                         try {if(previous)previous(std::move(session));}catch(...) {if(!failure)failure=std::current_exception();}

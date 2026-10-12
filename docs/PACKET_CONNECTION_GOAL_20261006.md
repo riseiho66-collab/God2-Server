@@ -4320,3 +4320,51 @@ qualifiedstack99/nativelevels/saves/frozen/fonts/conversion goalcontinues.
 Heavyartifacts outsideGod2, individualsealmembers exact. Oldgoalbinaryprefix,
 priorledgerfields/v23 preserved. PHASE1: no compiler/build/tests/runtime/
 native/API/CRT/VM/parser/codec/gameDBSQL/migrate/activate/deploy.
+
+
+## Round346 actual mutation aftertuple and original response write custody (2026-10-12)
+
+Previous345 was progress: publishedf5ab47fa8e55ff8c7438284caa23f61c26ca0efe,
+notification38264232569 success; all source/ledger/seal/receipt exact. New
+concrete source step retains the ACTUAL private joint Committed from each
+normal-entry C24 and owned movement plus its original prebuilt response.
+Private typed carriers/newopt-in APIs leave old/common APIs as exact adapters;
+no laterobserve_committed or suppliedissuer manufactures mutation proof.
+
+Session private WorldResponseWrite is minted onlyactualworld_records callback
+for its exact original complete RAW response. Attempt coverscapture/gameunwind/
+post/queue/drop; finalacceptedvalidresponse identity mustmatch. Newoptional
+Write marker islast, oldresponsebytes/FIFO unchanged. Written onlyexactunheld
+front/pointer/fulltransfer/PendingCAS; strandreadsimmutablewire/weakSession/
+atomicstatus only. Reject/throw/mismatch/budget/terminaldeny/close/drop→Failed;
+duplicate/reentry poisonsoriginal evencaught. Gracefulclose olddrain retained.
+No logicalreframe/directsend/native timing barrier or initialreplay.
+
+Actual defaultoffMain uses newtypedC24/move APIs, owns preallocateddraft and
+latestactualaftertuple/privateentry/response token per Session incarnation.
+Beforefuturemutation requalify closedtuple/currentactualepoch outsidejoint
+Current. Pending preservesexistingadmission; Failed/stale refuses writes.
+Nextactualmutation replacesoldreceipt; oldWritten cannotqualify stale bank.
+No mapiterator acrossobservers; caughtreentry invalidatesdraft/binding.
+Weakcaptures/disconnect beforepreviousobservers/stoprevoke beforeborrowed
+owners remain. Postcommitallocation/publication failure preservesdurableprefix
+andthrows, neverrollbackclaim/retry/native success. Writtenlocal only, no ACK/
+cache/catalog/helper/acquisition grant inferred.
+
+Initialmaterial plans locate genuinedefinition/instance/acquisition authority
+beforemint143 and full1215row+1/emptytails/DA missing. FirstTick/ready/Written
+are notinitialissuers. Genuineinitialfullbank/full25/freshclientfull50,
+fullnative5D/queue/helper/valueauthority/transfer/postbattle/allvariants and
+nativeacceptance remainOPEN. CUSTOM0094/95 rules/135IDs unchanged; new passive
+responseobservation field documentsdata/wireboundary, not newgamepolicy.
+
+Unique report20261012-tw-native-owned-mutation-response-custody-source-346;
+existingC++files7modified/new0, newactualMain sourceconnection1; newopcode/
+format/native methods/parser/phase/fullbidirectionalroutes0. TW156C2S/252S2C,
+world74=50partial/11control/13unconnected;CN156C2S/280phase/253length distinct
+scopesunchanged. Parser67.6% notwholecompletion; denominator/TW/gamepercentnull.
+Full TW-first/CN/fourWS/sharedC++20AsioLua5.4SQLite/common tables/common64/
+coin99999999999/qualifiedstack99/nativelevels/saves/frozen/fonts/conversion
+objectiveactive. Heavy evidenceexternal/permemberexact, oldgoalbinaryprefix/
+priorledgerfields/frontierv23 preserved. PHASE1 no compiler/build/tests/runtime/
+native/API/CRT/VM/emulator/parser/codec/gameDBSQL/migrate/activate/deploy.

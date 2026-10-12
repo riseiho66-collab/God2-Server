@@ -564,6 +564,11 @@ RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed
 RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed_with_owned_material(
     Session& session,SqliteOwnedEquipmentTransaction& custody,
     std::span<const RecoveredMovement::Request> requests) {
+    return std::move(move_committed_with_owned_material_and_receipt(session,custody,requests)).take_movement();
+}
+RecoveredMovementService::OwnedCommittedMove RecoveredMovementService::move_committed_with_owned_material_and_receipt(
+    Session& session,SqliteOwnedEquipmentTransaction& custody,
+    std::span<const RecoveredMovement::Request> requests) {
     if(owned_movement_thread_!=std::this_thread::get_id())
         throw std::logic_error("Owned normal-entry movement requires its game owner");
     reject_owned_movement_mutation();
@@ -652,7 +657,8 @@ RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed
     }
     if(!pose_current(prepared.next) || !custody.committed_current(*committed) || !pose_current(prepared.next))
         throw std::runtime_error("Owned movement committed but ACK delivery became stale");
-    return {std::move(prepared.response),old.saved,*prepared.next.saved,prepared.displaced_steps,std::move(prepared.path)};
+    return OwnedCommittedMove({std::move(prepared.response),old.saved,*prepared.next.saved,
+        prepared.displaced_steps,std::move(prepared.path)},*committed);
 }
 void RecoveredMovementService::remove(std::uint64_t session) noexcept { if(owned_movement_busy_)owned_movement_invalid_=true;active_.erase(session); }
 bool RecoveredMovementService::character_active(std::uint64_t account,std::uint64_t character) const noexcept {

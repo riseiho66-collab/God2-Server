@@ -1,4 +1,5 @@
 #pragma once
+#include "db/SqliteOwnedEquipmentTransaction.h"
 #include "db/RecoveredCharacterRepository.h"
 #include "game/RecoveredIndoorGrid.h"
 #include "game/RecoveredIslandEntryNavigation.h"
@@ -118,6 +119,24 @@ public:
         // Ordered displaced destinations, published only after the batch commits.
         std::vector<Step> path;
     };
+    // Actual CUSTOM-0095 mutation receipt plus the ORIGINAL batch ACKs/path.
+    // Passive proof transport, not native5D issuer or socket/client acceptance.
+    class OwnedCommittedMove final {
+    public:
+        OwnedCommittedMove(const OwnedCommittedMove&)=delete;
+        OwnedCommittedMove& operator=(const OwnedCommittedMove&)=delete;
+        OwnedCommittedMove(OwnedCommittedMove&&) noexcept=default;
+        OwnedCommittedMove& operator=(OwnedCommittedMove&&) noexcept=default;
+        const SqliteOwnedEquipmentTransaction::Committed& committed() const noexcept{return committed_;}
+        const CommittedMove& movement() const noexcept{return movement_;}
+        CommittedMove take_movement() && noexcept{return std::move(movement_);}
+    private:
+        friend class RecoveredMovementService;
+        OwnedCommittedMove(CommittedMove movement,SqliteOwnedEquipmentTransaction::Committed committed) noexcept
+            :movement_(std::move(movement)),committed_(std::move(committed)) {}
+        CommittedMove movement_;
+        SqliteOwnedEquipmentTransaction::Committed committed_;
+    };
     struct MovePreview {
         std::uint16_t area,scene,before_x,before_y,x,y;
         std::size_t displaced_steps;
@@ -134,6 +153,10 @@ public:
     // saved-pose/native-witness update. Complete current banks are mandatory;
     // no fallback, grant, stale-witness rebase or recovered native5D claim.
     CommittedMove move_committed_with_owned_material(Session&,SqliteOwnedEquipmentTransaction&,
+        std::span<const RecoveredMovement::Request> requests);
+    // Same actual owner, batch recipe, one joint COMMIT and publication checks;
+    // return its private durable receipt without a later observe_committed read.
+    OwnedCommittedMove move_committed_with_owned_material_and_receipt(Session&,SqliteOwnedEquipmentTransaction&,
         std::span<const RecoveredMovement::Request> requests);
     std::vector<std::uint8_t> move(std::uint64_t session,std::uint64_t account,
                                  std::uint64_t character,

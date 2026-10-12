@@ -211,7 +211,17 @@ public:
     void owner() const {if(thread_!=std::this_thread::get_id())throw std::logic_error("TW normal-entry bag move game owner mismatch");}
     void invalidate(){owner();if(busy_)invalid_=true;}
     void release(Session& session){owner();if(active_==&session)invalidate();}
+    struct Outcome {
+        Reply reply;
+        std::vector<std::uint8_t> wire;
+        Transaction::Committed committed;
+    };
     std::optional<Reply> dispatch(Session& session,Request request) {
+        auto result=dispatch_with_receipt(session,request,false);
+        if(!result)return std::nullopt;
+        return std::move(result->reply);
+    }
+    std::optional<Outcome> dispatch_with_receipt(Session& session,Request request,bool retain_wire) {
         owner();if(busy_){invalid_=true;throw std::logic_error("TW normal-entry bag move reentered");}
         busy_=true;invalid_=false;active_=&session;
         struct End {NormalEntryOwner& self;~End(){self.active_=nullptr;self.busy_=false;self.invalid_=false;}} end{*this};
@@ -250,6 +260,10 @@ public:
         // legacy client's previously retained18 bytes from a saved bank.
         const auto next=plan(*before,request,true);if(!next)return std::nullopt;
         auto reply=prepare_reply(*next,request,true);
+        // Generic Reply exposes a const wire view. Only this typed opt-in
+        // copies those exact bytes, BEFORE COMMIT; the old adapter copies none.
+        std::vector<std::uint8_t> response_wire;
+        if(retain_wire)response_wire=reply.bytes();
         if(!pose_current() || !transaction_->before_current(*before) || !pose_current())return std::nullopt;
         const auto committed=transaction_->replace_from_issuer(*before,*next,
             [&](const Transaction::Before&,const State& proposed,Transaction::Check)->std::optional<State> {
@@ -263,7 +277,7 @@ public:
            !pose_current()) {
             invalid_=true;throw std::runtime_error("TW normal-entry bag move committed but delivery became stale");
         }
-        return reply;
+        return Outcome{std::move(reply),std::move(response_wire),*committed};
     }
 private:
     const std::thread::id thread_=std::this_thread::get_id();
@@ -300,5 +314,19 @@ SharedTaiwanWorldRecordSource::InventoryMoveBinding SharedTaiwanOwnedBagMoveSour
     auto owner=std::make_shared<NormalEntryOwner>(std::move(transaction),movement);
     return {[owner](Session& session,const Request& request){return owner->dispatch(session,request);},
         [owner](Session& session){owner->release(session);},[owner]{owner->invalidate();}};
+}
+SharedTaiwanOwnedBagMoveSource::MutationBinding SharedTaiwanOwnedBagMoveSource::create_for_normal_entry_with_item_material_and_receipt(
+    std::shared_ptr<Transaction> transaction,AccountRepository& accounts,
+    RecoveredCharacterRepository& characters,RecoveredMovementService& movement) {
+    if(!transaction || !transaction->owns_sources(accounts,characters) ||
+       !movement.owns_repository(characters))throw std::invalid_argument("TW normal-entry bag move requires actual same common sources and movement");
+    auto owner=std::make_shared<NormalEntryOwner>(std::move(transaction),movement);
+    return {[owner](Session& session,const Request& request)->std::optional<MutationResult> {
+            auto result=owner->dispatch_with_receipt(session,request,true);
+            if(!result)return std::nullopt;
+            // The lexical source factory alone can construct this carrier.
+            // This is the actual private token returned by the SAME mutation.
+            return MutationResult(result->reply.native_no_reply(),std::move(result->wire),result->committed);
+        },[owner](Session& session){owner->release(session);},[owner]{owner->invalidate();}};
 }
 }

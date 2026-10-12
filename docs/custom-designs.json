@@ -3650,7 +3650,9 @@
         "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
         "src/core/Application.cpp",
         "src/core/Config.h",
-        "src/core/Config.cpp"
+        "src/core/Config.cpp",
+        "src/net/Session.h",
+        "src/net/Session.cpp"
       ],
       "native_gap": "Original S3B opaqueWORD producer and cross-slot helper compatibility not recovered. Direct consumer does not read the WORD, but EBX retains payload across opaque calls; do not infer global padding.",
       "rules": {
@@ -3661,7 +3663,14 @@
         "commit": "Existing actual full joint before/internal plan/fulltuple CAS, same actual Session/lease/root/position/pending battle and durable receipt. No fallback to0093 on missing full25."
       },
       "reason": "Connect genuine retained full25 material directly from the actual private whole-population read to a concrete optional mutation/reply source, instead of inventing the missing WORD or adding an Action placeholder.",
-      "activation": "PHASE1 existing shared factories and default-off world.owned_whole_bag_moves normal-entry Main source branch. Real private Session entry, same DB full bank and positive live pose; competing scalar/typed profiles excluded. No configured activation, population/schema installation or native acceptance.",
+      "activation": "PHASE1 existing shared factories and default-off world.owned_whole_bag_moves normal-entry Main source branch. Real private Session entry, same DB full bank and positive live pose; competing scalar/typed profiles excluded. No configured activation, population/schema installation or native acceptance. Passive actual joint mutation aftertuple and exact original callback-response observation now share the same default-off Main profile; Pending retains existing admission and Written is local socket completion only.",
+      "normal_entry_response_observation": {
+        "scope": "Passive source/data/wire custody only under the existing default-off normal-entry owner; no initial replay or native timing rule.",
+        "mutation": "Actual private same-operation joint Committed carried with original prebuilt C24 or movement wire, never observe_committed/rebase/caller mint.",
+        "response": "Private actual synchronous callback raw-response capture; exact accepted return/FIFO frame/full local write, Attempt retirement and caught reentry poison.",
+        "lifecycle": "Latest per actual Session and private normal-entry epoch; next actual commit replaces old tuple; Pending preserves admission, Failed/stale custody rejects.",
+        "limits": "Written is not remote ACK/cache/catalog/helpers/grant/original policy. Initial genuine bank/acquisition, native5D/allvariants/transfer/postbattle and native acceptance remain OPEN."
+      },
       "production_activated": false,
       "native_tw_cn_web_profile_activated": false,
       "tests": [],
@@ -3683,7 +3692,9 @@
         "src/handlers/RecoveredMovementService.h",
         "src/handlers/RecoveredMovementService.cpp",
         "src/core/Application.cpp",
-        "src/core/Config.cpp"
+        "src/core/Config.cpp",
+        "src/net/Session.h",
+        "src/net/Session.cpp"
       ],
       "native_gap": "Original server inventory-witness lifecycle across ordinary walking is not recovered. This policy retains qualified full material; it does not claim a fresh native afterstate capture.",
       "rules": {
@@ -3694,13 +3705,20 @@
         "compatibility": "Null/default and borrowed movement APIs retain existing behavior; opt-in passes actual transaction strongly through host/source/controller. No CN/web/frozen feature rewrite."
       },
       "reason": "Connect ordinary walking to subsequent owned-bag requests without leaving the existing native delivery witness at an obsolete saved position.",
-      "activation": "PHASE1 existing common Sources/StoredSources opt-in and default-off world.owned_whole_bag_moves normal-entry Main joint movement. Actual Session/entry/actor and positive full bank pose required; full batch final position committed once with witness. Initial populations, schema installation, runtime and deployment remain unselected.",
+      "activation": "PHASE1 existing common Sources/StoredSources opt-in and default-off world.owned_whole_bag_moves normal-entry Main joint movement. Actual Session/entry/actor and positive full bank pose required; full batch final position committed once with witness. Initial populations, schema installation, runtime and deployment remain unselected. Passive actual joint mutation aftertuple and exact original callback-response observation now share the same default-off Main profile; Pending retains existing admission and Written is local socket completion only.",
       "normal_entry_source_variant": {
         "scope": "Separate bounded normal-entry source variant; preceding rules describe the existing common-owner variant.",
         "authority": "Actual private Session entry/current/write receipt, native entry actor, same-Database current full material and positive exact saved pose; existing legacy batch geometry/ring validation.",
         "custody": "One joint final-position/native-witness commit per complete batch, stationary included; inventory/full native bytes retained; pure OLD active/Session Current and allocated receipts.",
         "projection": "Original legacy ACK recipe retained unchanged. No full native5D/pending/helper/peer authority or new native variant is qualified.",
         "limits": "No initial population/grant/rebase, freshclient fullbank, transfer/battle-return continuity, original server policy or native acceptance; default-off Main source integration only."
+      },
+      "normal_entry_response_observation": {
+        "scope": "Passive source/data/wire custody only under the existing default-off normal-entry owner; no initial replay or native timing rule.",
+        "mutation": "Actual private same-operation joint Committed carried with original prebuilt C24 or movement wire, never observe_committed/rebase/caller mint.",
+        "response": "Private actual synchronous callback raw-response capture; exact accepted return/FIFO frame/full local write, Attempt retirement and caught reentry poison.",
+        "lifecycle": "Latest per actual Session and private normal-entry epoch; next actual commit replaces old tuple; Pending preserves admission, Failed/stale custody rejects.",
+        "limits": "Written is not remote ACK/cache/catalog/helpers/grant/original policy. Initial genuine bank/acquisition, native5D/allvariants/transfer/postbattle and native acceptance remain OPEN."
       },
       "production_activated": false,
       "native_tw_cn_web_profile_activated": false,
