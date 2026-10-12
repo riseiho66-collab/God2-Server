@@ -3794,3 +3794,25 @@ requirements persist. PHASE1source/hash/PE/Capstone/staticreport only, no build/
 tests/native/runtime/VM/codec/gameDB/SQL/migrate/activate/deploy. Next actualU0A
 writer/eventlineage and trueoperation/rules/currentowner/persistence/replies/
 recovery, withpostchildcurrentstate andB1/E5/E6causality independentlyproved.
+
+
+## Round331 — E7 raw status and genuine list zero source, 2026-10-12
+
+Previous330 published141c1eb with successful notification; goal stays active.
+See research/tw-native-petegg-e7-list-source-20261012.md. Actual4691FD->4D6340
+S2CE7 length2/body1 has two localtype/row predicates, low7status branches and
+necessary4D9990 child preserving rawhighbit37/38/39. New readonly raw2codec
+RecoveredPetEggNotice is formatonly: no guessed B1 response/eligibility/handler.
+ActualsameU setup4817C0->481C20->4DC610 directlyzeros48B U0A..U39; later
+children and nonzero arraypopulation remainopen.15cuts3220codeB/55dataB all
+pinnedPEequal; initialseal precisionerror preserved withimmutableappendix.
+Frontierv20 changes onlyE7 classification, retainsallnative/historicalfields:
+independentformat11->12, unclassified115->114. No newopcode/parser/phase/
+authority/completebidirectional/gameplay credit. TW C2S156/S2C252/world74
+partial50/control11/gap13; CN C2S156/phaseS2C280/lengthS2C253. Allotherscoped
+counts unchanged; denominator/TW/wholecompletion null. FullTW/CN/web/common64/
+sharedtable/coin99999999999/stack99/nativelevels/frozen requirements persist.
+PHASE1source/hash/PE/Capstone/staticreport only, no build/tests/runtime/native/
+VM/codec/gameDB/SQL/migrate/activate/deploy. Nextnonzeroarraywriter/actualinput
+lineage and originalissuer/rules/currentownedstate/persistence/orderedreplies;
+B1/E5/E6/E7 pairing must be independentlyproven, notsameUI/similarstatus.
