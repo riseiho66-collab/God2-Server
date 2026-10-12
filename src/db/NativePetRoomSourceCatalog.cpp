@@ -157,6 +157,51 @@ std::array<std::pair<std::uint16_t,std::uint16_t>,57> rom_map_ranges(
     }
     return ranges;
 }
+// Byte stores reproduce the selected native physical layout without host
+// endianness, packed-struct aliasing or treating metadataDWORD0 as a source key.
+void store_record_word(std::array<std::uint8_t,396>& bytes,std::size_t offset,std::uint16_t value) {
+    bytes[offset]=static_cast<std::uint8_t>(value);
+    bytes[offset+1]=static_cast<std::uint8_t>(value>>8u);
+}
+void store_record_dword(std::array<std::uint8_t,396>& bytes,std::size_t offset,std::uint32_t value) {
+    for(unsigned i=0;i<4;++i)bytes[offset+i]=static_cast<std::uint8_t>(value>>(8u*i));
+}
+void copy_record_string(std::array<std::uint8_t,396>& bytes,std::size_t offset,
+                        const std::vector<std::uint8_t>& text,std::size_t capacity) {
+    // The native copies precede forced end bytes and do not have these guards.
+    // These finite-source bounds preserve their actual meaningful text+NUL.
+    if(text.size()>=capacity || offset>bytes.size() || capacity>bytes.size()-offset)
+        throw DatabaseError("PetRoom conditional record string exceeds qualified region");
+    for(std::size_t i=0;i<text.size();++i)bytes[offset+i]=text[i];
+    bytes[offset+text.size()]=0;
+}
+NativePetRoomDefinitionRecordSource project_record_source(
+    NativePetRoomDefinitionResource resource,NativePetRoomDefinitionText text) {
+    // Value initialization is explicitly conditional on the original successful
+    // zero-allocation/selector0 premises, not an observed current record buffer.
+    NativePetRoomDefinitionRecordSource result{std::move(resource),std::move(text),{}};
+    auto& bytes=result.conditional_record_bytes;
+    const auto& scalars=result.source_resource.source_scalars;
+    store_record_dword(bytes,0x000,scalars.metadata_dword0); // token5
+    store_record_dword(bytes,0x004,scalars.metadata_dword4); // token6
+    copy_record_string(bytes,0x008,result.source_text.definition_name_cp950,38);
+    bytes[0x02d]=0; //459473 forces this byte after the whole token4+NUL copy
+    copy_record_string(bytes,0x02e,result.source_text.caption_cp950,38);
+    bytes[0x053]=0; //45949D forces this byte after the whole token7+NUL copy
+    copy_record_string(bytes,0x054,result.source_text.description_cp950,190);
+    // No forced recordBYTE111 write: native forces scratch[BDh], then copies
+    // the meaningful description+NUL; remaining bytes retain allocated zero.
+    store_record_word(bytes,0x112,scalars.metadata_word112);
+    store_record_word(bytes,0x114,scalars.metadata_word114);
+    store_record_word(bytes,0x116,result.source_resource.metadata_word116);
+    store_record_word(bytes,0x118,0xffffu);
+    bytes[0x11a]=scalars.metadata_byte11A;
+    if((scalars.metadata_byte11B_low4&0xf0u)!=0)
+        throw DatabaseError("PetRoom conditional scalar low4 shape differs");
+    bytes[0x11b]=scalars.metadata_byte11B_low4; // preserved high4 conditional initial0
+    // Selector0 skips category-specific stores:11C..18B retains conditional0.
+    return result;
+}
 void source_schema(sqlite3* db,bool require_both) {
     sqlite_detail::Statement objects(db,
         "SELECT type,name FROM main.sqlite_schema WHERE name IN('native_raw_item_source_sets',"
@@ -270,6 +315,18 @@ std::optional<NativePetRoomDefinitionResource> NativePetRoomSourceCatalog::looku
         }
     }
     NativePetRoomDefinitionResource result{std::move(*scalars),word116,std::move(matched)};
+    scope.finish();return result;
+}
+std::optional<NativePetRoomDefinitionRecordSource> NativePetRoomSourceCatalog::lookup_definition_record_source(std::uint16_t key) const {
+    ReadScope scope(db_);
+    // Resource validates both complete installed datasets before even an
+    // absent-key return. Every nested read borrows this same transaction view.
+    auto resource=lookup_definition_resource(key);
+    if(!resource) {scope.finish();return {};}
+    auto text=lookup_definition_text(key);
+    if(!text || text->source_record!=resource->source_scalars.source_record)
+        throw DatabaseError("PetRoom conditional resource/text source mismatch");
+    auto result=project_record_source(std::move(*resource),std::move(*text));
     scope.finish();return result;
 }
 void NativePetRoomSourceCatalog::import_pinned_source(sqlite3* db) {

@@ -4048,3 +4048,58 @@ FullTW/CN/fourWS/sharedtables/common64/coin99999999999/qualifiedstack99/native
 levels/fonts/textconversion/frozen requirements persist. PHASE1 staticsource/
 hash/PE/Capstone/uniquereport only; no build/compiler/tests/runtime/native/VM/
 codec/gameDBSQL/migrate/activate/deploy.
+
+
+## Round340 - conditional historical SPI396 source composition (2026-10-12)
+
+Previous round339 is progress, not goal completion: private mainfe468e6 and
+Discord notification38251918456 succeeded. The full goal remains active.
+
+Actual54A550..54A5A8 is retained complete88 bytes with both RETs and no callees.
+On the known allocator's valid small-block success, actual547E9E passes pointer,
+literal0 and original count*stride product, qualifying exactly that product's
+zero stores under DF-clear/fault-free/valid-storage conditions. The successful
+HeapAlloc flag8 alternative has official Microsoft HEAP_ZERO_MEMORY evidence.
+No API was invoked, and failure/callback outcomes remain opaque.
+
+The original category bank declares46 rows with1602 stride; SPI ordinal9's
+selector63D preserves allocated zero only when all36 comparisons return nonzero.
+The original SPI bank declares737 rows with396 stride. Retained22 rows occupy
+physical source ordinals517..538, not token0-key slots or a native22-row bank.
+Actual preceding reads, correct sameallocated physical slot, valid key-pointer
+table, bounded children and no prior/intervening/OOB writes remain prerequisites.
+
+Full generic selector0 write coverage separates20 common direct stores from
+28 excluded category stores, and separately inventories copy helpers and scratch.
+Finite text fits actual native regions. Variable NULs, forced2D/53 NULs and the
+description scratch189-after-append boundary are retained; no fixedrecord111
+write is invented. BYTE11B highF0/texttail gaps/11C..18B112 bytes preserve the
+conditional original allocation zero, rather than becoming observed bank state.
+
+Independent static source arithmetic composes22x396=8712 conditional bytes,
+SHA256df6d876a3c5cb3b0d59b9cd2f653696b8401ecbbf41fc50c7e72647a55f89afa.
+Canonical12994-byte proof SHA256242ec2de0b202a5f772b48285474fd45aadb03928bec1b1224735253281a3618
+retains source/physical position/write origins and all native premises. Exact
+historical decoded input, successful rt/CRLF/read/seek, compatible stable ctype,
+stable literals and complete unchanged RomMaps57 population remain required.
+Current encodedef297 equivalence/native bank/current396 is not observed.
+
+NativePetRoomDefinitionRecordSource and lookup_definition_record_source are
+additive source implementation in existing PetRoomHCPP. One outer sameconnection
+read scope validates full57+22 resource sources before an absent-key return,
+then obtains text and requires identical owning SPI source records. The owning
+conditional array uses explicit little-endian stores and bounded exact copies.
+No Main/Migration/handler/Application call activates it. BYTE11C conditional0
+does not grant eligibility. Old pins/SQLv1/read/importer/text/scalar/resource,
+frozen fourfamily observation and oldtwoSPI MapItem catalog remain unchanged.
+
+Unique report20261012-tw-native-spi-conditional-record-340 preserves all prior
+ledger fields and frontierv23. New opcode/format/parser/phase/authority/fullroute
+credits0; TW C2S156, S2C252=230fixed+22variable,206nondefault+46default,
+world74=50partial+11control+13unconnected. Parser-scoped67.6 is not TW completion.
+CN C2S156/S2Cphase280/length253 are separate scopes; TW3/CN35 unhosted chains
+and TW38/CN93 sourcebindings remain partial. Whole-game denominator/TW/whole
+percentages stay null. No build/compiler/test/runtime/native/VM/codec/gameDBSQL,
+migration/activation/deploy. Continue actual selected inventory/U8/F4issuer/B1
+rules/replies/storage/recovery/hosting and the fullTW/CN/fourWS/sharedtables/
+common64/coin99999999999/qualifiedstack99/nativelevels/frozen-feature goal.

@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -72,6 +73,45 @@ struct NativePetRoomDefinitionResource {
     std::uint16_t metadata_word116; // first native slot; 0xffff means no range match
     std::optional<NativeRomMapSourceRecord> matched_source_record; // owning raw5-field copy
 };
+// Conditional reconstruction of the historical generic SPI396 source path.
+// All conditions below are assumptions of this source projection; the API does
+// not observe original allocation, current bank identity or a native record.
+// Owning resource/text records retain the same raw SPI provenance independently.
+struct NativePetRoomDefinitionRecordSource {
+    static constexpr char qualification[]="CONDITIONAL_HISTORICAL_SPI396_SOURCE_PROJECTION";
+    static constexpr const char* required_input=NativePetRoomDefinitionScalars::required_input;
+    static constexpr const char* required_classification=NativePetRoomDefinitionScalars::required_classification;
+    static constexpr const char* required_line_input=NativePetRoomDefinitionResource::required_line_input;
+    static constexpr const char* required_native_bank=NativePetRoomDefinitionResource::required_native_bank;
+    static constexpr char required_zero_allocation[]=
+        "Successful original correctly sized allocations: native ItemType count46 "
+        "with1602 stride and native SPI count737 with396 stride; valid storage and "
+        "fault-free completion under normal DF-clear "
+        "x86 calling conditions; actual547E23 small-block success clears the original "
+        "product through54A550, or successful HeapAlloc uses HEAP_ZERO_MEMORY flag8";
+    static constexpr char required_spi_selector[]=
+        "Original historical ItemType physical ordinal9 is SPI, in the native46-row "
+        "category bank; its bounded row has selector at63D; "
+        "all36 original category comparisons return nonzero, preserving allocated "
+        "zero at category63D; lookup forwards selector0 and the same catalog to459420";
+    static constexpr char required_physical_slot[]=
+        "Original native SPI bank contains737 physical rows, not the retained22; "
+        "correct preceding native row reads place source_record_index517..538 in "
+        "the same correctly allocated396 physical slots; row advancement also "
+        "occurs for invalid token0 rows; valid full native bank/key-pointer-table "
+        "storage registers the source key to that physical slot; the key is not "
+        "a physical slot and there are no prior out-of-bounds record writes";
+    static constexpr char required_record_construction[]=
+        "Exact bounded historical22 source fields and qualified normalized numeric "
+        "input under stable classification/rt; complete correct native row placement "
+        "and RomMaps population; stable original5B4640 byte0 and584BB0 LF+NUL "
+        "literals; valid fault-free token/copy/conversion children and DF-clear "
+        "REP copies; no faults, out-of-bounds or intervening record/bank writes; "
+        "current resource/bank identity and full396 native output remain unobserved";
+    NativePetRoomDefinitionResource source_resource;
+    NativePetRoomDefinitionText source_text;
+    std::array<std::uint8_t,396> conditional_record_bytes;
+};
 class NativePetRoomSourceCatalog final {
 public:
     static constexpr char dataset_id[]="tw149c-historical-spi-petroom-source-window-v1";
@@ -109,6 +149,10 @@ public:
     // Full57 first-match arithmetic is source-only; no API observes native bank,
     // allocation, current input/classification, player ownership or operation rights.
     std::optional<NativePetRoomDefinitionResource> lookup_definition_resource(std::uint16_t native_key) const;
+    // Composes the existing complete57+22 resource and text projections in one
+    // read scope, requiring identical owning SPI records. Returns separately
+    // typed conditional historical396 bytes; no observed/native gameplay state.
+    std::optional<NativePetRoomDefinitionRecordSource> lookup_definition_record_source(std::uint16_t native_key) const;
 private:
     std::vector<NativePetRoomSourceRecord> read() const;
     sqlite3* db_;
