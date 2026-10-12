@@ -4103,3 +4103,58 @@ percentages stay null. No build/compiler/test/runtime/native/VM/codec/gameDBSQL,
 migration/activation/deploy. Continue actual selected inventory/U8/F4issuer/B1
 rules/replies/storage/recovery/hosting and the fullTW/CN/fourWS/sharedtables/
 common64/coin99999999999/qualifiedstack99/nativelevels/frozen-feature goal.
+
+
+## Round341 - exact staged PetEgg client local write source (2026-10-12)
+
+Previous round340 is progress, not completion: private mainfdec5e8 and Discord
+notification38253288527 succeeded. Full goal remains active; no narrower success.
+
+Full primary pre-action4D7230..4D78C7 supplies actual response-fed local state
+continuity before outgoing UI dispatch. Its selected4D76E0 gate requires whole
+WORD U+A6D4==0; field meaning is unknown. Actual first selected clock result
+minus liveU8C wraps32 bits, then CDQ/XOR/SUB forms unsigned native magnitude.
+Unsigned CMP/JB admits>=60000, including80000000's exact nativebit result.
+Full DWORD accepted difference domain isEA60..FFFF15A0 inclusive; no real
+elapsed-time, monotonicity, server schedule or gameplay unit is inferred.
+
+First liveU4C+60 changes low18 only, preserving high14 at4D7718. Actual second
+clock call precedes freshU4C read771D; secondclock result writesU8C at7720,
+then freshsignedU8 read7726 selects rowDWORD+8 at85618+24*I for7733's
+secondU4C&3FFFF write. TwoU4C reads and entry/freshU8 are never combined.
+Earliernonzero key gate723D is not a lease for the later row. Source offset
+is mathematicallysigned64 while original DWORD/WORD/packed masks are retained;
+this is not completed shared64 wire/object/display extension.
+
+New standalone RecoveredPetEggLocalCounterSource.h implements exact staged
+unsigned arithmetic and returns three ordered direct write descriptions only.
+Header5170 bytes SHA256f1138228f0c2e8f73d5da962785147446c8fbfb0461286b3318e4956bc544029.
+NativeStageOperands retains each actual read/call operand independently; no
+pointer/API/native/inventory/DB write occurs. Nativeprefix/validstorage/faultfree
+sameU/read-stage conditions remain unobserved. Emission/mutation flagsfalse;
+no Main/Session/gameplay caller, timer rule, Lua policy or authoritative issuer.
+Existing E6/PetRoom/RomMaps/MapItem/Sqlite/frozen source is byteunchanged.
+
+Actual complete49A330 control45 drag-release key/type/metadata/panel path leads
+toOpen, but directlysetsnoU8. Actualselected validators alsoarenotsetters.
+Open same-rowaffinity requires liveU8==45 at every relevant row-read plusstable
+row/key acrosschildren. Known329initialwrite45 isnot lifetimeinvariance, and
+incoming3Bslot45 isnot U8assignment. False4671A8 primaryalias ispreservedand
+excluded: EDI hasbeenreplacedbyformaloutputptr. No wholeimageabsenceclaim.
+
+Pre-action/close actualsources join E5/E6/E7-fed fields andlocal statusflags,
+butdo not identify pending request context joining B1/F4/E5/E6/E7. ListB1
+selector-onlyproducer queues/closes withoutdirectselectedkey/index/full20save;
+validF4 directarraywritehasno directpendinggate. Opaquechild effects andactual
+serverissuer/ownedbinding/operationrules/storage/orderedreply/recovery/hosting
+remainOPEN. Clientcopy/localwrites nevergrant serverauthority.
+
+Unique report20261012-tw-native-petegg-local-state-source-341 preservesprior
+ledgerfields/frontierv23; newopcode/format/parser/phase/authority/fullroute0.
+TW C2S156/S2C252=230fixed+22variable,206nondefault+46default; world74=
+50partial+11control+13unconnected. CN C2S156/S2Cphase280/length253 separate
+scopes; TW3/CN35 unhostedchains andTW38/CN93 bindings remainpartial. Wholegame
+denominator/TW/wholepercentnull. No build/compiler/test/runtime/native/CRT/VM/
+codec/parser/gameDBSQL/migration/activation/deploy. ContinuefullTW/CN/fourWS/
+sharedtables/common64/coin99999999999/qualifiedstack99/nativelevels/fonts/
+conversion/saves/frozenfeatures objective, not a local-projection substitute.
