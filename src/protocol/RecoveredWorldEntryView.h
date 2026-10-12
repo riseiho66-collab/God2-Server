@@ -15,6 +15,13 @@ struct RecoveredWorldEntryView {
     std::array<std::uint8_t,37> logical;
     std::uint16_t actor_handle,area,scene,x,y;
     std::uint8_t kind;
+    // Native149c B0bit31 -> 468204 world+A7F2F3C -> composite72 new NPC
+    // slot through 4CBD70 -> 4CAFE0 argument6. Its nonzero branch requests
+    // the "npcid:%d" label; existing-slot updates need not recreate it.
+    // Other uses and the actual server's flag-selection rule remain open.
+    // Read the complete received entry; do not derive this bit from NPC
+    // membership, IDs or permission. It does not prove resource/load success.
+    bool npc_id_label_requested() const noexcept {return (logical[4]&0x80u)!=0;}
     struct EntryResourceSelectors {
         std::uint8_t drv_selector;
         std::uint8_t drv_doll_selector;

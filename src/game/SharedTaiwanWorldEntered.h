@@ -22,6 +22,9 @@ public:
         RecoveredWorldEntryView::EntryResourceSelectors entry_resource_selectors() const noexcept {
             return entry.entry_resource_selectors();
         }
+        // The actual scene supplier receives the original entry's label request,
+        // never a new default or permission to construct NPC/2A bytes.
+        bool npc_id_label_requested() const noexcept {return entry.npc_id_label_requested();}
     };
     enum class Check {AfterSupply,BeforeQueue,BeforePublish,AfterInstall,QueueReleased,LocalPublished,BeforeOutward,OutwardPublish,Completed};
     enum class ReplyDecision {CompleteNativeAggregate,ExplicitNoInitialReply};
