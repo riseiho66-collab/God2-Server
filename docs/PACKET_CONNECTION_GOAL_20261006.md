@@ -4502,3 +4502,40 @@ full1215/freshfull50/native5D/transfer/postbattle/nativeacceptance OPEN. Full
 TWfirst/CN/fourWS/common64/coin99999999999/qualifiedstack99/nativelevels/saves/
 frozen/fonts/conversiongoalactive. PHASE1 no compiler/build/tests/runtime/native/
 API/CRT/VM/emulator/parser/codec/SQL/importer/migrate/activate/deploy.
+
+
+## Round350 actual UI direct writes and acquisition transaction seam (2026-10-12)
+
+Previous349 source progress publishedcd81bbeffa13b014dc1b39481351828bc78face4,
+exactHEADnotification38271579466success and immutable receipt. Authenticknown
+41EA00 whole487B/132sites/17closedjumps/3RET16,9NOPpadding. HistoricUIchain
+alreadylisted, newmethod/opcode/format/routecredits0. ActualQ=UIthis8 distinctU.
+Formal1 lowAX<4096/maskFFFF own656stride; formal2 signedlowWORD<106 ownslot,
+nonegativeguard, actualparent0..49 premise. Wholeformal1/2 celladdresses passed
+41E710 sohigh16notgloballydiscarded. Formal3 lowCX<512 yetFULL5396stride;
+actualparentMOVSXmetadataWORD/clear31 passinggate implies0..511/high16zero,
+notgeneralDWORDcallers. Formal4fullsigned sign; directWORDactionstoreBEFORE
+sign/childsuccess. TwofurtherconditionalDWORDstoreschildresultandpostchildfull
+formal1cell toliveP/J projectionaddresses. Rereadsdistinct acrossopaquechildren,
+no validpointer/currentUI/queue/rights/nativeacceptance inferred. Remaining
+41E710/402C70/427160/4271E0/425C80 andpartialregisterforwardingeffectsOPEN.
+
+Hosted37/85 CUSTOM0021/0022townreward scalar5569/count1 andpublicprogress/slot
+receipt notgenuinecommondefinition/instance/acquisition/full20/25/native1215.
+TownownBEGINIMMEDIATE/COMMIT vscommonautocommit/guardedissuer/privateouterstage
+meansnestedorcallbacktwo-call adaptersrejectconstraints; sequentialcommitscan
+splitdurablestate. Futureatomicownerseam needstruequalifiedtuplesupplier first.
+Noobservationalcatalog/publicreceiptcanmintprivateauthority; noC++wrapperadded.
+Source143=line notCUSTOM0143; actualstorageCUSTOM0092, custom135IDsunchanged.
+
+Externalindividualcustody/seals andexactLFsuccesshelpersnotrerun. Oldgoalprefix/
+priorledgerfields/frontierv23/C++/config/rules/savesunchanged. Unique report
+20261012-tw-native-item-ui-acquisition-seam-source-350; C++changes0; allnewmethod/
+opcode/format/parser/phase/handler/source/fullroutecredits0. TW156C2S/252S2C/
+world74=50partial11control13unconnected;CN156C2S/280phase/253lengthseparate,
+allcountdeltas0. Whole/TWdenominatorpercentnull; parser67.6%notcompletion.
+Truecommonacquisition/full25/full1215/freshfull50/native5D/allvariants/transfer/
+postbattle/fullrouteinventory/nativeacceptance OPEN. FullTWfirst/CN/fourWS/
+common64/coin99999999999/qualifiedstack99/nativelevels/saves/frozen/fonts/
+conversiongoalactive. PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/
+emulator/parser/codec/gameDBSQL/importer/migrate/activate/deploy.
