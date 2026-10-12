@@ -3438,3 +3438,22 @@ ActualD8 sharedApplication bound172B list/account/character/area/scene/nativeNPC
 Native限定metrics與三完整closure pins見本輪research capsule；source-world12完整inputs719981B，manualscope分列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整双向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
 
 下一來源：Trace actualraw4A descriptor sender forregisteredclass59E024/currentwindow6F4CA0 andglobalPsetter; qualify4828D2→4F4B50 jumpcase4F4E12/403send and475D60, keepingpoolflag distinctfromfull81B opaque9/17. Recover actualdaily NPC placement/eligibility beforetransactionaloperation.
+
+
+## 第310輪：IPC方向、角色旗標producer與正式世界來源
+
+原生 S2C 接收分派的八個 GM Tools FS2 轉送早已有歷史紀錄；本輪不計新 opcode，补原始 PE 匯入身分、實際 entry／呼叫、12B stack descriptor 及同步呼叫資料生命期。GM 工具標題與 XianJieWndClass／6F4CA0 分開，這條 outgoing IPC 不替代 incoming 遊戲視窗來源；wrapper virtual 回呼的 mutation 邊界依原生包保留。
+
+實際466B00 caller 的子物件 I=W+A7F2F6C →4820A0→4828D2→4F4B50。504620只追到output WORD=-1／BYTE=0入口，caller後續讀這些locals與返回值選擇分派，後段event來源未資格。selector10 的指定 flag 條件切換 I-relative pointer object449E bit2，產生完整 DWORD0/1並於4F4E58 SendMessageA 到global6F4CA0的403；4F4E52只是PUSH403。不同 objectbase 不混用；local403不是networkopcode。
+
+532360 callback 傳送原始 wParam stack slot 的位址，40E854讀 slot 的scalar旗標，並非 dereference address0/1；對上309 root440 Main→467DF0→128×268池旗標呼叫。另一256×1D8 pool／AL flag分開，未提供完整6F opaque DWORD9／DWORD17或原生 Timer36 U18 供應者。
+
+另資格既有S2C1B table46B5D4[1B]→46AE4D→4F5030，bodyWORD只直接寫subobject pointee449C..449D，不寫449E。跨opaque4F55F0/4F5670等children才重讀449E bit2，4F50D5傳local403，另4F50FA傳405；不證旗標由body供給或跨call保持。它不是鄰近82 case (82→46AE12)。網路consumer→本地通知來源已追到，仍无1B服務端issuer／玩法權威或完整雙向路徑，opcode計數不增加。
+
+實際 main88行的run_server(config,seconds)進入無 CN/web/world plan 的overload；explicit Application 同一Context host/factory/entry/lifecycle/movement/mixed接點存在，但完整原生供應者仍external。SceneSupply資料／完整2A issuer／Current／install缺口有精確來源位置，不啟用不完整 Main 路徑。
+
+完整WorldEntered210行及Session2422..2544追清 held frame→install／visibility→release queue→outward／ready順序；QueueReleased不是socketwrite或nativeACK。ExplicitNoInitialReply需真實source decision/current/install，不作空成功。HMD model placements與NPCList resources無已資格的NPC／Daily join，不能靠相同座標名授權目的地、費用或獎勵。
+
+三份證據完整closure與限定metrics見本輪research capsule；source-world15完整inputs1039959B，人工閱讀scope分列。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。網頁v102僅收到peerreported交接，無ACK／adoption／wireacceptance或目前容量現讀宣稱。
+
+下一來源：沿既有S2C1B→4F5030→4F55F0/4F5670及I+86888真實constructor/lifetime追449E寫入者，保持bodyWORD與flag分開；追cleanup55B42F/5463B5及原始5A0B60/64初始化與currentwriters，不能將refcount形狀冒稱gametimer supplier。GM outgoing IPC同步descriptor/wrapper不是incoming遊戲producer；完整2A/6F issuer與Current/install具備後才選定Main factory。保持NPC model geometry／NPCList／Daily association分開。
