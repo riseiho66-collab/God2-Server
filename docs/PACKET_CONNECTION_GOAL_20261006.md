@@ -3839,3 +3839,25 @@ stack99/nativelevels/frozenrequirements persist. PHASE1static source/hash/PE/
 Capstone/reportonly, no build/tests/runtime/native/VM/codec/gameDB/SQL/migrate/
 activate/deploy. Next actualnonzeroarraywriter, originalP/issuers and genuine
 currentownedstate/rules/storage/orderedreplies/recovery, noUIasauthority.
+
+
+## Round333 — real9C raw format and PetEgg list boundary, 2026-10-12
+
+Previous332 wasprogress;d08fde8 publishednotification succeeded. Goalactive.
+See research/tw-native-9c-and-petegg-list-boundaries-20261012.md. Actual9C
+logical49/body48 length401594->401276/WORLD46B844->468C8C->full4F34C0 reads
+UIformat operands undercurrent signedU232E22 gate, notdirect24WORDU0A copy.
+Newreadonlyraw49 RecoveredWorldPanel9C keepsall48bytes/rawDWORD20/24, no
+fixed16strings/result/ownedstate/issuer guesses. SelectedE7 full4D9BE0/4D94D0
+andnecessary4D98B0/RET4D97F0 showdirectscalar/UIeffects, noqualifiedlistwriter
+orqueuedchain. WORDUIcounter native16wrap/partialAXthenDEC32 keptassource,
+notnewmath/currentstate API/common64gamedomain. Allregisterfinite0A scan19
+rawcandidates hasnoalignedaliasproof/globalabsenceclaim. Nonzerolistpopulation
+stillopen; actualunprovenchildren/computedalias/upstreamissuer next.
+Frontierv22 adds9Conly, independent15/unclassified111; allpriornative/history
+fields preserved. Othercountsunchanged: TW C2S156/S2C252/world74 partial50/
+control11/gap13; CN C2S156/phaseS2C280/lengthS2C253. Opcode/parser/phase/
+authority/completebidirectional/gameplayincrements0, denominator/TW/whole
+completionnull. FullTW/CN/web/sharedtables/common64/coin99999999999/stack99/
+nativelevels/frozenrequirements persist. PHASE1source/hash/PE/Capstone/report
+only; no build/tests/runtime/native/VM/codec/gameDB/SQL/migrate/activate/deploy.
