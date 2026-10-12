@@ -3404,3 +3404,20 @@ PrivateCUSTOM0111 checkedSessiongenerationand1400 source pluscommandcontext poli
 Native限定metrics與四worker完整closure pins見本輪research capsule及externalarchive，不合計全域coverage。Source-routing9完整inputs838744B；source-command3完整inputs73352B，manualscope分開。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71，CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整雙向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
 
 下一來源：Trace actualreceiver467860/466B00/468AE0 message/callback outputaliases thatcanreachphysicalU18 (negative220 fromoutputU238), andlater5112C0 structnegative4 users; continue current81Bissuer andqualified82contextpolicy beforeactualApp/Timerowner promotion.
+
+
+## 第308輪：actual message與full81B opaque來源邊界
+
+ActualPeekMessage pointerV20 proven by stackrebasing; rawV28/V2C pushorder reaches465F30 formalarg2 descriptor. Descriptor opcode/length/payload goes toactual4132E0 owner36C8 append, notexplicitU18/outU238. No typedmessage swap/guessed semantics.
+
+Newcomplete465F30/55AD35/55AC24 exposesconditionalatomicheaderP-C writer withlocalM-10 pointercell; P-C=U18 requiresP=U24, actualsetterstillopen. HistoricalP/guard equalityskip doesnotprove currentglobals orno writer. ActualregisteredDispatchcallback/rawdescriptor/globalP setter remainconcrete nextcuts.
+
+12 actualreachedcomplete remote/actor1EC/actor224 callees qualifybase and graphics/coordinate/flaghandle fields. Nested34=actor220 adjacency notread/wholecopyproof; resourceowner28=actor24C. Originalbody8/logical9 andbody10/logical17 issuerstillopen; shifted4FC800 explorationexcluded.
+
+Full81B rawpass-through andactualshared name29..44/secondaryguild45..76 projection guards preserveopaque9/17; commonroot/pose/currenttext andfullrecordcomparison do notsupply originalfullscene/materialissuer. Sharedfactory still invokesexternalcomplete resolver; actualprivatepairedretention isnotworldpublication orApphosting.
+
+Original123member nativeopaque seal omitted3nestedhistoricalseals; immutable128member successor includesexactclones/originalseal/succession andwithdrawsfullclosureclaim. Rooteffective correction actualheader153/namecpp140lines preservessealedsourcepackage; failures notabsence. Native/source increments0, goalactive.
+
+Native限定metrics與完整修正版closure見本輪research capsule；source-custody9完整inputs280577B。990src unchanged；C++0/sourcebranch0/opcode0/fullroute0；mixed282/CUSTOM135/groups26/pending10。TW C2S candidate156/worldparser74=limited50/control11/unconnected13；S2C252=fixed230/variable22/nondefault206/default46/reply48/push11/gated4/unclassified117；battle110/specialized9，86selectors7/cases6，83actions23/projections2/outside21。TW unhostedchains3/bindings38unique34；CN chains35/bindings93unique71；CN歷史C2S156/S2C phaseopcode280/length253各自scope，CN增量0。全遊戲封包數/完整双向路徑/分母/TW與全遊戲百分比null。無build/compiler/tests/runtime/native/VM/emulator/codec/gameDBSQL/migrate/activate/deploy。shared64/CN/web/nativefonts/帳號存檔/其他凍結功能保留。
+
+下一來源：Trace actualregistered nativeDispatch windowprocedure and rawV28 descriptor/global5A0B60 setter forphysicalU18; obtain truecaller of4FC6E0 or otheractor/bodypointer indirectchild seekingoriginalopaque9/17 supplier, notzero/cache/unfedcallbacks.
