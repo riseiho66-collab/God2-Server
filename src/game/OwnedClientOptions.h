@@ -18,6 +18,8 @@ public:
         std::uint64_t revision;
         Session::NormalWorldInitialization initialization;
         bool pending_replay=false;
+        // Provisional exact original response; Queued is not Written/native ACK.
+        std::optional<Session::NormalWorldResponseAttempt> response;
     };
     struct State {std::map<std::uint64_t,Entry> entries;};
     using Snapshot=std::shared_ptr<const State>;

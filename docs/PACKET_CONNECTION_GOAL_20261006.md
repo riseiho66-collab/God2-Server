@@ -4671,3 +4671,43 @@ Whole/TWdenominatorpercentnull/parser67.6% notcompletion. Unique report
 fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/fonts/conversion
 active. PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/
 codec/gameDBSQL/importer/migration/activation/deploy.
+
+
+## Round354 native save/restore, authority frontier and options (2026-10-13)
+
+Previous353b6c0ec2d88c7c3f23dc2050ed21abe3c17e09650 published with exactHEAD
+notification38281892043success. Actual3whole1076B+outerpartial40B=1116codeB/
+285sites/data0, mapped149c/PE5fcfequal.23rawREPnear-literal candidates scoped;
+3/11actualalignedcallers.49C638 full20 OUT toUI85AD4;49C770 signedDWORDkeygate,
+unsignedsavedslot0..255/no50guard, lowkey/countonly restore thensignedclamp and
+opaquechildren. No full20copyback/directprefixstore/globalpurity. Outermatching
+canonicalUaffinityconditional.1215 serverwitness1200cache+DA15 notincomingpacket.
+Canonicalprefix/computedindirect/issuer OPEN, knownmethodsnotrecredited.
+
+Finite27immutableHEADsources/12cuts rankactualPK69/35 backend lackingtruepair/
+fullmaterial/seed/basiccoeff-order/returnowner; A3/CB lacksactualwindowCloseOwner;
+6Blane0 readset/PFD candidate notfoodauthority/effect/consume/reply. Fiveopcode
+subset of13unconnected/10pending, notwholeinventory. No fakefactory/rules.
+
+TwoCppApp/OwnedClientOptions change; Session/protocol/config/core/custom135
+frozen. DefaultoffCUSTOM0100 transientuntrustedWORD, notpermission/chat/game
+rules. Fourqualifiedresponsecustodyvariants C1Dword/B1sel7/B1sel8/knownwordreplay.
+ActualwrittenINIT+own353callback beforeprogress, pureCurrent/refinds; oldFailed
+blocks, PendingonlysameData, QueuedknownWORDmaycrossgenuinewrittennewINIT without
+callingoldINITcurrent/ACK. Nextstate/framedS1B/merged staged, expectbeforeCAS/
+swap; componentcopyitselfmayallocate. ready/disconnectmarkerase neverrevoke
+sharedData. Actuallaterreject/phasechange/finalinvalid/drop/postfailure failclosed
+asauthorized, no mixedtransferacceptance/rebase/nativeadoption claim. Queuedlocal
+FIFO notWritten/nativeACK; generalundestroyedcontextabort OPEN. Unobserved
+generic/frozenchat bytebehavior exact, noSQL inoptions path.
+
+Fiveupstreamseals+twoexactCppinverse+independentreview, separatefinalcanonical.
+NineexactsuccessfulLFcopieswithoutreexecution. Failedprewriteoptionshelper,
+authorityApp-race/cut206→202 partials/corrections additive. Goalold603907binary
+prefix/priorledgerfields/frontierv23 exact. Newnative method/opcode/format/parser/
+handler/phase/fullroute0/globaldeltas0. TW156/252/world74=50partial11control13open;
+CN156/280phase/253length separate. Whole/TWdenominatorpercentnull/parser67.6%
+notcompletion. Unique report20261013-tw-native-world-control-authority-frontier-source-354.
+FullTWfirst/CN/fourWS/common64/coin99999999999/stack99/nativelevels/saves/frozen/
+fonts/conversion active. PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/
+emulator/parser/codec/resource/gameDBSQL/importer/migrate/activate/deploy.

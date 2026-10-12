@@ -7439,10 +7439,13 @@ if(guild_officer_runtime && player_guild(session) &&
                             const auto initialization=session.normal_world_initialization();
                             if(!initialization || !initialization->entry_written() ||
                                !session.normal_world_initialization_current_on_game(*initialization))return;
+                            const auto response=session.capture_normal_world_response(*initialization);
+                            if(!response)return; // No copied facade/IDs can qualify new option source.
                             const auto account=session.account_id,character=session.character_id,battle=session.battle_generation();
                             const auto phase=session.state();
                             const auto current=[&] {
                                 return !dispatch->reentered &&
+                                    session.normal_world_response_callback_current(*response) &&
                                     session.normal_world_initialization_current_on_game(*initialization) &&
                                     !session.closing() && session.recovered_world_ready() && account && character &&
                                     session.account_id==account && session.character_id==character &&
@@ -7457,6 +7460,18 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(previous && (previous->session.lock()!=held || previous->session_id!=session.id() ||
                                previous->account!=account || previous->character!=character))return; // Never rebind stale ownership.
                             if(!previous && (replay || selector || before->entries.size()>=config.max_sessions))return;
+                            const auto prior_response_current=[&] {
+                                if(!previous || !previous->response)return true;
+                                const auto status=previous->response->status();
+                                if(status==Session::NormalWorldResponseStatus::Failed)return false;
+                                if(status==Session::NormalWorldResponseStatus::Pending)
+                                    return *previous->response==*response &&
+                                        session.normal_world_response_callback_current(*previous->response);
+                                // Queued known WORD may cross a genuine new/current INIT;
+                                // never treat the obsolete old INIT as current or as an ACK.
+                                return true;
+                            };
+                            if(!prior_response_current())return;
                             if(replay) {
                                 // Reuse only this exact owner's known WORD after
                                 // a genuine new/current written entry. No initial0.
@@ -7475,15 +7490,17 @@ if(guild_officer_runtime && player_guild(session) &&
                             }
                             auto next=std::make_shared<OwnedClientOptions::State>(*before);
                             next->entries.insert_or_assign(session.id(),OwnedClientOptions::Entry{
-                                held,session.id(),account,character,word,revision,*initialization,false});
+                                held,session.id(),account,character,word,revision,*initialization,false,*response});
                             const auto logical=TaiwanNativeClientOptions::synchronize(word);
                             const auto framed=RecoveredWorldFrame::encode(logical);
                             auto merged=wire;merged.insert(merged.end(),framed.begin(),framed.end());
-                            // All allocation/framing precedes source publication.
-                            // These are pure game-owner/receipt/state fences.
-                            if(!current() || owned_client_options->snapshot()!=before ||
+                            // Stage owning state/frame/merged bytes before registration/publication.
+                            // Registration may allocate and poison this shared actual callback.
+                            if(!current() || !prior_response_current() || owned_client_options->snapshot()!=before)return;
+                            session.expect_normal_world_response(*response,framed);
+                            if(!current() || !prior_response_current() || owned_client_options->snapshot()!=before ||
                                !owned_client_options->publish(before,std::move(next)))return;
-                            wire.swap(merged); // Ordinary returned bytes, not Written/ACK/held delivery.
+                            wire.swap(merged); // Provisional endpoint until actual original FIFO Queued.
                         };
                         for(std::size_t i=0;i<records.size();) {
                             if(options(records[i])) {
