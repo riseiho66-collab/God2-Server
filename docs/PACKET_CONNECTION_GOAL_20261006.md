@@ -4414,3 +4414,51 @@ postbattle/nativeacceptance OPEN. FullTWfirst/CN/fourWS/common64/coin99999999999
 qualifiedstack99/nativelevels/saves/frozen/fonts/conversiongoalactive. PHASE1
 no compiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/SQL/
 importer/migrate/activate/deploy.
+
+
+## Round348 actual catalog loader and item helper source (2026-10-12)
+
+Previous347 progress published6f1dc2da05006fe9c6142ae9fba748fb02c63efc,
+notification38269315142success; actualsource/ledger/seal/receipt exact. Corrected
+known2A/reset/context20 source doesnotattestremoteclient/currentbank/authority.
+348followsactualpointer/loader andclosesonepreviouslyopaqueknown49B850 method.
+
+Exact4649DB rereadsMain+A7E05C4 afteropaqueCALL412EE0;4649EC/F1 adds444/stores
+MainAA36480. OriginalApplication affinity requiresnointerveningfieldreplacement
+andvalidlifetime, notinferredopaqueinvariance. Qualifiedconstructor/startup
+Application+444 source separates ProgramMsgdynamicB2C68/signedWORDB2C6C label
+bank fromgeneric396-byte records/inline32600DWORD B2D40 keytable(130400B).
+396recordwidth notcapacity. Actual22filenamepairs/44names+%scomm pathoperands
+qualified; noresourceopened/decoded. ProgramMsg literal/categoryprecedence
+selectsknown458C90 count*4/stringallocation/line-token1/NULcopy/boundupdate.
+No priorboundresetwhenarrayreplaced; return1 includesEOF/nonpositivecount;
+missing/duplicate/currentallocation/bound/entries/helperreadiness remainOPEN.
+Sameobject/nativecatalogsource cannotgrantitems ormakebankreceipt.
+
+Known49B850..49BAE0 complete656B/224sites/9RET8/alllocaljumps closesinspected
+238/346opaquefrontier only, no globalhistoricalfirst/newopcode/format/route.
+LowWORDsignedDI0..49 gate leavesfullEDIupper16unknown; parentMOVSX CX,AL
+preservesECXupper16. Rowfull20=existing3Bbody+4copy→row+4. LiveDWORDrow+4
+stagedreads cannotcollapseacross49B720/5068C0/49B770; selected42/43rereadagain.
+Directcount/mask003F0000/byte+0C andProgramMsgkey1A2/36A UIbranches noeligibility
+orissuer. Directnonstackstores0 notglobalchildstateabsence. Outputmeaning/
+U-rowstability/allocation/opaqueUI/queue/currentness OPEN. NextactualsameU
+stackoutputsource49B720/49B770 separatefromcommonacquisitionauthority.
+
+Twoexternalpackages115members182026B individuallyverified; loader13cuts2846B
+(eightknownwhole2424+fiveselected422),data50cuts1238B. Helpermisaligned38B
+caller draftpreserved/excluded; newaligned498E0A..498E30 sourceequal. FiveLF
+publichelpers exactsuccessfulstages, none rerun. Prior347all54members,335six
+referencedmembersONLY; helperprior346/238106members375100B verified. Heavy
+custodyoutsideGod2; oldgoalbinaryprefix/priorledgerfields/frontierv23/C++/
+custom135IDs/rules/defaultsallunchanged.
+
+Unique report20261012-tw-native-catalog-material-helper-source-348; C++changes0,
+newcoveredknownmethod1 ininspectedfrontier, nativeopcode/format/parser/phase/
+source-route/fullbidirectionalroutecredits0. TW156C2S/252S2C/world74=50partial/
+11control/13unconnected;CN156C2S/280phase/253lengthseparateunchanged. Parser67.6%
+notcompletion, whole/TWpercent+denominatornull. Initialgenuinecommonbank/full25/
+full1215/freshclientfull50/native5D/allvariants/transfer/postbattle/acceptance
+OPEN. FullTWfirst/CN/fourWS/common64/coin99999999999/qualifiedstack99/nativelevels/
+saves/frozen/fonts/conversiongoalactive. PHASE1 no compiler/build/tests/runtime/
+native/API/CRT/VM/emulator/parser/codec/SQL/importer/migrate/activate/deploy.
