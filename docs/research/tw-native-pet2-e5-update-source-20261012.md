@@ -59,11 +59,18 @@ WORDs; selector20 enters at4A5C54 and writes one. REPORT-CORRECTION-02.md is
 required alongside the retained original REPORT.md/seal. The source preserves
 the actual sequence rather than imposing a symmetric four-stat interpretation.
 
-Selector2 separately changes inventory DWORD bits8..14 at world+8560C+24*slot.
+Selector2 separately changes inventory DWORD bits8..14 at world+85620+24*slot,
+the native24-byte inventory row's offset14h (20-byte metadata offset10h).
 Active slot44 selectors1/3/4/5/6 call independent HUD children4ACEA0/4AC360/
 4AC550/4AC740/4AC930. GUI handles/flag20 can refresh4A40C0/49B850. These child
 effects remain outside the direct row contract. Both opaque E5 tail bytes and
 all unrelated FB bits remain distinct from missing gameplay authority.
+
+Round327 corrects the previous source document's8560C address and the worker's
+count-DWORD wording:58EC*24=85620, not8560C. The previous sealed326 source/report
+is retained with an independent append-only correction package. This is an
+opaque property-field write, not a count change. The326 C++ bool description
+contained no address or mutation and remains valid.
 
 ## Source and accounting
 
