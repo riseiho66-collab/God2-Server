@@ -3365,7 +3365,29 @@
       "reason": "Explicit owner per-stack limit increase while preserving quantity conservation, item instances and existing saves.",
       "activation": "Domain source only, not yet installed in native gameplay/storage/GUI paths.",
       "tests": [],
-      "replacement": "Qualify current TW/CN producers/consumers and stackability sources, connect same authoritative storage/mutations and per-recipient UI; validate comprehensively after full source integration."
+      "replacement": "Qualify current TW/CN producers/consumers and stackability sources, connect same authoritative storage/mutations and per-recipient UI; validate comprehensively after full source integration.",
+      "round325_quantity64_source_extension": {
+        "round": 325,
+        "date": "2026-10-12",
+        "authority": "Existing owner-selected99 policy and common64 input qualification; no new native gameplay rule",
+        "source_paths": [
+          "src/game/OwnedStackQuantity.h",
+          "src/db/SqliteOwnedInventoryRepository.cpp"
+        ],
+        "changes": [
+          "from/increase/decrease accept complete uint64 inputs; narrow to bounded BYTE only after comparison",
+          "Actual common owned inventory valid/load/validate_change/stage_replace uses same domain directly on uint64 quantity; occupied and unstackable rules remain separate"
+        ],
+        "historical_activation_preserved": true,
+        "scope": "Existing common inventory validation source only; old direct uint64 comparison already rejected out-of-range saved quantities",
+        "new_gameplay_routes": 0,
+        "new_item_grants": 0,
+        "native_stack99_completion": false,
+        "builds": 0,
+        "tests": 0,
+        "DBSQL": false,
+        "deployed": false
+      }
     },
     {
       "id": "CUSTOM-0090",

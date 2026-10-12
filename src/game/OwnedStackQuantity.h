@@ -9,16 +9,18 @@ namespace god2 {
 class OwnedStackQuantity {
 public:
     static constexpr std::uint8_t maximum=99;
-    static std::optional<OwnedStackQuantity> from(std::uint32_t count)noexcept {
+    // Common custody quantities are uint64. Check the complete input before
+    // the bounded BYTE projection; a 32-bit argument would discard high bits.
+    static std::optional<OwnedStackQuantity> from(std::uint64_t count)noexcept {
         if(count>maximum)return std::nullopt;
         return OwnedStackQuantity(static_cast<std::uint8_t>(count));
     }
     std::uint8_t value()const noexcept{return count_;}
-    std::optional<OwnedStackQuantity> increase(std::uint32_t amount)const noexcept {
-        if(amount>std::uint32_t(maximum-count_))return std::nullopt;
+    std::optional<OwnedStackQuantity> increase(std::uint64_t amount)const noexcept {
+        if(amount>std::uint64_t(maximum-count_))return std::nullopt;
         return OwnedStackQuantity(static_cast<std::uint8_t>(count_+amount));
     }
-    std::optional<OwnedStackQuantity> decrease(std::uint32_t amount)const noexcept {
+    std::optional<OwnedStackQuantity> decrease(std::uint64_t amount)const noexcept {
         if(amount>count_)return std::nullopt;
         return OwnedStackQuantity(static_cast<std::uint8_t>(count_-amount));
     }

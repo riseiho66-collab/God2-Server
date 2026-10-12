@@ -34,3 +34,13 @@ CAS交易內再次檢查count99、empty occupancy及非零revision。普通背�
 projection127保留；歷史100..127數量不剪截／遷移，新的此類swap拒絕。
 倉庫、交易、獎勵、使用、拆分、完整instance及CN/UI仍各有未完路徑。
 這是實際既有Application來源呼叫的寫入域接入，不是全物品99或TW100%。
+
+2026-10-12第325輪：OwnedStackQuantity的from/increase/decrease收完整uint64
+輸入，先比較99/remaining/current再投影BYTE；quantity值域仍0..99。
+SqliteOwnedInventoryRepository::valid直接使用此共用域校驗common quantity64，
+occupied仍1..99、unstackable仍1。load/validate_change/stage_replace以及既有
+兩庫／三庫裝備交易的實際校驗使用相同來源；舊literal uint64比較原已拒絕
+大值，沒有聲稱現存存檔曾被截斷。既有scalar move的count:uint8呼叫維持，
+未新增increase/decrease玩法caller、merge/split/grant或原生stackability。
+SQL schema與wire不改，native30 clamp/CN/UI/全玩法99仍未完成。保留0089
+歷史欄位并新增唯一325provenance。未build/tests/runtime/native/codec/DBSQL/deploy。

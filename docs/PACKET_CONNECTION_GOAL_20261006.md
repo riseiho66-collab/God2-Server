@@ -3707,3 +3707,12 @@ known49A330→496550後無success測試即呼叫4D5910；直接panel body只資�
 新增靜態來源capture工具1、report欄位1，runtime C++0、new native method/opcode/完整route0；6selected cuts428B/148sites，2known mechanical maps4956B不計fullmanual或globalnovel。獨立count來源審閱確認234舊3B byte-add/signed30與41 absolute，CUSTOM0094 full25 supplier不能升格C28原權威。分母/百分比null；TW156/world74=50partial/11control/13open、S2C252=230fixed+22variable，CN156/phase280/length253 scope獨立，mixed282/groups26/pending10/CUSTOM135不變。
 
 封存native29members/125120B、review10members/42514B均桌面God2外，歷史323與blocked goal觀測保留。新chat full TW/CN/web goal active，不因舊goal/tool狀態停止授權工作。未build/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy。下一步取得真正C28 fullnext/rules與sender/stat/self/observer有序owner；不重查本輪localpanel/packedloop當新進度，不再新增空supplier wrapper。詳見docs/research/tw-native-equipment-request-context-20261012.md。
+
+
+## 第325輪：共用quantity64校驗與裝備完整後態界線
+
+修改2既有C++：OwnedStackQuantity from/increase/decrease收完整uint64並先檢邊界後BYTE投影；actual SqliteOwnedInventoryRepository::valid直接消費common quantity64，occupied1..99、unstackable1保持。load/validate_change/stage_replace及現有joint writer校驗共用域；舊literaluint64原已拒大存檔量，並非宣稱原存檔截斷bug。CUSTOM0089舊值保留、追加325來源；沒有新increase/decrease caller/grant/stackability或native99資格。
+
+獨立有界來源收斂新缺口：320三tuple不含self2C/role/resource after-state；可讀aux硬pin6bf/CUSTOM0045，PK讀saved值CUSTOM0106，不能升格149c ordinary equip stat authority。需要genuine same-rule2C/22/24 producer、owned20到DA15、完整affected-state persistence及sender/stat/self/observer order/recovery，不再加外部unknown材料wrapper。authority review24members129027B（含seal25files134008B），sha3401440af868639515c2f2a093dd4d74d1e7a14bcdb1bb4eddae8ba2018a6686。
+
+共用quantity sourcecall新增1；完整branch/opcode/native method/route新增0，TW156/world74=50partial/11control/13open、S2C252=230fixed+22variable；CN156/phase280/length253 scope分列。mixed282/groups26/pending10/CUSTOM135不變，全遊戲分母/百分比null，goal active。未build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy，frozen/TW/CN/web/sharedtables/coin99999999999/stack99/level不變。詳見docs/research/tw-owned-quantity64-and-equipment-state-source-20261012.md。

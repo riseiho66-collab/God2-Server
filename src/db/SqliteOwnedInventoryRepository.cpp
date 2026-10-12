@@ -3,6 +3,7 @@
 #include "db/SqliteSupport.h"
 #include "db/NativeWeaponCatalog.h"
 #include "db/NativeArmorCatalog.h"
+#include "game/OwnedStackQuantity.h"
 #include <algorithm>
 #include <limits>
 #include <map>
@@ -39,8 +40,11 @@ bool valid(const OwnedInventorySnapshot& v) {
         if(!text(cell.location_kind,64)||(previous && *previous>=location(cell)))return false;
         previous=location(cell);if(!cell.instance)continue;
         const auto& item=*cell.instance;
+        // CUSTOM-0089: qualify the full common64 quantity directly, before
+        // any native BYTE projection. Occupied/unstackable rules stay separate.
+        const auto quantity=OwnedStackQuantity::from(item.quantity);
         if(!positive(item.id)||!ids.insert(item.id).second||!positive(item.definition_key)||
-           !positive(item.revision)||!item.quantity||item.quantity>(item.stackable?99u:1u)||
+           !positive(item.revision)||!quantity||!quantity->value()||(!item.stackable&&quantity->value()!=1)||
            !digest(item.acquisition_sha256)||!text(item.acquisition_record,2048)||item.aliases.size()>16)return false;
         std::optional<std::pair<std::string,std::string>> prior_alias;
         for(const auto& a:item.aliases) {
