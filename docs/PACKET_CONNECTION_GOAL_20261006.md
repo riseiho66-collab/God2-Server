@@ -3517,3 +3517,14 @@ Stored Supply/Current先拥有Snapshot/Scope/Frame，检查exact frame/root/posi
 Actual6F旧actor replacement进入C=A224的4FFCF0 cleanup四handle，全部73B旧资格重叠，新增native bytes0。Actionowner/record不是A220/bodypointer；不继续无指向的Action树，不把未知DWORD9/17填成零或已恢复。
 
 修改C++4、新增0、資源資格延伸1，精確恢復原檔2；完整branch/opcode/fullroute增量0，TW156/world74=50部分/11control/13未接，S2C252=230fixed/22variable；CN156/phase280/length253各scope分列。mixed282/CUSTOM135不變。全遊戲總數/完整路徑分母/百分比null。未build/tests/runtime/resourcecodec/gameDBSQL/deploy；只允許一般archive恢復及唯讀tool index。下一步：将两份现已精确恢复的输入供给后续真实游戏资源owner；追完整2A frame issuer的剩余字段及post-entry publication，远端仅追实际full6F bodypointer/A220 read custody，避免重跑known cleanup/allocator/lookups。
+
+
+## 第315輪：2A body方向與暫存器、遠端參數別名更正
+
+更正226所留46819C fullbody escape方向：傳到415690的是scratch目的，實際2A branch從packet複製至scratch，不能由此formalarg推定wholebody input reader；其後global/opaque callback界線仍open。保留原226紀錄，新增有效更正。
+
+資格actual4607D0低WORD setter與呼叫端EDX來源，關閉未知callee clobber邊界；其selected direct行為不提供2A B26..27或完整native producer。不將count高位／opaque猜成0。已知461270 body+12來源8B及其他已資格方法只作caller-context對照，按實際namedoverlap記錄不算全域新發現。
+
+Remote4FC1C0的body base、directloads與各actual formalarg逐點追蹤；&原body slot在449330前已被改成另一scalar cell，不能當wholebody傳入。沒有恢復新body8 reader或A220權威來源；disp220候選不具actualremotebase資格，維持boundednegative而不說全域unused。
+
+C++新增/修改0、新完整branch/opcode/route0。TW156/world74=50部分/11control/13未接，S2C252=230fixed/22variable；CN156/phase280/length253各scope獨立，CN增量0。mixed282/CUSTOM135保持。全遊戲總數/route分母/百分比null；不build/tests/runtime/VM/codec/gameDBSQL/deploy，不用歷史fixture/defaultkind或0補來源。下一步：依有效方向更正排除knownpacketcopy與knowncomponentreader；追actual2A B0/B4/B8 source及真正scene/publication供應者，遠端只追完整body或A220真實owner的讀取／生成來源，避免generic Action/allocator/lookup及同一negative掃描重跑。
