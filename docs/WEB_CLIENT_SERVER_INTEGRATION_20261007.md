@@ -111,3 +111,49 @@ PC與網頁共用權威驗證：身份/owner、phase、物件歸屬、玩法約�
 保持原生PC wire相容，不添加猜測的加密/認證欄位，不以JS混淆作安全邊界。
 前端chat負責網頁資源暴露、DOM/chat注入、憑證生命週期及開發靜態站防護。
 正式安全測試與啟用仍在全來源串接後的集中驗證/發布階段。
+
+## 2026-10-12 round334：目前可交接的原生來源與啟用條件
+
+本輪重新唯讀核對目前來源，回應網頁端最新交接。對方自述私人commit
+69539f4、DB6/E4C已有局部來源移植；本輪沒有驗證或修改其客戶端。
+來源盤點封存於桌面God2外的round334-web-native-route-handoff-audit；
+REPORT.md保留每個phase的實際來源、條件與精確行段。以下是版本化的
+原生基準來源交接，沒有宣稱目前可連線、完整配對或已完成可玩驗收。
+本輪沒有重新觀察listener，前文2026-10-07端點觀察仍只是歷史證據。
+
+普通src/main.cpp只呼叫run_server(config,seconds)，其Application overload
+將CN/Web/world plans設為null。設定仍可建立TW L與recovered_dual_connection
+的G candidate listener，不能把這點誤寫為完全沒有TCP。實際共用角色列表、
+entry、async scene/movement/mixed-record owners需由qualified world plan供應；
+WebGateway需明確WebServerPlan，四路徑只綁實際已bound的listener/registry。
+這些計畫的來源存在，普通main未選取它們；目前沒有可交付的正式活躍端點。
+
+表中opcode均為hex；logical長度含opcode、不含outer length/checksum。
+現有TW frame來源保留LE總長度、feedback/key/checksum及A00h logical界線，
+適用已資格化的zero-seed/key、feedback-zero、uncompressed profile。
+任意seed/壓縮旗標不能套用此子集合。WS完整二進位流、每socket獨立L/G
+握手與key、半包/合包規則保持；不得拿S2C長度表切C2S。
+
+| Phase | 可查的原生基準來源 | 配對／權威界線 |
+|---|---|---|
+| L/G登入 | seed hello/proof各wire19；postseed L=01 53、G=01 F6，wire5；credentials L04/G00 logical173、wire176。來源RecoveredSeedExchange/RecoveredPostSeed/RecoveredC2S0002。 | 每socket獨立認證。L1D flag-zero已觀察branch；G1F wire128仍是opaque zero-filled candidate，沒有完整原生bootstrap資格。 |
+| Server／角色列表 | routes04/05/06 wire8/12/8；L0A wire20；C2SA6 logical3；S2C07 logical75。 | 普通A6使用frozen fixture；candidate07不能替代全原生列表。SharedTaiwanNativeCharacterListSource需真實saved full material、issued token、Current及socket-write lineage；僅在qualified common plan安裝。 |
+| G選角／創角 | 1A logical38、wire41，保留credentials/token/opaque tail；17/1B logical45；postcreate18 logical2接1A；committed02 logical23。 | 必須真實角色歸屬與已commit建立結果。L列表寫出不等於G admission或scene lease。 |
+| World entry | 2A logical37/body36；C2S tail1F 00、23 00、1C localWORD/configBYTE/00共logical9，另可有30 00。 | 普通2A仍是historical candidate。qualified entry需完整native frame、Current、真實async Entered/cancel與同一common publication；tail接受不證渲染或live驗收。 |
+| 移動 | C2S2E logical7：x/y WORD、sequenceBYTE、opaqueBYTE；30 00 sideband；S2C5D logical2。 | diagnostic sequence echo不是native5D權威。實際WorldOwner/cells/resources/rules/current/full5D及release/invalidation仍須供應。 |
+| NPC | C2S37 logical5保留raw DWORD target；S2C72 logical21只含已資格spawn，7A是分context/dialogue來源。 | 無通用37→7A配對；高WORD/target不可截斷。CUSTOM help/quest/scene子集合保持原config gate；其餘native Others不能填空成功。 |
+| 背包／道具 | C24 logical3 src/dst；C25 logical5 keyWORD/slot/rawtail；C28 logical5目前flag1子集合。S41 logical5 occupancy；S3B logical25 incomingcount/slot/opaqueWORD/full20。 | 41不能初始化未知full20；3B incomingcount不保證absolute。C25 rawtail不是quantity，C28 flag1不等於equip。CUSTOM0093/0094與native item Action各自需exact stores、ownership/rules、CAS及完整ordered reply。 |
+| 戰鬥／技能 | C35 logical17分basic/action2/control0B，native action3/83保留全17並需catalog/state資格；S83/0D logical15只限既有nonzero WORD+11、signed16 delta branch。 | parser不給turn/action permission；ordinary diagnostic只在設定gate下存在。native owner需learned/grant/cost/control/battle-generation/settlement/full reply及release/invalidation；不能稱所有技能／傷害已完成。 |
+| 新F4清單輸入 | S2CF4 logical5/body4：raw indexBYTE、未直接使用BYTE、raw little-endianWORD。實際WORLD469233→same primaryU→4A3380，初始index<24直接寫U0A+2*index。來源RecoveredPetRoomListEntry.h。 | 原生資料能供給4DC710/4DC880的24WORD陣列，但仍不證owned item/full20、完整人口快照、操作權利、原issuer或F4/B1因果。初始越界先走opaque assertion再讀index，未建模為必然拒絕。 |
+
+上述原生byte layout與已要求的擴充wire分開維護。本輪沒有新增或啟用可供
+網頁遊戲直接使用的64-bit numeric wire profile；數值64位元的共同計算、
+producer/consumer/object/display與持久化仍需同步完成，不得截斷成舊WORD/
+DWORD或用browser Number失精度冒充相容。仙幣cap99999999999只適用coin；
+EXP/HP/damage maxima未定。單格99只適用已資格stackable items，原生等級、
+bag容量、equipment/PET實例與native ID/index寬度保持原來語義。TW/CN共同
+核心與共用表仍是預設；只有已證明的儲存不相容才使用_tw/_cn。
+
+本輪新增F4獨立格式資格，不新增已完成玩法或hosting/驗收。下一個實際
+整合界線是補齊原生issuer/權威資料與完整source owners，選取同一Application
+的qualified world/Web plans；PHASE1未建置、測試、啟動、部署或操作gameDB。

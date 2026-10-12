@@ -3861,3 +3861,28 @@ authority/completebidirectional/gameplayincrements0, denominator/TW/whole
 completionnull. FullTW/CN/web/sharedtables/common64/coin99999999999/stack99/
 nativelevels/frozenrequirements persist. PHASE1source/hash/PE/Capstone/report
 only; no build/tests/runtime/native/VM/codec/gameDB/SQL/migrate/activate/deploy.
+
+
+## Round334 — actualF4 list-word writer and current web source handoff, 2026-10-12
+
+Previous333 wasprogress;87fa5f3 publishednotification succeeded. Goalactive.
+See research/tw-native-f4-list-writer-and-source-handoff-20261012.md and the
+updated WEB_CLIENT_SERVER_INTEGRATION_20261007.md source/gate matrix.
+ActualF4 logical5/body4, length4016F4->4012AC/WORLD46B9A4->469233->same
+primaryU Main+A7F2F6C->full4A3380 supplies rawWORD2 toU0A+2index forinitial
+unsignedindex<24. This demonstratesa nonzero-capable input to24WORD array
+readby4DC710/4DC880. Initial>=24 hasopaqueassert thenreread; diagnostics
+readWORD2 butno directstore inthatbranch. RawBYTE1/fullWORD/allindexes kept;
+noWORDvaluegate orfinalpopulation/ownership/issuer/F4-B1causality invented.
+No parser/handler/authority activation ornew currentstate provider. Expanded
+named.text833rawcandidates/physical-mappedsection and2knownCALL scopes retain
+noexecflags0 pitfall, unmappedtail andcomputedalias/indirect/otherwritersOPEN.
+Webhandoff listsactualnativephase source contracts plusordinarymain plansnull
+versusqualified common/Web source owners; no currentendpoint/liveacceptance.
+Frontierv23 addsF4only, independent16/unclassified110; allpriornative/history
+fields preserved. TW C2S156/S2C252/world74 partial50/control11/gap13; CN
+C2S156/phaseS2C280/lengthS2C253 unchanged. Opcode/parser/phase/authority/
+completebidirectional/gameplayincrements0, denominator/TW/wholecompletionnull.
+FullTW/CN/web/sharedtables/common64/coin99999999999/stack99/nativelevels/frozen
+requirements persist. PHASE1 source/hash/PE/Capstone/report only; no build/
+compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
