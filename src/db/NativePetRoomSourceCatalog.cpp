@@ -128,6 +128,35 @@ NativePetRoomDefinitionScalars project_scalars(NativePetRoomSourceRecord source)
     // code and are deliberately excluded. No RomMaps/default11C/396 is supplied.
     return {std::move(source),dword0,dword4,word114,word112,byte11A,byte11B_low4};
 }
+std::array<std::pair<std::uint16_t,std::uint16_t>,57> rom_map_ranges(
+    const std::vector<NativeRomMapSourceRecord>& records) {
+    if(records.size()!=57)throw DatabaseError("Complete RomMaps source required");
+    std::array<std::pair<std::uint16_t,std::uint16_t>,57> ranges{};
+    // records() already validates every raw pin. Convert all57 before searching,
+    // retaining the actual token0 slot relation for this exact ordered dataset.
+    // This does not model arbitrary duplicate/invalid slots or failed row reads.
+    for(std::size_t i=0;i<records.size();++i) {
+        const auto& record=records[i];
+        const std::span<const std::uint8_t> raw(record.normalized_record);
+        std::vector<std::span<const std::uint8_t>> fields;
+        std::size_t first=0;
+        for(std::size_t j=0;j<=raw.size();++j) {
+            if(j<raw.size() && (raw[j]==0 || raw[j]=='\r' || raw[j]=='\n'))
+                throw DatabaseError("RomMaps source contains a line delimiter");
+            if(j==raw.size() || raw[j]==',') {
+                fields.push_back(raw.subspan(first,j-first));first=j+1;
+            }
+        }
+        if(fields.size()!=5 || record.source_record_index!=i || record.slot_index!=i ||
+           finite_decimal(fields[0])!=i || fields[3].size()>127)
+            throw DatabaseError("RomMaps finite source shape differs");
+        ranges[i]={static_cast<std::uint16_t>(finite_decimal(fields[1])&0xffffu),
+                   static_cast<std::uint16_t>(finite_decimal(fields[2])&0xffffu)};
+        // token3 fits the native128-byte path destination; token4 remains raw
+        // evidence only and is not consumed by actual459EF0.
+    }
+    return ranges;
+}
 void source_schema(sqlite3* db,bool require_both) {
     sqlite_detail::Statement objects(db,
         "SELECT type,name FROM main.sqlite_schema WHERE name IN('native_raw_item_source_sets',"
@@ -219,6 +248,29 @@ std::optional<NativePetRoomDefinitionScalars> NativePetRoomSourceCatalog::lookup
     auto source=lookup(key);
     if(!source)return {};
     return project_scalars(std::move(*source));
+}
+std::optional<NativePetRoomDefinitionResource> NativePetRoomSourceCatalog::lookup_definition_resource(std::uint16_t key) const {
+    ReadScope scope(db_);
+    // Both nested readers borrow this same connection/transaction view. A
+    // missing source dataset cannot become the native no-range-match sentinel,
+    // and an absent SPI key cannot skip the other complete source validation.
+    const auto maps=NativeRomMapSourceCatalog(db_).records();
+    if(maps.empty() || !populated())throw DatabaseError("Installed SPI and RomMaps sources required");
+    const auto ranges=rom_map_ranges(maps);
+    auto scalars=lookup_definition_scalars(key);
+    if(!scalars) {scope.finish();return {};}
+    std::uint16_t word116=0xffffu;
+    std::optional<NativeRomMapSourceRecord> matched;
+    const auto icon=scalars->metadata_word114;
+    // Actual459FC0 uses signedWORD count57 and unsigned inclusiveWORD ranges.
+    // Only AX is copied by459943; its first slot result is not a gameplay ID.
+    for(std::size_t i=0;i<ranges.size();++i) {
+        if(icon>=ranges[i].first && icon<=ranges[i].second) {
+            word116=static_cast<std::uint16_t>(i);matched=maps[i];break;
+        }
+    }
+    NativePetRoomDefinitionResource result{std::move(*scalars),word116,std::move(matched)};
+    scope.finish();return result;
 }
 void NativePetRoomSourceCatalog::import_pinned_source(sqlite3* db) {
     if(!db || !sqlite3_get_autocommit(db))throw DatabaseError("PetRoom source import requires own transaction");

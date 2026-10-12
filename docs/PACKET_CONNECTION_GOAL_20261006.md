@@ -4009,3 +4009,42 @@ normalized1..5 ASCIIdigit bytes in ordinarynative flags49h stringdescriptor.
 OriginalCRLF finaltoken25 line-reader behavior is OPEN; retainedCR would require
 opaque nonEOF pushback553158. Stablectype alone does not establish actualnative
 original-file output. API observes neither inputpreparation norclassification.
+
+## Round339 — common RomMaps source and conditional SPI resource field, 2026-10-12
+
+Previous338 was progress;7f111e4 pushed and notification38249832572 succeeded.
+Goalactive. See research/tw-native-rommaps-spi-resource-source-20261012.md.
+ActualCALL456268 reaches full459EF0loader, signedWORDcount/84hstride/token0slot;
+459FC0 firstunsignedinclusiveWORDrange match and459943 AX->WORD116 nowqualified.
+Loaderreturn1 notfullpopulation; positivecount nullguard absent. Fullallocation
+helper547E23 includesreachablecoldtail; allocationchildren/success unobserved.
+Actualrt->4000h->fd80h->54EF0C CRLFtoLF source proves conditionalnormalizedinput,
+with successfulread/lookahead/seek/stablefd/exactsource/transform conditions.
+Prior338 CRLFgap/seal preserved; no native/current input or ctype observation.
+Two new commonC++sourcefiles pin raw57 RomMaps/5fields/bothpaths/header/offsets,
+dataset tw149c-historical-rommaps-source-v1; canonical14189B/708atoms SHA99f0fe.
+Strictmain joinedwhole57 read/counts/envelope/rawbytes exposesorphans, borrows
+callertransaction elseownsreadscope. Explicitimporter BEGINIMMEDIATE/idempotent/
+emptyinsertonly/reverify/rollback plus main/TEMP case-insensitivetriggerguards;
+sourceSQLnotexecuted, noMain/Migration/requestcaller. OriginalitemSQLv1NULLpins/
+read/importer/MapItemtwoSPI/saves unchanged. Newresourcecomposition oneouter
+sameconnection ReadScope validatesbothinstalledSPI22/RomMaps57 beforekeylookup;
+missing/empty/corruptsource iserror, absentkey onlyafterbothvalidations returnsnone.
+Convertall57finiteindices/ranges beforefirstslotmatch, unsignedWORDinclusive/
+uint16FFFFsentinel, returnowningsource/scalars/matchedrawrecord+catalogfingerprint.
+194rawnumerictokens1+171+22 ASCII1..5/max65500/count57/alloc7524beforealignment;
+57nonoverlappingranges/all22iconsmatch:slot25x4,27x2,35x1,43x4,44x7,46x4.
+Independentconditionalnumericproof23012B SHA388012; bothnativeinput/ctype and
+loaderdispatch/allocation/fullpopulation/stablebank/SPIcommontail conditions
+remainexplicitunobserved. token4/default11C/118/full396/ownedrights notinferred.
+Historical70a4/75c3 remainsdistinctcurrentef297. SevenoriginalLFstaticcaptures
+publishedexactly/notrerun; generationstage+TEMP/maincasecorrections preserved.
+Frontierv23 byte-identical; TW C2S156/S2C252/world74 partial50/control11/gap13/
+independent16/unclassified110; CN C2S156/phaseS2C280/lengthS2C253 unchanged.
+Packet/format/parser/phase/handler/completebidirectional/gameplayincrements0;
+wholeTW/game denominator/completionnull. Next full396/currentbank/eligibleowned
+population/F4issuer/B1rules/fullorderedreply/storage/recovery/Applicationhosting.
+FullTW/CN/fourWS/sharedtables/common64/coin99999999999/qualifiedstack99/native
+levels/fonts/textconversion/frozen requirements persist. PHASE1 staticsource/
+hash/PE/Capstone/uniquereport only; no build/compiler/tests/runtime/native/VM/
+codec/gameDBSQL/migrate/activate/deploy.

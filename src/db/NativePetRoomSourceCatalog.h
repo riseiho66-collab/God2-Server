@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "db/NativeRomMapSourceCatalog.h"
 struct sqlite3;
 namespace god2 {
 // Historical SPI source text, normalized by the retained source inventory.
@@ -48,6 +49,29 @@ struct NativePetRoomDefinitionScalars {
     std::uint16_t metadata_word114,metadata_word112; // tokens3/13, lowWORD
     std::uint8_t metadata_byte11A,metadata_byte11B_low4; // tokens14..25 low bits
 };
+// Conditional source composition of the generic parser's WORD114->WORD116
+// relation. A coherent SQL source view is not a current native bank observation.
+struct NativePetRoomDefinitionResource {
+    static constexpr char qualification[]="CONDITIONAL_HISTORICAL_ROMMAPS_SOURCE_PROJECTION";
+    static constexpr char required_native_bank[]=
+        "Actual RomMaps literal dispatch after category lookup returns zero; "
+        "exact historical header57 and all57 rows converted under exact normalized "
+        "digit input and valid stable classification; successful correctly sized "
+        "live native allocation and complete slot population on the same catalog; "
+        "no intervening bank replacement during lookup";
+    static constexpr char required_generic_tail[]=
+        "Historical SPI reaches its generic common tail under independent "
+        "category-selector0 initialization conditions using the same catalog; "
+        "current native record and full396 output are not observed";
+    static constexpr char required_line_input[]=
+        "Successful actual rt stream of exact historical decoded bodies plus CRLF; "
+        "valid stable fd text mode and successful required read/lookahead/seek; "
+        "resource transformation and current source identity are not observed";
+    static constexpr const char* resource_catalog_sha256=NativeRomMapSourceCatalog::catalog_sha256;
+    NativePetRoomDefinitionScalars source_scalars; // includes WORD114 and its source record
+    std::uint16_t metadata_word116; // first native slot; 0xffff means no range match
+    std::optional<NativeRomMapSourceRecord> matched_source_record; // owning raw5-field copy
+};
 class NativePetRoomSourceCatalog final {
 public:
     static constexpr char dataset_id[]="tw149c-historical-spi-petroom-source-window-v1";
@@ -79,6 +103,12 @@ public:
     // Exact22 nonnegative ASCII-decimal source fields only. This is conditional
     // on required_classification; it is not a general sscanf implementation.
     std::optional<NativePetRoomDefinitionScalars> lookup_definition_scalars(std::uint16_t native_key) const;
+    // Requires both complete installed SPI22 and RomMaps57 source datasets in
+    // one consistent read scope on this connection. Missing/empty/corrupt source
+    // throws; only after both validations can an absent SPI key return none.
+    // Full57 first-match arithmetic is source-only; no API observes native bank,
+    // allocation, current input/classification, player ownership or operation rights.
+    std::optional<NativePetRoomDefinitionResource> lookup_definition_resource(std::uint16_t native_key) const;
 private:
     std::vector<NativePetRoomSourceRecord> read() const;
     sqlite3* db_;
