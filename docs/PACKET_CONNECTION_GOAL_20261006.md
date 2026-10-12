@@ -3698,3 +3698,12 @@ completed its archive seal and retained the independent bounded review.
 External root: `C:/Users/risei/.codex/artifact-archives/god2-server/20261012/tw-native-entry-npc-label-source-323`.
 Native: `../tw-native-entry-packed-mode-source-323/native-entry`.
 C28 source: `../tw-native-owned-equipment-action-source-323/c28-source`.
+
+
+## 第324輪：C28送包返回與本地panel來源
+
+known49A330→496550後無success測試即呼叫4D5910；直接panel body只資格UI+50/52與panelWORD/bit20，opaque5073E0/507BB0保持open，不能當full next裝備來源或pending85608 reset。known4999C0首個equipment30..37條件key非零/instanceDWORD+0C bits8..14<=2，僅該key尋首個bag0..29 field>=3，無count讀取；呼叫496550後直接return1，不證送出或原服成功。
+
+新增靜態來源capture工具1、report欄位1，runtime C++0、new native method/opcode/完整route0；6selected cuts428B/148sites，2known mechanical maps4956B不計fullmanual或globalnovel。獨立count來源審閱確認234舊3B byte-add/signed30與41 absolute，CUSTOM0094 full25 supplier不能升格C28原權威。分母/百分比null；TW156/world74=50partial/11control/13open、S2C252=230fixed+22variable，CN156/phase280/length253 scope獨立，mixed282/groups26/pending10/CUSTOM135不變。
+
+封存native29members/125120B、review10members/42514B均桌面God2外，歷史323與blocked goal觀測保留。新chat full TW/CN/web goal active，不因舊goal/tool狀態停止授權工作。未build/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy。下一步取得真正C28 fullnext/rules與sender/stat/self/observer有序owner；不重查本輪localpanel/packedloop當新進度，不再新增空supplier wrapper。詳見docs/research/tw-native-equipment-request-context-20261012.md。

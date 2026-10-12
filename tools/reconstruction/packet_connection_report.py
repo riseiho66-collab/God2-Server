@@ -304,6 +304,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'dual_client_endpoint_catalog': current_catalog,
         'historical_ledger_endpoint_catalog': ledger.get('dual_client_endpoint_catalog'),
         'phase_source_counts_method':'CURRENT_LEDGER_DIRECTION_PHASE_OPCODE_TUPLES',
+        'tw_native_equipment_request_context324': ledger.get('tw_native_equipment_request_context324'),
         'current_catalog_supplied':current_catalog is not None,
         'tw_supplemental_producer_evidence': ledger.get('tw_supplemental_producer_evidence'),
         'cn_unresolved_receiver_evidence': ledger.get('cn_unresolved_receiver_evidence'),
