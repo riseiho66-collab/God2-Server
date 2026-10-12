@@ -3561,3 +3561,14 @@ TW world50/74=67.6%限定部分分支，完整route新增0，全遊戲分母/百
 在既有SceneContent/SceneSupply及paired offer/Issuer/CAS與stored Qualify共享同一strong immutable來源；新增sameContext HostPlan overload保留完整producer和qualifier mandatory。4existing modified/2newsource，resource source extension1；原overloads/current null契約保持，不推Main或完整route。
 
 TW world50/74=67.6%限定部分分支，完整branch/opcode/route新增0；全遊戲分母/百分比null。CN無增量，mixed282/CUSTOM135保持；无build/tests/native/gameDBSQL/deploy。下一步：已排除DrvDoll availability與ordinal混淆，沿current角色profile/owned equipment真實write chain與2A B0/B4 consumer差額追完整owned entry issuer；先匹配真source字段與state lifecycle，不重跑已知rowloader/allocator/ROM，不能用col0/emptyrow/fresh preview推所有權。
+
+
+## 第319輪：入場current-selector與ownedDA交易來源
+
+將current R44的實際Petdrv signed-WORD getter、local scalar派生與原2A欄位／prior-state來源分开，具體跨度／新舊scope見native-entry固定證據，不把currentselector無條件改稱原B6或server issuer。
+
+對齊C28 occurrence→唯一full20 alias／可選full396 definition→mandatory Action及fullState issuer→jointCommitted→完整DA15的既有source custody；後態有components/transform/scalars/actorID，並沒有fresh2A B0/B4/B8及完整原owned來源。
+
+定位兩writer的實際交易邊界：joint只stage inventory/equipment，entry自有transaction，joint Current也要求autocommit。禁止把publicwriter/current嵌入另一transaction的Issuer；純observe或順序兩次commit不能代替atomic source。
+
+C++/完整branch/opcode/route新增0；TW world50/74=67.6%只是部分解析。全遊戲分母/百分比null，CN/mixed282/CUSTOM135不變；無build/tests/runtime/native/gameDBSQL/deploy。下一步：依actual current-selector與producer差額，從原角色／裝備所有者的真正mutation來源及完整phase-bound入場供應者追字段；對已證明兩store seam不再新增重複adapter。若處理existing-entry＋DA持久同步，必須是same-connection完整tuple的實際source機制，並保留完整原opaque、身份與currentness，不靠public Current嵌入transaction。
