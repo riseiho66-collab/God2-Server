@@ -3771,3 +3771,26 @@ PHASE1 source/hash/PE/Capstone/staticreport only, no build/test/native/runtime/V
 codec/gameDB/SQL/migrate/activate/deploy. Next exactmissingedges: currentU8/owned45
 instance acrosschildren, realUI504620input, genuineB1 operation/rules/storage/
 orderedreply/recovery and any E5/E6 pairing; no empty supplier closes these.
+
+
+## Round330 — genuine deferred PetEgg B1 variants, 2026-10-12
+
+Previous329 was progress; goal active, not complete/paused/blocked. See
+research/tw-native-petegg-deferred-b1-source-20261012.md. Alternative localopens
+4DA680/4DC710 lead to distinct later actualUIevents: primary482748->4DA730
+queuesB1selectors10/11;4827A5->4DC880 queues14..37 fromcurrent24WORDarray or43
+fromcontrol25. Opensdo notdirectqueue; opaquechildren/currentstate remainopen.
+Existing RecoveredPetEggControl now preserves35selectednumericvalues and three
+knownUIorigin tags, notauthorityphase/ownership. Guardeduint16 1821..1838 lowBYTE
+projection exact; native MOVSX targetisCX, notfullECX; highbitsnotpredicted.
+Compactlabels are not automaticallyoriginalrow/control; actualU0A writersopen.
+No parser/handler/owneditemprovider orreplypairing added. Native15cuts904codeB/
+11dataB; historical329caller/producer and324close retainnovelty0. Independent
+review exactheaderpassed; aggregate-null metadata retained withimmutableappendix.
+All scopedcounts unchanged, opcode/phase/handler/completebidirectional increments0;
+27 sourcevariants are not27completedroutes. Denominator/TW/wholecompletion null.
+FullTW/CN/web/sharedtables/common64/coin99999999999/stack99/nativelevels/frozen
+requirements persist. PHASE1source/hash/PE/Capstone/staticreport only, no build/
+tests/native/runtime/VM/codec/gameDB/SQL/migrate/activate/deploy. Next actualU0A
+writer/eventlineage and trueoperation/rules/currentowner/persistence/replies/
+recovery, withpostchildcurrentstate andB1/E5/E6causality independentlyproved.
