@@ -19,6 +19,9 @@ public:
         RecoveredWorldEntryView::EntryAppearanceBaseline entry_appearance_baseline() const noexcept {
             return entry.entry_appearance_baseline();
         }
+        RecoveredWorldEntryView::EntryResourceSelectors entry_resource_selectors() const noexcept {
+            return entry.entry_resource_selectors();
+        }
     };
     enum class Check {AfterSupply,BeforeQueue,BeforePublish,AfterInstall,QueueReleased,LocalPublished,BeforeOutward,OutwardPublish,Completed};
     enum class ReplyDecision {CompleteNativeAggregate,ExplicitNoInitialReply};

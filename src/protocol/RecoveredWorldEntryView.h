@@ -15,6 +15,21 @@ struct RecoveredWorldEntryView {
     std::array<std::uint8_t,37> logical;
     std::uint16_t actor_handle,area,scene,x,y;
     std::uint8_t kind;
+    struct EntryResourceSelectors {
+        std::uint8_t drv_selector;
+        std::uint8_t drv_doll_selector;
+        bool operator==(const EntryResourceSelectors&) const = default;
+    };
+    // Ordinary zero-transform2A:4684EB passes unsigned B6 and B0 bits16..22
+    // to461270. The second selector reaches463AD0's distinct DrvDoll bank;
+    // it does not select the four-component branch or the Drv action row.
+    // These are the full entry's raw selectors, not resource membership,
+    // current after-state, authoritative field construction or load success.
+    // Other transform/override paths remain unqualified. Reading these values
+    // does not authorize scene admission or fresh-preview component defaults.
+    EntryResourceSelectors entry_resource_selectors() const noexcept {
+        return {logical[7],static_cast<std::uint8_t>(logical[3]&0x7f)};
+    }
     struct EntryAppearanceBaseline {
         // The identity actually bound by this2A, not a mask for arbitrary DA.
         std::uint16_t actor_handle;

@@ -3539,3 +3539,14 @@ C++新增/修改0、新完整branch/opcode/route0。TW156/world74=50部分/11con
 追實際native create前40B→共同角色profile BLOB來源與current owned appearance writer；SqlitePlayerAppearanceRepository釘6bf/CUSTOM0047、transform0，Application diagnostic fixture writer及單純DA尾快照不能升格actual149c完整2A issuer。Profile局部已知投影保持；缺少真實持久外觀mutation/resource與完整欄位來源，不新增fixture/defaultkind完整成功。
 
 C++新增/修改0；完整branch/opcode/route增量0。TW156/world74=50部分/11control/13未接，S2C252=230fixed/22variable；CN156/phase280/length253各scope独立，本輪CN增量0。mixed282/CUSTOM135保持，全遊戲總數/完整分母/百分比null；無build/tests/runtime/native/VM/codec/gameDBSQL/deploy。下一步：依已排除scene-cache高位直接使用與舊6bf fixture來源，定點追真正actual149c owned appearance mutation／完整2A issuer，NPC／EnyName只保留來源membership，不把resourcecount或名字當worldinstance；需要時追實際B0/B4狀態與下一個確實使用的欄位，而非已知cache/lookup/allocator重查。
+
+
+## 第317輪：實際入口readonly selectors與原明文資源
+
+actual普通2A CALL4684EB：formal1 unsigned B6控制461270四component zero/positive branch；formal2 B0bits16..22只流向463AD0的DrvDoll tail。兩selector與Drv32B／DrvDoll136B namespace分開，未推原server issuer。
+
+在實際RecoveredWorldEntryView加入by-value EntryResourceSelectors，直接讀logical[7]與logical[3]&0x7f；SharedTaiwanWorldEntered::Scope從同一entry轉發給既有Source。兩既有headers修改、無新增檔案／aggregate欄位／wire／DB／cache／權限。只計readonly source projection1，完整branch/opcode/route0。
+
+fresh verified=true archive receipt精確恢復HeroDoll37189B與Drv3899B、共41088B，外置God2；釘8HeroDoll rows與Drv原row0。普通archive zlib與readonly archive-tool SQL，不執行遊戲resourcecodec或gameDBSQL。DrvDoll第三原明文尚未恢復，98fresh conditional domain不當owned2A default。
+
+TW world50/74=67.6%限定部分分支，完整route新增0，全遊戲分母/百分比null。CN無增量，mixed282/CUSTOM135保持；無build/tests/native/gameDBSQL/deploy。下一步：精確恢復獨立DrvDoll原明文並釘ordinal grammar到463AD0的136B bank；接著追actual149c owned2A creation/mutation完整來源，不重查既有cache/allocator或以fresh preview/fixture推權威。
