@@ -3970,3 +3970,42 @@ Applicationhosting. FullTW/CN/fourWS/sharedtables/common64/coin99999999999/
 qualifiedstack99/nativelevels/fonts/textconversion/frozenrequirements persist.
 PHASE1 static source/hash/PE/Capstone/report only; no build/compiler/tests/
 runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
+
+## Round338 — historical offsets and conditional physical scalars, 2026-10-12
+
+Previous337 was progress;78a2459 publication/notification succeeded. Goalactive.
+See research/tw-native-spi-offsets-and-scalars-20261012.md. Retainednonretired
+round314 decoded75c3 independentlyqualifies SPI22 historicaloffsets/allrawbodies
+and57RomMaps raw5-fieldrows/order/offsets. SPI3556B CRLF cut673207..676763;
+RomMaps3513B cut4374..7887. Currentef297 encodedbank remainsdistinct/unobserved.
+Existingcatalog lookup enriches returnedcopy offset+supplementale9c54fingerprint;
+rawSQLv1NULLpins/843555fingerprint/importer unchanged. No migration/DBexecution.
+NewphysicalscalarAPI validatescomplete22 before restrictedASCIIdecimal32bit
+sourcearithmetic/WORD114/112/11A8bits/11BLOW4. Returnedqualification explicitly
+requires stablevalidctype -1..255 and masks0004/0008; no observed/satisfiedbool,
+currentnativevalue/default11C/resourceordinal/full396/gameplayattribute claimed.
+Actual49h stringdescriptor/byteinput/EOF branch nowqualified; finiteEOFsuccess
+returns count1 via550C31/37/89/8E/9D. Previousconditional550C9A keptseparate.
+ASCII/EOF classification fastpaths avoidopaque multibytechild, butactual553BB3
+canpublish dynamicallygeneratedctype. InitialPE values notcurrentlocaleproof.
+Classification738code/522dataB; report518 typo correctedimmutableappendix,
+originalseal retained. Input5completecuts428B; allnative methodcredits0.
+RomMaps459F47 interiorrowfragment notfullmethod; actualloader/count/allocation/
+order/convertedranges remain nextsource, notinventedWORD116. PriorNULLmetadata
+andfailedcapture drafts remainpreserved; publicstaticcapture exactcopies2 plus
+classification finalCRLF-to-LF derivative1; originalsealedscript notrewritten.
+Frontierv23 byte-identical; TW C2S156/S2C252/world74 partial50/control11/gap13
+independent16/unclassified110; CN C2S156/phaseS2C280/lengthS2C253 unchanged.
+Packet/format/parser/phase/handler/completebidirectional/gameplayincrements0;
+fullTW/game denominator/completionnull. Next classifierlifetime/RomMapsloader/
+currentbank396/eligibleownedpopulation/F4issuer/B1rules/fullorderedreply/storage/
+recovery/Applicationhosting. FullTW/CN/fourWS/sharedtables/common64/
+coin99999999999/qualifiedstack99/nativelevels/fonts/textconversion/frozen
+requirements persist. PHASE1 static source/hash/PE/Capstone/report only;
+no build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy.
+
+Round338 independentreview clarification: scalarqualification also requires exact
+normalized1..5 ASCIIdigit bytes in ordinarynative flags49h stringdescriptor.
+OriginalCRLF finaltoken25 line-reader behavior is OPEN; retainedCR would require
+opaque nonEOF pushback553158. Stablectype alone does not establish actualnative
+original-file output. API observes neither inputpreparation norclassification.

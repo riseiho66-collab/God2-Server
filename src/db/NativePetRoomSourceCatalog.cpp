@@ -22,6 +22,11 @@ std::vector<std::uint8_t> hex(std::string_view text) {
 constexpr char item_inventory_sha256[]="3c21cc86d1072aafc6fa24fc80644a9d093454bfc45e66bf49829123cc9ae9bc";
 constexpr char category_inventory_sha256[]="e75442ce039273f6dd3cf1af88c8b72853af444145bf2d3969102c4f6d4890c3";
 constexpr char category_record_sha256[]="de24fac6aece10ade1df6b6412401069c7a137d325ac3b38c3f5244eb6f660ef";
+// Supplemental historical locations; the unchanged v1 raw-source pins below
+// retain SQLNULL. These offsets have their own source_locations_sha256 proof.
+const std::array<std::uint32_t,22> historical_decoded_offsets{{
+    673207,673321,673437,673555,673671,673844,674010,674176,674342,674508,674674,674852,675018,675184,675350,675516,675696,675848,676000,676178,676355,676558
+}};
 const auto category_record=hex("353530312c363430302c5350492caf53aeedb944a8e32ca5bca4c0c3fe2cb6c7b065c45faf5d2cc1f4a8adadbbc46c2ca540acc9a661b9cf2cac56a6e2c5f8c0592cafe0a44fa4f4b4b92cadbba4f52caca1b0caa5ceb7cfa4f52cae76ae7ba55cafe0bcfaab7e2cb1a1a448b860aca1b0ca2cb874bdcfb860aca1b0ca2cb773a67eaca1b0ca2cb867c5e7a55ba6a8b944a8e32caf53aeedab48afc82ca46ac059b7d3a8cfa5ce2cbed4c364addcae772cbed4c364c2e0a5cda4a62ca8bec37aa5db2ca843a4e9a5f4b0c8b944a8e3a5ce");
 // These22 normalized raw records preserve every CP950 octet and empty field.
 // Record decoded offsets and full396 output were not retained; no values are invented.
@@ -55,8 +60,8 @@ std::vector<std::uint8_t> blob(sqlite_detail::Statement& row,int index) {
 void bind(sqlite_detail::Statement& row,int index,const char* text) {
     row.bind(index,std::string(text));
 }
-NativePetRoomDefinitionText project_text(NativePetRoomSourceRecord source) {
-    // Only read()'s exact pinned source records reach this projection. In these
+std::vector<std::span<const std::uint8_t>> source_fields(const NativePetRoomSourceRecord& source) {
+    // Only lookup()'s base-pin-verified source records reach this projection. In these
     // normalized rows every comma is a delimiter, and no NUL/CR/LF is retained
     // inside a field. Native451BE0 has no quote/escape/codepage transformation.
     const std::span<const std::uint8_t> raw(source.normalized_cp950_record);
@@ -71,6 +76,10 @@ NativePetRoomDefinitionText project_text(NativePetRoomSourceRecord source) {
     }
     if(fields.size()!=26 || source.field_count!=26)
         throw DatabaseError("PetRoom text source field count differs");
+    return fields;
+}
+NativePetRoomDefinitionText project_text(NativePetRoomSourceRecord source) {
+    const auto fields=source_fields(source);
     // Native451AE0 copies the entire token+NUL before459420 forces BYTE2D/53=0.
     // These pins' token4/7 lengths fit38 bytes; reject larger input rather than
     // treating the native unbounded copy as a generally safe truncation rule.
@@ -91,6 +100,33 @@ NativePetRoomDefinitionText project_text(NativePetRoomSourceRecord source) {
         description.insert(description.end(),fields[i].begin(),fields[i].end());
     }
     return {std::move(source),std::move(name),std::move(caption),std::move(description)};
+}
+std::uint32_t finite_decimal(std::span<const std::uint8_t> field) {
+    // All exact pins use1..5 ASCII digits. Conditional native%d input/count/
+    // classification semantics are separate from this checked source arithmetic.
+    if(field.empty() || field.size()>5)throw DatabaseError("PetRoom scalar source shape differs");
+    std::uint32_t value=0;
+    for(const auto byte:field) {
+        if(byte<'0' || byte>'9')throw DatabaseError("PetRoom scalar source is not finite ASCII decimal");
+        const auto digit=static_cast<std::uint32_t>(byte-'0');
+        if(value>(0x7fffffffu-digit)/10u)throw DatabaseError("PetRoom scalar exceeds signed32 conversion");
+        value=value*10u+digit;
+    }
+    return value;
+}
+NativePetRoomDefinitionScalars project_scalars(NativePetRoomSourceRecord source) {
+    const auto fields=source_fields(source);
+    const auto dword0=finite_decimal(fields[5]),dword4=finite_decimal(fields[6]);
+    const auto word114=static_cast<std::uint16_t>(finite_decimal(fields[3])&0xffffu);
+    const auto word112=static_cast<std::uint16_t>(finite_decimal(fields[13])&0xffffu);
+    std::uint8_t byte11A=0,byte11B_low4=0;
+    for(unsigned i=0;i<8;++i)
+        byte11A=static_cast<std::uint8_t>(byte11A|((finite_decimal(fields[14+i])&1u)<<i));
+    for(unsigned i=0;i<4;++i)
+        byte11B_low4=static_cast<std::uint8_t>(byte11B_low4|((finite_decimal(fields[22+i])&1u)<<i));
+    // All8 bits of11A are directly written;11B's upper4 are preserved by native
+    // code and are deliberately excluded. No RomMaps/default11C/396 is supplied.
+    return {std::move(source),dword0,dword4,word114,word112,byte11A,byte11B_low4};
 }
 void source_schema(sqlite3* db,bool require_both) {
     sqlite_detail::Statement objects(db,
@@ -166,13 +202,23 @@ std::vector<NativePetRoomSourceRecord> NativePetRoomSourceCatalog::read() const 
 bool NativePetRoomSourceCatalog::populated() const {return !read().empty();}
 std::optional<NativePetRoomSourceRecord> NativePetRoomSourceCatalog::lookup(std::uint16_t key) const {
     const auto records=read();
-    for(const auto& row:records)if(row.native_key==key)return row;
+    for(std::size_t i=0;i<records.size();++i)if(records[i].native_key==key) {
+        auto result=records[i];
+        result.decoded_offset=historical_decoded_offsets[i];
+        result.source_location_sha256=source_locations_sha256;
+        return result;
+    }
     return {};
 }
 std::optional<NativePetRoomDefinitionText> NativePetRoomSourceCatalog::lookup_definition_text(std::uint16_t key) const {
     auto source=lookup(key);
     if(!source)return {};
     return project_text(std::move(*source));
+}
+std::optional<NativePetRoomDefinitionScalars> NativePetRoomSourceCatalog::lookup_definition_scalars(std::uint16_t key) const {
+    auto source=lookup(key);
+    if(!source)return {};
+    return project_scalars(std::move(*source));
 }
 void NativePetRoomSourceCatalog::import_pinned_source(sqlite3* db) {
     if(!db || !sqlite3_get_autocommit(db))throw DatabaseError("PetRoom source import requires own transaction");
