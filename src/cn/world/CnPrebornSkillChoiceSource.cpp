@@ -37,6 +37,13 @@ std::optional<CnPrebornSkillChoiceSource::Resolved> CnPrebornSkillChoiceSource::
         auto actual=catalog.lookup_words(words);if(!actual)return std::nullopt;
         result.definitions=std::move(*actual);
     }
+    result.facts.common_definitions.reserve(result.definitions.size());
+    for(const auto& original:result.definitions) {
+        auto common=catalog.lookup_shared(static_cast<std::uint8_t>(original.kind),
+            static_cast<std::uint8_t>(original.definition_id));
+        if(!common || !common->requested_native || *common->requested_native!=original)return std::nullopt;
+        result.facts.common_definitions.push_back(std::move(common->definition));
+    }
     if(subject) {
         if(!subject->current() || !subject->retained_selection())return std::nullopt;
         const auto references=primary?CnPrebornSkillReferences::resolve_actual_primary_source(*primary,catalog):

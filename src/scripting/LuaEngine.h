@@ -42,6 +42,8 @@ struct ScriptMonster {
 
 class LuaEngine {
 public:
+    using SharedSkillLookupFunction=std::function<std::optional<SharedSkillLookup>(
+        std::int64_t kind,std::int64_t definition_id)>;
     using NativeArmorLookup = std::function<std::optional<NativeArmorRecord>(std::uint16_t item)>;
     using NativeWeaponLookup = std::function<std::optional<NativeWeaponRecord>(std::uint16_t item)>;
     using NativeMapLookup = std::function<std::optional<NativeMapRecord>(std::int64_t area,
@@ -57,7 +59,8 @@ public:
     explicit LuaEngine(std::filesystem::path script_root = "scripts", bool fixture_mode = true,
                        NativeMapLookup native_map_lookup = {}, NativeSkillLookup native_skill_lookup = {},
                        NativeSkillBookLookup native_skill_book_lookup = {}, NativeWeaponLookup native_weapon_lookup = {},
-                       NativeArmorLookup native_armor_lookup = {});
+                       NativeArmorLookup native_armor_lookup = {},
+                       SharedSkillLookupFunction common_skill_lookup = {});
     ~LuaEngine();
     LuaEngine(const LuaEngine&) = delete;
     LuaEngine& operator=(const LuaEngine&) = delete;
@@ -139,6 +142,7 @@ private:
     const std::shared_ptr<const NativeSkillBookLookup> native_skill_book_lookup_;
     const std::shared_ptr<const NativeWeaponLookup> native_weapon_lookup_;
     const std::shared_ptr<const NativeArmorLookup> native_armor_lookup_;
+    const std::shared_ptr<const SharedSkillLookupFunction> common_skill_lookup_;
     std::thread::id owner_;
     std::unique_ptr<Vm> vm_;
     std::vector<Entry> entries_;

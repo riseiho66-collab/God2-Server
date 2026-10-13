@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <utility>
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -63,6 +64,23 @@ bool record_digest_matches(const NativeSkillRecord& record) {
     (void)record;return false;
 #endif
 }
+struct SharedReadScope {
+    sqlite3* db;bool owned,finished=false;
+    explicit SharedReadScope(sqlite3* value):db(value),owned(sqlite3_get_autocommit(db)!=0) {
+        if(owned)sqlite_detail::execute(db,"BEGIN");
+    }
+    SharedReadScope(const SharedReadScope&)=delete;
+    SharedReadScope& operator=(const SharedReadScope&)=delete;
+    ~SharedReadScope(){if(owned && !finished)sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}
+    void finish(){if(owned)sqlite_detail::execute(db,"COMMIT");finished=true;}
+};
+SharedSkillNativeBinding shared_binding(const NativeSkillRecord& r,SharedSkillRegion region) {
+    if(r.raw_record.size()!=110)throw DatabaseError("Invalid shared skill raw record");
+    SharedSkillNativeBinding b;b.region=region;b.source=r.source;
+    b.source_record_index=r.source_record_index;b.source_offset=r.source_offset;
+    b.record_sha256=r.record_sha256;std::copy(r.raw_record.begin(),r.raw_record.end(),b.raw.begin());
+    b.row_digest_verified=record_digest_matches(r);return b;
+}
 }
 
 NativeSkillCatalog::NativeSkillCatalog(sqlite3* db) : db_(db) {
@@ -88,6 +106,21 @@ std::optional<NativeSkillRecord> NativeSkillCatalog::lookup_main_digest_checked(
     auto record=lookup_main(owned_dataset,kind,definition_id);
     if(!record || !record_digest_matches(*record))return std::nullopt;
     return record;
+}
+std::optional<SharedSkillLookup> NativeSkillCatalog::lookup_shared_definition_main(
+    std::int64_t kind,std::int64_t definition_id) const {
+    // Existing joined reads validate selectors and corrupt rows even on this
+    // explicit path. A missing CN counterpart never drops a valid TW snapshot.
+    SharedReadScope scope(db_);
+    auto tw=lookup_main(current_dataset_id,kind,definition_id);
+    auto cn=lookup_main("cn-native-cbspec2-582f2695-857b52e3-v1",kind,definition_id);
+    if(!tw && !cn){scope.finish();return std::nullopt;}
+    std::optional<SharedSkillNativeBinding> t,c;
+    if(tw)t=shared_binding(*tw,SharedSkillRegion::Taiwan);
+    if(cn)c=shared_binding(*cn,SharedSkillRegion::China);
+    SharedSkillLookup value{tw,resolve_shared_skill_definition(
+        static_cast<std::uint8_t>(kind),static_cast<std::uint8_t>(definition_id),std::move(t),std::move(c))};
+    scope.finish();return value;
 }
 std::optional<NativeSkillSource> NativeSkillCatalog::lookup_main_source(const std::string& dataset_id) const {
     const auto owned_dataset=dataset_id; // Own caller text before SQLite observers.

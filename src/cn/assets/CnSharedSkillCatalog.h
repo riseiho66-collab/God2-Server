@@ -31,6 +31,9 @@ public:
     ~CnSharedSkillCatalog();
     bool current() const;
     std::optional<Record> lookup(std::uint8_t kind,std::uint8_t id) const;
+    // Actual private native/source qualification first; same common resolver
+    // then supplies owning definition metadata. Original lookups stay exact.
+    std::optional<SharedSkillLookup> lookup_shared(std::uint8_t kind,std::uint8_t id) const;
     std::optional<std::vector<Record>> lookup_words(std::span<const std::uint16_t>) const;
 private:
     CnSharedSkillCatalog(const NativeSkillCatalog&,std::shared_ptr<const Native>,

@@ -857,7 +857,10 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 [&database](std::int64_t kind, std::int64_t definition_id) {
                     return database.native_skill_book_catalog().lookup(kind,definition_id);
                 },[&database](std::uint16_t item){return database.native_weapon_catalog().lookup(item);},
-                [&database](std::uint16_t item){return database.native_armor_catalog().lookup(item);});
+                [&database](std::uint16_t item){return database.native_armor_catalog().lookup(item);},
+                [&database](std::int64_t kind,std::int64_t definition_id) {
+                    return database.native_skill_catalog().lookup_shared_definition_main(kind,definition_id);
+                });
             if(!lua.initialize() || !lua.load_script(config.bootstrap)) throw std::runtime_error("Lua bootstrap failed");
             std::unique_ptr<FixtureBattleService> fixture_battles;
             if(config.fixture_battle) {

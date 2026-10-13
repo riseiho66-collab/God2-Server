@@ -4915,3 +4915,58 @@ parser/handler/phase/fullroute0/globaldeltas0. TW156/252/world74=50partial11cont
 parser67.6% notcompletion. Unique report20261013-tw-native-party-lifetime-source-358.
 PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/emulator/productparser/
 codec/resource decoder/gameDBSQL/import/migrate/activate/deploy. Goalactive.
+
+
+## Round359 actual common skill definition consumers (2026-10-13)
+
+Previous3588520e6330e32631df630fecc46204f040a6f911a exact-head notification
+38352661594 success; prior root plus8 packages1197members72,070,834B individually
+verified. Owner resumed goalactive. TW-first/CN/fourWS/common64/coin99999999999/
+stack99/nativelevels/saves/frozen/fonts/conversion and PHASE1 limits preserved.
+
+ONE shared owning definition carries full110 regional profiles, source/key/
+ordinal/offset/hash, separate requested_native and chosen parameter base.
+9 existing Cpp/3 new files: NativeSkillSource move preserves original record,
+SharedSkillDefinition pure composition907 exactrawpins, MainLua actual last
+optionalprovider retained ininitial/rebuiltVm, CNprivate actualselection owning
+Facts intoexistingapply/delivery. Oldnative getter/equality/lookup and original
+CN453 private gate remain. No shared chosenTW record replaces CN entitlement.
+
+Owner complete-source preference: borrowCNfull0/122..125 for confirmedTWreserves,
+CN1/83 for pinnedemptyTW; TWcomplete0/95 and1/129 conflictbase, retainCN originals.
+This composition CUSTOM0138 notnativeformula/permission; AGENTS binaryprefix
+and135 oldcustom entries preserved, new136th/maxID138. TWTraditional nonempty
+names primary; confirmedreserve usesactualCNname/short converted separately.
+Bounded2..1F/20..3D excludesWORD3E, notnativeUIwidth. 907 arrays99,770B exact,
+publicdigest flag/enum cannot promote mismatchingraw; inputregion guard explicit.
+Owner allows futureCN CUSTOM0058瞬影126 and0059牛踏150 commonrules/learnedrights,
+separatequalifiedCNwire/effects. OriginalCN857453 notforged; noCNcustomprofile
+orcastactivation thisround. Preserve TWcastershadow/direction/clones/fourphases.
+
+ActualBIN originalTW4487676/installedTW4533adc/CN453857; original448 unchanged,
+4TWreserves+custom126 additions. Original448shared445equalphysical50/3paramdiff
+sameIDs0/95,1/83,1/129. Installed452shared/454union; TWonly0/126,CNonly1/130.
+Equalrecordtail isnot equalformula/learnedpermission/activeability.
+
+CN knownS83type3 selectedwhole54C5101699B441sites/556D401713B574sites/55E2F0
+70B29sites=3482B1044sites. Parentunion239B67sites/overlap83 separate;175tableB
+padding4 excluded. Actualbanklookup includes+4header. Source2/masks5,7/key11/
+WORD9low16/markers13,14 preserved. 5634E0 only664B199site prefix; type3/type17
+signedHP/mathtail563A3E OPEN; state5MOVSX notproof type3damage. PinnedinplacePE
+no independentmappedmemorypair/newknownmethod credit. ActualTW/CN MPgate only
+comparesWORD42/currentMP/B67; noMPdebit. HPdelta clampconsumer notdamageproducer.
+
+Ownerpoison targetCURRENTMAXIMUMHP/10, actualstatus/turn/checkpoint stillOPEN.
+No isolatedunusedhelper/arbitrarytimer/ordinaryattackreplacement. Clientactual
+formulas priority, playerguides secondary. Futureactualcommon cast/debit/status
+and CNcustomwire/effect integration remain; metadata branch notfullroute.
+
+Source branches2(MainLua/CNselection), nativecredits/formulas/opcode/format/
+parser/handler/phase/fullroute0; globaldeltas0. TW156C2S/252S2C/world74=50partial
+11control13unconnected; CN156C2S/280phase/253length separatelycounted. Whole/TW
+denominatorpercentnull; parser67.6% notcompletion. Canonicalreview/memberseals/
+existingCppwholeinverses retained; successfulLFhelpers notrerun, failedprewrites
+additive. Oldgoalbinaryprefix/priorledgerfields/frontierv23exact; RtwoLF/K3.
+Unique report20261013-tw-cn-shared-skill-source-359 before rootseal/publication.
+PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/emulator/productparser/
+codec/resource decoder/gameDBSQL/import/migrate/activate/deploy. Goalactive.

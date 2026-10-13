@@ -1,5 +1,8 @@
 #pragma once
 
+#include "db/NativeSkillSource.h"
+#include "db/SharedSkillDefinition.h"
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -8,19 +11,7 @@
 struct sqlite3;
 
 namespace god2 {
-struct NativeSkillSource {
-    std::string dataset_id;
-    std::string source_path;
-    std::string source_sha256;
-    std::string decoded_sha256;
-    std::string native_image_sha256;
-    std::string source_section;
-    std::string loader_rva;
-    std::string lookup_rva;
-    std::int64_t row_count = 0;
-
-    bool operator==(const NativeSkillSource&) const = default;
-};
+// Source value moved unchanged to NativeSkillSource.h.
 
 struct NativeSkillRecord {
     NativeSkillSource source;
@@ -36,6 +27,14 @@ struct NativeSkillRecord {
     std::uint16_t client_mp_threshold() const;
 
     bool operator==(const NativeSkillRecord&) const = default;
+};
+
+// New explicit result only. Original NativeSkillRecord/equality and all old
+// lookups are unchanged; absence of the requested TW raw row remains visible.
+struct SharedSkillLookup {
+    std::optional<NativeSkillRecord> requested_native;
+    SharedSkillDefinition definition;
+    bool operator==(const SharedSkillLookup&) const=default;
 };
 
 // Original definition identities/raw bytes and a verified client-only MP threshold.
@@ -67,6 +66,11 @@ public:
     // Full main provenance observation, including for an empty issued model.
     // Sequential callers must reobserve it; this is not a cross-source CAS.
     std::optional<NativeSkillSource> lookup_main_source(const std::string& dataset_id) const;
+
+    // One main-schema DB read view over both original dataset selectors.
+    // Missing counterparts remain missing; no import, grant or native Current.
+    std::optional<SharedSkillLookup> lookup_shared_definition_main(
+        std::int64_t kind,std::int64_t definition_id) const;
 
 private:
     std::optional<NativeSkillRecord> lookup_impl(const std::string&,std::int64_t,std::int64_t,bool main_schema) const;

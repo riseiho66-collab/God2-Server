@@ -73,6 +73,28 @@ std::optional<CnSharedSkillCatalog::Record> CnSharedSkillCatalog::lookup(
     auto result=retained_lookup(kind,id);
     if(!observe()){terminal_=true;return std::nullopt;}return result;
 }
+std::optional<SharedSkillLookup> CnSharedSkillCatalog::lookup_shared(
+    std::uint8_t kind,std::uint8_t id) const {
+    Operation operation(*this);
+    auto actual=retained_lookup(kind,id);
+    if(!actual)return std::nullopt;
+    if(!observe()){terminal_=true;return std::nullopt;}
+    auto common=shared_.lookup_shared_definition_main(kind,id);
+    if(!observe()){terminal_=true;return std::nullopt;}
+    if(!common){terminal_=true;return std::nullopt;}
+    const auto found=std::find_if(common->definition.profiles.begin(),common->definition.profiles.end(),
+        [](const auto& b){return b.region==SharedSkillRegion::China;});
+    if(found==common->definition.profiles.end() || found->source!=actual->source ||
+       found->source_record_index!=actual->source_record_index || found->source_offset!=actual->source_offset ||
+       found->record_sha256!=actual->record_sha256 ||
+       !std::equal(found->raw.begin(),found->raw.end(),actual->raw_record.begin(),actual->raw_record.end())) {
+        terminal_=true;return std::nullopt;
+    }
+    // Requested native remains the exact qualified CN original, never the
+    // selected common TW parameter profile or an invented TW source row.
+    common->requested_native=std::move(actual);
+    if(!observe()){terminal_=true;return std::nullopt;}return common;
+}
 std::optional<std::vector<CnSharedSkillCatalog::Record>> CnSharedSkillCatalog::lookup_words(
     std::span<const std::uint16_t> words) const {
     Operation operation(*this);

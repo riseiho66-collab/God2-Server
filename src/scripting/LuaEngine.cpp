@@ -124,6 +124,40 @@ sol::table catalog_snapshot(sol::state_view lua, const NativeSkillRecord& record
         "client_mp_threshold", record.client_mp_threshold());
 }
 
+sol::table common_skill_snapshot(sol::state_view lua,const SharedSkillLookup& value) {
+    const auto& d=value.definition;
+    auto profiles=lua.create_table();
+    for(std::size_t n=0;n<d.profiles.size();++n) {
+        const auto& b=d.profiles[n];
+        profiles[n+1]=lua.create_table_with(
+            "region",b.region==SharedSkillRegion::Taiwan?"TW":"CN",
+            "source",catalog_provenance(lua,b.source),
+            "source_record_index",b.source_record_index,"source_offset",b.source_offset,
+            "record_sha256",b.record_sha256,"row_qualification",shared_skill_qualification_name(b.qualification),
+            "raw_record",std::string(b.raw.begin(),b.raw.end()),
+            "raw_word_42",unsigned(b.raw[0x42])|(unsigned(b.raw[0x43])<<8));
+    }
+    const auto text=[&](const SharedSkillTextProjection& t) {
+        auto result=lua.create_table_with("offset",t.offset,"limit_exclusive",t.limit_exclusive,
+            "encoding",t.encoding,"bounded_raw",std::string(t.bounded_raw.begin(),t.bounded_raw.end()),
+            "source_utf8",t.source_utf8,"traditional_utf8",t.traditional_utf8,
+            "bounded_source_literal",t.pinned_literal,"native_ui_width_qualified",false);
+        if(t.profile_index)result["profile_index"]=*t.profile_index+1;return result;
+    };
+    auto result=lua.create_table_with("canonical_key",d.canonical_key,
+        "status",shared_skill_status_name(d.status),"profiles",profiles,
+        "name",text(d.name),"short_text",text(d.short_text),"gameplay_authority",false,
+        "requested_native_present",value.requested_native.has_value());
+    if(value.requested_native)result["requested_native"]=catalog_snapshot(lua,*value.requested_native);
+    if(d.chosen_profile) {
+        result["chosen_profile"]=*d.chosen_profile+1;
+        const auto& raw=d.profiles[*d.chosen_profile].raw;
+        result["common_raw_profile"]=std::string(raw.begin(),raw.end());
+        result["physical_parameter_tail"]=std::string(raw.begin()+62,raw.end());
+    }
+    return result;
+}
+
 sol::table catalog_snapshot(sol::state_view lua, const NativeSkillBookRecord& record) {
     return lua.create_table_with(
         "source", catalog_provenance(lua, record.source),
@@ -219,7 +253,8 @@ struct LuaEngine::Vm {
        std::shared_ptr<const NativeSkillLookup> native_skill_lookup,
        std::shared_ptr<const NativeSkillBookLookup> native_skill_book_lookup,
        std::shared_ptr<const NativeWeaponLookup> native_weapon_lookup,
-       std::shared_ptr<const NativeArmorLookup> native_armor_lookup) : root(std::move(script_root)) {
+       std::shared_ptr<const NativeArmorLookup> native_armor_lookup,
+       std::shared_ptr<const SharedSkillLookupFunction> common_skill_lookup) : root(std::move(script_root)) {
         lua.set_exception_handler([](lua_State* state, sol::optional<const std::exception&>, sol::string_view what) {
             detail::lua_logger()->error("{}", std::string(what.data(), what.size()));
             return sol::stack::push(state, what);
@@ -255,6 +290,16 @@ struct LuaEngine::Vm {
             sol::state_view lua(state);
             if (!record) return sol::make_object(lua, sol::nil);
             return sol::make_object(lua, catalog_snapshot(lua, *record));
+        });
+        lua.set_function("common_skill_definition",[lookup=std::move(common_skill_lookup)](
+                sol::this_state state,sol::variadic_args args)->sol::object {
+            if(args.size()!=2)throw std::runtime_error("common_skill_definition requires kind and definition_id");
+            const auto kind=catalog_selector(args.get<sol::object>(0),0,3,"common_skill_definition");
+            const auto id=catalog_selector(args.get<sol::object>(1),1,255,"common_skill_definition");
+            if(!*lookup)throw std::runtime_error("common_skill_definition unavailable");
+            const auto value=(*lookup)(kind,id);sol::state_view lua(state);
+            if(!value)return sol::make_object(lua,sol::nil);
+            return sol::make_object(lua,common_skill_snapshot(lua,*value));
         });
         lua.set_function("native_skill_book_catalog", [lookup = std::move(native_skill_book_lookup)](
                 sol::this_state state, sol::variadic_args args) -> sol::object {
@@ -384,14 +429,16 @@ struct LuaEngine::Vm {
 LuaEngine::LuaEngine(std::filesystem::path script_root, bool fixture_mode,
                      NativeMapLookup native_map_lookup, NativeSkillLookup native_skill_lookup,
                      NativeSkillBookLookup native_skill_book_lookup,NativeWeaponLookup native_weapon_lookup,
-                     NativeArmorLookup native_armor_lookup)
+                     NativeArmorLookup native_armor_lookup,
+                     SharedSkillLookupFunction common_skill_lookup)
     : root_(std::filesystem::weakly_canonical(std::filesystem::absolute(script_root))),
       fixture_mode_(fixture_mode),
       native_map_lookup_(std::make_shared<const NativeMapLookup>(std::move(native_map_lookup))),
       native_skill_lookup_(std::make_shared<const NativeSkillLookup>(std::move(native_skill_lookup))),
       native_skill_book_lookup_(std::make_shared<const NativeSkillBookLookup>(std::move(native_skill_book_lookup))),
       native_weapon_lookup_(std::make_shared<const NativeWeaponLookup>(std::move(native_weapon_lookup))),
-      native_armor_lookup_(std::make_shared<const NativeArmorLookup>(std::move(native_armor_lookup))) {}
+      native_armor_lookup_(std::make_shared<const NativeArmorLookup>(std::move(native_armor_lookup))),
+      common_skill_lookup_(std::make_shared<const SharedSkillLookupFunction>(std::move(common_skill_lookup))) {}
 LuaEngine::~LuaEngine() = default;
 
 void LuaEngine::check_thread() const {
@@ -411,7 +458,7 @@ bool LuaEngine::initialize() {
     owner_ = std::this_thread::get_id();
     try {
         vm_ = std::make_unique<Vm>(root_, fixture_mode_, native_map_lookup_, native_skill_lookup_,
-                                   native_skill_book_lookup_,native_weapon_lookup_,native_armor_lookup_);
+                                   native_skill_book_lookup_,native_weapon_lookup_,native_armor_lookup_,common_skill_lookup_);
         return true;
     } catch (const std::exception& error) {
         detail::lua_logger()->error("initialization failed: {}", error.what());
@@ -436,7 +483,7 @@ bool LuaEngine::rebuild(const std::vector<Entry>& entries) {
     if (!vm_) { detail::lua_logger()->error("load requires initialize()"); return false; }
     try {
         auto staged = std::make_unique<Vm>(root_, fixture_mode_, native_map_lookup_, native_skill_lookup_,
-                                           native_skill_book_lookup_,native_weapon_lookup_,native_armor_lookup_);
+                                           native_skill_book_lookup_,native_weapon_lookup_,native_armor_lookup_,common_skill_lookup_);
         for (const auto& entry : entries) {
             const auto path = contained_path(root_, entry.path);
             if (!entry.directory) {

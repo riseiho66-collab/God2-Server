@@ -5144,6 +5144,36 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Close actualsharedroot/pose source gap at final terminal-read cut, including empty scene and recipient-only endpoints, without inventing fullnative actor/resource state.",
   "replacement": "Complete originalfullactor opaque/currentappearance/resource/directedaudience source and realhost/fullreturnlifecycle before concentratedverification/release."
+},
+{
+  "id": "CUSTOM-0138",
+  "name": "Owner shared skill complete-source composition and Traditional text",
+  "authority": "OWNER_REQUESTED_COMMON_SOURCE_POLICY_NOT_RECOVERED_NATIVE_FORMULA_OR_PERMISSION",
+  "implementation": [
+    "src/db/SharedSkillDefinition.cpp",
+    "src/db/SharedSkillDefinition.h",
+    "src/db/NativeSkillCatalog.cpp",
+    "src/scripting/LuaEngine.cpp",
+    "src/cn/assets/CnSharedSkillCatalog.cpp",
+    "src/cn/world/CnPrebornSkillChoiceSource.cpp"
+  ],
+  "native_gap": "Physical raw equality does not prove equal skill algorithms, native UI widths, learned rights or effects. Complete cast/debit/status/CN custom presentation remains open.",
+  "rules": {
+    "source": "Exact full110 expected row bytes and source/key/ordinal/offset/count/image pins qualify owning metadata. Public digest flag cannot qualify different bytes. Original raw records remain unchanged.",
+    "selection": "Prefer CN complete for confirmed TW reserve0/122..125 and pinned empty1/83; TW complete for both-complete conflicts0/95 and1/129, retain original CN profile. Unknown snapshots have no chosen qualified profile.",
+    "text": "Pinned nonempty TW Traditional name/short primary; confirmed reserved reuse uses separate CN name/short converted literal. Bounded source projection excludes WORD3E; not a recovered UI width.",
+    "scope": "New actual Main Lua common getter and CN private selection owning facts. Old native record, CN453 private gate and learned rights remain separately required. No grants, SQL/schema mutation or new wire packets.",
+    "custom": "Existing CUSTOM0058/0059 common skills are authorized for future CN adapters; no synthesized original CN rows. This rule does not change their existing formulas."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
+  "reason": "Owner requires all skills to share one common core with complete settings and TW Traditional text.",
+  "replacement": "Complete actual formula/status/cast/checkpoint and independently qualified regional wire/effect bindings, then concentrated build/native acceptance."
 }
 ]
 }

@@ -254,3 +254,25 @@ production promotion. Arithmetic/unit-test success is not balance approval.
   docs/research/external-balance-references.md. Community documentation is not
   automatically build-matched native evidence; never mix pet generations or
   treat pet growth as wild-monster stats without validation.
+
+
+Owner shared-skill directive (2026-10-13): ONE common skill definition/gameplay
+core for TW and CN; all regional raw identities, protocol and client gates are
+adapter bindings. Prefer complete valid settings; zero alone is not missing.
+Use original TW Traditional names/text, with pinned CN-to-Traditional literals
+for confirmed missing/reserved TW entries. Actual client formula evidence has
+priority over secondary player guides. Poison owner rule is target CURRENT
+MAXIMUM HP divided by10; status/timing/rounding/immune/stack/death integration
+must be recorded separately, without claiming unproved native arithmetic.
+Root routine source choice is TW complete base where both profiles are complete
+but conflict, while retaining original CN data. This source composition is
+CUSTOM-0138, not recovered native formula equality or cast/learning authority.
+The owner explicitly requires existing CUSTOM-0058 (ShunyingSanshazhan126) and
+CUSTOM-0059 (NiuzhuanXianjieTa150) to apply to CN as well. These two are scoped
+exceptions to prior CN native-only gameplay restriction; reuse the SAME common
+custom definitions/formulas/learned-rights pipeline and separately qualify real
+CN framing/effect resources. Do not alter original CN453 source/hash/provenance
+or fabricate original native custom rows. Preserve accepted TW direction,
+real-caster shadows, permitted shadowless clones and four presentation phases.
+PHASE1 remains static source/accounting only; no build/tests/runtime/DB SQL/
+migration/activation/deployment. Goal remains active after the owner's resume.

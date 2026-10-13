@@ -41,6 +41,10 @@ struct CnPrebornSkillChoiceSource {
         std::optional<god2cn::CnWorldPrimarySkillSource::Scope> native_primary_bank_scope;
         std::optional<std::vector<god2cn::CnWorldPrimarySkillSource::Entry>> native_primary_bank_entries;
         std::vector<Entry> entries;
+        // Owning same-registry metadata for actual apply/qualify callbacks.
+        // Original raw definitions and native permission facts stay separate;
+        // these snapshots survive commit without calling obsolete Current.
+        std::vector<SharedSkillDefinition> common_definitions;
     };
     struct Resolved {
         Definitions definitions;
