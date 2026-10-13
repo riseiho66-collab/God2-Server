@@ -61,3 +61,10 @@ row absence. TW Traditional text stays primary. Whole denominator/percentage
 unknown. No new Python project files. PHASE1: no builds/tests/runtime/native/
 API/VM/packet codec/gameDBSQL/migrate/activate/deploy. Goal remains active.
 Approved duplicate cleanup remains tool-policy blocked with zero files deleted.
+
+
+Round371 qualifies a distinct native WORLD S2C35 flag3 event and separate kind/id
+selector. Saved34 appends flags0; C67 local Written/current selection does not
+supply that native event or a cast grant. The bit0 selector has no qualified
+actual caller and must not be imposed on every C56/direct-selector path. See
+tw-world-skill-menu-event-source-20261014.md / source/12. Existing C++ unchanged.

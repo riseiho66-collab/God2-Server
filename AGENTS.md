@@ -373,3 +373,12 @@ frames and commit chain, Written/current/private INIT/Session/lease/map pointer
 fenced. Repeat full private/local tuple AFTER ready_lease observer. No stale
 equal-key publication, SQL retry/rollback or native adoption/cast authority.
 Default CLI/C56 action still OPEN. No new Python files; PHASE1 unchanged.
+
+
+Round371 same149c WORLD S2C35 logical4/body3 key/kind/id matches the live bank
+pointer and overwrites first matching roster flag BYTE with3; S34 append writes0.
+Actual authoritative35 event/save/publication is not supplied by saved34/common
+definition/C67 Written. Separate4A92D0 key-selector checks flag&1 and definition
+BYTE67; no qualified actual caller, so NOT a universal C56/direct-selector gate.
+Current-prefix flags&2 auxiliary semantics stay independent. No custom rule or
+C++ gameplay change; source/12 keeps29 exact pins. PHASE1/no newPY unchanged.

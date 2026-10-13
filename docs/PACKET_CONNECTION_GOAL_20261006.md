@@ -5233,3 +5233,28 @@ priority and owner maxHPdiv10 poison rule retained. CNcustom126/150 adapter/
 resources/effects remain qualified separately. PHASE1 no build/tests/runtime/
 native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Goal active; approved
 duplicate cleanup still auto-review blocked, zero deleted/no alternate retry.
+
+
+## Round371 - native WORLD35 flag event and bounded selector (2026-10-14)
+
+Same149c S2C WORLD35 fixedlogical4/body3 key/kind/id: lengthcell4013F8->401264,
+WORLDcell46B6A8->469FF1/call469FF9->4AA830. Complete receiver422B/111sites,
+separate complete4A92D0 kind/id selector198B/72sites and actualpartialcaller18B/
+5sites;638codeB/188sites plus8tabledataB. Old lengthleaf6B/S34/reset/menu refs
+reused in place; no global whole-image or newmethod coverage claim. AtAA907
+first matching bankpointer flag overwritten3, no append/count/pointer write;
+S34 appends0. Opaque child and fresh-role affinity remain premises; armedDWORD
+clearAA995 is not rowflag clear. Separate key-selector requiresdefBYTE67 and
+rowflag&1, but no qualified actualcaller; known directselector/type2 shortcuts
+do not establish universalflag gate forC56. Raw5 writer stillOPEN, bounded
+literalcandidate zero is not globalabsence. Existing actualnormalprefix only
+30/31/34, flags0; real authoritativeWORLD35 event/save/orderedpublication/current
+issuer remainsmissing. Preserve shared453/TWTraditional and all current C++.
+Source/12 exactsame29pins, CUSTOM registry unchanged, C++changes0/newPY0.
+Frontierv24 adds independent-format-only35:16->17, unclassified110->109; no
+reply/push/phasebinding/fullroute/formula/newopcode. TW156/252/parser75=
+50partial+11control+14unconnected, unhosted3/40/36; CN156/280phase/253supported/
+35chains/93bindings/71unique unchanged. Whole denominator/%null. C56default
+Main/action/targets/cost/status/effects/persistence/replies/nativeadoption remain
+OPEN. Goal active; PHASE1 no build/tests/runtime/native/API/VM/codec/gameDBSQL/
+migrate/activate/deploy. No resources/save/account/EXE/frozen feature changes.
