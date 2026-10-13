@@ -314,3 +314,12 @@ plan/lease/token rather than replacing it with fresh equal keys. Preserve
 Item/Opaque policy, actual inventory Current and execute-once/result contracts.
 OriginalCN453 missing126/150, extended resources/actor/learned/87/host and
 native formula/cost/acceptance remain independently OPEN.
+
+Owner resume after round364 revokes its stop/pause request; continue the full
+TW-first common-core goal in PHASE1. CUSTOM-0143 carries the owning common
+definition in the existing TW C35 Scope through real WorldOwner callbacks.
+Keep original digestchecked TW/issued/requested-native full-row equality and
+all native grammar/actor/list gates. Require same common value before action,
+without rebasing. After action retain that input but only qualify the actual
+next receipt, never requery consumed old catalog/grant or undo durable work.
+Sequential source checks are not atomic CAS, native formulas or actual host.

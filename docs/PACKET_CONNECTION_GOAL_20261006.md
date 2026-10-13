@@ -5118,3 +5118,19 @@ method/opcode/fullroute/formula credit0. TW156/252 world74=50partial+11control+
 PHASE1 no build/tests/native/runtime/VM/codec/gameDBSQL/migrate/activate/deploy.
 Owner requests stop after round364: finalize publication then pause goal; no
 next round until resume. Whole denominator/percentage unknown.
+
+
+## Round365 - common definition at existing TW command interface (2026-10-13)
+
+Owner resumed; round364 stop is historical/revoked. CUSTOM-0143 adds owning
+common Scope to actual existing TW qualification/current/action/after_action
+handoff. Original digestchecked TW/issued/requested-native exact row and all
+primary/secondary grammar/actor/list gates stay. Preaction same common value
+reobserved, no rebase; after action only actual next receipt, no consumed old
+catalog/grant reread or durable retry/rollback. Sequential cuts not atomic CAS.
+Two source handoff branches; no actual default host/formula/opcode/fullroute
+credit. TW156/252 world74=50partial+11control+13unconnected; CN156/280phase/253
+supported unchanged. CN126/150 profile/resources/actor/learned/87/effects open.
+Sourcecontract source/6; native slice facts retained in immutable N365 upstream.
+PHASE1 no build/tests/native/runtime/API/VM/codec/gameDBSQL/migrate/activate/deploy.
+Whole denominator/percentage unknown; full goal active.

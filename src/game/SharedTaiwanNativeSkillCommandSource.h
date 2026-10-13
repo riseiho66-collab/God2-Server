@@ -1,5 +1,6 @@
 #pragma once
 #include "db/NativeSkillCatalog.h"
+#include "db/SharedSkillDefinition.h"
 #include "game/SharedTaiwanWorldRecordSource.h"
 #include "game/SharedTaiwanIssuedSkillSource.h"
 #include "protocol/TaiwanNativeSkillCommand.h"
@@ -30,6 +31,9 @@ public:
         SharedWorldPresence::Lease lease;
         RecoveredPosition saved_position;
         std::uint64_t battle_generation;
+        // CUSTOM-0143: owning common definition for the same requested TW row.
+        // Source composition is not learned/cost/actor/native grant authority.
+        std::optional<SharedSkillDefinition> common_definition{};
     };
     enum class Check {Qualified,BeforeAction};
     struct Budgets {std::size_t max_records,max_output_bytes,max_output_frames;};

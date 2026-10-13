@@ -1,0 +1,144 @@
+{
+  "contract_version": "god2-server/shared-skills/source/6",
+  "phase": "PHASE1",
+  "custom_designs": [
+    "CUSTOM-0138",
+    "CUSTOM-0139",
+    "CUSTOM-0140",
+    "CUSTOM-0141",
+    "CUSTOM-0142",
+    "CUSTOM-0143"
+  ],
+  "source_files": [
+    {
+      "path": "src/db/SqliteCompanionRepository.h",
+      "bytes": 9735,
+      "sha256": "ae00c31d9a52681318c0c6a611e7a395fc41eb420eaf612830cc036f6719077c"
+    },
+    {
+      "path": "src/db/SqliteCompanionRepository.cpp",
+      "bytes": 40828,
+      "sha256": "38c69f367795e4221dd8c65a493314b8212d2f3906fa532f14453dda62542dfd"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.h",
+      "bytes": 16241,
+      "sha256": "9cd28da6bdb93e96d7c5bbf7fd252abeb735676621c22efc393217ec4a939e78"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.cpp",
+      "bytes": 67454,
+      "sha256": "a7648f8b866c609cc4d6101ac9b23943a97e27061a19b0e7fd54d2667678a8a7"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.h",
+      "bytes": 9053,
+      "sha256": "6b72768cb05b77c8c064f17d814dec62650bc226db9ad668144f29d58d637fc5"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.cpp",
+      "bytes": 48477,
+      "sha256": "5a19c0bd5398e08817e69601e3ac9e39cb96e57cc9d4ba7519055a0a4834d87c"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "bytes": 735319,
+      "sha256": "8bc08e5c100376bb255412341c0719772e748976226dfe49caf7fd64e0761ad4"
+    },
+    {
+      "path": "src/net/Session.h",
+      "bytes": 35781,
+      "sha256": "49875550c8033c246b38ca747c6e8672468597529e4bd6cdfb1612c01b622afa"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "bytes": 252277,
+      "sha256": "9b86c261e4343f46c16523b26caee4b168aee35d36a064c596c1b0a81f9cdfdc"
+    },
+    {
+      "path": "src/cn/world/SharedNativeBattleCommandData.h",
+      "bytes": 6091,
+      "sha256": "0ff6c0da2ef5821cc30e73f4d78f127ff6a4a2641b896bcb0ff7553834a760b7"
+    },
+    {
+      "path": "src/cn/world/SharedNativeBattleCommandData.cpp",
+      "bytes": 22083,
+      "sha256": "48a6b16da9b97dcf0438b5edbe4fcef9a06d3f7a9ced57d4e7882ac43bfb4b0b"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeSkillCommandSource.h",
+      "bytes": 4137,
+      "sha256": "df661e92a22debf2faf451bb86b13a574b19f83743e60ada37304355385b6f3a"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeSkillCommandSource.cpp",
+      "bytes": 12588,
+      "sha256": "0afbafcac12b57716a8b9168230e447f7021a23a17d4268811be3bbbe14517b7"
+    }
+  ],
+  "traditional_names_primary": true,
+  "skills": [
+    {
+      "kind": 0,
+      "id": 126,
+      "design_id": "CUSTOM-0058",
+      "name": "瞬影三煞斬"
+    },
+    {
+      "kind": 0,
+      "id": 150,
+      "design_id": "CUSTOM-0059",
+      "name": "牛轉仙界踏"
+    }
+  ],
+  "qualification": {
+    "common_definition_query_source_connected": true,
+    "common_saved_readset_consumption_source_connected": true,
+    "actual_TW_diagnostic_bootstrap_roster_source_connected": true,
+    "actual_original_callback_write_custody_source_connected": true,
+    "actual_general_TW_gameplay_host_complete": false,
+    "full_native_primary_secondary_list_qualified": false,
+    "native_list_adoption": false,
+    "native_turn_grant": false,
+    "native_processing_ACK": false,
+    "native_input_barrier": false,
+    "CN_custom_cast_source_connected": false,
+    "CN_custom_native_profile_qualified": false,
+    "CN_native_effect_source_qualified": false,
+    "CN_runtime_enabled": false,
+    "learned_grant": false,
+    "native_source": false,
+    "actual_owned_response_input_continuation_source_connected": true,
+    "actual_CN_command_data_common_definition_handoff_source_connected": true,
+    "actual_CN_command_data_host_complete": false,
+    "actual_TW_command_common_definition_handoff_source_connected": true,
+    "actual_TW_native_command_host_complete": false
+  },
+  "publication_source": "One complete selected saved roster -> unchanged actual87/id/80 producer -> same full callback frame captured before actual service binding -> typed final full-roster qualifier",
+  "owned_bootstrap_epoch": "Original tuple fence adjacent existing set_state; only actual result tuple, independent of cosmetic pose, no predicted increment or observer rebase",
+  "command_source": "Optional opted receipt requires Written and current plus existing361 fresh learned observation and same-txn persistence",
+  "remaining_timing": "Exact opted original callback response holds bounded input through actual full write and successful old bookkeeping; native interaction acceptance/general executor convergence remain open",
+  "postcommit_fence_limit": "refuse stale memory publication; cannot roll back successful COMMIT",
+  "persistence_branches": [
+    "active_checkpoint",
+    "terminal_checkpoint",
+    "resources_without_checkpoint",
+    "settlement_without_checkpoint"
+  ],
+  "owned_settlement_request_version": 4,
+  "ordinary_requests_preserved": true,
+  "new_native_formulas": 0,
+  "build": false,
+  "test": false,
+  "runtime": false,
+  "game_database_SQL": false,
+  "migrate": false,
+  "activate": false,
+  "deploy": false,
+  "owned_input_continuation": "Exact private Attempt published atomically on game; same FIFO full response/current phase+epoch releases original input once; failure retires first",
+  "CN_command_source": "Exact qualified original CN requested row + owning common definition -> existing actual DataAuthority current/prepare/execute_group; sequential same-value checks and original skill-group prefix/private holder retained",
+  "cross_source_atomic_CAS": false,
+  "original_CN_row_absence_not_bypassed": true,
+  "TW_command_source": "Exact original digestchecked TW and issued/requested-native row + retained owning common Scope -> existing qualification/current/action/after_action callbacks; no old catalog/grant reread after actual action",
+  "owner_resumed_after_round364": true
+}

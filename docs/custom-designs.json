@@ -5288,6 +5288,32 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "One common TW/CN skill definition must reach the real existing CN command data handoff while regional wire provenance remains exact.",
   "replacement": "Complete actual common action authority, native actor/list/profile/learned/persistence providers and CN custom adapters, then comprehensive build/tests/current-client acceptance."
+},
+{
+  "id": "CUSTOM-0143",
+  "name": "TW existing C35 owning common definition handoff",
+  "authority": "OWNER_COMMON_SOURCE_COMPOSITION_NOT_NATIVE_FORMULA_PERMISSION_OR_HOST",
+  "implementation": [
+    "src/game/SharedTaiwanNativeSkillCommandSource.h",
+    "src/game/SharedTaiwanNativeSkillCommandSource.cpp"
+  ],
+  "native_gap": "Actual complete native issued roster/control, learned actor/grant and action owner hosting remain unqualified; common metadata cannot manufacture original TW or CN custom rows.",
+  "rules": {
+    "scope": "Append owning common definition to existing Scope; actual qualification/current/action/after_action callbacks receive the same value without changing virtual signatures.",
+    "native": "Original digestchecked TW record and issued selection must exactly equal shared requested_native; chosen common profile never replaces native grammar/MP/wire fields.",
+    "current": "Before action reobserve original full TW plus full common definition through sequential current cuts; refuse missing common or any replacement/rebase.",
+    "settlement": "After actual action pass retained Scope only; preserve real next receipt and complete reply validation without rereading consumed old grant/catalog or reversing durable work.",
+    "limits": "No cross-source atomic CAS, learned/cost/actor/native formula/default host or client acceptance is inferred."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "One common TW/CN skill core requires the existing TW command action interface to receive the same owning common definition already available to the CN data handoff.",
+  "replacement": "Complete actual full native list/actor/learned/action/persistence suppliers and adapters, then comprehensive build/tests/current-client acceptance."
 }
 ]
 }

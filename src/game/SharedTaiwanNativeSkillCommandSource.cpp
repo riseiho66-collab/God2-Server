@@ -71,10 +71,18 @@ struct Owner {
         Source::Scope scope{*lease,*position,generation};
         return ready(session,scope,true)?std::optional{scope}:std::nullopt;
     }
-    bool definition_current(Session& session,const Source::Scope& scope,const NativeSkillRecord& expected) const {
+    bool base_definition_current(Session& session,const Source::Scope& scope,const NativeSkillRecord& expected) const {
         if(!ready(session,scope,true))return false;
         const auto actual=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
         return actual && *actual==expected && ready(session,scope,true);
+    }
+    bool definition_current(Session& session,const Source::Scope& scope,const NativeSkillRecord& expected) const {
+        if(!scope.common_definition || !base_definition_current(session,scope,expected))return false;
+        const auto shared=catalog.lookup_shared_definition_main(expected.kind,expected.definition_id);
+        // Compare the retained whole value; never refresh Scope from a later
+        // counterpart observation. Requested TW raw remains the command input.
+        return shared && shared->requested_native && *shared->requested_native==expected &&
+            shared->definition==*scope.common_definition && ready(session,scope,true);
     }
     bool current(Session& session,const Source::Scope& scope,Source::Check check,
         const Source::Command& command,const Source::Qualification& qualification,
@@ -103,7 +111,7 @@ struct Owner {
             if(actual_session.get()!=&session)return std::nullopt;
             if(records.empty() || records.size()>budgets.max_records)return std::nullopt;
             const std::vector<Source::WireRecord> owned(records.begin(),records.end());
-            const auto scope=capture(session);if(!scope)return std::nullopt;
+            auto scope=capture(session);if(!scope)return std::nullopt;
             const auto& first=owned.front();
             for(const auto& record:owned)
                 if(!TaiwanNativeSkillCommand::parse_wire(record.logical) ||
@@ -117,7 +125,14 @@ struct Owner {
             const auto definition=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,first.kind(),first.definition_id());
             if(!definition || definition->source.native_image_sha256!=TaiwanNativeSkillCommand::image_sha256 ||
                *definition!=selection->lookup().definition ||
-               !definition_current(session,*scope,*definition))return std::nullopt;
+               !base_definition_current(session,*scope,*definition))return std::nullopt;
+            // Enrich only after the original TW digest/image/issued gates. The
+            // captured presence/position/battle tuple is never rebased here.
+            auto shared=catalog.lookup_shared_definition_main(first.kind(),first.definition_id());
+            if(!shared || !shared->requested_native || *shared->requested_native!=*definition ||
+               !ready(session,*scope,true) || !issued->current(session,*selection))return std::nullopt;
+            scope->common_definition=std::move(shared->definition);
+            if(!definition_current(session,*scope,*definition))return std::nullopt;
             const auto actual=world;
             const auto qualification=actual->qualification(session,*scope,owned,*definition);
             if(!qualification || !qualification->actor_position || !qualification->side_flag ||
