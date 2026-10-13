@@ -48,6 +48,22 @@ struct SharedTaiwanOwnedDeitySkillSource::Impl {
         Scope scope{*lease,*position,phase,generation};
         return ready(s,scope)?std::optional{scope}:std::nullopt;
     }
+    bool self_target_current(Session& s,const SelfTargetInput& input,const Scope& scope,
+        const NativeSkillRecord& definition) const {
+        if(scope.phase!=SessionState::InWorld || !local(s,scope) ||
+           !input.initialization().entry_written() ||
+           !s.normal_world_initialization_current_on_game(input.initialization()))return false;
+        const auto& logical=input.initialization().entry_logical();
+        if(logical.size()!=37 || logical[0]!=0x2a)return false;
+        // Same149c 468629 masks the entry handle; 497A90 does NOT mask
+        // its incoming target. Never truncate the independent64-bit DB owner.
+        const auto entry_handle=static_cast<std::uint16_t>(
+            (std::uint16_t{logical[1]}|(std::uint16_t{logical[2]}<<8))&0x3fff);
+        return entry_handle==scope.lease.actor_handle &&
+            input.request().raw_target()==entry_handle &&
+            input.request().kind()==definition.kind && input.request().definition_id()==definition.definition_id &&
+            s.normal_world_initialization_current_on_game(input.initialization()) && local(s,scope);
+    }
     static bool qualified(const NativeSkillRecord& r,std::uint8_t kind,std::uint8_t id) {
         // Main catalog lookup checks metadata, raw row shape/key and all110
         // bytes against the stored digest. Here pin
@@ -94,15 +110,34 @@ std::optional<SharedTaiwanOwnedDeitySkillSource::Observation> SharedTaiwanOwnedD
        !state->common_definition_current(*definition,shared->definition) || !state->ready(session,*scope))return std::nullopt;
     return Observation(state,weak,std::move(*saved),std::move(*definition),std::move(shared->definition),*scope);
 }
+std::optional<SharedTaiwanOwnedDeitySkillSource::Observation> SharedTaiwanOwnedDeitySkillSource::observe_world_self(
+    Session& session,const RecoveredWorldSkillRequest::Request& request) {
+    const auto self=shared_from_this();const auto state=state_;
+    // Copy input before any repository observer can release the caller holder.
+    const auto owned_request=request;
+    if(session.closing() || session.state()!=SessionState::InWorld)return std::nullopt;
+    auto initialization=session.normal_world_initialization();
+    if(!initialization || !initialization->entry_written() ||
+       !session.normal_world_initialization_current_on_game(*initialization))return std::nullopt;
+    SelfTargetInput input(owned_request,std::move(*initialization));
+    auto observation=observe(session,owned_request.kind(),owned_request.definition_id());
+    if(!observation || !state->self_target_current(session,input,observation->scope_,observation->definition_))
+        return std::nullopt;
+    observation->self_target_input_=std::move(input);
+    return observation;
+}
 bool SharedTaiwanOwnedDeitySkillSource::current(Session& session,const Observation& observation) {
     const auto self=shared_from_this();const auto state=state_;Impl::Read read(*state);
     // Own the argument before observers; they may release its caller holder.
     const auto owned=observation;
     const auto actual_session=owned.session_.lock();
     if(owned.origin_.lock()!=state || actual_session.get()!=&session ||
-       !state->ready(session,owned.scope_) || !state->common_definition_current(owned.definition_,owned.common_definition_) ||
+       !state->ready(session,owned.scope_) ||
+       (owned.self_target_input_ && !state->self_target_current(session,*owned.self_target_input_,owned.scope_,owned.definition_)) ||
+       !state->common_definition_current(owned.definition_,owned.common_definition_) ||
        !state->companions.selected_deity_skill_current(owned.saved_))return false;
     return state->ready(session,owned.scope_) &&
-        state->common_definition_current(owned.definition_,owned.common_definition_) && state->ready(session,owned.scope_);
+        state->common_definition_current(owned.definition_,owned.common_definition_) && state->ready(session,owned.scope_) &&
+        (!owned.self_target_input_ || state->self_target_current(session,*owned.self_target_input_,owned.scope_,owned.definition_));
 }
 }

@@ -346,3 +346,13 @@ default Main host follows. New world menu evidence is selected-roster lineage;
 do not invent a separate player learned bank or reuse a stale entry source after
 C67 selection changes. A C67 receipt must belong to the complete actual original
 world response, not an inner S31 component. PHASE1 and no new PY files remain.
+
+
+Owner common skill source continuation368 (2026-10-13): CUSTOM-0145 optionally
+retains actual owning C56 self request/private normal INIT in the existing
+selected-skill Observation. Actual own callback/InWorld/Written/current plus
+entryWORD&3FFF==ready lease handle and full UNMASKED incoming target equality;
+full64 DB owner stays independent. Old observe(kind,id) unchanged. One Read,
+pure postobserve attach, same holder rechecked around original current observers.
+Local Written is not native adoption/permission/action. No new Python files,
+default Main host, formula or complete route; PHASE1 remains static only.

@@ -5339,6 +5339,31 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "The common TW/CN definition must be carried by the genuine saved selected-skill observation rather than reconstructed from a key later.",
   "replacement": "Join actual ordered selected roster publications, current target/action owner and transaction/next receipt, then comprehensive acceptance."
+},
+{
+  "id": "CUSTOM-0145",
+  "name": "Owning C56 self target input joined to private current normal entry",
+  "authority": "OWNER_COMMON_SOURCE_COMPOSITION_WITH_CONDITIONAL_NATIVE_SELF_IDENTITY_NOT_CAST_PERMISSION",
+  "implementation": [
+    "src/game/SharedTaiwanOwnedDeitySkillSource.h",
+    "src/game/SharedTaiwanOwnedDeitySkillSource.cpp"
+  ],
+  "native_gap": "No intervening native pointer/role overwrite, actual selected-menu adoption/publication, other targets, MP/cost/status/effects/action and complete replies still require genuine providers; no default Main host.",
+  "rules": {
+    "input": "Existing Observation optionally owns exact raw7 request plus actual private NormalWorldInitialization; old kind/id observe path remains unchanged.",
+    "identity": "Only actual own world callback, InWorld, local Written and current private INIT; original logical37 opcode2A WORD1&3FFF equals exact ready lease actor handle. Full incoming C56 WORD must equal it without masking or DBID truncation.",
+    "current": "One existing observe Read only; no nested guard or unguarded repository observer. Recheck same private INIT and input before/after original saved/native/common/ready observers; full64 common owners and exact phase/generation remain.",
+    "limits": "Sequential checks not atomic CAS or native processing/ACK/permission. raw5 and unwritten native tail retained; no postdurable-action reread, cost, rule or action added."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "Carry actual world self target identity with the existing common selected-skill source without inventing a target namespace or native grant.",
+  "replacement": "Join real ordered selected publications and complete C56 action/target/cost/effects/persistence/next receipt, then comprehensive build/tests/native acceptance."
 }
 ]
 }

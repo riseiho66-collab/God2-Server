@@ -52,3 +52,10 @@ execution review blocked deletion, reporting only "blocked by policy". Zero
 files were deleted; approximately33.43GB remains above30GB. Saves, databases,
 settings, frozen-chat evidence and current resources remain. The full goal
 continues; this operational blocker is not gameplay completion or a goal pause.
+
+
+Round368 adds an optional owning raw C56 self input/private current normal INIT
+to this existing observation. Entry WORD1&3FFF must equal the ready lease handle,
+and incoming target WORD must match in full without masking. Old kind/id path
+remains unchanged; native selected publication, permission/action and Main host
+remain open. See tw-world-skill-self-target-source-20261013.md and source/9.

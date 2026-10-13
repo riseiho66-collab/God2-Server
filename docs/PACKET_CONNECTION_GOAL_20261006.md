@@ -5169,3 +5169,21 @@ unchanged. Whole denominator/percentage unknown. PHASE1 no build/tests/runtime/
 native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Capacity cleanup exact
 duplicates5.04GB authorized but tool policy blocked even after consent; zero
 deleted, roughly33.43GB still over30GB. Full goal remains active.
+
+
+## Round368 - world skill self target source (2026-10-13)
+
+CUSTOM-0145 keeps raw7 request/private actual normal INIT with existing owning
+common/saved skill observation. Actual native context+28 publisher481833 gives
+U8688C=R and actual self C56 follows R0; qualified2A writes masked14-bit handle.
+No intervening mutation remains premise; zero new native bytes/methods/opcodes.
+Actual own callback/InWorld/Written/current entry37 mask3FFF equals ready lease;
+incoming C56 target is compared FULL WORD without masking or DBID truncation.
+Old kind/id path unchanged. One Read, pure afterobserve attach, same retained
+private INIT before/after current observers; sequential not atomic CAS. No Main
+C56 action/MP/formula/selected-menu adoption/full reply/complete route credit.
+Two existing C++ files, no new Python. Source/9 pins26. TW156/252/parser75 =
+50partial+11control+14unconnected; CN156/280phase/253supported unchanged.
+Whole denominator/percentage unknown; full goal active. No build/tests/runtime/
+native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Approved duplicate cleanup
+still policy blocked, zero deleted; prior sources/history remain immutable.
