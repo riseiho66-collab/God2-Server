@@ -5053,3 +5053,35 @@ native opcodes/method credit/formulas0. TW156C2S/252S2C, world74=50partial+
 11control+13unconnected; CN156C2S/280phase/253supported lengths unchanged.
 Whole route denominator/percentage unknown. PHASE1 only: no build/tests/
 runtime/native/VM/codec/gameDBSQL/migration/activation/deployment. Goalactive.
+
+
+## Round362 — actual common owner skill bootstrap/write custody (2026-10-13)
+
+CUSTOM-0140 replaces actualApp two owned-skill booleans with ONE complete
+saved deity roster for126/150; existing shared definition getter consumes
+formal owner-rule key/design only, not raw native data or learned grants.
+Keep original87/id/80 flags/order and finalvitals. Sameframe encoded once,
+captured by actualSession WorldResponseWrite before realservice bind, then
+returned through the same original world callback/FIFO. Typed fullroster
+qualifier guards actualbinding/controller/keyset/private receipt/Session
+around actualrepository observer with reentry poison/deferredremove. Fence
+originaltuple before existing InBattle transition and freeze only its actual
+result epoch, separate from cosmeticpose; no predicted increment or rebase.
+Optedowned C35 requires localWritten/current plus361 fresh savedreadset/CAS.
+Written is not nativeACK/cache/listadoption/turngrant or inputbarrier; Pending
+earlyarrival/native scheduling acceptance remainsOPEN. No-afterCOMMIT rollback
+is claimed. Ordinary/trial/revival packet/rule defaults and TW effects remain.
+
+OriginalCN564A30..564C6D closes573codeB/166sites/29branches/6RET14h.
+It consumes lowBYTE modifiers and updates actionstate/packedtarget arrays;
+no ownqueuedHP28A/arithmetic/death/64-bit reader proved. Opaquechildren OPEN.
+N36217/78839 seal908e600e85b79a696b2045997bfd786b1d2be0db6e5c25b6a1a3750db5bf000c.
+ActualCNhost/actor/list/resources/native87/effects and fullTWnativeprimary/
+secondary/control/auxiliary/roster providers remainOPEN; originalCN453 and
+full907 compiled row pins unchanged. Sourcecontract shared-skills/source/3.
+
+New actual ownedbootstrap sourcebranches2; completebidirectional routes0;
+nativeopcode/methodcredit/formulas0. TW156C2S/252S2C, world74=50partial+
+11control+13unconnected; CN156C2S/280phase/253supported lengths unchanged.
+Whole denominator/percentage unknown. PHASE1 no compiler/build/tests/runtime/
+native/API/CRT/VM/codec/gameDBSQL/migrate/activate/deploy. Goal active.

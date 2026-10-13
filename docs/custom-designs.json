@@ -5205,6 +5205,35 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "Owner requires both custom skills to share saved rights and common gameplay before independent CN adapters.",
   "replacement": "Complete actual CN host/actor/list/87 publication and native effects, then full source-route build/tests/native acceptance in later phase."
+},
+{
+  "id": "CUSTOM-0140",
+  "name": "Shared owner skill actual bootstrap saved source and passive original response custody",
+  "authority": "OWNER_CUSTOM_SOURCE_OWNERSHIP_NOT_NATIVE_ACK_LIST_OR_TURN_GRANT",
+  "implementation": [
+    "src/core/Application.cpp",
+    "src/handlers/RecoveredBattleService.h",
+    "src/handlers/RecoveredBattleService.cpp"
+  ],
+  "native_gap": "Original CN453 lacks126/150. Actual mainland host/actor/list/resources/87/effects and complete TW native control/auxiliary/primary-secondary roster providers remain open.",
+  "rules": {
+    "source": "One privately minted complete saved deity roster determines BOTH custom keys; selected row/full bytes/provenance/revisions/selection retain actual same-repository identity.",
+    "definition": "Actual existing shared getter supplies formal existing owner-rule key/design only. Raw native profiles/selected base/metadata never grant learned skills or certify a client bank.",
+    "publication": "Actual Timer36 App producer keeps original87/id/80 record order/flags/vitals; encodes the SAME final callback response once and captures existing WorldResponseWrite before actual binding.",
+    "current": "Typed service qualifier consumes full saved roster through the bound actual repository, with private response identity/controller/keyset/Session/scope checks and existing reentry/deferred-remove guard.",
+    "epoch": "Fence original saved observation tuple immediately before the existing set_state(InBattle); capture only its actual result epoch, never assume plus1 or rebase after observers; separate owned epoch from cosmetic pose metadata.",
+    "admission": "For an opted actual bootstrap receipt, owned C35 additionally requires current local Written; still requires361 fresh selected-skill readset/complete targets/same-txn persistence. Missing receipt leaves existing other trusted bindings unchanged.",
+    "limits": "Passive receipt is not native ACK/cache adoption/turn grant/input barrier. Fast native input scheduling remains an acceptance gap; postCOMMIT fence cannot undo successful persistence."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "Owner requires two custom skills to share actual learned and publication source, not unrelated metadata or invented native rows.",
+  "replacement": "Complete actual native control/list/actor/profile and mainland custom effects, then comprehensive source-route build/tests/native acceptance."
 }
 ]
 }

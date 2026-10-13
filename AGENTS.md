@@ -285,3 +285,13 @@ This is source ownership, not recovered skill arithmetic or CN wire authority.
 Keep diagnostic hosting explicitly scoped and ordinary/trial/revival defaults
 unchanged. CN actual actor/list/resources/native87/effects remain separately
 qualified; no original CN453 rows or learned rights may be fabricated.
+
+CUSTOM-0140 qualifies the existing actual owner-skill bootstrap from ONE full
+saved roster and the existing original callback-response local write receipt.
+Fence the original observation before the existing battle transition; retain
+only that transition actual result epoch, separately from cosmetic pose state.
+Recheck the actual typed roster/actor/keyset/receipt around DB observers with
+the owned operation reentry/deferred-removal guard. Written is local custody,
+not native ACK/list adoption/turn grant or an input barrier. Keep early native
+input scheduling, complete native roster/control and CN host/effects OPEN.
+No raw native rows, new learning events, balances or schemas are invented.

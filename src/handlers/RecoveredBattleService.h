@@ -78,7 +78,13 @@ public:
     using OwnedCheckpointCommit = std::function<void(const BattleCheckpoint&,const BattleCheckpoint&,
         const SelectedDeitySkillReadset&)>;
     void bind(Session& session, Battle battle, Policy policy, Battle::Encode encode,Commit commit={},
-        CheckpointCommit checkpoint_commit={},OwnedCheckpointCommit owned_checkpoint_commit={});
+        CheckpointCommit checkpoint_commit={},OwnedCheckpointCommit owned_checkpoint_commit={},
+        std::optional<Session::WorldResponseWrite> owned_bootstrap_write={});
+    // CUSTOM-0140: actual hosted bootstrap producer/source qualification.
+    // Full saved roster is private repository data; the original callback wire
+    // receipt is only local custody, never native list adoption/ACK/turn grant.
+    bool qualify_owned_bootstrap(Session&,const Session::WorldResponseWrite&,
+        const OwnedDeityRosterReadset&);
     std::optional<std::vector<std::uint8_t>> handle(
         Session& session, std::span<const RecoveredWorldRecords::Record> records);
     const BattleSnapshot& inspect(std::uint64_t session) const;
@@ -131,6 +137,9 @@ private:
         std::optional<std::uint8_t> pose_last_symbol;
         OwnedCheckpointCommit owned_checkpoint_commit;
         bool owned_skill_operating{},owned_skill_reentered{},owned_skill_remove_pending{};
+        std::optional<Session::WorldResponseWrite> owned_bootstrap_write;
+        // CUSTOM-0140: separate opt-in actual bootstrap identity; not cosmetic.
+        std::uint64_t owned_bootstrap_battle_generation{};
     };
     void reject_owned_skill_reentry(std::uint64_t session);
     Battle::Rule rule_;

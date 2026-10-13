@@ -6122,14 +6122,58 @@ if(guild_officer_runtime && player_guild(session) &&
                                             !config.diagnostic_battle_revival && pending_checkpoint->checkpoint.snapshot.revision==5;
                                         // CUSTOM-0058: only saved learned state on the selected owned
                                         // deity grants126. Catalog presence and C2S requests grant nothing.
-                                        const bool owned_shunying=!config.diagnostic_shunying_manual &&
-                                            !config.diagnostic_battle_revival &&
-                                            database.companions().selected_deity_has_skill(session.account_id,
-                                                session.character_id,ShunyingSanshazhan::kind,ShunyingSanshazhan::id);
-                                        const bool owned_thousand_bulls=!config.diagnostic_shunying_manual &&
-                                            !config.diagnostic_battle_revival &&
-                                            database.companions().selected_deity_has_skill(session.account_id,
-                                                session.character_id,ThousandBulls::kind,ThousandBulls::id);
+                                        // CUSTOM-0140: one complete saved observation supplies BOTH
+                                        // owner keys. Raw native catalog rows remain separate from rights.
+                                        const auto owned_account=session.account_id,owned_character=session.character_id;
+                                        const auto owned_session=session.id();
+                                        const auto owned_phase=session.state();
+                                        const auto owned_generation=session.battle_generation();
+                                        auto owned_expected_phase=owned_phase;
+                                        auto owned_expected_generation=owned_generation;
+                                        const auto owned_identity_current=[&] {
+                                            return !session.closing() && session.id()==owned_session &&
+                                                session.account_id==owned_account && session.character_id==owned_character &&
+                                                session.state()==owned_expected_phase &&
+                                                session.battle_generation()==owned_expected_generation;
+                                        };
+                                        std::optional<OwnedDeityRosterReadset> owned_bootstrap_roster;
+                                        if(!config.diagnostic_shunying_manual && !config.diagnostic_battle_revival) {
+                                            owned_bootstrap_roster.emplace(database.companions().load_deity_roster(
+                                                owned_account,owned_character));
+                                            if(session.closing() || session.id()!=owned_session ||
+                                               session.account_id!=owned_account || session.character_id!=owned_character ||
+                                               session.state()!=owned_phase || session.battle_generation()!=owned_generation)
+                                                throw std::runtime_error("Owned bootstrap source identity changed");
+                                        }
+                                        const auto saved_owner_skill=[&](std::uint8_t kind,std::uint8_t id) {
+                                            if(!owned_bootstrap_roster || !owned_bootstrap_roster->selection())return false;
+                                            const auto selected=owned_bootstrap_roster->selection()->key;
+                                            for(const auto& row:owned_bootstrap_roster->rows())
+                                                if(row.snapshot.status.key_raw()==selected)
+                                                    for(const auto& skill:row.snapshot.skills) {
+                                                        const auto raw=skill.encode();
+                                                        if(raw[2]==kind && raw[3]==id)return true;
+                                                    }
+                                            return false;
+                                        };
+                                        const bool owned_shunying=saved_owner_skill(ShunyingSanshazhan::kind,ShunyingSanshazhan::id);
+                                        const bool owned_thousand_bulls=saved_owner_skill(ThousandBulls::kind,ThousandBulls::id);
+                                        // Consume the existing one-core namespace, not a fabricated native
+                                        // row. Presence of profiles/chosen/native data grants no skill.
+                                        const auto owner_namespace=[&](std::uint8_t kind,std::uint8_t id,
+                                            std::uint16_t key,const char* design) {
+                                            const auto common=database.native_skill_catalog().lookup_shared_definition_main(kind,id);
+                                            if(!common || !common->definition.owner_rule ||
+                                               common->definition.owner_rule->key!=key ||
+                                               common->definition.owner_rule->design_id!=design)
+                                                throw std::runtime_error("Owned bootstrap formal namespace unavailable");
+                                        };
+                                        if(owned_shunying)owner_namespace(ShunyingSanshazhan::kind,ShunyingSanshazhan::id,
+                                            ShunyingSanshazhan::key,ShunyingSanshazhan::design_id);
+                                        if(owned_thousand_bulls)owner_namespace(ThousandBulls::kind,ThousandBulls::id,
+                                            ThousandBulls::key,ThousandBulls::design_id);
+                                        std::optional<std::vector<std::uint8_t>> owned_bootstrap_wire;
+                                        std::optional<Session::WorldResponseWrite> owned_bootstrap_write;
                                         const auto manual_resources=config.diagnostic_shunying_manual ?
                                             database.recovered_characters().load_resources(session.account_id,session.character_id) :
                                             std::optional<CharacterResources>{};
@@ -6292,7 +6336,17 @@ if(guild_officer_runtime && player_guild(session) &&
                                                 else if(pending_checkpoint->checkpoint!=Battle(battle_id,actors,123).checkpoint())
                                                     throw std::runtime_error("Visibility recovery requires qualified checkpoint");
                                             }
+                                            if(owned_bootstrap_roster && !owned_identity_current())
+                                                throw std::runtime_error("Owned bootstrap identity changed before battle entry");
                                             session.set_state(SessionState::InBattle);
+                                            if(owned_bootstrap_roster) {
+                                                // This existing local transition is the only accepted epoch
+                                                // change, not rebasing after a repository observer.
+                                                owned_expected_phase=SessionState::InBattle;
+                                                owned_expected_generation=session.battle_generation();
+                                                if(!owned_identity_current())
+                                                    throw std::runtime_error("Owned bootstrap battle transition changed");
+                                            }
                                             Battle battle=pending_checkpoint ? Battle::restore(pending_checkpoint->checkpoint) : Battle(battle_id,actors,123);
                                             if(config.diagnostic_battle_revival) {
                                                 if(durable_resources && !pending_checkpoint) {
@@ -6352,6 +6406,15 @@ if(guild_officer_runtime && player_guild(session) &&
                                                 policy.pose_publication=RecoveredBattlePose::publication(vitals);
                                                 if(!policy.pose_publication)
                                                     throw std::runtime_error("Battle pose actual bootstrap is not qualified");
+                                            }
+                                            if(owned_bootstrap_roster && !owned_identity_current())
+                                                throw std::runtime_error("Owned bootstrap identity changed before capture/bind");
+                                            if(owned_shunying || owned_thousand_bulls) {
+                                                // The exact producer inserts the existing primary-list
+                                                // state records {87,id,80} above; no substring/list parser
+                                                // is used to infer native record boundaries or adoption.
+                                                owned_bootstrap_wire.emplace(RecoveredWorldFrame::encode(vitals));
+                                                owned_bootstrap_write.emplace(session.observe_world_response(*owned_bootstrap_wire));
                                             }
                                             diagnostic_combat->bind(session,std::move(battle),policy,
                                                 [&,terminal=config.diagnostic_battle_terminal,
@@ -6417,7 +6480,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                                     }
                                                     return RecoveredWorldFrame::encode(logical);
                                                 },{},std::move(resource_commit),
-                                                (owned_shunying || owned_thousand_bulls) ? std::move(owned_resource_commit) : RecoveredBattleService::OwnedCheckpointCommit{});
+                                                (owned_shunying || owned_thousand_bulls) ? std::move(owned_resource_commit) : RecoveredBattleService::OwnedCheckpointCommit{},
+                                                owned_bootstrap_write);
                                             if(config.diagnostic_visibility_battle)
                                                 deliver_visibility(player_visibility.set_fight_title(session.id(),
                                                     session.account_id,session.character_id,{2,15},true));
@@ -6435,7 +6499,15 @@ if(guild_officer_runtime && player_guild(session) &&
                                                     });
                                             }
                                         }
+                                        if(owned_bootstrap_roster) {
+                                            const bool current=owned_bootstrap_write ?
+                                                diagnostic_combat->qualify_owned_bootstrap(session,*owned_bootstrap_write,*owned_bootstrap_roster) :
+                                                database.companions().deity_roster_current(*owned_bootstrap_roster);
+                                            if(!current || !owned_identity_current())
+                                                throw std::runtime_error("Owned bootstrap saved source changed before return");
+                                        }
                                         spdlog::warn("DIAGNOSTIC_VITALS88_SENT_AFTER_TIMER36 session_id={}",session.id());
+                                        if(owned_bootstrap_wire)return std::optional<std::vector<std::uint8_t>>(std::move(*owned_bootstrap_wire));
                                         return std::optional<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(vitals));
                                     }
                                     return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});

@@ -30,7 +30,8 @@ void RecoveredBattleService::reject_owned_skill_reentry(std::uint64_t session) {
         throw std::invalid_argument("Owned skill operation reentry rejected");
     }
 }
-void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy, Battle::Encode encode,Commit commit,CheckpointCommit checkpoint_commit,OwnedCheckpointCommit owned_checkpoint_commit) {
+void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy, Battle::Encode encode,Commit commit,CheckpointCommit checkpoint_commit,OwnedCheckpointCommit owned_checkpoint_commit,
+    std::optional<Session::WorldResponseWrite> owned_bootstrap_write) {
     reject_owned_skill_reentry(session.id());
     if(bool(policy.owned_skill_repository)!=!policy.saved_owned_skills.empty() ||
        (policy.owned_skill_repository && (commit || policy.diagnostic_manual_receipts || policy.diagnostic_revival ||
@@ -43,6 +44,12 @@ void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy
         if((key!=skill_key(ShunyingSanshazhan::kind,ShunyingSanshazhan::id) &&
             key!=skill_key(ThousandBulls::kind,ThousandBulls::id)) || !policy.skills.contains(key))
             throw std::invalid_argument("Invalid owned skill saved policy");
+    if(owned_bootstrap_write &&
+       (!policy.owned_skill_repository || policy.saved_owned_skills.empty() ||
+        owned_bootstrap_write->status()!=Session::WorldResponseWriteStatus::Pending ||
+        !session.world_response_write_current(*owned_bootstrap_write)))
+        throw std::invalid_argument("Owned bootstrap requires actual pending original callback custody");
+    const auto owned_bootstrap_generation=owned_bootstrap_write ? session.battle_generation() : 0;
     const auto profile=battle.inspect().numeric_profile;
     if((policy.numeric_profile!=BattleNumericProfile::LegacyCustom &&
         policy.numeric_profile!=BattleNumericProfile::ExtendedHealth64) ||
@@ -144,6 +151,55 @@ void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy
     bindings_.at(session.id()).pose_battle_generation=pose_generation;
     bindings_.at(session.id()).pose_session=pose_session;
     bindings_.at(session.id()).owned_checkpoint_commit=std::move(owned_checkpoint_commit);
+    bindings_.at(session.id()).owned_bootstrap_write=std::move(owned_bootstrap_write);
+    bindings_.at(session.id()).owned_bootstrap_battle_generation=owned_bootstrap_generation;
+}
+bool RecoveredBattleService::qualify_owned_bootstrap(Session& session,
+    const Session::WorldResponseWrite& supplied_write,const OwnedDeityRosterReadset& supplied_roster) {
+    // Retain both arguments before the real repository observation. Wrong
+    // game-owner receipts fail before touching the game-owned binding map.
+    const auto write=supplied_write;const auto roster=supplied_roster;
+    if(write.status()==Session::WorldResponseWriteStatus::Failed ||
+       !session.world_response_write_current_on_game(write))return false;
+    reject_owned_skill_reentry(session.id());
+    const auto found=bindings_.find(session.id());if(found==bindings_.end())return false;
+    auto& bound=found->second;
+    if(!bound.policy.owned_skill_repository || !bound.owned_bootstrap_write)return false;
+    std::unordered_set<std::uint16_t> expected;
+    if(roster.selection())for(const auto& row:roster.rows())
+        if(row.snapshot.status.key_raw()==roster.selection()->key)
+            for(const auto& skill:row.snapshot.skills) {
+                const auto raw=skill.encode();const auto key=skill_key(raw[2],raw[3]);
+                if(key==ShunyingSanshazhan::key || key==ThousandBulls::key)expected.insert(key);
+            }
+    const auto current=[&] {
+        const auto& state=bound.battle.inspect();
+        // The immutable wire object's identity belongs to the same private
+        // receipt Data retained by both copies; byte equality alone is not used.
+        return !bound.owned_skill_reentered && !bound.owned_skill_remove_pending &&
+            bound.session==&session && !session.closing() && session.state()==SessionState::InBattle &&
+            session.account_id==bound.account && session.character_id==bound.character &&
+            roster.account()==bound.account && roster.character()==bound.character &&
+            session.battle_generation()==bound.owned_bootstrap_battle_generation &&
+            bound.battle.active() && !bound.action_received && !bound.control_received &&
+            !bound.initial_control_received && bound.owned_bootstrap_write && &bound.owned_bootstrap_write->wire()==&write.wire() &&
+            write.status()!=Session::WorldResponseWriteStatus::Failed &&
+            session.world_response_write_current_on_game(write) &&
+            !expected.empty() && bound.policy.saved_owned_skills==expected &&
+            bound.policy.actor_position<state.actors.size() && state.actors[bound.policy.actor_position] &&
+            state.actors[bound.policy.actor_position]->controller==bound.character;
+    };
+    if(!current())return false;
+    bound.owned_skill_operating=true;bound.owned_skill_reentered=false;
+    struct Exit {
+        RecoveredBattleService& service;std::uint64_t id;bool& active;bool& remove_pending;
+        ~Exit(){active=false;if(remove_pending)service.remove(id);}
+    } exit{*this,session.id(),bound.owned_skill_operating,bound.owned_skill_remove_pending};
+    // Exact same actual repository origin/selection/all rows/revisions/bytes.
+    // The guard protects this binding across observers, including caught
+    // reentry and deferred erase. This is not an SQL/socket atomic CAS.
+    const bool saved_current=bound.policy.owned_skill_repository->deity_roster_current(roster);
+    return saved_current && current();
 }
 std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
         Session& session, std::span<const RecoveredWorldRecords::Record> records) {
@@ -468,12 +524,21 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
     const auto current_owned=[&] {
         if(bound.owned_skill_reentered || bound.session!=&session || session.closing() ||
            session.state()!=SessionState::InBattle || session.account_id!=bound.account ||
-           session.character_id!=bound.character || session.battle_generation()!=generation)
+           session.character_id!=bound.character || session.battle_generation()!=generation ||
+           (bound.owned_bootstrap_write &&
+            (bound.owned_bootstrap_write->status()!=Session::WorldResponseWriteStatus::Written ||
+             !session.world_response_write_current_on_game(*bound.owned_bootstrap_write))))
             throw std::invalid_argument("Owned skill session changed");
     };
     if(first && bound.policy.saved_owned_skills.contains(skill_key(first->selection_kind_byte,first->selection_id_byte))) {
         bound.owned_skill_operating=true;bound.owned_skill_reentered=false;
         owned_operation.emplace(*this,session.id(),bound.owned_skill_operating,bound.owned_skill_remove_pending);
+        // CUSTOM-0140 local-write prerequisite for this supplied bootstrap
+        // only. Pending early-arrival/native timing remains an acceptance gap;
+        // absent receipts preserve existing explicitly trusted other bindings.
+        if(bound.owned_bootstrap_write &&
+           (bound.owned_bootstrap_write->status()!=Session::WorldResponseWriteStatus::Written ||
+            !session.world_response_write_current_on_game(*bound.owned_bootstrap_write)))return std::nullopt;
         owned_skill=bound.policy.owned_skill_repository->load_selected_deity_skill(
             bound.account,bound.character,first->selection_kind_byte,first->selection_id_byte);
         current_owned();
