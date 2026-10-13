@@ -8,6 +8,7 @@ struct ThousandBulls final {
     static constexpr std::uint32_t power_percent=1000,mp_cost=100;
     static constexpr auto key=RecoveredBattleService::skill_key(kind,id);
     static constexpr char design_id[]="CUSTOM-0059";
+    static constexpr char traditional_name[]="牛轉仙界踏";
     // Cost provenance: original cbspec2 kind0/id73 鯨吞亂舞, record+0x42
     // (file offset7994) WORD6400=100. This is the owner-selected native cost
     // reference; the new skill coefficient and four presentation phases are custom.

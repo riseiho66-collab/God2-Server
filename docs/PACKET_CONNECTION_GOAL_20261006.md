@@ -4970,3 +4970,56 @@ additive. Oldgoalbinaryprefix/priorledgerfields/frontierv23exact; RtwoLF/K3.
 Unique report20261013-tw-cn-shared-skill-source-359 before rootseal/publication.
 PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/emulator/productparser/
 codec/resource decoder/gameDBSQL/import/migrate/activate/deploy. Goalactive.
+
+
+## Round360 common owner skill definitions without native rows (2026-10-13)
+
+Previous359a4ca93050ec0416325b3d83abf54552a9f244af3 exact-head notification
+38361009768success. Priorroot+6packages1349members81,953,643B individuallyverified.
+Baseline330/20,139,208B includes328canonical+L/F; extra27/152,572B actualowner/
+learned/checkpoint/native dependencies. FailedwrongLua-path baselinepartial
+retained; corrected gameplay/combat_health64 path capturedonce. Goalactive.
+
+Actualcommongetter nowreturns owningformalCUSTOM0058 kind0/126 and0059 kind0/150
+when BOTHoriginalTW448/CN453 rawrowsabsent. Source6existingCpp/new0, complete
+inversea4ca; newOwnerSkillRule appendsSharedDefinition, directlyreferences existing
+class key/power/cost/limit/designID/name; no duplicated300/1000/20/100 rules or
+authorize/owned_action execution. Classesnames-only, methods/trials/clones/
+realcastershadow/direction/fourphases exact. 907pintable784107B unchanged.
+Absentrequested_native/profiles/chosen/nativeSourceText remainabsent, othermissing
+keysnull; invalidselectors/corruptrowchecks original. Present unknownrawstatus/
+qualification retained. Luaowner_rule/display_name ownvalues, TWTraditional,
+falsegameplayauthority/native_source; no fakeNative110/Current/learnedgrant.
+Versioned docs/integration/SHARED_SKILL_SERVER_SOURCE_V1.json pinsSource6,
+source-only capability; CNcast/extendedprofile/encode/effects/runtimefalse.
+
+Actual Appcustom savedbootstrap operatesexistingdiagnosticencounter only. Common
+Battle oneMPcharge/checkpoint-beforepublish retained. Genuine savedreadset exists;
+original448same149c SharedTaiwanOwnedDeitySkillSourceObservation notcustomissuer.
+CNselection requiresactualoriginal453/listbank fullrawCurrent; nativekind0count125
+rejects126/150. CN actualcustomsaved/actor/list/resource compatibility+real87event/
+revision/flags+WorldOwner host required, notmanufacturedbydefinition metadata.
+
+OriginalCN5634E0..563C19 complete1849B540sites/soleRET20h, table36B/literals20B
+padding3/nextentry17B separately. 359prefix664exact+1185extension; knownmethodcredit0.
+S83type03h/17h(decimal23) samearm; decimal17default. Formal5rawSI storedWORD
+actor+28A+2BYTE239; signedMOVSX HP-labelled formatting under rawmarkers7/8 and
+resource/state branches. No directHPadd/clamp/death/damageproducer or64client
+proof. 42opaquechildren unexpanded; actual55709E→562510/readers remainnextsource.
+CurrentPE582f in-place pinned, no mappedmemorypair/nativeexecution claim.
+
+No poison status/turn/checkpoint source yet: ownercurrentMAXHP/10 preserved;
+rounding/immunity/stack/timing/lethality OPEN. No timer/unusedhelper/sourceguess.
+Clientformulas primary, guides secondary. No CNoriginal857453 fakeextension.
+Main4899878/source3 handoff reference-only, peerfiles/scripts notmodified/run.
+
+Native/authority/implementation/independentreview+canonicalseals individually
+readback; 6Cppwholeinverses/oldmethods907pins/frozendependencies exact. Public
+successfulLFsingleEOF captures notrerun, failedpartials/applyoriginal retained.
+AGENTS/custom136 unchanged; oldG binaryprefix/RtwoLF-K3/Lparsedfields/Fexact.
+Sourcebranches2 owner126/150 metadata; nativecredit/formula/opcode/format/parser/
+handler/phase/fullroute0; globaldeltas0. TW156/252/world74=50partial11control
+13unconnected, CN156/280phase/253length distinct. Whole/TWdenominatorpercentnull,
+parser67.6% notcompletion. Unique report20261013-tw-cn-common-owner-skill-definition-source-360.
+PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/productparser/codec/
+resource execution/gameDBSQL/import/migrate/activate/deploy. Goalactive.

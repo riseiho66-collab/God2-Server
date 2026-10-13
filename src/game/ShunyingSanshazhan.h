@@ -11,6 +11,7 @@ struct ShunyingSanshazhan final {
     static constexpr std::uint32_t mp_cost=20;
     static constexpr auto key=RecoveredBattleService::skill_key(kind,id);
     static constexpr char design_id[]="CUSTOM-0058";
+    static constexpr char traditional_name[]="瞬影三煞斬";
 
     // Approved formal policy: physical attack*300%, existing defense and
     // critical policy, one20MP charge for the complete1..3-target action.

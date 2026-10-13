@@ -148,6 +148,17 @@ sol::table common_skill_snapshot(sol::state_view lua,const SharedSkillLookup& va
         "status",shared_skill_status_name(d.status),"profiles",profiles,
         "name",text(d.name),"short_text",text(d.short_text),"gameplay_authority",false,
         "requested_native_present",value.requested_native.has_value());
+    // Owner display metadata is separate from the native bounded projection;
+    // an absent profile has no invented CP950/CP936 bytes or native offset.
+    result["display_name"]=d.owner_rule?d.owner_rule->traditional_name:d.name.traditional_utf8;
+    if(d.owner_rule) {
+        const auto& r=*d.owner_rule;
+        result["owner_rule"]=lua.create_table_with("design_id",r.design_id,"key",r.key,
+            "physical_power_percent",r.physical_power_percent,"mp_cost",r.mp_cost,
+            "max_targets",r.max_targets,"all_living_opponents",r.all_living_opponents,
+            "traditional_name",r.traditional_name,"source_type","existing_owner_rule_constants",
+            "gameplay_authority",false,"native_source",false);
+    }
     if(value.requested_native)result["requested_native"]=catalog_snapshot(lua,*value.requested_native);
     if(d.chosen_profile) {
         result["chosen_profile"]=*d.chosen_profile+1;

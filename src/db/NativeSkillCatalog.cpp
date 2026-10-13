@@ -114,12 +114,14 @@ std::optional<SharedSkillLookup> NativeSkillCatalog::lookup_shared_definition_ma
     SharedReadScope scope(db_);
     auto tw=lookup_main(current_dataset_id,kind,definition_id);
     auto cn=lookup_main("cn-native-cbspec2-582f2695-857b52e3-v1",kind,definition_id);
-    if(!tw && !cn){scope.finish();return std::nullopt;}
     std::optional<SharedSkillNativeBinding> t,c;
     if(tw)t=shared_binding(*tw,SharedSkillRegion::Taiwan);
     if(cn)c=shared_binding(*cn,SharedSkillRegion::China);
     SharedSkillLookup value{tw,resolve_shared_skill_definition(
         static_cast<std::uint8_t>(kind),static_cast<std::uint8_t>(definition_id),std::move(t),std::move(c))};
+    // Existing native absence stays visible. Only the two formal owner rule
+    // keys can yield a common definition with no native source/raw profile.
+    if(!tw && !cn && !value.definition.owner_rule){scope.finish();return std::nullopt;}
     scope.finish();return value;
 }
 std::optional<NativeSkillSource> NativeSkillCatalog::lookup_main_source(const std::string& dataset_id) const {

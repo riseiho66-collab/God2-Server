@@ -38,6 +38,18 @@ struct SharedSkillTextProjection {
     bool pinned_literal=false;
     bool operator==(const SharedSkillTextProjection&) const=default;
 };
+// Formal owning specification of the existing owner rule classes. This is
+// definition data, never installed Policy, learned rights or cast authority.
+// Native raw bindings remain independent; no native110 bytes are synthesized.
+struct OwnerSkillRule {
+    std::string design_id;
+    std::uint16_t key=0;
+    std::uint32_t physical_power_percent=0,mp_cost=0;
+    std::uint8_t max_targets=0;
+    bool all_living_opponents=false;
+    std::string traditional_name;
+    bool operator==(const OwnerSkillRule&) const=default;
+};
 struct SharedSkillDefinition {
     // Stable registry/native-binding key. A common identity does not assert
     // equal native effects. Original regional keys and full records remain.
@@ -48,6 +60,9 @@ struct SharedSkillDefinition {
     // native eligibility, server debit, bank population or entitlement.
     std::optional<std::size_t> chosen_profile;
     SharedSkillTextProjection name,short_text;
+    // Engaged only for the existing CUSTOM-0058/0059 formal rule keys.
+    // Presence never promotes any raw profile's pin/source qualification.
+    std::optional<OwnerSkillRule> owner_rule;
     bool operator==(const SharedSkillDefinition&) const=default;
 };
 const char* shared_skill_status_name(SharedSkillStatus) noexcept;

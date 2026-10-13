@@ -1,0 +1,167 @@
+{
+  "schema": "god2-shared-skill-server-source/1",
+  "version": "source/1",
+  "round": 360,
+  "base_source_head": "a4ca93050ec0416325b3d83abf54552a9f244af3",
+  "scope": "SOURCE_CONNECTED_FORMAL_OWNER_DEFINITION_QUERY_NOT_RUNTIME_CAPABILITY",
+  "provider": {
+    "cpp": "NativeSkillCatalog::lookup_shared_definition_main",
+    "lua": "common_skill_definition(kind,id)",
+    "owning": true,
+    "initial_and_reloaded_VM": true,
+    "owner_rule_field": "owner_rule",
+    "traditional_display_field": "display_name",
+    "missing_native_profiles_preserved": true,
+    "requested_native_optional_separate": true,
+    "empty_native_text_projections_when_no_profiles": true,
+    "native_raw_rows_synthesized": false,
+    "unknown_native_rows_not_promoted": true,
+    "other_missing_keys_return_null": true,
+    "gameplay_authority": false
+  },
+  "rules": [
+    {
+      "kind": 0,
+      "id": 126,
+      "key": 126,
+      "design_id": "CUSTOM-0058",
+      "traditional_name": "瞬影三煞斬",
+      "origin": "EXISTING_OWNER_FORMAL_RULE",
+      "physical_power_percent": 300,
+      "mp_cost": 20,
+      "max_targets": 3,
+      "all_living_opponents": false,
+      "source": "src/game/ShunyingSanshazhan.h",
+      "formal_action_method": "owned_action",
+      "learning_grant": false,
+      "client_native_rule": false,
+      "actual_damage_rule": "Existing authorized common base/defense/critical policy is still required; this coefficient does not supply an original damage formula.",
+      "MP_semantics": "Existing common Battle stages one MP charge for the entire action; definition query does not deduct MP.",
+      "rendering_authority": false
+    },
+    {
+      "kind": 0,
+      "id": 150,
+      "key": 150,
+      "design_id": "CUSTOM-0059",
+      "traditional_name": "牛轉仙界踏",
+      "origin": "EXISTING_OWNER_FORMAL_RULE",
+      "physical_power_percent": 1000,
+      "mp_cost": 100,
+      "max_targets": 14,
+      "all_living_opponents": true,
+      "source": "src/game/ThousandBulls.h",
+      "formal_action_method": "owned_action",
+      "learning_grant": false,
+      "client_native_rule": false,
+      "actual_damage_rule": "Existing authorized common base/defense/critical policy is still required; this coefficient does not supply an original damage formula.",
+      "MP_semantics": "Existing common Battle stages one MP charge for the entire action; definition query does not deduct MP.",
+      "rendering_authority": false
+    }
+  ],
+  "canonical_language": "TW Traditional owner names; protocol selection independent of display language",
+  "native_source": {
+    "CN_image_sha256": "582f269535f86e95fcd77946821adf79a30d1bd33f21d566cf48c36fd221b3c8",
+    "CN_original_BIN_sha256": "857b52e36ceb4d08f61a373f2882593dada84ecbb8150da187f8c5553389a004",
+    "CN_original_declared_records": 453,
+    "CN_original_kind0_count": 125,
+    "CN_custom_keys_are_owner_extensions": true,
+    "CN_original_453_gate_unchanged": true,
+    "CN_extended_profile_generated": false,
+    "CN_raw_custom_rows_qualified": false
+  },
+  "native_CN_wire": {
+    "existing_S83_type3_logical_bytes": 15,
+    "opcode_offset": 0,
+    "type_offset": 1,
+    "caster_offset": 2,
+    "target_mask_WORD_offsets": [
+      5,
+      7
+    ],
+    "delta_WORD_offset": 9,
+    "skill_id_offset": 11,
+    "skill_kind_offset": 12,
+    "raw_modifier_BYTE_offsets": [
+      13,
+      14
+    ],
+    "legacy_delta_cache_bits": 16,
+    "legacy_HP_text_signed": true,
+    "body_arm_hex_17_means_decimal_23": true,
+    "decimal_17_not_skill_arm": true,
+    "actual_HP_mutation_qualified": false,
+    "marker_death_or_immunity_semantics_qualified": false,
+    "wide_64_wire_object_floating_text_connected": false,
+    "new_dedicated_custom_opcode": false,
+    "custom_CN_encode_qualified": false
+  },
+  "existing_common_core": {
+    "BattleActor_HP_and_maxHP_uint64": true,
+    "BattleHit_damage_and_HP_loss_uint64": true,
+    "MP_uint32_unchanged": true,
+    "existing_authorize_and_trial_overrides_unchanged": true,
+    "existing_checkpoint_before_publication_source": true,
+    "ordinary_attack_defense_and_critical_policy_not_replaced": true
+  },
+  "CN_remaining": [
+    "Genuine shared saved learned/list observation bound to the actual CN actor/list incarnation and owner-custom definition/resources",
+    "Qualified extended CN custom profile with separate owner provenance and real effect/ACT/ROM bindings",
+    "Actual native87 committed event/revision/flags and held publication supplier",
+    "Actual source HP mutation/64-bit wire/object/floating text and real cast/MP/target/checkpoint adapters",
+    "Preserve real caster shadows/direction, permitted clone shadow exception and four presentation phases"
+  ],
+  "qualification": {
+    "definition_query_source_connected": true,
+    "original_native_lookup_behavior_unchanged": true,
+    "learned_permission_granted": false,
+    "CN_custom_cast_source_connected": false,
+    "CN_custom_client_effects_connected": false,
+    "CN_runtime_enabled": false,
+    "build": false,
+    "tests": false,
+    "runtime": false,
+    "native_acceptance": false,
+    "game_database_SQL": false,
+    "import_or_migration": false,
+    "deployment": false
+  },
+  "source_files": [
+    {
+      "path": "src/db/SharedSkillDefinition.h",
+      "bytes": 3549,
+      "sha256": "9191228d4934531362481b6de361dcfce4a24cc57b9a20e4891de13ef9b3968b"
+    },
+    {
+      "path": "src/db/SharedSkillDefinition.cpp",
+      "bytes": 792801,
+      "sha256": "168e9929f19e81d9e256943422afbf3264c5fb854f9374c2e80a8f8ab4ede747"
+    },
+    {
+      "path": "src/db/NativeSkillCatalog.cpp",
+      "bytes": 10871,
+      "sha256": "43036bb2139b5324f7995092c184dc57716910bf9de4343a51118279d3754a2a"
+    },
+    {
+      "path": "src/scripting/LuaEngine.cpp",
+      "bytes": 73410,
+      "sha256": "eaf7c9c7888ea53e63f3182c4a1bac59718ec5469220788b421fb1aaa68e9a9a"
+    },
+    {
+      "path": "src/game/ShunyingSanshazhan.h",
+      "bytes": 3024,
+      "sha256": "c705df2d7026430d454d3846789387bc5da0ac02b3e41105938860b1c598897e"
+    },
+    {
+      "path": "src/game/ThousandBulls.h",
+      "bytes": 3103,
+      "sha256": "a4d82882b56ca36239927d7c5079d449d10528bc227b51869087b0ce2f4dedbb"
+    }
+  ],
+  "reference_only_client_handoff": {
+    "peer_commit": "4899878c8083feb8d425afd6264769caf9b6e392",
+    "peer_source_contract": "integration/SHARED_SKILL_SOURCE_V3.json",
+    "peer_original_catalog_not_relabelled_as_extended_server_capability": true,
+    "peer_working_tree_modified": false
+  }
+}

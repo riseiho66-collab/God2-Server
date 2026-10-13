@@ -1,10 +1,28 @@
 #include "db/SharedSkillDefinition.h"
+#include "game/ShunyingSanshazhan.h"
+#include "game/ThousandBulls.h"
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
 
 namespace god2 {
 namespace {
+std::optional<OwnerSkillRule> formal_owner_rule(std::uint8_t kind,std::uint8_t id) {
+    static_assert(ShunyingSanshazhan::kind==0 && ShunyingSanshazhan::id==126);
+    static_assert(ThousandBulls::kind==0 && ThousandBulls::id==150);
+    static_assert(!ShunyingSanshazhan::magical);
+    if(kind==ShunyingSanshazhan::kind && id==ShunyingSanshazhan::id)
+        return OwnerSkillRule{ShunyingSanshazhan::design_id,ShunyingSanshazhan::key,
+            ShunyingSanshazhan::provisional_power_percent,ShunyingSanshazhan::mp_cost,
+            ShunyingSanshazhan::max_targets,false,ShunyingSanshazhan::traditional_name};
+    if(kind==ThousandBulls::kind && id==ThousandBulls::id)
+        return OwnerSkillRule{ThousandBulls::design_id,ThousandBulls::key,
+            ThousandBulls::power_percent,ThousandBulls::mp_cost,
+            ThousandBulls::max_targets,true,ThousandBulls::traditional_name};
+    // The targeting flag describes the existing authorize methods' explicit
+    // target-limit/all-living map contracts. No authorize/owned_action is called.
+    return std::nullopt;
+}
 // Independently retained original TW448/CN453 row digests and literal text.
 // Owner-added TW records are separate pins, never original native rows.
 // Name2..20h / short20h..3Eh is bounded source policy, not UI-width proof.
@@ -990,6 +1008,7 @@ SharedSkillDefinition resolve_shared_skill_definition(std::uint8_t kind,std::uin
        (cn && cn->region!=SharedSkillRegion::China))
         throw std::invalid_argument("Shared skill positional region mismatch");
     SharedSkillDefinition d;d.canonical_key=static_cast<std::uint16_t>((unsigned(kind)<<8)|id);
+    d.owner_rule=formal_owner_rule(kind,id);
     std::optional<std::size_t> t,c;std::vector<const Pin*> matched;
     if(tw) {t=d.profiles.size();matched.push_back(qualify(*tw,kind,id));d.profiles.push_back(std::move(*tw));}
     if(cn) {c=d.profiles.size();matched.push_back(qualify(*cn,kind,id));d.profiles.push_back(std::move(*cn));}
@@ -1017,6 +1036,9 @@ SharedSkillDefinition resolve_shared_skill_definition(std::uint8_t kind,std::uin
         d.status=SharedSkillStatus::SingleProfile;d.chosen_profile=tp?t:c;
     } else d.status=d.profiles.size()==1?SharedSkillStatus::SingleProfile:
         SharedSkillStatus::UnresolvedRegionalProfiles;
+    // Empty-profile owner specification is explicit; it neither manufactures
+    // native source rows nor promotes any present unknown profile/status.
+    if(d.profiles.empty() && d.owner_rule)d.status=SharedSkillStatus::OwnerCustom;
     // Text selection is independent of common numeric selection: nonempty
     // pinned Traditional TW first; then pinned CN literal converted for display.
     for(bool short_text:{false,true}) {
