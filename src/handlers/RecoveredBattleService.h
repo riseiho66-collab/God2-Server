@@ -1,5 +1,6 @@
 #pragma once
 #include "game/Battle.h"
+#include "db/SqliteCompanionRepository.h"
 #include "game/RevivalRecovery.h"
 #include "net/Session.h"
 #include "protocol/RecoveredBattlePose.h"
@@ -61,6 +62,10 @@ public:
         // CUSTOM-0103: trusted actual prepared bootstrap only. No client
         // receipt, native constructor success or ordinary shared PvP implied.
         std::optional<RecoveredBattlePose::Publication> pose_publication;
+        // CUSTOM-0139: real saved source for these explicitly authorized rules.
+        SqliteCompanionRepository* owned_skill_repository{};
+        std::unordered_set<std::uint16_t> saved_owned_skills;
+        bool nonpersistent_owned_skills{}; // Explicit existing isolated diagnostic only.
     };
     static constexpr std::uint16_t skill_key(std::uint8_t kind,std::uint8_t id) noexcept {
         return static_cast<std::uint16_t>((std::uint16_t{kind}<<8)|id);
@@ -70,7 +75,10 @@ public:
     // Called after all encoding succeeds, before noexcept in-memory publication.
     using Commit = std::function<void(const BattleSnapshot&,const BattleSnapshot&)>;
     using CheckpointCommit = std::function<void(const BattleCheckpoint&,const BattleCheckpoint&)>;
-    void bind(Session& session, Battle battle, Policy policy, Battle::Encode encode,Commit commit={},CheckpointCommit checkpoint_commit={});
+    using OwnedCheckpointCommit = std::function<void(const BattleCheckpoint&,const BattleCheckpoint&,
+        const SelectedDeitySkillReadset&)>;
+    void bind(Session& session, Battle battle, Policy policy, Battle::Encode encode,Commit commit={},
+        CheckpointCommit checkpoint_commit={},OwnedCheckpointCommit owned_checkpoint_commit={});
     std::optional<std::vector<std::uint8_t>> handle(
         Session& session, std::span<const RecoveredWorldRecords::Record> records);
     const BattleSnapshot& inspect(std::uint64_t session) const;
@@ -121,7 +129,10 @@ private:
         std::weak_ptr<Session> pose_session;
         std::optional<std::chrono::steady_clock::time_point> pose_last_sent;
         std::optional<std::uint8_t> pose_last_symbol;
+        OwnedCheckpointCommit owned_checkpoint_commit;
+        bool owned_skill_operating{},owned_skill_reentered{},owned_skill_remove_pending{};
     };
+    void reject_owned_skill_reentry(std::uint64_t session);
     Battle::Rule rule_;
     std::unordered_map<std::uint64_t,Bound> bindings_;
 };

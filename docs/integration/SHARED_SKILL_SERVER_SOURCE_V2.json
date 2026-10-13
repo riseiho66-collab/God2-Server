@@ -1,0 +1,88 @@
+{
+  "contract_version": "god2-server/shared-skills/source/2",
+  "phase": "PHASE1",
+  "custom_design": "CUSTOM-0139",
+  "source_files": [
+    {
+      "path": "src/db/SqliteCompanionRepository.h",
+      "bytes": 9735,
+      "sha256": "ae00c31d9a52681318c0c6a611e7a395fc41eb420eaf612830cc036f6719077c"
+    },
+    {
+      "path": "src/db/SqliteCompanionRepository.cpp",
+      "bytes": 40828,
+      "sha256": "38c69f367795e4221dd8c65a493314b8212d2f3906fa532f14453dda62542dfd"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.h",
+      "bytes": 16241,
+      "sha256": "9cd28da6bdb93e96d7c5bbf7fd252abeb735676621c22efc393217ec4a939e78"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.cpp",
+      "bytes": 67454,
+      "sha256": "a7648f8b866c609cc4d6101ac9b23943a97e27061a19b0e7fd54d2667678a8a7"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.h",
+      "bytes": 8405,
+      "sha256": "f5b4f3b64918e9bf7aa497aea6ffb943f1b994044116cfa129c2eed0ca089722"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.cpp",
+      "bytes": 43740,
+      "sha256": "4fe0c73e18157d73b634c87b33eda4614cd47c113cfe4d6d1cdd764454d75581"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "bytes": 728069,
+      "sha256": "b6fc8890cdd268bc657df3ce147c9929c1dbb500a06157d54acbcda9020b0ba5"
+    }
+  ],
+  "traditional_names_primary": true,
+  "skills": [
+    {
+      "kind": 0,
+      "id": 126,
+      "design_id": "CUSTOM-0058",
+      "name": "瞬影三煞斬"
+    },
+    {
+      "kind": 0,
+      "id": 150,
+      "design_id": "CUSTOM-0059",
+      "name": "牛轉仙界踏"
+    }
+  ],
+  "qualification": {
+    "common_definition_query_source_connected": true,
+    "common_saved_readset_consumption_source_connected": true,
+    "existing_TW_diagnostic_Application_supplier_connected": true,
+    "actual_general_TW_gameplay_host_complete": false,
+    "CN_custom_cast_source_connected": false,
+    "CN_custom_native_profile_qualified": false,
+    "CN_native_effect_source_qualified": false,
+    "CN_runtime_enabled": false,
+    "learned_grant": false,
+    "native_source": false
+  },
+  "persistence_branches": [
+    "active_checkpoint",
+    "terminal_checkpoint",
+    "resources_without_checkpoint",
+    "settlement_without_checkpoint"
+  ],
+  "owned_settlement_request_version": 4,
+  "ordinary_requests_preserved": true,
+  "explicit_nonpersistent_scope": "existing isolated diagnostic with no durable callbacks",
+  "callback_contract": "synchronous game executor; no reentry/send/event pumping",
+  "postcommit_fence_limit": "refuse stale memory publication; cannot roll back successful COMMIT",
+  "new_native_formulas": 0,
+  "build": false,
+  "test": false,
+  "runtime": false,
+  "game_database_SQL": false,
+  "migrate": false,
+  "activate": false,
+  "deploy": false
+}

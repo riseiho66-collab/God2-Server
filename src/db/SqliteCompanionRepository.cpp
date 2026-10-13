@@ -272,6 +272,12 @@ std::optional<SelectedDeitySkillReadset> SqliteCompanionRepository::load_selecte
     return read_selected_deity_skill(account,character,kind,skill);
 }
 bool SqliteCompanionRepository::selected_deity_skill_current(const SelectedDeitySkillReadset& readset) {
+    return selected_deity_skill_current_impl(readset,false);
+}
+bool SqliteCompanionRepository::selected_deity_skill_current_in_transaction(const SelectedDeitySkillReadset& readset) {
+    return selected_deity_skill_current_impl(readset,true);
+}
+bool SqliteCompanionRepository::selected_deity_skill_current_impl(const SelectedDeitySkillReadset& readset,bool borrowed) {
     if(readset_reading_) {
         readset_reentered_=true;
         throw DatabaseError("Selected deity readset reentry rejected");
@@ -279,7 +285,7 @@ bool SqliteCompanionRepository::selected_deity_skill_current(const SelectedDeity
     const auto owned=readset;
     const auto identity=owned.identity_.lock();
     if(owned.repository_!=this || !identity || identity!=readset_identity_) return false;
-    const auto actual=read_selected_deity_skill(owned.account(),owned.character(),owned.kind(),owned.definition_id());
+    const auto actual=read_selected_deity_skill(owned.account(),owned.character(),owned.kind(),owned.definition_id(),borrowed);
     return actual && actual->selection()==owned.selection() &&
         actual->deity().revision==owned.deity().revision &&
         actual->deity().provenance==owned.deity().provenance &&
@@ -289,24 +295,24 @@ bool SqliteCompanionRepository::selected_deity_skill_current(const SelectedDeity
         actual->skill().encode()==owned.skill().encode();
 }
 std::optional<SelectedDeitySkillReadset> SqliteCompanionRepository::read_selected_deity_skill(
-        std::uint64_t account,std::uint64_t character,std::uint8_t kind,std::uint8_t skill) {
+        std::uint64_t account,std::uint64_t character,std::uint8_t kind,std::uint8_t skill,bool borrowed) {
     if(readset_reading_) {
         readset_reentered_=true;
         throw DatabaseError("Selected deity readset reentry rejected");
     }
     readset_reading_=true;readset_reentered_=false;
     struct Exit { bool& active; ~Exit(){active=false;} } exit{readset_reading_};
-    if(!db_ || !account || !character || !sqlite3_get_autocommit(db_))
-        throw DatabaseError("Selected deity readset requires owner and autocommit connection");
+    if(!db_ || !account || !character || bool(sqlite3_get_autocommit(db_))==borrowed)
+        throw DatabaseError("Selected deity readset requires owner and matching transaction scope");
     const auto changes=sqlite3_total_changes64(db_);
     // Explicit main qualification prevents an attached/TEMP table from being
     // mistaken for the actual same-connection saved-state source.
     struct Read {
-        sqlite3* db;bool committed=false;
-        explicit Read(sqlite3* value):db(value){sqlite_detail::execute(db,"BEGIN");}
-        ~Read(){if(!committed)sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}
-        void commit(){sqlite_detail::execute(db,"COMMIT");committed=true;}
-    } read(db_);
+        sqlite3* db;bool borrowed,committed=false;
+        Read(sqlite3* value,bool borrow):db(value),borrowed(borrow){if(!borrowed)sqlite_detail::execute(db,"BEGIN");}
+        ~Read(){if(!borrowed && !committed)sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}
+        void commit(){if(!borrowed)sqlite_detail::execute(db,"COMMIT");committed=true;}
+    } read(db_,borrowed);
     const auto fence=[&] {
         if(readset_reentered_ || sqlite3_get_autocommit(db_) || sqlite3_total_changes64(db_)!=changes)
             throw DatabaseError("Selected deity readset changed during observation");
@@ -368,7 +374,7 @@ std::optional<SelectedDeitySkillReadset> SqliteCompanionRepository::read_selecte
         }
     }
     fence();read.commit();
-    if(readset_reentered_ || !sqlite3_get_autocommit(db_) || sqlite3_total_changes64(db_)!=changes)
+    if(readset_reentered_ || bool(sqlite3_get_autocommit(db_))==borrowed || sqlite3_total_changes64(db_)!=changes)
         throw DatabaseError("Selected deity readset completion changed");
     return result;
 }

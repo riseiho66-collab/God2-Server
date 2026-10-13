@@ -1,5 +1,8 @@
 #include "db/SqliteRecoveredCharacterRepository.h"
 #include "db/SqliteSupport.h"
+#include "db/SqliteCompanionRepository.h"
+#include "game/ShunyingSanshazhan.h"
+#include "game/ThousandBulls.h"
 #include "game/RevivalRecoveryCodec.h"
 #include "game/ExtendedExperienceAmount.h"
 #include <algorithm>
@@ -511,7 +514,8 @@ std::optional<StoredBattleCheckpoint> SqliteRecoveredCharacterRepository::load_c
 StoredBattleCheckpoint SqliteRecoveredCharacterRepository::commit_checkpoint(
         std::uint64_t account,std::uint64_t character,const std::optional<StoredBattleCheckpoint>& expected,
         const CharacterResources& expected_resources,BattleCheckpoint next,CharacterResources resources,
-        const std::string& policy_id,const std::optional<RevivalRecovery>& revival) {
+        const std::string& policy_id,const std::optional<RevivalRecovery>& revival,
+        const OwnedSkillCheckpointAuthority* owned_skill) {
     std::string document;
     std::string phase_document;
     if(revival) {
@@ -533,6 +537,7 @@ StoredBattleCheckpoint SqliteRecoveredCharacterRepository::commit_checkpoint(
     }
     if(controlled!=1) throw DatabaseError("Checkpoint requires exactly one owned diagnostic actor");
     sqlite_detail::Transaction transaction(db_);
+    require_owned_skill_current(account,character,owned_skill);
     const auto current=load_checkpoint(account,character,next.snapshot.id);
     if(current!=expected || load_resources(account,character)!=std::optional<CharacterResources>{expected_resources})
         throw DatabaseError("Checkpoint baseline conflict");
@@ -564,6 +569,7 @@ StoredBattleCheckpoint SqliteRecoveredCharacterRepository::commit_checkpoint(
     if(load_checkpoint(account,character,result.checkpoint.snapshot.id)!=std::optional<StoredBattleCheckpoint>{result} ||
        load_resources(account,character)!=std::optional<CharacterResources>{saved})
         throw DatabaseError("Checkpoint commit readback mismatch");
+    require_owned_skill_current(account,character,owned_skill);
     transaction.commit();return result;
 }
 
@@ -601,6 +607,33 @@ StoredBattleCheckpoint SqliteRecoveredCharacterRepository::commit_revival_phase(
     transaction.commit();return result;
 }
 
+// CUSTOM-0139: only the actual private saved readset and same connection qualify.
+void SqliteRecoveredCharacterRepository::require_owned_skill_current(std::uint64_t account,
+        std::uint64_t character,const OwnedSkillCheckpointAuthority* authority) {
+    if(!authority)return;
+    const auto& saved=authority->readset;
+    const bool supported=(saved.kind()==ShunyingSanshazhan::kind && saved.definition_id()==ShunyingSanshazhan::id) ||
+        (saved.kind()==ThousandBulls::kind && saved.definition_id()==ThousandBulls::id);
+    if(!supported || saved.account()!=account || saved.character()!=character ||
+       !authority->repository.uses_connection(db_) ||
+       !authority->repository.selected_deity_skill_current_in_transaction(saved))
+        throw DatabaseError("Owned skill saved authority changed");
+}
+CharacterResources SqliteRecoveredCharacterRepository::commit_owned_skill_resources(
+        std::uint64_t account,std::uint64_t character,const CharacterResources& expected,
+        CharacterResources next,const OwnedSkillCheckpointAuthority& authority) {
+    sqlite_detail::Transaction transaction(db_);
+    require_owned_skill_current(account,character,&authority);
+    next=commit_resources_in_transaction(account,character,expected,std::move(next));
+    require_owned_skill_current(account,character,&authority);
+    transaction.commit();return next;
+}
+BattleSettlement SqliteRecoveredCharacterRepository::settle_owned_skill_battle(
+        std::uint64_t account,std::uint64_t character,std::uint64_t battle,
+        const CharacterResources& expected,CharacterResources next,bool won,std::uint64_t experience,
+        const std::optional<BattleProgressionCommit>& progression,const OwnedSkillCheckpointAuthority& authority) {
+    return settle_battle_impl(account,character,battle,expected,std::move(next),won,experience,progression,nullptr,nullptr,&authority);
+}
 CharacterResources SqliteRecoveredCharacterRepository::commit_resources(
     std::uint64_t account,std::uint64_t character,
     const std::optional<CharacterResources>& expected,CharacterResources next) {
@@ -716,13 +749,14 @@ BattleSettlement SqliteRecoveredCharacterRepository::settle_battle(
 BattleSettlement SqliteRecoveredCharacterRepository::settle_checkpoint(
     std::uint64_t account,std::uint64_t character,const StoredBattleCheckpoint& checkpoint,
     const CharacterResources& expected,const BattleCheckpoint& terminal,CharacterResources next,bool won,std::uint64_t experience,
-    const std::optional<BattleProgressionCommit>& progression) {
-    return settle_battle_impl(account,character,terminal.snapshot.id,expected,std::move(next),won,experience,progression,&checkpoint,&terminal);
+    const std::optional<BattleProgressionCommit>& progression,const OwnedSkillCheckpointAuthority* owned_skill) {
+    return settle_battle_impl(account,character,terminal.snapshot.id,expected,std::move(next),won,experience,progression,&checkpoint,&terminal,owned_skill);
 }
 BattleSettlement SqliteRecoveredCharacterRepository::settle_battle_impl(
     std::uint64_t account,std::uint64_t character,std::uint64_t battle,
     const CharacterResources& expected,CharacterResources next,bool won,std::uint64_t experience,
-    const std::optional<BattleProgressionCommit>& progression,const StoredBattleCheckpoint* checkpoint,const BattleCheckpoint* terminal) {
+    const std::optional<BattleProgressionCommit>& progression,const StoredBattleCheckpoint* checkpoint,const BattleCheckpoint* terminal,
+    const OwnedSkillCheckpointAuthority* owned_skill) {
     // Validate wide award and complete HP values BEFORE canonical replay.
     // It is still an actual server-authorized CUSTOM diagnostic outcome.
     if(!ExtendedExperienceAmount::from(experience) || !expected.valid_health() || !next.valid_health() ||
@@ -782,8 +816,24 @@ BattleSettlement SqliteRecoveredCharacterRepository::settle_battle_impl(
         request_data["checkpoint"]={{"before",before_document},{"after",terminal_document},
             {"resource_revision",checkpoint->resource_revision},{"policy_id",checkpoint->policy_id}};
     }
+    // CUSTOM-0139: a durable retry retains the exact selected saved authority.
+    // Old ordinary requests keep their original structured version and bytes.
+    if(owned_skill) {
+        const auto& saved=owned_skill->readset;
+        std::vector<std::array<std::uint8_t,4>> skills;
+        for(const auto& skill:saved.deity().snapshot.skills)skills.push_back(skill.encode());
+        request_data["version"]=4;
+        request_data["owned_skill_readset"]={
+            {"design_id","CUSTOM-0139"},{"account",saved.account()},{"character",saved.character()},
+            {"selection_key",saved.selection().key},{"selection_revision",saved.selection().revision},
+            {"deity_revision",saved.deity().revision},{"declaration",saved.deity().snapshot.declaration.encode()},
+            {"status",saved.deity().snapshot.status.encode()},{"skills",skills},{"selected_skill",saved.skill().encode()},
+            {"source_sha256",saved.deity().provenance.source_sha256},
+            {"authority",saved.deity().provenance.authority},{"evidence_id",saved.deity().provenance.evidence_id}};
+    }
     const auto request=request_data.dump();
     sqlite_detail::Transaction transaction(db_);
+    require_owned_skill_current(account,character,owned_skill);
     const auto current=load_resources(account,character); // Ownership applies to retries too.
     {
         sqlite_detail::Statement reservation(db_,
@@ -805,6 +855,7 @@ BattleSettlement SqliteRecoveredCharacterRepository::settle_battle_impl(
             if(expected.revision>=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) ||
                next.revision!=expected.revision+1)
                 throw DatabaseError("Invalid settlement readback");
+            require_owned_skill_current(account,character,owned_skill);
             transaction.commit();
             return result; // Do not restore old resources or XP over a later battle.
         }
@@ -861,6 +912,7 @@ BattleSettlement SqliteRecoveredCharacterRepository::settle_battle_impl(
            std::optional<StoredBattleCheckpoint>{{*terminal,next.revision,checkpoint->policy_id}})
             throw DatabaseError("Terminal checkpoint readback mismatch");
     }
+    require_owned_skill_current(account,character,owned_skill);
     transaction.commit();
     return {next,total,resulting_role};
 }

@@ -12,6 +12,14 @@ struct sqlite3;
 
 namespace god2 {
 class SqliteNativeCharacterSummarySnapshotRepository;
+class SqliteCompanionRepository;
+class SelectedDeitySkillReadset;
+// CUSTOM-0139: borrowed actual saved observation, consumed in the same DB txn.
+// It grants neither native CN casting nor a skill absent from the saved row.
+struct OwnedSkillCheckpointAuthority {
+    SqliteCompanionRepository& repository;
+    const SelectedDeitySkillReadset& readset;
+};
 // CUSTOM-0021: completion requires a matching CUSTOM-0022 reward receipt.
 struct StoredTownGuideProgress {
     std::uint32_t stage{}, journal_description{};
@@ -109,12 +117,14 @@ public:
     BattleSettlement settle_checkpoint(std::uint64_t account,std::uint64_t character,
         const StoredBattleCheckpoint& expected_checkpoint,const CharacterResources& expected_resources,
         const BattleCheckpoint& terminal,CharacterResources resources,bool won,std::uint64_t experience,
-        const std::optional<BattleProgressionCommit>& progression={});
+        const std::optional<BattleProgressionCommit>& progression={},
+        const OwnedSkillCheckpointAuthority* owned_skill=nullptr);
     std::optional<StoredBattleCheckpoint> load_checkpoint(std::uint64_t account,std::uint64_t character,std::uint64_t battle);
     StoredBattleCheckpoint commit_checkpoint(std::uint64_t account,std::uint64_t character,
         const std::optional<StoredBattleCheckpoint>& expected,const CharacterResources& expected_resources,
         BattleCheckpoint next,CharacterResources resources,const std::string& policy_id,
-        const std::optional<RevivalRecovery>& revival={});
+        const std::optional<RevivalRecovery>& revival={},
+        const OwnedSkillCheckpointAuthority* owned_skill=nullptr);
     // CUSTOM-0017: receipt/rearm only; resources and battle revision stay unchanged.
     StoredBattleCheckpoint commit_revival_phase(std::uint64_t account,std::uint64_t character,
         const StoredBattleCheckpoint& expected,const CharacterResources& resources,const RevivalRecovery& next);
@@ -132,6 +142,12 @@ public:
     std::optional<CharacterResources> load_resources(std::uint64_t account,std::uint64_t character) override;
     CharacterResources commit_resources(std::uint64_t account,std::uint64_t character,
         const std::optional<CharacterResources>& expected,CharacterResources next) override;
+    // CUSTOM-0139: additive typed variants for existing noncheckpoint storage.
+    CharacterResources commit_owned_skill_resources(std::uint64_t account,std::uint64_t character,
+        const CharacterResources& expected,CharacterResources next,const OwnedSkillCheckpointAuthority&);
+    BattleSettlement settle_owned_skill_battle(std::uint64_t account,std::uint64_t character,
+        std::uint64_t battle,const CharacterResources& expected,CharacterResources next,bool won,std::uint64_t experience,
+        const std::optional<BattleProgressionCommit>&,const OwnedSkillCheckpointAuthority&);
     RecoveredCharacter create(std::uint64_t account_id,
                               const std::array<std::uint8_t, 40>& profile) override;
     struct NewOwnedCharacter {
@@ -215,7 +231,10 @@ private:
     BattleSettlement settle_battle_impl(std::uint64_t account,std::uint64_t character,std::uint64_t battle,
         const CharacterResources& expected,CharacterResources next,bool won,std::uint64_t experience,
         const std::optional<BattleProgressionCommit>& progression,
-        const StoredBattleCheckpoint* checkpoint=nullptr,const BattleCheckpoint* terminal=nullptr);
+        const StoredBattleCheckpoint* checkpoint=nullptr,const BattleCheckpoint* terminal=nullptr,
+        const OwnedSkillCheckpointAuthority* owned_skill=nullptr);
+    void require_owned_skill_current(std::uint64_t account,std::uint64_t character,
+        const OwnedSkillCheckpointAuthority*);
     RoleResourceCommit commit_role_resources_in_transaction(std::uint64_t account,std::uint64_t character,
         const std::optional<CharacterRoleSnapshot>& expected_role,const CharacterResources& expected_resources,
         CharacterRoleSnapshot next_role,CharacterResources next_resources);

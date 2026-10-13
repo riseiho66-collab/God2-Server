@@ -149,11 +149,15 @@ public:
         const std::function<void(const Pet2TransferCommit&)>& prepare);
 private:
     friend class OwnedTaiwanPkCompanionSource;
+    friend class SqliteRecoveredCharacterRepository;
+    // CUSTOM-0139: private read-only validation inside the same writer txn.
+    bool selected_deity_skill_current_in_transaction(const SelectedDeitySkillReadset&);
+    bool selected_deity_skill_current_impl(const SelectedDeitySkillReadset&,bool borrowed);
     // CUSTOM-0129 borrow the RESERVED transaction; no BEGIN, callback or write.
     // Complete privately minted roster equality, not a live Session qualifier.
     bool deity_roster_current_in_transaction(const OwnedDeityRosterReadset&);
     std::optional<SelectedDeitySkillReadset> read_selected_deity_skill(
-        std::uint64_t account,std::uint64_t character,std::uint8_t kind,std::uint8_t skill);
+        std::uint64_t account,std::uint64_t character,std::uint8_t kind,std::uint8_t skill,bool borrowed=false);
     void require_owner(std::uint64_t account,std::uint64_t character);
     void require_no_pending_battle(std::uint64_t character);
     static void require_provenance(const CompanionProvenance& provenance);

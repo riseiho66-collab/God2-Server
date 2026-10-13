@@ -276,3 +276,12 @@ or fabricate original native custom rows. Preserve accepted TW direction,
 real-caster shadows, permitted shadowless clones and four presentation phases.
 PHASE1 remains static source/accounting only; no build/tests/runtime/DB SQL/
 migration/activation/deployment. Goal remains active after the owner's resume.
+
+CUSTOM-0139 records the common owner-skill saved readset consumption policy:
+retain the actual selected deity/selection revision and complete saved bytes
+for each authenticated126/150 action; consume on the SAME SQLite connection
+inside actual active/terminal checkpoint and resource/settlement transactions.
+This is source ownership, not recovered skill arithmetic or CN wire authority.
+Keep diagnostic hosting explicitly scoped and ordinary/trial/revival defaults
+unchanged. CN actual actor/list/resources/native87/effects remain separately
+qualified; no original CN453 rows or learned rights may be fabricated.

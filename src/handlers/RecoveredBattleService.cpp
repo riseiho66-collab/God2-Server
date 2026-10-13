@@ -1,5 +1,7 @@
 #include "handlers/RecoveredBattleService.h"
 #include "protocol/RecoveredWorldFrame.h"
+#include "game/ShunyingSanshazhan.h"
+#include "game/ThousandBulls.h"
 #include <stdexcept>
 #include <bit>
 #include <type_traits>
@@ -21,7 +23,26 @@ void validate_reply(std::span<const std::uint8_t> reply) {
 RecoveredBattleService::RecoveredBattleService(Battle::Rule rule) : rule_(std::move(rule)) {
     if (!rule_) throw std::invalid_argument("Missing battle rule");
 }
-void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy, Battle::Encode encode,Commit commit,CheckpointCommit checkpoint_commit) {
+void RecoveredBattleService::reject_owned_skill_reentry(std::uint64_t session) {
+    const auto it=bindings_.find(session);
+    if(it!=bindings_.end() && it->second.owned_skill_operating) {
+        it->second.owned_skill_reentered=true;
+        throw std::invalid_argument("Owned skill operation reentry rejected");
+    }
+}
+void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy, Battle::Encode encode,Commit commit,CheckpointCommit checkpoint_commit,OwnedCheckpointCommit owned_checkpoint_commit) {
+    reject_owned_skill_reentry(session.id());
+    if(bool(policy.owned_skill_repository)!=!policy.saved_owned_skills.empty() ||
+       (policy.owned_skill_repository && (commit || policy.diagnostic_manual_receipts || policy.diagnostic_revival ||
+        (policy.nonpersistent_owned_skills ?
+            (!policy.diagnostic_single_action || checkpoint_commit || owned_checkpoint_commit) :
+            (!checkpoint_commit || !owned_checkpoint_commit)))) ||
+       (!policy.owned_skill_repository && (owned_checkpoint_commit || policy.nonpersistent_owned_skills)))
+        throw std::invalid_argument("Owned skill requires a paired actual saved and persistence source");
+    for(const auto key:policy.saved_owned_skills)
+        if((key!=skill_key(ShunyingSanshazhan::kind,ShunyingSanshazhan::id) &&
+            key!=skill_key(ThousandBulls::kind,ThousandBulls::id)) || !policy.skills.contains(key))
+            throw std::invalid_argument("Invalid owned skill saved policy");
     const auto profile=battle.inspect().numeric_profile;
     if((policy.numeric_profile!=BattleNumericProfile::LegacyCustom &&
         policy.numeric_profile!=BattleNumericProfile::ExtendedHealth64) ||
@@ -122,9 +143,11 @@ void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy
                                       std::move(battle),std::move(policy),std::move(encode),std::move(commit),std::move(checkpoint_commit)});
     bindings_.at(session.id()).pose_battle_generation=pose_generation;
     bindings_.at(session.id()).pose_session=pose_session;
+    bindings_.at(session.id()).owned_checkpoint_commit=std::move(owned_checkpoint_commit);
 }
 std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
         Session& session, std::span<const RecoveredWorldRecords::Record> records) {
+    reject_owned_skill_reentry(session.id());
     const auto found=bindings_.find(session.id());
     if (found==bindings_.end() || session.state()!=SessionState::InBattle ||
         records.empty() || records.size()>8192) return std::nullopt;
@@ -431,6 +454,31 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
             return refused;
         }
     }
+    // CUSTOM-0139: after full authenticated key/sequence/target selection, own
+    // a fresh saved observation through this one staged action and persistence.
+    std::optional<SelectedDeitySkillReadset> owned_skill;
+    struct OperationExit {
+        RecoveredBattleService& service;std::uint64_t id;bool& active;bool& remove_pending;
+        OperationExit(RecoveredBattleService& owner,std::uint64_t key,bool& value,bool& pending) noexcept
+            :service(owner),id(key),active(value),remove_pending(pending){}
+        ~OperationExit(){active=false;if(remove_pending)service.remove(id);}
+    };
+    std::optional<OperationExit> owned_operation;
+    const auto generation=session.battle_generation();
+    const auto current_owned=[&] {
+        if(bound.owned_skill_reentered || bound.session!=&session || session.closing() ||
+           session.state()!=SessionState::InBattle || session.account_id!=bound.account ||
+           session.character_id!=bound.character || session.battle_generation()!=generation)
+            throw std::invalid_argument("Owned skill session changed");
+    };
+    if(first && bound.policy.saved_owned_skills.contains(skill_key(first->selection_kind_byte,first->selection_id_byte))) {
+        bound.owned_skill_operating=true;bound.owned_skill_reentered=false;
+        owned_operation.emplace(*this,session.id(),bound.owned_skill_operating,bound.owned_skill_remove_pending);
+        owned_skill=bound.policy.owned_skill_repository->load_selected_deity_skill(
+            bound.account,bound.character,first->selection_kind_byte,first->selection_id_byte);
+        current_owned();
+        if(!owned_skill)return std::nullopt;
+    }
     // No client revision field is invented. This is internal optimistic state;
     // native turn/ack admission and replay detection remain separate work.
     const auto encode=[&](const auto& state,const auto& result) {
@@ -464,6 +512,7 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
             throw;
         auto refused=bound.policy.diagnostic_mp_refusal(bound.battle.inspect(),*action,refusal);
         validate_reply(refused);
+        if(owned_skill)current_owned();
         return refused;
     }
     if(bound.policy.diagnostic_retaliation && staged.active()) {
@@ -474,12 +523,22 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
         }
     }
     static_assert(std::is_nothrow_move_assignable_v<Battle>);
+    if(owned_skill) {
+        current_owned();
+        if(!bound.policy.owned_skill_repository->selected_deity_skill_current(*owned_skill))
+            throw std::invalid_argument("Owned skill saved selection changed during staging");
+        current_owned();
+    }
     if(bound.commit) bound.commit(bound.battle.inspect(),staged.inspect());
     if(bound.checkpoint_commit) {
         const auto before=bound.battle.checkpoint();
         const auto after=staged.checkpoint();
-        bound.checkpoint_commit(before,after);
+        if(owned_skill)bound.owned_checkpoint_commit(before,after,*owned_skill);
+        else bound.checkpoint_commit(before,after);
     }
+    // Persistence must obey the existing no-reentry/no-send callback contract.
+    // This fence prevents stale in-memory publication; it cannot undo COMMIT.
+    if(owned_skill)current_owned();
     bound.battle=std::move(staged);
     bound.action_received=true;
     if(control_received) bound.control_received=true;
@@ -490,6 +549,7 @@ const BattleSnapshot& RecoveredBattleService::inspect(std::uint64_t session) con
 }
 std::vector<std::uint8_t> RecoveredBattleService::apply_native_deltas(Session& session,std::uint64_t revision,
         std::span<const RecoveredBattleDelta::Record> records,const Battle::NativeDeltaEncode& encode) {
+    reject_owned_skill_reentry(session.id());
     const auto found=bindings_.find(session.id());
     if(found==bindings_.end())throw std::invalid_argument("Native results require a bound battle");
     auto& bound=found->second;
@@ -510,6 +570,7 @@ std::vector<std::uint8_t> RecoveredBattleService::apply_native_deltas(Session& s
     return reply;
 }
 void RecoveredBattleService::rearm_diagnostic(Session& session,std::uint64_t expected_revision) {
+    reject_owned_skill_reentry(session.id());
     const auto it=bindings_.find(session.id());
     if(it==bindings_.end()) throw std::invalid_argument("Missing diagnostic battle");
     auto& bound=it->second;
@@ -548,13 +609,20 @@ bool RecoveredBattleService::diagnostic_timeout_round_ready(const Session& sessi
         diagnostic_round_ready(session);
 }
 void RecoveredBattleService::set_revival_phase_commit(Session& session,PhaseCommit commit) {
+    reject_owned_skill_reentry(session.id());
     (void)checkpoint_revival(session);
     auto& bound=bindings_.at(session.id());
     if(!commit || bound.phase_commit || !bound.checkpoint_commit)
         throw std::invalid_argument("Revival phase persistence requires one paired checkpoint callback");
     bound.phase_commit=std::move(commit);
 }
-void RecoveredBattleService::remove(std::uint64_t session) noexcept { bindings_.erase(session); }
+void RecoveredBattleService::remove(std::uint64_t session) noexcept {
+    const auto it=bindings_.find(session);
+    if(it!=bindings_.end() && it->second.owned_skill_operating) {
+        it->second.owned_skill_reentered=true;it->second.owned_skill_remove_pending=true;return;
+    }
+    bindings_.erase(session);
+}
 RecoveredBattleService::RevivalRecovery RecoveredBattleService::checkpoint_revival(const Session& session) const {
     const auto it=bindings_.find(session.id());
     if(it==bindings_.end()) throw std::invalid_argument("Missing revival recovery binding");
@@ -572,6 +640,7 @@ RecoveredBattleService::RevivalRecovery RecoveredBattleService::checkpoint_reviv
         b.revival_opening_received,b.action_received,b.control_received,p.diagnostic_revival->opening_notice};
 }
 void RecoveredBattleService::restore_revival_phase(Session& session,const RevivalRecovery& recovery) {
+    reject_owned_skill_reentry(session.id());
     const auto current=checkpoint_revival(session);
     if(recovery.version!=1 || recovery.account!=current.account || recovery.character!=current.character ||
        recovery.battle!=current.battle || recovery.opening_notice!=current.opening_notice ||
@@ -591,6 +660,7 @@ void RecoveredBattleService::restore_revival_phase(Session& session,const Reviva
     bound.revival_phase_restored=true;
 }
 void RecoveredBattleService::expect_revival_reconnect_notice(Session& session) {
+    reject_owned_skill_reentry(session.id());
     const auto phase=checkpoint_revival(session);
     auto& bound=bindings_.at(session.id());
     if(!bound.revival_phase_restored || bound.reconnect_notice!=Bound::ReconnectNotice::None ||
@@ -602,6 +672,7 @@ void RecoveredBattleService::expect_revival_reconnect_notice(Session& session) {
     bound.reconnect_revision=phase.battle.snapshot.revision;
 }
 bool RecoveredBattleService::release_finished_diagnostic(Session& session) {
+    reject_owned_skill_reentry(session.id());
     const auto it=bindings_.find(session.id());
     if(it==bindings_.end()) return false;
     const auto& b=it->second;

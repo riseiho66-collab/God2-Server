@@ -5023,3 +5023,33 @@ handler/phase/fullroute0; globaldeltas0. TW156/252/world74=50partial11control
 parser67.6% notcompletion. Unique report20261013-tw-cn-common-owner-skill-definition-source-360.
 PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/productparser/codec/
 resource execution/gameDBSQL/import/migrate/activate/deploy. Goalactive.
+
+
+## Round361 — common owner skill action saved readset (2026-10-13)
+
+CUSTOM-0139 connects the actual selected deity learned observation for both
+kind0/126 CUSTOM-0058 and kind0/150 CUSTOM-0059 after authenticated complete
+C35 selection. Actual Application forwards the typed readset to active and
+terminal checkpoints and noncheckpoint resources/settlement writers, with
+same-connection private full-row checks inside BEGIN IMMEDIATE before writes
+and immediately before COMMIT. Owned canonical settlement replay version4
+pins complete saved selection/deity/provenance/skill bytes. No saved requests
+or schemas are rewritten. Ordinary/trial/revival/formulas/effect bodies stay
+unchanged. Existing isolated nonpersistent owner casts are explicitly scoped.
+Nested operations poison the action; removal is deferred to RAII cleanup.
+Final memory-publication fence cannot undo an already successful COMMIT; the
+existing synchronous no-reentry/no-send callback contract still applies.
+
+Actual Application hosting remains the existing TW diagnostic encounter,
+not a completed CN cast/list/actor/resource/87/effect pipeline. Original
+CN453 remains unchanged and provides no fabricated126/150 rows or rights.
+Server source capability is versioned in SHARED_SKILL_SERVER_SOURCE_V2.json.
+Bounded CN562510 complete152B/46sites only maps modifiers and calls564A30;
+80B table data, queuedHP/death/64-bit consumer child remains OPEN. Native
+package19/67662 seal6347e4dfa8da5523bf4926a53d2b88773cc708bb9cb634188895d93acd16a824.
+
+New actual source persistence branches4; complete bidirectional routes0;
+native opcodes/method credit/formulas0. TW156C2S/252S2C, world74=50partial+
+11control+13unconnected; CN156C2S/280phase/253supported lengths unchanged.
+Whole route denominator/percentage unknown. PHASE1 only: no build/tests/
+runtime/native/VM/codec/gameDBSQL/migration/activation/deployment. Goalactive.

@@ -5951,6 +5951,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                     if(diagnostic_vitals_sent.insert(session.id()).second) {
                                         std::uint32_t initial_hp=100,initial_mp=config.diagnostic_battle_revival ? 80u : (config.diagnostic_battle_mp_refusal ? 7u : 50u);
                                         RecoveredBattleService::CheckpointCommit resource_commit;
+                                        RecoveredBattleService::OwnedCheckpointCommit owned_resource_commit;
                                         std::shared_ptr<CharacterResources> durable_resources;
                                         std::shared_ptr<StoredBattleCheckpoint> revival_checkpoint;
                                         std::optional<StoredBattleCheckpoint> pending_checkpoint;
@@ -6040,11 +6041,15 @@ if(guild_officer_runtime && player_guild(session) &&
                                             }
                                             if(!pending_checkpoint) battle_id=repo.reserve_battle(session.account_id,session.character_id,*saved);
                                             durable_resources=std::make_shared<CharacterResources>(*saved);
-                                            resource_commit=[&repo,account=session.account_id,character=session.character_id,saved=durable_resources,battle_id,
+                                            auto persist_resources=[&repo,&companions=database.companions(),account=session.account_id,character=session.character_id,saved=durable_resources,battle_id,
                                                     &lua,level_snapshot=config.diagnostic_level_snapshot,growth_class,
                                                     visibility_checkpoint=config.diagnostic_visibility_checkpoint,span=config.diagnostic_progress_span,
                                                     award=config.diagnostic_battle_experience](
-                                                    const BattleCheckpoint& before_checkpoint,const BattleCheckpoint& after_checkpoint) {
+                                                    const BattleCheckpoint& before_checkpoint,const BattleCheckpoint& after_checkpoint,
+                                                    const SelectedDeitySkillReadset* owned_skill) {
+                                                std::optional<OwnedSkillCheckpointAuthority> authority;
+                                                if(owned_skill)authority.emplace(OwnedSkillCheckpointAuthority{companions,*owned_skill});
+                                                const auto* qualified=authority ? &*authority : nullptr;
                                                 const auto& before=before_checkpoint.snapshot;
                                                 const auto& after=after_checkpoint.snapshot;
                                                 const auto& old=*before.actors[0];const auto& next=*after.actors[0];
@@ -6087,22 +6092,27 @@ if(guild_officer_runtime && player_guild(session) &&
                                                         throw std::runtime_error("Persisted battle checkpoint diverged");
                                                     if(after.state==BattleState::Finished) {
                                                         auto committed=repo.settle_checkpoint(account,character,*stored,*saved,after_checkpoint,resources,
-                                                            *after.victorious_side==0,*after.victorious_side==0 ? award : 0,progression);
+                                                            *after.victorious_side==0,*after.victorious_side==0 ? award : 0,progression,qualified);
                                                         *saved=std::move(committed.resources);
                                                     } else {
                                                         auto next_resources=resources;
-                                                        const auto committed=repo.commit_checkpoint(account,character,stored,*saved,after_checkpoint,resources,stored->policy_id);
+                                                        const auto committed=repo.commit_checkpoint(account,character,stored,*saved,after_checkpoint,resources,stored->policy_id,{},qualified);
                                                         next_resources.revision=committed.resource_revision;
                                                         *saved=std::move(next_resources);
                                                     }
                                                     return;
                                                 }
                                                 auto committed=after.state==BattleState::Finished ?
-                                                    repo.settle_battle(account,character,battle_id,*saved,resources,
-                                                        *after.victorious_side==0,*after.victorious_side==0 ? award : 0,progression).resources :
-                                                    repo.commit_resources(account,character,*saved,resources);
+                                                    (qualified ? repo.settle_owned_skill_battle(account,character,battle_id,*saved,resources,
+                                                        *after.victorious_side==0,*after.victorious_side==0 ? award : 0,progression,*qualified).resources :
+                                                     repo.settle_battle(account,character,battle_id,*saved,resources,
+                                                        *after.victorious_side==0,*after.victorious_side==0 ? award : 0,progression).resources) :
+                                                    (qualified ? repo.commit_owned_skill_resources(account,character,*saved,resources,*qualified) :
+                                                     repo.commit_resources(account,character,*saved,resources));
                                                 *saved=std::move(committed);
                                             };
+                                            resource_commit=[persist_resources](const auto& before,const auto& after){persist_resources(before,after,nullptr);};
+                                            owned_resource_commit=[persist_resources](const auto& before,const auto& after,const auto& saved){persist_resources(before,after,&saved);};
                                         }
                                         const bool first_exchange_resume=pending_checkpoint && !config.diagnostic_battle_revival &&
                                             pending_checkpoint->checkpoint.snapshot.revision==3 &&
@@ -6210,6 +6220,13 @@ if(guild_officer_runtime && player_guild(session) &&
                                                         return diagnostic_shunying_manual_reply(state,result,
                                                             diagnostic_rounds_granted.at(session_id)-1);
                                                     });
+                                            }
+                                            if(owned_shunying || owned_thousand_bulls) {
+                                                // CUSTOM-0139: same saved/core source for either client adapter.
+                                                policy.owned_skill_repository=&database.companions();
+                                                policy.nonpersistent_owned_skills=!config.diagnostic_battle_resources;
+                                                if(owned_shunying)policy.saved_owned_skills.insert(RecoveredBattleService::skill_key(0,ShunyingSanshazhan::id));
+                                                if(owned_thousand_bulls)policy.saved_owned_skills.insert(RecoveredBattleService::skill_key(0,ThousandBulls::id));
                                             }
                                             if(owned_shunying) {
                                                 ShunyingSanshazhan::authorize(policy,ShunyingSanshazhan::owned_action(policy.basic),
@@ -6399,7 +6416,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                                         logical.insert(logical.end(),bulk.begin(),bulk.end());
                                                     }
                                                     return RecoveredWorldFrame::encode(logical);
-                                                },{},std::move(resource_commit));
+                                                },{},std::move(resource_commit),
+                                                (owned_shunying || owned_thousand_bulls) ? std::move(owned_resource_commit) : RecoveredBattleService::OwnedCheckpointCommit{});
                                             if(config.diagnostic_visibility_battle)
                                                 deliver_visibility(player_visibility.set_fight_title(session.id(),
                                                     session.account_id,session.character_id,{2,15},true));

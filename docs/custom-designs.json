@@ -5174,6 +5174,37 @@
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Owner requires all skills to share one common core with complete settings and TW Traditional text.",
   "replacement": "Complete actual formula/status/cast/checkpoint and independently qualified regional wire/effect bindings, then concentrated build/native acceptance."
+},
+{
+  "id": "CUSTOM-0139",
+  "name": "Common owner skill saved readset consumption at actual action persistence",
+  "authority": "OWNER_CUSTOM_SKILL_SOURCE_OWNERSHIP_NOT_NATIVE_FORMULA_OR_CN_WIRE",
+  "implementation": [
+    "src/db/SqliteCompanionRepository.h",
+    "src/db/SqliteCompanionRepository.cpp",
+    "src/db/SqliteRecoveredCharacterRepository.h",
+    "src/db/SqliteRecoveredCharacterRepository.cpp",
+    "src/handlers/RecoveredBattleService.h",
+    "src/handlers/RecoveredBattleService.cpp",
+    "src/core/Application.cpp"
+  ],
+  "native_gap": "CN original453 cannot grant126/150; real CN actor/list/resources/effect and application hosting remain open. Existing Application owner-skill path is isolated diagnostic battle source.",
+  "rules": {
+    "source": "Actual selected deity privately minted full saved readset on the same SQLite connection; exact account/character/selection/row/provenance/all skills/current skill comparison.",
+    "action": "After existing authenticated complete C35 key/sequence/targets selection and trusted common rule, load a fresh readset and retain it across staged rule/encode/retaliation; check actual Session identity/generation and saved selection before persistence.",
+    "persistence": "Actual active checkpoint, terminal checkpoint, noncheckpoint resources and settlement writers consume the typed readset inside BEGIN IMMEDIATE before writes and immediately before COMMIT; native saved row is not rewritten.",
+    "replay": "Owned settlement structured version4 includes exact saved selection/deity/provenance/skill bytes; original ordinary request formats remain unchanged.",
+    "scope": "Only existing authorized CUSTOM0058/0059 saved owner policies; ordinary/trial/revival defaults, balance values, packet layouts and accepted TW effects unchanged."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "Owner requires both custom skills to share saved rights and common gameplay before independent CN adapters.",
+  "replacement": "Complete actual CN host/actor/list/87 publication and native effects, then full source-route build/tests/native acceptance in later phase."
 }
 ]
 }
