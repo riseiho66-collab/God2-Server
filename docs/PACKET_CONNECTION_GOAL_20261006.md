@@ -5085,3 +5085,20 @@ nativeopcode/methodcredit/formulas0. TW156C2S/252S2C, world74=50partial+
 11control+13unconnected; CN156C2S/280phase/253supported lengths unchanged.
 Whole denominator/percentage unknown. PHASE1 no compiler/build/tests/runtime/
 native/API/CRT/VM/codec/gameDBSQL/migrate/activate/deploy. Goal active.
+
+
+## Round363 — actual owned bootstrap input continuation (2026-10-13)
+
+CUSTOM-0141 connects the actual126/150 bootstrap private response Attempt
+to original input continuation: atomic game publication before handoff,
+bounded raw bytes and old batch/read/deadline ownership; identical FIFO
+full write plus successful old bookkeeping/current phase+epoch releases
+once. Failure/drop/exception retires first, before fallible logging. Local
+Written is not native ACK/cache/list adoption/turn grant or durable rollback.
+Source contract shared-skills/source/4; 3existing C++files, 2existing owner
+bootstrap branches, 0complete bidirectional routes/opcodes/native formulas.
+TW156/252 world74=50partial+11control+13unconnected; CN156/280phase/253
+supported lengths unchanged. CN actual host/list/resources/87/effects and
+full native roster/control/auxiliary/queuedHP/poison status remain OPEN.
+PHASE1 static only: no compiler/build/tests/runtime/native/VM/codec/gameDBSQL/
+migrate/activate/deploy. Whole denominator/percentage unknown; goal active.

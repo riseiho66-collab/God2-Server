@@ -295,3 +295,12 @@ the owned operation reentry/deferred-removal guard. Written is local custody,
 not native ACK/list adoption/turn grant or an input barrier. Keep early native
 input scheduling, complete native roster/control and CN host/effects OPEN.
 No raw native rows, new learning events, balances or schemas are invented.
+
+CUSTOM-0141 connects only the actual typed owner126/150 bootstrap to an exact
+private response input continuation. Install its Attempt atomically on game
+before the original handoff; retain bounded raw input and original batches.
+Only that FIFO response full write plus successful old bookkeeping/current
+phase and epoch may release once, preserving read ownership. Retire first on
+failure/drop/exception, before fallible logging; Written stays physical local
+custody, not native ACK/cache/list adoption/turn grant or durable rollback.
+Other passive/ordinary defaults and CN host/list/resources/effects remain open.

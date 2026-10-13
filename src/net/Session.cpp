@@ -331,13 +331,33 @@ struct Session::Impl {
     struct WorldResponseAttempt {
         std::shared_ptr<WorldResponseWrite::Data> receipt;
         std::shared_ptr<std::vector<std::uint8_t>> frame;
+        enum class InputPhase {Unarmed,Armed,Released,Retired};
+        std::atomic<InputPhase> input_phase{InputPhase::Unarmed};
         explicit WorldResponseAttempt(std::shared_ptr<WorldResponseWrite::Data> value):receipt(std::move(value)) {}
         void fail() noexcept {
             auto pending=WorldResponseWriteStatus::Pending;
             receipt->status.compare_exchange_strong(pending,WorldResponseWriteStatus::Failed);
+            auto armed=InputPhase::Armed;
+            input_phase.compare_exchange_strong(armed,InputPhase::Retired);
+            if(input_phase.load()==InputPhase::Retired)
+                if(const auto self=receipt->session.lock()) {
+                    self->impl_->owned_input_retired.store(true);
+                    self->impl_->close_requested.store(true);
+                }
         }
         ~WorldResponseAttempt(){fail();}
     };
+    struct OwnedInputLease {
+        const std::shared_ptr<WorldResponseAttempt> attempt;
+        explicit OwnedInputLease(std::shared_ptr<WorldResponseAttempt> value):attempt(std::move(value)){}
+        ~OwnedInputLease(){if(attempt->input_phase.load()!=WorldResponseAttempt::InputPhase::Released)attempt->fail();}
+    };
+    // The atomic hold is installed on GAME before any strand response post.
+    // A separate callback/post/Write lease retires dropped delivery even while
+    // this strong hold keeps the immutable private Attempt alive.
+    std::atomic<std::shared_ptr<WorldResponseAttempt>> owned_response_input_hold;
+    std::atomic<bool> owned_input_retired{false}; // Persistent opt-in-only failure ingress latch.
+    std::shared_ptr<OwnedInputLease> owned_input_callback_lease; // Serial GAME only.
     std::shared_ptr<WorldResponseAttempt> world_response_callback_capture; // Serial game callback ONLY.
     struct NormalOutputPending {
         const std::shared_ptr<NormalWorldOutputAttempt::Data> data;
@@ -580,7 +600,8 @@ struct Session::Impl {
         std::shared_ptr<WorldWriteAttempt> observed_world{};
         std::shared_ptr<NormalWorldInitialization::Entry> normal_entry{};
         std::shared_ptr<NativePkEntryHold::Data> native_pk{};
-        std::shared_ptr<WorldResponseAttempt> observed_response{}; // LAST: preserve every old aggregate initializer.
+        std::shared_ptr<WorldResponseAttempt> observed_response{}; // Preserve old aggregate initializers.
+        std::shared_ptr<OwnedInputLease> owned_input_lease{}; // LAST: opt-in only.
     };
     std::deque<Write> writes;
     // Network strand only; set by the exact marked Write's success completion,
@@ -1070,6 +1091,7 @@ struct Session::Impl {
         }catch(...){fail("Native PK output staged encoding or handoff failed");}
     }
     void read() {
+        if(owned_input_paused())return;
         if(native_pk_terminal.load()) {stage_native_pk_terminal();return;}
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
         if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
@@ -1945,7 +1967,62 @@ struct Session::Impl {
         }
         return true;
     }
+    bool owned_input_transport_current(const std::shared_ptr<WorldResponseAttempt>& held) const {
+        return held && owned_response_input_hold.load()==held && !owned_input_retired.load() && !close_requested.load() &&
+            held->input_phase.load()==WorldResponseAttempt::InputPhase::Armed &&
+            held->receipt->status.load()!=WorldResponseWriteStatus::Failed &&
+            held->receipt->session.lock().get()==&owner && mode==ProtocolMode::God2CharacterConnection &&
+            owner.state()==held->receipt->phase && owner.battle_generation()==held->receipt->battle &&
+            !native_pk_terminal.load() && !native_pk_pending.load() && !native_battle_pending.load();
+    }
+    void retire_owned_input() noexcept {
+        if(const auto held=owned_response_input_hold.exchange({})) {
+            owned_input_retired.store(true);held->fail();close_requested.store(true);closing=true;
+            asio::error_code ignored;socket.close(ignored);
+        }
+    }
+    void fail_owned_input(const char* reason) noexcept {
+        // Preserve opted identity after pointer removal, including a failure
+        // after physical Written/release. No logger precedes retirement.
+        owned_input_retired.store(true);close_requested.store(true);closing=true;
+        retire_owned_input();asio::error_code ignored;socket.close(ignored);
+        try {fail(reason);}catch(...) {} // Socket/input are already retired; no native convergence claim.
+    }
+    bool owned_input_paused() {
+        if(owned_input_retired.load()) {
+            if(!closing)fail_owned_input("Owned bootstrap input already retired");
+            return true;
+        }
+        const auto held=owned_response_input_hold.load();if(!held)return false;
+        if(!owned_input_transport_current(held))fail_owned_input("Owned bootstrap input hold retired");
+        return true;
+    }
+    void release_owned_input(const std::shared_ptr<OwnedInputLease>& lease) {
+        const auto held=lease->attempt;
+        if(!owned_input_transport_current(held) ||
+           held->receipt->status.load()!=WorldResponseWriteStatus::Written) {
+            fail_owned_input("Owned bootstrap input continuation is not exact Written/current");return;
+        }
+        auto armed=WorldResponseAttempt::InputPhase::Armed;
+        if(!held->input_phase.compare_exchange_strong(armed,WorldResponseAttempt::InputPhase::Released)) {
+            fail_owned_input("Owned bootstrap input continuation retired");return;
+        }
+        auto expected=held;
+        if(!owned_response_input_hold.compare_exchange_strong(expected,{})) {
+            fail_owned_input("Owned bootstrap input continuation identity changed");return;
+        }
+        // An older read/game completion owns its existing continuation. Never
+        // issue a second read merely because this exact write has now finished.
+        if(game_busy || read_inflight)return;
+        try {resume_world_input(bool(skill_deadline));}
+        catch(...) {
+            // Written stays a physical fact. Failure of this later continuation
+            // retires input/owner before the old logger can itself throw.
+            fail_owned_input("Owned bootstrap input continuation failed");
+        }
+    }
     void resume_world_input(bool awaiting_skill=false) {
+        if(owned_input_paused())return;
         if(native_pk_terminal.load()) {stage_native_pk_terminal();return;}
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
         if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
@@ -1964,6 +2041,24 @@ struct Session::Impl {
         read();
     }
     void feed_world(std::span<const std::uint8_t> bytes) {
+        if(owned_input_retired.load()){owned_input_paused();return;}
+        if(owned_response_input_hold.load()) {
+            // Retain raw suffix/in-flight bytes at the original limit. Do not
+            // move staged records, decode, reclassify or dispatch a second job.
+            try {
+                if(world_input.size()>16384 || bytes.size()>16384-world_input.size()) {
+                    fail_owned_input("World input limit");return;
+                }
+                world_input.insert(world_input.end(),bytes.begin(),bytes.end());
+                if((native_skill_generation && owner.battle_generation()!=*native_skill_generation) ||
+                   (skill_deadline && (std::chrono::steady_clock::now()>=*skill_deadline ||
+                                      owner.state()!=SessionState::InBattle))) {
+                    fail_owned_input("Owned bootstrap retained skill input expired");return;
+                }
+                if(owned_input_paused())return;
+                fail_owned_input("Owned bootstrap input hold disappeared");return;
+            }catch(...){fail_owned_input("Owned bootstrap raw input retention failed");return;}
+        }
         if(native_pk_terminal.load()) {
             if(!bytes.empty() || !world_input.empty() || !world_pending_records.empty()) {
                 fail("Native PK terminal cannot reclassify old input");return;
@@ -2152,13 +2247,27 @@ struct Session::Impl {
         game_busy=true;
         asio::post(game,[self=owner.shared_from_this(),records=std::move(records),requests=std::move(requests),native_batch_generation] {
             auto& s=*self->impl_;
+            // A batch parsed/posted BEFORE arm cannot be rolled back into raw
+            // input. Reject it before ANY callback/capture/owner mutation; no
+            // splitting, redispatch, or reclassification of those records.
+            if(const auto held=s.owned_response_input_hold.load();held || s.owned_input_retired.load()) {
+                if(held)held->fail();
+                s.owned_input_retired.store(true);s.close_requested.store(true);
+                try {asio::post(s.strand,[self] {
+                    auto& s=*self->impl_;s.game_busy=false;
+                    s.fail_owned_input("Pre-arm world batch reached game during owned input hold");
+                });}catch(...) {} // No executor-abort convergence claim.
+                return;
+            }
             s.native_pk_terminal_callback_capture.reset(); // This exact serial input callback only.
+            s.owned_input_callback_lease.reset(); // Retire an unhanded opt-in independently of the strong hold.
             s.world_response_callback_capture.reset(); // Previous unhanded attempt retires Failed.
             s.normal_response_callback_capture.reset(); // Independent private original-response attempt.
             s.normal_callback_admission_capture.reset(); // Unhanded whole-callback Attempt fails, not Data-only Pending.
             struct ResponseCaptureEnd {
                 Impl& state;
                 ~ResponseCaptureEnd(){
+                    state.owned_input_callback_lease.reset();
                     state.world_response_callback_capture.reset();
                     state.normal_response_callback_capture.reset();
                     state.normal_callback_admission_capture.reset();
@@ -2227,6 +2336,7 @@ struct Session::Impl {
             // can qualify it; rejection/throw never acknowledges acceptance.
             const auto terminal_ack=std::exchange(s.native_pk_terminal_callback_capture,{});
             const auto response_write=std::exchange(s.world_response_callback_capture,{});
+            const auto input_lease=std::exchange(s.owned_input_callback_lease,{});
             auto normal_response=std::exchange(s.normal_response_callback_capture,{});
             const auto admission=std::exchange(s.normal_callback_admission_capture,{});
             if(admission && (!accepted || admission->receipt->status.load()!=NormalWorldCallbackAdmissionStatus::Pending ||
@@ -2243,13 +2353,19 @@ struct Session::Impl {
                 response_write->fail();accepted=false;
             }
             if(admission && !accepted)admission->fail(); // Existing response-prefix checks apply symmetrically.
-            try {asio::post(s.strand,[self,accepted,terminal_ack,response_write,normal_response,admission,response=std::move(response),
+            try {asio::post(s.strand,[self,accepted,terminal_ack,response_write,input_lease,normal_response,admission,response=std::move(response),
                                  count=records.size(),movement_count=requests.size()]() mutable {
                 auto& s=*self->impl_;
+                const bool owned_handoff=bool(input_lease) || bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
+                try {
                 s.game_busy=false;
                 if(s.closing) { s.finish();return; }
                 if(s.close_requested.load()) { s.close();return; }
                 if(!accepted) { s.fail("Recovered world policy or response rejected");return; }
+                if(input_lease && (input_lease->attempt!=response_write ||
+                   !s.owned_input_transport_current(input_lease->attempt))) {
+                    s.fail("Owned bootstrap exact input continuation handoff changed");return;
+                }
                 try {
                     if(!response.empty()) {
                         if(response.size()>max_buffer-s.write_bytes || s.writes.size()>=max_writes) {
@@ -2293,6 +2409,7 @@ struct Session::Impl {
                             s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
                             s.writes.back().observed_response=response_write;
                         }
+                        if(input_lease)s.writes.back().owned_input_lease=input_lease;
                         if(s.writes.front().bytes==bytes) s.write();
                     }
                     if(s.character_handlers.world_records)
@@ -2315,8 +2432,22 @@ struct Session::Impl {
                         }
                         if(!admitted){admission->fail();s.fail("Actual callback admission source retired");return;}
                     }
-                } catch(...) { s.fail("Recovered world response failed"); }
+                } catch(...) {
+                    if(input_lease || s.owned_response_input_hold.load() || s.owned_input_retired.load())
+                        s.fail_owned_input("Recovered owned world response failed");
+                    else s.fail("Recovered world response failed");
+                }
+                }catch(...) {
+                    if(owned_handoff || s.owned_response_input_hold.load() || s.owned_input_retired.load()) {s.fail_owned_input("Owned bootstrap complete strand handoff failed");return;}
+                    throw; // Preserve the old unobserved outer error behavior.
+                }
             });}catch(...) {
+                if(input_lease) {
+                    input_lease->attempt->fail(); // Atomic retirement before preserving old rethrow.
+                    try {asio::post(s.strand,[self] {
+                        auto& s=*self->impl_;s.game_busy=false;s.fail_owned_input("Owned bootstrap response handoff failed");
+                    });}catch(...) {} // Undestroyed/unrun executor convergence remains OPEN.
+                }
                 if(admission)admission->fail(); // Post/drop never leaves retained Data Pending.
                 if(normal_response)normal_response->fail(); // Before preserving the existing rethrow/context-abort path.
                 if(!terminal_ack)throw; // Existing nonterminal handoff semantics.
@@ -2375,9 +2506,13 @@ struct Session::Impl {
         if(writes.empty() || writes.front().held)return;
         auto bytes = writes.front().bytes;
         // The completion owns the active buffer even when fail() clears the queue.
+        const bool owned_initiation=bool(owned_response_input_hold.load()) || owned_input_retired.load();
+        try {
         asio::async_write(socket, asio::buffer(*bytes), asio::bind_executor(strand,
             [self = owner.shared_from_this(), bytes](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
+                const bool owned_completion=bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
+                try {
                 if (s.finished || s.writes.empty()) return;
                 if (ec) { s.fail(ec.message()); return; }
                 if(const auto entry=s.writes.front().normal_entry) {
@@ -2483,6 +2618,7 @@ struct Session::Impl {
                 if(s.mode==ProtocolMode::God2LegacyCharacterListCandidate && bytes->size()==78) {
                     logger("session")->info("session_id={} LEGACY_CHARACTER_LIST_CANDIDATE_SENT length=78 opcode=7; current client acceptance UNKNOWN",s.id);
                 }
+                const auto completed_input_lease=s.writes.front().owned_input_lease;
                 s.write_bytes -= s.writes.front().bytes->size();
                 s.writes.pop_front();
                 if(s.native_pk_terminal.load())s.stage_native_pk_terminal();
@@ -2492,10 +2628,23 @@ struct Session::Impl {
                     s.resume_after_login_write=false;
                     s.read();
                 }
+                // Every original marker/log/pop/queue operation above completed
+                // before the exact owned response releases a single continuation.
+                if(completed_input_lease)s.release_owned_input(completed_input_lease);
+                }catch(...) {
+                    if(owned_completion || s.owned_response_input_hold.load() || s.owned_input_retired.load()) {s.fail_owned_input("Owned bootstrap FIFO completion failed");return;}
+                    throw; // Preserve the original unobserved completion path.
+                }
             }));
+        }catch(...) {
+            if(owned_initiation || owned_response_input_hold.load() || owned_input_retired.load()) {fail_owned_input("Owned bootstrap async write initiation failed");return;}
+            throw; // Original unobserved initiation behavior.
+        }
     }
     void close() {
-        if (closing) return;
+        const bool was_closing=closing;
+        retire_owned_input();
+        if (was_closing) return; // First opted close still executes ALL original cleanup.
         closing = true;
         close_requested.store(true);
         for(const auto& queued:writes)if(queued.observed_response)queued.observed_response->fail();
@@ -2512,6 +2661,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        retire_owned_input(); // Opt-in socket/atomic retirement precedes potentially throwing logging.
         if (finished) return;
         if (auto log = logger("session")) log->debug("session_id={} remote_ip={} closing: {}", id, ip, reason);
         closing = true;
@@ -2658,6 +2808,26 @@ bool Session::world_response_write_current_on_game(const WorldResponseWrite& obs
     if(actual.get()!=this)return false;
     return !closing() && recovered_world_ready() && impl_->mode==ProtocolMode::God2CharacterConnection &&
         state()==data->phase && battle_generation()==data->battle && account_id==data->account && character_id==data->character;
+}
+void Session::hold_world_input_until_response_written(const WorldResponseWrite& write) {
+    if(observed_world_callback!=this || (observed_response_poison && *observed_response_poison)) {
+        poison_world_response();throw std::logic_error("Owned input continuation requires actual callback TLS");
+    }
+    const auto captured=impl_->world_response_callback_capture;
+    if(impl_->owned_input_retired.load() || !captured || captured->receipt!=write.data_ || impl_->owned_input_callback_lease ||
+       write.status()!=WorldResponseWriteStatus::Pending || !world_response_write_current(write)) {
+        poison_world_response();throw std::logic_error("Owned input continuation requires exact current original callback");
+    }
+    auto lease=std::make_shared<Impl::OwnedInputLease>(captured);
+    auto unarmed=Impl::WorldResponseAttempt::InputPhase::Unarmed;
+    if(!captured->input_phase.compare_exchange_strong(unarmed,Impl::WorldResponseAttempt::InputPhase::Armed)) {
+        poison_world_response();throw std::logic_error("Owned input continuation duplicate rejected");
+    }
+    std::shared_ptr<Impl::WorldResponseAttempt> empty;
+    if(!impl_->owned_response_input_hold.compare_exchange_strong(empty,captured)) {
+        captured->fail();poison_world_response();throw std::logic_error("Owned input continuation already held");
+    }
+    impl_->owned_input_callback_lease=std::move(lease);
 }
 std::optional<Session::NormalWorldInitialization> Session::normal_world_initialization() const {
     if(observed_world_callback!=this)

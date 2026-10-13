@@ -6506,6 +6506,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                             if(!current || !owned_identity_current())
                                                 throw std::runtime_error("Owned bootstrap saved source changed before return");
                                         }
+                                        if(owned_bootstrap_write)session.hold_world_input_until_response_written(*owned_bootstrap_write);
                                         spdlog::warn("DIAGNOSTIC_VITALS88_SENT_AFTER_TIMER36 session_id={}",session.id());
                                         if(owned_bootstrap_wire)return std::optional<std::vector<std::uint8_t>>(std::move(*owned_bootstrap_wire));
                                         return std::optional<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(vitals));

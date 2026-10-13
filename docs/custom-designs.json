@@ -5234,6 +5234,34 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "Owner requires two custom skills to share actual learned and publication source, not unrelated metadata or invented native rows.",
   "replacement": "Complete actual native control/list/actor/profile and mainland custom effects, then comprehensive source-route build/tests/native acceptance."
+},
+{
+  "id": "CUSTOM-0141",
+  "name": "Actual owned bootstrap response input continuation",
+  "authority": "OWNER_CUSTOM_SOURCE_OWNERSHIP_NOT_NATIVE_ACK_LIST_OR_TURN_GRANT",
+  "implementation": [
+    "src/net/Session.h",
+    "src/net/Session.cpp",
+    "src/core/Application.cpp"
+  ],
+  "native_gap": "Local bootstrap input ordering was not fenced by passive Written receipt. CN host/list/actor/resources/effects and client acceptance remain unqualified.",
+  "rules": {
+    "scope": "Only actual typed owner126/150 bootstrap arms its existing private response Attempt; ordinary and passive receipt paths preserve their defaults.",
+    "installation": "Exact private Attempt installed atomically on game before original response handoff; network observes immutable receipt and atomic lifecycle/phase/epoch, never game-owned account fields.",
+    "input": "Preserve original bounded raw bytes, staged batch semantics, native skill generation/deadline and read ownership; no extra read, packet split or reclassification.",
+    "completion": "Same FIFO full response must physically complete and old completion/bookkeeping succeed before exact current hold releases input once.",
+    "failure": "Retire hold and prohibit continuation before fallible logging/close paths; stale epoch/drop/exception never releases. Physical Written fact remains local and is not demoted.",
+    "limits": "No native ACK, remote cache/list adoption, turn grant, learned rights, durable rollback or CN wire/effect proof is inferred."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "Connect existing actual owner-skill bootstrap to original input continuation while preserving authoritative common learned/persistence rules.",
+  "replacement": "Complete native providers and CN actual gameplay adapter, then comprehensive build/tests/current-client acceptance."
 }
 ]
 }

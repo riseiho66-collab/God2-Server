@@ -419,6 +419,9 @@ public:
     WorldResponseWrite observe_world_response(std::span<const std::uint8_t> wire);
     bool world_response_write_current(const WorldResponseWrite&) const;
     bool world_response_write_current_on_game(const WorldResponseWrite&) const;
+    // CUSTOM-0141: only the exact current original callback receipt may opt in.
+    // Subsequent raw world input waits for this exact full write; not native ACK.
+    void hold_world_input_until_response_written(const WorldResponseWrite&);
     // Only the actual synchronous world-records game callback can obtain or
     // requalify this transcript. Missing metadata leaves the old sender intact.
     std::optional<NormalWorldInitialization> normal_world_initialization() const;
