@@ -1,0 +1,8 @@
+# GitHub language statistics describe the server implementation.
+# Offline tools and research remain visible with their actual syntax highlighting.
+tools/** -linguist-detectable
+tests/research/** -linguist-detectable
+reverse/** -linguist-detectable
+
+# The server's .h files are C++ headers.
+src/**/*.h linguist-language=C++

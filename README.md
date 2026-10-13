@@ -1,5 +1,13 @@
 # GOD2 Server Rebuild
 
+**服務端主要使用 C++20＋Lua 5.4，資料儲存使用 SQLite。**
+C++ 負責網路、狀態、資料儲存與遊戲整合；Lua 負責既有架構中的遊戲規則。
+`tools/` 與 `tests/research/` 內的 Python 是離線逆向、研究、測試與維運工具，
+不屬於服務端執行核心，正式服務端啟動不需要 Python。
+
+GitHub 語言占比透過 `.gitattributes` 排除離線工具與研究目錄，呈現服務端實作語言。
+這些工具仍保留原始語言與可讀原始碼；語言統計調整不代表歷史腳本已經清理完成。
+
 Private source repository: [riseiho66-collab/God2-Server](https://github.com/riseiho66-collab/God2-Server).
 Push notifications and local-only exclusions: [GitHub / Discord updates](docs/GITHUB_DISCORD_UPDATES.md).
 Current owner scope and phase restrictions are maintained in [AGENTS.md](AGENTS.md);
