@@ -382,3 +382,12 @@ definition/C67 Written. Separate4A92D0 key-selector checks flag&1 and definition
 BYTE67; no qualified actual caller, so NOT a universal C56/direct-selector gate.
 Current-prefix flags&2 auxiliary semantics stay independent. No custom rule or
 C++ gameplay change; source/12 keeps29 exact pins. PHASE1/no newPY unchanged.
+
+
+Round372 repairs the actual existing C28 selection/action pre-post ready cuts:
+both local lambdas now require pure retained_ready_current(exact Lease) before
+AND after virtual presence/position observers. Retired/replaced active registry
+cannot pass via unchanged Session/position. Preserve old custody-after-mutation
+policy, actual mandatory action and native reply decision; no SQL/retry/rollback.
+No new gameplay/custom rule. SKB learning supplier/WORLD35 issuer stillOPEN;
+source/13 pins36, original29 unchanged. PHASE1/no newPY unchanged.

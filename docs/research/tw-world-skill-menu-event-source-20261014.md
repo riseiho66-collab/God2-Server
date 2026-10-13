@@ -78,3 +78,11 @@ Whole-game denominator/percentage unknown. Goal remains active. PHASE1: no
 build/tests/runtime/native/API/VM/packet codec/gameDBSQL/migrate/activate/deploy.
 New Python files0. Owner maxHP/10 poison and CNcustom126/150 qualification
 remain separate pending integrations under the same shared core.
+
+
+Round372 wording clarification: the4A92D0 body explicitly requires a positive
+learned count; it supplies no upper learned-count bound. This does not change
+the separate-selector/caller-open/nonuniversal-C56 limits above. Actual C28
+source readiness now rechecks retained active presence before/after observers;
+SKB learning and authoritative WORLD35 issuer/persistence remain open. See
+tw-owned-item-presence-source-20261014.md / source/13.

@@ -5258,3 +5258,26 @@ reply/push/phasebinding/fullroute/formula/newopcode. TW156/252/parser75=
 Main/action/targets/cost/status/effects/persistence/replies/nativeadoption remain
 OPEN. Goal active; PHASE1 no build/tests/runtime/native/API/VM/codec/gameDBSQL/
 migrate/activate/deploy. No resources/save/account/EXE/frozen feature changes.
+
+
+## Round372 - actual C28 retained presence observer fence (2026-10-14)
+
+Two existing C++ ready lambdas in owneditem Selection and RequestOwner now
+include pure retained_ready_current(fullLease), so existing before/finalafter
+ready_lease/saved_position virtual observers recheck actual active registry.
+Confirmed final load_position observer could release/replace lease yet return
+same pose/Session, yielding stale true before actualAction.handle or after its
+durableprefix. Preserve all privateC28/owner/phase/gen/pose/fullcustody/catalog/
+reply cuts and existing failure path. No oldconsumedcustody reread, query,
+SQLretry/rollback/newrules/wire/defaultactivation.2literal edits/2whole inverses
+exactoldrefs/Git63edc90; independent2CPP reviewPASS. Source/13 pins36, old29
+unchanged; canonical443; newPY0/newCUSTOM0. Historicaldefinition source is only
+TWP/WPN/EQU/TEQ, genuineSKB learning/action/subject/right/itemconsume/WORLD35
+event/atomiconce persistence stillmissing.371 selector requirespositivecount,
+no uppercountbound; not universalC56gate. OneactualC28sourcebranch improved,
+newopcode/formula/phase/ownerchain/fullroute0. TW156/252/parser75=50partial+
+11control+14unconnected, unhosted3/40/36; CN156/280phase/253supported/35/93/71
+unchanged. S2Cindependentformats17/unclassified109; frontier24immutable.
+Whole denominator/%null. Goalactive; PHASE1 no build/tests/runtime/native/API/
+VM/codec/gameDBSQL/migrate/activate/deploy. Shared453/TWTraditional/maxHPdiv10
+poison/CNcustom126/150/common64 and all frozen/account/save requirements retained.

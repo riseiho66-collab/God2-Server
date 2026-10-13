@@ -40,7 +40,7 @@ struct Owner {
         const SharedTaiwanOwnedItemSelectionSource::Selection& owned) const {
         const auto& lease=owned.lease();
         const auto local=[&] {
-            return !reentered && !session.closing() && session.state()==SessionState::InWorld &&
+            return presence->retained_ready_current(lease) && !reentered && !session.closing() && session.state()==SessionState::InWorld &&
                 session.id()==lease.session && session.account_id==lease.account && session.character_id==lease.character &&
                 session.battle_generation()==owned.battle_generation() && session.world_selection_input_current(input) &&
                 session.recovered_world_ready() && session.common_world_delivery_current(lease.account,lease.character,lease.generation) &&

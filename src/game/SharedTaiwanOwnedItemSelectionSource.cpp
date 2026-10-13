@@ -26,7 +26,7 @@ std::shared_ptr<SharedTaiwanOwnedItemSelectionSource> SharedTaiwanOwnedItemSelec
 }
 bool SharedTaiwanOwnedItemSelectionSource::ready(Session& s,const SharedWorldPresence::Lease& lease,
     const RecoveredPosition& position,std::uint64_t battle) const {
-    const auto local=[&] {return !(reentered_||s.closing()||s.state()!=SessionState::InWorld||!s.recovered_world_ready()||
+    const auto local=[&] {return presence_->retained_ready_current(lease) && !(reentered_||s.closing()||s.state()!=SessionState::InWorld||!s.recovered_world_ready()||
        s.id()!=lease.session||s.account_id!=lease.account||s.character_id!=lease.character||s.battle_generation()!=battle||
        !s.common_world_delivery_current(lease.account,lease.character,lease.generation)||
        s.common_world_entry_current(lease.account,lease.character,lease.generation)||
