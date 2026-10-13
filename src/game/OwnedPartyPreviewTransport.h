@@ -191,6 +191,21 @@ public:
             } else ++it; // Pending has no native timeout or acceptance implication.
         }
     }
+    // Actual game-owned ready/disconnect supplier; no ID/successor lookup.
+    // Already completed allQueued flights have no registry node to revoke.
+    void retire_source(Session& source) noexcept {
+        if(state_->game_thread!=std::this_thread::get_id())return;
+        if(state_->stopped)return;
+        for(auto it=state_->flights.begin();it!=state_->flights.end();) {
+            const auto flight=*it;
+            const bool matches=std::any_of(flight->sources.begin(),flight->sources.end(),
+                [&](const auto& held){return held.peer.get()==&source;});
+            if(!matches){++it;continue;}
+            flight->retire(flight->committed);
+            state_->held_sources-=flight->sources.size();
+            it=state_->flights.erase(it);
+        }
+    }
     void stop() noexcept {state_->stop();}
 private:
     const std::shared_ptr<State> state_;

@@ -2323,6 +2323,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             if(config.owned_pk_invitation_enabled)
                 spdlog::warn("OWNED_PK_SOURCE_INCOMPLETE room_authority=unavailable invitations_not_published CUSTOM-0086");
             Session::DisconnectHandler on_disconnect=[&](std::shared_ptr<Session> session) {
+                    if(party_preview_transport)party_preview_transport->retire_source(*session); // Before throwing observers.
                     if(blacklist_lifetime->load()) {
                         const auto at=blacklist_replays.find(session->id());
                         if(at!=blacklist_replays.end() && at->second.session.lock()==session)retire_blacklist_output(at->second);
@@ -7146,6 +7147,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     };
                     const auto directory_ready=game_handlers.world_ready;
                     game_handlers.world_ready=[&,directory_ready](Session& session) {
+                        if(party_preview_transport)party_preview_transport->retire_source(session); // Before throwing observers.
                         directory_ready(session); // Existing ready and blacklist hook first.
                         try{owned_party_directory_retire(session);}
                         catch(const std::exception& error){spdlog::warn("PARTY_DIRECTORY_REENTRY_RETIRE_FAILED reason={}",error.what());}

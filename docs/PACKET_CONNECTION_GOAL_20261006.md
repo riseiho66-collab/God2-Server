@@ -4859,3 +4859,59 @@ denominatornull; parser67.6% notcompletion. Unique report
 coin99999999999/stack99/nativelevels/saves/frozen/fonts/conversion preserved.
 PHASE1 nocompiler/build/tests/runtime/native/API/CRT/VM/emulator/parser/codec/resource/
 gameDBSQL/import/migrate/activate/deploy. Ownerrequestedpause applies afterreceipt.
+
+
+## Round358 actual delivered party lifecycle and common skills priority (2026-10-13)
+
+Previous35781566a8a7efb75e7ea768bb5f767e1e5f1ad9324 exactHEAD notification
+38290924662 success. Owner '繼續工作' resumes after applied357pause; historical
+stop/receipt remains unchanged. Goal active, complete TW-first/CN/fourWS/common64/
+coin99999999999/stack99/nativelevels/saves/frozen/fonts/conversion unchanged.
+
+Actual delivered on_disconnect and Directory world_ready first statements retire
+matching courier flights on recorded game thread/exactstrongSession object.
+Fresh-only revoke and committed-only exactheldpeer close; exactnode capacity/erase
+once, no ID/successor/retry/rollback/newtimer. Uncommitted Prepared retains retired
+Data currentfalse and cannot double-decrement/close. Already allQueued nodesabsent
+so queuedWrite Data not revoked. Scan noallocation; existingclose post mayallocate
+under existingcontainedcatch. Actual Sessiontail retiresnormaloutput before game
+ready; close/fail beforegame disconnect. This closes deliveredhook seam only:
+finish logger/commoncleanup beforeApp/postdrop/Schedulerrearm/context convergence
+stillOPEN. TwoexistingCpp exactwholeinverses to81566, allotherSession/Scheduler/
+models/config/protocol/storage/native135/frozenchat byteexact; defaultoff noactivation.
+
+Authentic49DE50 group5/base866E8 andgroup7/base867A8 directchild49E0C0..49E19D
+221B/73sites/RET8/fivebranches; selectedprior14ranges nooverlap, qualified1body
+notglobalnovelty. Eightaux24B rows rereadkeys aroundopaquechildren, no direct
+nonstackstore/canonicalprefix readwrite. Nativecanonicalfull25/1215/acquisition/
+permission/grant/fullroute0; opaquechild effectsunknown.
+
+Actualhosted2A/both2C legacycommit251..308 cannotreplace twoowners through incoming
+singleowner remint. Future sameDBdetachcells/aliases thenreattach preservesglobalID.
+Genuine sameeventdonor/full25/both actualdeliveryreceipts and completeafter1215 source
+missing; nofactory/newSQL/settlementcredit.
+
+Owner newpriority requires ONEcommon skillcore/catalog allskills, TWTraditional
+skillChinese primary, actualclientformulas primary and playerguides secondary.
+Poison ownerrule target CURRENT MAXIMUM HP /10. Nativeidentity/wire/clientgate
+differences belongto adapters; unequalrows don'tauthorize separateregional gameplay.
+Differentabilities samerawkey cannotoverwrite. Coremerge/tickstatus notimplemented
+by thisround's existingcourier change.
+
+Three actualraw plain112660B BIN sources: originalTW448(121/129/87/111)7676,
+installedTW453(126/129/87/111)3adc, CN453(125/130/87/111)857. Original448 fully
+unchangedinstalled, fiveadditions are4reserved0/122..125 +CUSTOM0058 0/126.
+Originalshared448 physicaltail equal445/different3(0/95,1/83,1/129); notformulas.
+Installedshared452/union454 withTWonly0/126/CNonly1/130; nofake453nativeclaim.
+Common64Battle hasHP/maxHP butnoactualpoisonstatus/turnexecutor/checkpointfields.
+Nextqualified commonnativebinding/effectdescriptor/turnboundary/stagedmaxHPdiv10/
+checkpoint publication required; noarbitrarytimer/unusedhelper/fakeformula/grant.
+
+Sevenupstreamseals +finalcanonicalreview,15successfulLFcopiedhelpers notrerun,
+failedpartials additive. Oldgoalbinaryprefix/priorledgerfields/frontierv23 exact;
+RexacttwoLF/K3. Twoconditional lifecyclebranches/nativebody1; nativeopcode/format/
+parser/handler/phase/fullroute0/globaldeltas0. TW156/252/world74=50partial11control
+13unconnected; CN156/280phase/253length separate. Whole/TWdenominatorpercentnull;
+parser67.6% notcompletion. Unique report20261013-tw-native-party-lifetime-source-358.
+PHASE1 no compiler/build/tests/runtime/native/API/CRT/VM/emulator/productparser/
+codec/resource decoder/gameDBSQL/import/migrate/activate/deploy. Goalactive.
