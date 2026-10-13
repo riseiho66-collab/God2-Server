@@ -50,3 +50,10 @@ nine-edit application. Failure and recovery are retained without hiding it.
 The owner's approved5.04GB duplicate cleanup remains blocked by automatic
 execution policy, reason only "blocked by policy"; zero files deleted. No
 alternate deletion channel or another large archive is used.
+
+
+Round369 fixes the actual C67 selected-row transaction/prepared S31 handoff.
+Its private committed full row is available through the existing helper typed
+path, while the old Main API moves the original prebuilt reply. This does not
+publish a whole world-response/Written epoch or authorize C56. See
+tw-deity-selection-commit-source-20261013.md and source/10.

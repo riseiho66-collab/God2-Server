@@ -121,18 +121,26 @@ std::vector<std::vector<std::uint8_t>> RecoveredOwnedCompanions::restore_rows(
     }
     return batches;
 }
+std::optional<RecoveredOwnedCompanions::SelectionResult> RecoveredOwnedCompanions::select_deity_with_source(
+        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request) {
+    const auto key=request.key;
+    const auto rows=repository_.load_deities(account,character);
+    const auto found=std::find_if(rows.begin(),rows.end(),[&](const auto& row){return row.snapshot.status.key_raw()==key;});
+    if(found==rows.end()) return std::nullopt;
+    const auto projection=RecoveredDeityState::selection_response(key,found->snapshot,repository_.deity_template_keys());
+    if(!projection) return std::nullopt;
+    // Encode before COMMIT; mutable ownership avoids the old const-vector copy
+    // after a successful selection. The repository compares this full row.
+    auto wire=RecoveredWorldFrame::encode(projection->encode());
+    const auto selected=repository_.load_deity_selection(account,character);
+    auto committed=repository_.select_deity_with_source(account,character,key,selected,*found);
+    return SelectionResult(std::move(committed),std::move(wire));
+}
 std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_deity(std::uint64_t account,std::uint64_t character,
         const RecoveredDeitySelection::Request& request) {
-    const auto rows=repository_.load_deities(account,character);
-    const auto found=std::find_if(rows.begin(),rows.end(),[&](const auto& row){return row.snapshot.status.key_raw()==request.key;});
-    if(found==rows.end()) return std::nullopt;
-    const auto projection=RecoveredDeityState::selection_response(request.key,found->snapshot,repository_.deity_template_keys());
-    if(!projection) return std::nullopt;
-    // Complete native response must be encodable before the DB selection changes.
-    const auto wire=RecoveredWorldFrame::encode(projection->encode());
-    const auto selected=repository_.load_deity_selection(account,character);
-    repository_.select_deity(account,character,request.key,selected);
-    return wire;
+    auto result=select_deity_with_source(account,character,request);
+    if(!result) return std::nullopt;
+    return std::move(*result).take_wire();
 }
 std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_pet2(std::uint64_t account,std::uint64_t character,
         const RecoveredSelectionItemRequest::Request& request) {

@@ -5187,3 +5187,21 @@ Two existing C++ files, no new Python. Source/9 pins26. TW156/252/parser75 =
 Whole denominator/percentage unknown; full goal active. No build/tests/runtime/
 native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Approved duplicate cleanup
 still policy blocked, zero deleted; prior sources/history remain immutable.
+
+
+## Round369 - selected deity full row commit and S31 handoff (2026-10-13)
+
+CUSTOM-0146 fixes actual Main C67 helper stale-row reply and postCOMMIT const
+wire copy. Private owning proof binds requested full row/raw19/raw29/ordered34,
+revision/provenance/full64owner/repoorigin and before/afterselection inside the
+actual reserved transaction. Owner/main/TEMP/reentry/noPendingBattle/fullrow/
+selectionCAS/readback and intendedwritecount beforeCOMMIT, includingnoop;
+allocateproof/preencodewire beforeCOMMIT then no-throw moves only. Legacy
+repo method unchanged; actual Main helper API delegates typed path. Final whole
+world response/Written/publication to skillprovider/nativeadoption remainOPEN;
+one selected row is not the whole roster or cast authority. Four existing C++,
+one actualsource branch improved, no newPython/opcode/formula/phasebinding/full
+route. Source/10 pins28; TW156/252/parser75=50partial+11control+14unconnected,
+CN156/280phase/253supported unchanged. Whole denominator/percentage unknown.
+PHASE1 no build/tests/runtime/native/API/VM/codec/gameDBSQL/migrate/activate/
+deploy. Full goal active; authorized cleanup still policyblocked/zero deleted.

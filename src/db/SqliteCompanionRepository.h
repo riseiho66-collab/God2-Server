@@ -124,6 +124,30 @@ public:
     std::optional<SelectedDeitySkillReadset> load_selected_deity_skill(
         std::uint64_t account,std::uint64_t character,std::uint8_t kind,std::uint8_t skill);
     bool selected_deity_skill_current(const SelectedDeitySkillReadset& readset);
+    // CUSTOM-0146: one exact owned row and selection committed on this
+    // repository. This is not a socket publication, learning or action grant.
+    class CommittedDeitySelection {
+    public:
+        CommittedDeitySelection(CommittedDeitySelection&&) noexcept=default;
+        CommittedDeitySelection& operator=(CommittedDeitySelection&&) noexcept=default;
+        CommittedDeitySelection(const CommittedDeitySelection&)=delete;
+        CommittedDeitySelection& operator=(const CommittedDeitySelection&)=delete;
+        std::uint64_t account() const noexcept;
+        std::uint64_t character() const noexcept;
+        const StoredDeity& deity() const noexcept;
+        const std::optional<StoredDeitySelection>& before() const noexcept;
+        const StoredDeitySelection& after() const noexcept;
+        bool changed() const noexcept;
+    private:
+        friend class SqliteCompanionRepository;
+        struct Data;
+        explicit CommittedDeitySelection(std::shared_ptr<const Data> data) noexcept:data_(std::move(data)) {}
+        std::shared_ptr<const Data> data_;
+    };
+    // Own IMMEDIATE transaction; both expected values are owned before any
+    // observer. Reject stale full rows even for an idempotent selection.
+    CommittedDeitySelection select_deity_with_source(std::uint64_t account,std::uint64_t character,
+        std::uint8_t key,std::optional<StoredDeitySelection> expected,StoredDeity expected_deity);
     StoredDeitySelection select_deity(std::uint64_t account,std::uint64_t character,
         std::uint8_t key,const std::optional<StoredDeitySelection>& expected);
     // Explicit trusted acquisition/import API. Network requests cannot grant.

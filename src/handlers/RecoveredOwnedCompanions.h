@@ -40,6 +40,27 @@ public:
         const Restoration&,const NativeSkillCatalog&);
     bool normal_entry_prefix_current(const Restoration&,const TaiwanNativeDeityRosterPrefix&,
         const NativeSkillCatalog&);
+    class SelectionResult {
+    public:
+        SelectionResult(SelectionResult&&) noexcept=default;
+        SelectionResult& operator=(SelectionResult&&) noexcept=default;
+        SelectionResult(const SelectionResult&)=delete;
+        SelectionResult& operator=(const SelectionResult&)=delete;
+        const SqliteCompanionRepository::CommittedDeitySelection& committed() const noexcept {return committed_;}
+        const std::vector<std::uint8_t>& wire() const noexcept {return wire_;}
+        std::vector<std::uint8_t> take_wire() && noexcept {return std::move(wire_);}
+    private:
+        friend class RecoveredOwnedCompanions;
+        SelectionResult(SqliteCompanionRepository::CommittedDeitySelection committed,
+            std::vector<std::uint8_t> wire) noexcept
+            :committed_(std::move(committed)),wire_(std::move(wire)) {}
+        SqliteCompanionRepository::CommittedDeitySelection committed_;
+        std::vector<std::uint8_t> wire_;
+    };
+    // Exact prebuilt S31 plus the one-row selection commit which qualified it.
+    // No socket-written receipt, native adoption or permission is inferred.
+    std::optional<SelectionResult> select_deity_with_source(
+        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request);
     std::optional<std::vector<std::uint8_t>> select_deity(
         std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request);
     std::optional<std::vector<std::uint8_t>> select_pet2(

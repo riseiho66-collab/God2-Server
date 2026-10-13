@@ -5364,6 +5364,34 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "Carry actual world self target identity with the existing common selected-skill source without inventing a target namespace or native grant.",
   "replacement": "Join real ordered selected publications and complete C56 action/target/cost/effects/persistence/next receipt, then comprehensive build/tests/native acceptance."
+},
+{
+  "id": "CUSTOM-0146",
+  "name": "Full selected deity row commit proof and prepared S31 reply transfer",
+  "authority": "OWNER_SHARED_STATE_TRANSACTION_AND_REPLY_CONSISTENCY_NOT_NATIVE_CAST_PERMISSION",
+  "implementation": [
+    "src/db/SqliteCompanionRepository.h",
+    "src/db/SqliteCompanionRepository.cpp",
+    "src/handlers/RecoveredOwnedCompanions.h",
+    "src/handlers/RecoveredOwnedCompanions.cpp"
+  ],
+  "native_gap": "Final whole world response Written publication and native selected-menu adoption remain separate; no C56 target/action/MP/effect/native permission host follows.",
+  "rules": {
+    "transaction": "Private owning commit binds full64 owner/repository identity, exact requested stored row including raw19/raw29/ordered34/revision/provenance, old selection and committed next selection. Validate before any write and no-op.",
+    "fence": "Actual immediate transaction, owner/main sources/TEMP/reentry/pending battle and selection CAS; own intended write count and full row/readback before COMMIT. Prepare proof allocation before COMMIT.",
+    "reply": "Actual existing Main C67 helper uses typed path. Preencode mutable original S31 before mutation, pair private commit proof with that original response by no-throw moves; old helper returns moved wire.",
+    "legacy": "Original public repository select_deity body preserved. No postCOMMIT validation/query/allocation/copy/retry/rollback introduced by helper handoff.",
+    "limits": "A committed selected row is not a whole roster publication, local write/remote ACK, native learning/cast permission or atomic cross-source action receipt."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "Earlier helper could prepare old row A S31 while same key row B passed selection CAS, and const wire could allocate on return after successful commit.",
+  "replacement": "Connect private committed result to one actual final aggregate response/write epoch and selected skill provider; complete C56 action and comprehensive acceptance."
 }
 ]
 }

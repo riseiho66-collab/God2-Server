@@ -356,3 +356,11 @@ full64 DB owner stays independent. Old observe(kind,id) unchanged. One Read,
 pure postobserve attach, same holder rechecked around original current observers.
 Local Written is not native adoption/permission/action. No new Python files,
 default Main host, formula or complete route; PHASE1 remains static only.
+
+
+CUSTOM-0146 binds actual C67 selected full row and prebuilt original S31 to
+the real same-transaction selection CAS, including same-key no-op. Preserve
+original public repo select_deity body. Own proof allocation before COMMIT;
+only no-throw moves of proof/prebuilt mutable wire afterwards, no stale-source
+query/retry/rollback. This is one selected row, not a full roster/Written/native
+adoption/permission or Main C56 host. No new Python files; PHASE1 unchanged.
