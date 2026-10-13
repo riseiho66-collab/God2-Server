@@ -149,7 +149,8 @@ struct SharedTaiwanOwnedDeitySkillSource::Impl {
             s.state()==scope.phase && (scope.phase==SessionState::InWorld || scope.phase==SessionState::InBattle) &&
             s.battle_generation()==scope.battle_generation && s.recovered_world_ready() &&
             s.common_world_delivery_current(lease.account,lease.character,lease.generation) &&
-            !s.common_world_entry_current(lease.account,lease.character,lease.generation);
+            !s.common_world_entry_current(lease.account,lease.character,lease.generation) &&
+            presence->retained_ready_current(lease);
     }
     bool ready(Session& s,const Scope& scope) const {
         if(!local(s,scope))return false;

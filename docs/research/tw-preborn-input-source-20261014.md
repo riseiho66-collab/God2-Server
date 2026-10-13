@@ -69,3 +69,11 @@ This raw ingress does not complete those remaining authority/resource paths.
 Goal active. PHASE1 static only: no build/tests/runtime/native/API/VM/product
 codec/gameDBSQL/import/migration/activation/deployment. Preserve saves/accounts,
 frozen features, native fonts/conversion and common C++/Lua core.
+
+
+Round374 qualifies actual S2C A0/A2 suppliers of staged83 pointer/count plus
+selected-row offer/local-click path, all conditional on current native bank/
+role/window/lifetime. This is not evidence every83 consumes a skill book or
+grants learning. C28 item use remains separate. Mixed source and regular saved
+skill observation now recheck retained active fullLease after observers. See
+tw-preborn-issuer-presence-source-20261014.md / source/15 / frontier25.

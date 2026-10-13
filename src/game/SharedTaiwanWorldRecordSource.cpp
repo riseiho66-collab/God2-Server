@@ -93,7 +93,7 @@ struct Owner {
            !session.recovered_world_ready() ||
            !session.common_world_delivery_current(lease.account,lease.character,lease.generation) ||
            session.common_world_entry_current(lease.account,lease.character,lease.generation))return false;
-        return true;
+        return presence->retained_ready_current(lease);
     }
     bool ready(Session& session,const Source::Lease& lease) const {
         if(!local(session,lease))return false;

@@ -5301,3 +5301,26 @@ S2Cformats17/unclassified109/frontier24 unchanged; newnativeopcode/formula/
 formalphase/ownerchain/fullroute0; wholedenominator/%null. Goalactive, PHASE1
 staticonly/no newPY. Shared453/TWTraditional/client-primary/maxHPdiv10poison/
 CNcustom126/150/common64 and frozen/account/save requirements all retained.
+
+
+## Round374 - staged suppliers and actual presence observer fences (2026-10-14)
+
+Actual mixed WorldRecordSource and regular OwnedDeitySkillSource local checks
+now require pure retained_ready_current(fullLease). Virtual list/position
+observers could retire/replace registry yet return same data/Session; existing
+final local checks now reject before mandatory action/current observations.
+Two literal edits/two whole inverses==oldrefs/Gitc685789, independent review
+PASS. Source/15 retains37 paths/updates2 pins; canonical451/newPY0/newCUSTOM0.
+Native WORLD A0 clear/display limits and A2 real A91C/AB10 pointer supplier,
+actual selected-row offer and local-click appender qualified with native bank/
+role/window/lifetime/opaque-child premises. No universal capacity/entitlement
+or every83->book-consume rule. Existing store_deity/inventory writes each own
+separate transactions; no atomic learning/debit/event claim or SQL change.
+Frontier25 adds independent-format-only A0/A2:19 formats/unclassified107.
+No nativeopcode/formula/formalphase/ownerchain/fullroute; parser77=50partial+
+11control+16unconnected/pending11,64.9% only parser scope; TW156/252/3/40/36,
+CN156/280phase/253/35/93/71 unchanged. Actual operation/rules/subject/rights/
+replay/save/fullreplies/defaultMain/adoption OPEN. Whole denominator/%null,
+goalactive; PHASE1 static/no build/tests/runtime/native/API/VM/codec/gameDBSQL/
+migration/activation/deploy. Shared453/TWTraditional/client-primary/maxHPdiv10/
+CNcustom126/150/common64/all frozen/save/account requirements retained.

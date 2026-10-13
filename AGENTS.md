@@ -401,3 +401,13 @@ remain. Words moved-empty bounds guarded. Native queue order is not atomicity
 or learning; issuer/phase/window/subject/stage/apply/book-debit/save/replay/full
 replies remain OPEN. Source/14 pins37, parser77 with16 unconnected. No new
 Python/custom rule or complete route; PHASE1 unchanged.
+
+
+Round374 closes retired active-presence acceptance in mixed WorldRecordSource
+and regular OwnedDeitySkillSource local predicates, using pure exact fullLease
+registry after existing Session cuts. Mandatory action/current/native reply and
+saved/native/common checks preserved; no observer/SQL/retry/newrule. Native A0
+clear/limits and A2 actual staged pointer supplier plus actual offer/click path
+are conditional source evidence, not learned rights or proof83 consumes books.
+Source/15 pins37; frontier25 formats19/unclassified107. PHASE1/no newPY/full
+goal retained; operation/rules/persistence/reply/Main remain OPEN.
