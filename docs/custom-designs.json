@@ -5314,6 +5314,31 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "One common TW/CN skill core requires the existing TW command action interface to receive the same owning common definition already available to the CN data handoff.",
   "replacement": "Complete actual full native list/actor/learned/action/persistence suppliers and adapters, then comprehensive build/tests/current-client acceptance."
+},
+{
+  "id": "CUSTOM-0144",
+  "name": "Owning common definition in saved selected deity skill observation",
+  "authority": "OWNER_COMMON_SOURCE_COMPOSITION_NOT_NATIVE_CAST_PERMISSION",
+  "implementation": [
+    "src/game/SharedTaiwanOwnedDeitySkillSource.h",
+    "src/game/SharedTaiwanOwnedDeitySkillSource.cpp"
+  ],
+  "native_gap": "World selected-roster identity/publication/currentness, target, cost, effects and complete native action remain independently unqualified. Existing source is not automatically hosted by Main.",
+  "rules": {
+    "scope": "Existing private saved observation owns a nonoptional full SharedSkillDefinition together with the unchanged TW native row, saved selected skill and captured lease/position/phase.",
+    "native": "Digestchecked original TW full110 source/geometry is retained; shared requested_native must equal it exactly. Chosen regional common base never replaces requested TW.",
+    "current": "Whole common/native value is reobserved around the actual saved selected readset; original origin/session/account/character/selection revisions and ready scope remain. Never rebase.",
+    "limits": "Sequential source checks are not cross-source atomic CAS, a native UI/list receipt, learned grant, MP debit, formula, action or default host. No post-durable-consumption current call is added."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "The common TW/CN definition must be carried by the genuine saved selected-skill observation rather than reconstructed from a key later.",
+  "replacement": "Join actual ordered selected roster publications, current target/action owner and transaction/next receipt, then comprehensive acceptance."
 }
 ]
 }

@@ -336,3 +336,13 @@ checks or discarding native evidence. Never rename scripts to hide their languag
 or move large archives elsewhere on C: as purported disk cleanup. Continue the
 authorized shared-skill work in C++/Lua; preserve current candidate source and
 existing saves. Existing PHASE1 limits and native-evidence requirements remain.
+
+CUSTOM-0144 retains a nonoptional owning common definition in the existing
+private saved selected-deity skill Observation. Keep original digestchecked TW
+raw/profile/geometry, full saved readset/private source and exact ready scope.
+Shared requested_native must equal TW; compare the same whole common value
+around saved observers without rebasing. No cast/list/MP/formula/atomic CAS or
+default Main host follows. New world menu evidence is selected-roster lineage;
+do not invent a separate player learned bank or reuse a stale entry source after
+C67 selection changes. A C67 receipt must belong to the complete actual original
+world response, not an inner S31 component. PHASE1 and no new PY files remain.

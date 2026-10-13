@@ -45,3 +45,13 @@ S2C252. CN156 C2S/280phase/253supported unchanged. Parser coverage is not game
 completion; whole denominator and completion percentage remain unknown.
 PHASE1 only: no build, tests, native/runtime/API/VM/codec/gameDBSQL, migration,
 activation or deployment. The owner resumed work; earlier stop is revoked.
+
+
+## Round367 clarification: selected roster source
+
+New exact menu leaf evidence follows the selected S30/31/34 roster row, not a
+separately proved player learned bank. The existing saved selected-deity readset
+is a genuine candidate under ownership/selection/current publication premises.
+Opaque-child role/row affinity, target, cost/action/full replies remain open.
+CUSTOM-0144 carries owning common data in that existing saved observation; no
+Main host is inferred. See tw-selected-deity-common-skill-source-20261013.md.

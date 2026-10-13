@@ -61,6 +61,14 @@ struct SharedTaiwanOwnedDeitySkillSource::Impl {
         const auto actual=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
         return !reentered && actual && *actual==expected;
     }
+    bool common_definition_current(const NativeSkillRecord& native,const SharedSkillDefinition& common) const {
+        if(!definition_current(native))return false;
+        const auto actual=catalog.lookup_shared_definition_main(native.kind,native.definition_id);
+        // CUSTOM-0144: retain the original TW input independently of the
+        // common parameter base; compare the entire owning value, never rebase.
+        return !reentered && actual && actual->requested_native &&
+            *actual->requested_native==native && actual->definition==common;
+    }
 };
 std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> SharedTaiwanOwnedDeitySkillSource::create(
     std::shared_ptr<SharedWorldPresence> presence,SqliteCompanionRepository& companions,const NativeSkillCatalog& catalog) {
@@ -80,7 +88,11 @@ std::optional<SharedTaiwanOwnedDeitySkillSource::Observation> SharedTaiwanOwnedD
     auto saved=state->companions.load_selected_deity_skill(scope->lease.account,scope->lease.character,kind,id);
     if(!saved || !state->ready(session,*scope) || !state->definition_current(*definition) ||
        !state->companions.selected_deity_skill_current(*saved) || !state->ready(session,*scope))return std::nullopt;
-    return Observation(state,weak,std::move(*saved),std::move(*definition),*scope);
+    auto shared=state->catalog.lookup_shared_definition_main(kind,id);
+    if(!shared || !shared->requested_native || *shared->requested_native!=*definition ||
+       !state->ready(session,*scope) || !state->companions.selected_deity_skill_current(*saved) ||
+       !state->common_definition_current(*definition,shared->definition) || !state->ready(session,*scope))return std::nullopt;
+    return Observation(state,weak,std::move(*saved),std::move(*definition),std::move(shared->definition),*scope);
 }
 bool SharedTaiwanOwnedDeitySkillSource::current(Session& session,const Observation& observation) {
     const auto self=shared_from_this();const auto state=state_;Impl::Read read(*state);
@@ -88,8 +100,9 @@ bool SharedTaiwanOwnedDeitySkillSource::current(Session& session,const Observati
     const auto owned=observation;
     const auto actual_session=owned.session_.lock();
     if(owned.origin_.lock()!=state || actual_session.get()!=&session ||
-       !state->ready(session,owned.scope_) || !state->definition_current(owned.definition_) ||
+       !state->ready(session,owned.scope_) || !state->common_definition_current(owned.definition_,owned.common_definition_) ||
        !state->companions.selected_deity_skill_current(owned.saved_))return false;
-    return state->ready(session,owned.scope_);
+    return state->ready(session,owned.scope_) &&
+        state->common_definition_current(owned.definition_,owned.common_definition_) && state->ready(session,owned.scope_);
 }
 }

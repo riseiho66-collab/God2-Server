@@ -22,17 +22,20 @@ public:
     public:
         const SelectedDeitySkillReadset& saved() const noexcept {return saved_;}
         const NativeSkillRecord& definition() const noexcept {return definition_;}
+        // CUSTOM-0144: owning common data, never a cast/list/publication grant.
+        const SharedSkillDefinition& common_definition() const noexcept {return common_definition_;}
         const Scope& scope() const noexcept {return scope_;}
     private:
         friend class SharedTaiwanOwnedDeitySkillSource;
         Observation(std::weak_ptr<Impl> origin,std::weak_ptr<Session> session,
-            SelectedDeitySkillReadset saved,NativeSkillRecord definition,Scope scope)
+            SelectedDeitySkillReadset saved,NativeSkillRecord definition,SharedSkillDefinition common,Scope scope)
             :origin_(std::move(origin)),session_(std::move(session)),saved_(std::move(saved)),
-             definition_(std::move(definition)),scope_(std::move(scope)) {}
+             definition_(std::move(definition)),common_definition_(std::move(common)),scope_(std::move(scope)) {}
         std::weak_ptr<Impl> origin_;
         std::weak_ptr<Session> session_;
         SelectedDeitySkillReadset saved_;
         NativeSkillRecord definition_;
+        SharedSkillDefinition common_definition_;
         Scope scope_;
     };
     static std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> create(

@@ -5150,3 +5150,22 @@ TW parser75=50partial+11control+14unconnected; TW156/252 andCN156/280phase/253
 unchanged. Whole denominator/percentage unknown. PHASE1 no build/tests/runtime/
 native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Owner requests continued
 work; no new pause request. Sourcecontract source/7.
+
+
+## Round367 - saved selected skill owning common definition (2026-10-13)
+
+CUSTOM-0144 adds full owning common definition to existing saved selected-skill
+Observation, alongside unchanged original TW and private learned readset/scope.
+Exact requested_native equality and whole common Current around saved observers;
+no rebase/atomicCAS/native grant/charge/action/Main host. Two C++ files, one
+existing source enrichment, zero new Python/opcode/formula/full routes. Native
+menu152B48sites (whole107/partial45) follows selected S30/31/34 roster; do not
+invent independent player bank. Postopaque fresh reread and ignored failure
+prevent atomic earlierMPgate-to-key claims. Actual C67 changes selection revision
+and stales old restoration; future source needs final complete original response
+receipt and committed selection, not an inner S31 or old entry epoch. Source/8
+21pins; TW156/252/parser75=50partial+11control+14unconnected, CN156/280phase/253
+unchanged. Whole denominator/percentage unknown. PHASE1 no build/tests/runtime/
+native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Capacity cleanup exact
+duplicates5.04GB authorized but tool policy blocked even after consent; zero
+deleted, roughly33.43GB still over30GB. Full goal remains active.
