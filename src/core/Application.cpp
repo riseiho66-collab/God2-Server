@@ -4,6 +4,7 @@
 #include "db/GuildOfficerSqliteMigrations.h"
 #include "core/Application.h"
 #include "core/SharedWorldHostPlan.h"
+#include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "db/NativeWorldEntrySnapshotRepository.h"
 #include "db/NativeCharacterSummarySnapshotRepository.h"
 #include "db/SqliteNativeCharacterSummarySnapshotRepository.h"
@@ -599,6 +600,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
     config.validate_owned_whole_bag_moves();
     if(config.owned_whole_bag_moves_enabled && world_plan)
         throw std::invalid_argument("Normal-entry whole bag moves cannot borrow or compete with an explicit shared world plan");
+    const bool deity_selection_publication=world_plan && world_plan->owned_deity_selection_publication;
+    if(deity_selection_publication && (!world_plan->make_taiwan_world_records || !world_plan->make_taiwan_movement))
+        throw std::invalid_argument("Owned deity selection publication requires an actual constructed mixed world plan");
     const auto taiwan_entry_identity=world_plan?world_plan->taiwan_entry_identity:TaiwanWorldEntryIdentity::SelectedCharacter;
     if(world_plan && (bool(world_plan->make_taiwan_entered)==bool(world_plan->make_taiwan_entered_async) || !config.recovered_account_auth || config.mock_login ||
        config.protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate || !config.recovered_character_creation ||
@@ -712,9 +716,13 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             const GuildRelations53FlagsDraft flags53{config.owned_guild_membership_enabled,config.owned_guild_announcements_enabled,config.owned_guild_officers_enabled,config.owned_guild_succession_enabled,config.owned_guild_relations53_enabled};
             const auto migrations=configured_guild_relations53(config.database,flags53);
             SqliteDatabase database(config.database,migrations);database.initialize();database.migrate();
+            // Actual helper outlives Context suppliers and game-owned drains.
+            RecoveredOwnedCompanions owned_companions(database.companions());
             // One same-repository host on this game owner, retained through all
             // listener/controller drain. No native placement or data is created.
             std::shared_ptr<SharedWorldHost> common_world;
+            std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> owned_deity_skill_source;
+            std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> configured_deity_selection_source;
             SharedTaiwanWorldLifecycle::Entered taiwan_entered;
             SharedTaiwanWorldLifecycle::AsyncOwner taiwan_entered_async;
             SharedTaiwanWorldEntrySource::Entry taiwan_world_entry;
@@ -723,6 +731,10 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             SharedTaiwanNativeCharacterListSource::Binding taiwan_native_characters;
             if(world_plan) {
                 common_world=std::make_shared<SharedWorldHost>(database.recovered_characters());
+                if(deity_selection_publication)
+                    owned_deity_skill_source=SharedTaiwanOwnedDeitySkillSource::create(
+                        common_world->presence(),database.companions(),database.native_skill_catalog(),
+                        SharedTaiwanOwnedDeitySkillSource::Mode::SelectionPublicationRequired,config.max_sessions);
                 // Only the explicit stored-entry plan requests this capability.
                 // Same migrated Database object; accessor performs no SQL/DDL.
                 // Its raw material is qualified later by the actual suppliers.
@@ -758,7 +770,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     database.native_map_catalog(),game.get_executor(),common_world,
                     &database.native_skill_catalog(),entry_snapshots,summary_accounts,summary_snapshots,summary_writer,entry_writer,
                     &database.native_enemy_display_catalog(),equipment_snapshots,equipment_writer,owned_inventory,owned_inventory_writer,
-                    &database.companions()};
+                    &database.companions(),&owned_companions,owned_deity_skill_source};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
@@ -786,6 +798,10 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                        !taiwan_native_characters.current || !taiwan_native_characters.complete)
                         throw std::invalid_argument("Shared world host requires complete actual Taiwan list/token sources");
                 }
+                if(deity_selection_publication &&
+                   (!owned_deity_skill_source || taiwan_records.deity_selection_source.lock()!=owned_deity_skill_source))
+                    throw std::invalid_argument("Constructed mixed C67 binding does not retain the actual Context source");
+                configured_deity_selection_source=taiwan_records.deity_selection_source;
                 // Check the actual constructed owners after all external factories.
                 // An explicit independent handle must never fall through to the
                 // legacy selected-character movement when a supplier changes plan metadata.
@@ -1018,7 +1034,6 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             };
             auto& supply_repository=static_cast<SqliteRecoveredCharacterRepository&>(database.recovered_characters());
             RecoveredFruitQuests fruit_quests(database.fruit_quests());
-            RecoveredOwnedCompanions owned_companions(database.companions());
             const auto observe_companion_restoration_write=[&](Session& session) {
                 const auto at=owned_companion_restoration_sources.find(session.id());
                 if(at==owned_companion_restoration_sources.end())return;
@@ -7856,6 +7871,52 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(failure)std::rethrow_exception(failure);
                     };
                     spdlog::warn("OWNED_WHOLE_BAG_MOVES_SOURCE CUSTOM-0094 full25 only existing_owner no_grants stale_pose_rejected");
+                }
+                if(deity_selection_publication) {
+                    if(!game_handlers.world_records || !owned_deity_skill_source ||
+                       configured_deity_selection_source.lock()!=owned_deity_skill_source)
+                        throw std::invalid_argument("Owned C67 publication lost its constructed source");
+                    const std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> weak=owned_deity_skill_source;
+                    const auto original=game_handlers.world_records;
+                    // LAST wrapper: capture the actual complete original return
+                    // after every existing wrapper, including WholeBagMove.
+                    game_handlers.world_records=[weak,original](Session& session,
+                        std::span<const RecoveredWorldRecords::Record> records)
+                        ->std::optional<std::vector<std::uint8_t>> {
+                        const auto source=weak.lock();if(!source)return std::nullopt;
+                        source->check_selection_callback_entry(); // Poison reentry BEFORE any key allocation.
+                        std::vector<std::uint8_t> keys;
+                        keys.reserve(std::count_if(records.begin(),records.end(),[](const auto& record) {
+                            return std::holds_alternative<RecoveredDeitySelection::Request>(record);
+                        }));
+                        for(const auto& record:records)
+                            if(const auto* request=std::get_if<RecoveredDeitySelection::Request>(&record))keys.push_back(request->key);
+                        auto callback=source->begin_selection_callback(session,keys);
+                        if(!callback)return original(session,records);
+                        struct End {
+                            std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> source;
+                            SharedTaiwanOwnedDeitySkillSource::SelectionCallback callback;
+                            ~End(){if(const auto owner=source.lock())owner->abandon_selection_callback(callback);}
+                        } end{weak,*callback};
+                        auto response=original(session,records);
+                        if(!response || !source->selection_response_matches(session,*callback,*response))
+                            throw std::runtime_error("Owned C67 committed prefix lacks its complete original response");
+                        // Receipt allocation can fail after a durable prefix.
+                        // End retires this publication; no SQL retry/rollback.
+                        const auto write=session.observe_world_response(*response);
+                        session.hold_world_input_until_response_written(write);
+                        source->publish_selection_callback(session,*callback,write);
+                        return response;
+                    };
+                    const auto previous=on_disconnect;
+                    on_disconnect=[weak,previous](std::shared_ptr<Session> session) {
+                        std::exception_ptr failure;
+                        try {if(session)if(const auto source=weak.lock())source->release_selection(*session);}
+                        catch(...) {failure=std::current_exception();}
+                        try {if(previous)previous(std::move(session));}
+                        catch(...) {if(!failure)failure=std::current_exception();}
+                        if(failure)std::rethrow_exception(failure);
+                    };
                 }
                 character_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),
                     config.host,config.character_port,config.max_sessions,config.packet_dump,

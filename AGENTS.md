@@ -364,3 +364,12 @@ original public repo select_deity body. Own proof allocation before COMMIT;
 only no-throw moves of proof/prebuilt mutable wire afterwards, no stale-source
 query/retry/rollback. This is one selected row, not a full roster/Written/native
 adoption/permission or Main C56 host. No new Python files; PHASE1 unchanged.
+
+
+CUSTOM-0147 adds explicit default-off constructed mixed C67 commit/publication
+through the SAME actual Context source/helper/presence/catalog. LAST Application
+wrapper owns one complete original aggregate/write/input hold; ordered C67
+frames and commit chain, Written/current/private INIT/Session/lease/map pointer
+fenced. Repeat full private/local tuple AFTER ready_lease observer. No stale
+equal-key publication, SQL retry/rollback or native adoption/cast authority.
+Default CLI/C56 action still OPEN. No new Python files; PHASE1 unchanged.

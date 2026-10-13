@@ -50,6 +50,11 @@ const StoredDeity& SqliteCompanionRepository::CommittedDeitySelection::deity() c
 const std::optional<StoredDeitySelection>& SqliteCompanionRepository::CommittedDeitySelection::before() const noexcept {return data_->before;}
 const StoredDeitySelection& SqliteCompanionRepository::CommittedDeitySelection::after() const noexcept {return data_->after;}
 bool SqliteCompanionRepository::CommittedDeitySelection::changed() const noexcept {return data_->changed;}
+bool SqliteCompanionRepository::issued_selection(const CommittedDeitySelection& value) const noexcept {
+    if(!value.data_ || value.data_->repository!=this)return false;
+    const auto identity=value.data_->identity.lock();
+    return identity && identity==readset_identity_;
+}
 void SqliteCompanionRepository::require_owner(std::uint64_t account,std::uint64_t character) {
     if(!account || !character) throw DatabaseError("Invalid companion owner");
     sqlite_detail::Statement row(db_,"SELECT 1 FROM recovered_characters WHERE account_id=? AND id=?");

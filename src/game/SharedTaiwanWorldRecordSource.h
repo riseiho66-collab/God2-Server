@@ -2,13 +2,14 @@
 #include "game/SharedTaiwanMovementSource.h"
 
 namespace god2 {
+class SharedTaiwanOwnedDeitySkillSource;
 // Ordered mixed native world-record source, using the actual same movement
 // binding. Typed grammar alone grants no remaining opcode/phase authority.
 class SharedTaiwanWorldRecordSource final {
 public:
     using Lease=SharedWorldPresence::Lease;
     using Record=RecoveredWorldRecords::Record;
-    enum class Kind {Movement,Others,SelectionItem,InventoryMove,NativeSkill};
+    enum class Kind {Movement,Others,SelectionItem,InventoryMove,NativeSkill,DeitySelection};
     struct Run {std::size_t offset,count;Kind kind;};
     struct Scope {
         Lease lease;
@@ -27,6 +28,7 @@ public:
         static Reply no_reply();
         bool native_no_reply() const noexcept;
         const std::vector<std::uint8_t>& bytes() const noexcept;
+        std::vector<std::uint8_t> take_bytes() && noexcept;
     private:
         Reply(bool,std::vector<std::uint8_t>);
         bool no_reply_;
@@ -50,6 +52,12 @@ public:
         std::function<void(Session&)> release;
         std::function<void()> invalidate_active;
     };
+    struct DeitySelectionBinding {
+        std::function<std::optional<Reply>(Session&,const RecoveredDeitySelection::Request&)> dispatch;
+        std::function<void(Session&)> release;
+        std::function<void()> invalidate_active;
+        std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> source;
+    };
     struct OtherBinding {
         // This sender's native encrypted output returns in original run order;
         // do not submit it directly ahead of earlier accumulated batch replies.
@@ -71,6 +79,7 @@ public:
         // Actual mandatory Others owner explicitly advertises lossless C56
         // input support. It still supplies Current/action/reply or refusal.
         bool native_world_skill_requests=false;
+        std::optional<DeitySelectionBinding> deity_selection={};
     };
     // Mandatory real opcode/whole-batch/run-phase qualification. Current is a
     // pure observer; saved position, phase and battle generation are read again
@@ -90,6 +99,7 @@ public:
         bool native_selection_input=false;
         bool native_skill_commands=false;
         bool native_world_skill_requests=false; // Separate C56 grammar, never C35 authority.
+        std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> deity_selection_source={};
     };
     static Binding create(std::shared_ptr<SharedWorldPresence>,SharedTaiwanMovementSource::Binding,
         OtherBinding,Current,Budgets,std::size_t actual_session_capacity);

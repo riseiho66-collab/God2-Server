@@ -40,21 +40,33 @@ public:
         const Restoration&,const NativeSkillCatalog&);
     bool normal_entry_prefix_current(const Restoration&,const TaiwanNativeDeityRosterPrefix&,
         const NativeSkillCatalog&);
+    class SelectionPublication {
+        struct Data;
+    public:
+        SelectionPublication(const SelectionPublication&) noexcept=default;
+        SelectionPublication& operator=(const SelectionPublication&) noexcept=default;
+        const SqliteCompanionRepository::CommittedDeitySelection& committed() const noexcept;
+        const std::vector<std::uint8_t>& wire() const noexcept;
+    private:
+        friend class RecoveredOwnedCompanions;
+        explicit SelectionPublication(std::shared_ptr<const Data> data) noexcept:data_(std::move(data)) {}
+        std::shared_ptr<const Data> data_;
+    };
     class SelectionResult {
     public:
         SelectionResult(SelectionResult&&) noexcept=default;
         SelectionResult& operator=(SelectionResult&&) noexcept=default;
         SelectionResult(const SelectionResult&)=delete;
         SelectionResult& operator=(const SelectionResult&)=delete;
-        const SqliteCompanionRepository::CommittedDeitySelection& committed() const noexcept {return committed_;}
+        const SqliteCompanionRepository::CommittedDeitySelection& committed() const noexcept {return publication_.committed();}
+        const SelectionPublication& publication() const noexcept {return publication_;}
         const std::vector<std::uint8_t>& wire() const noexcept {return wire_;}
         std::vector<std::uint8_t> take_wire() && noexcept {return std::move(wire_);}
     private:
         friend class RecoveredOwnedCompanions;
-        SelectionResult(SqliteCompanionRepository::CommittedDeitySelection committed,
-            std::vector<std::uint8_t> wire) noexcept
-            :committed_(std::move(committed)),wire_(std::move(wire)) {}
-        SqliteCompanionRepository::CommittedDeitySelection committed_;
+        SelectionResult(SelectionPublication publication,std::vector<std::uint8_t> wire) noexcept
+            :publication_(std::move(publication)),wire_(std::move(wire)) {}
+        SelectionPublication publication_;
         std::vector<std::uint8_t> wire_;
     };
     // Exact prebuilt S31 plus the one-row selection commit which qualified it.

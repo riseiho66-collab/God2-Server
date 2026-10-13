@@ -5205,3 +5205,31 @@ route. Source/10 pins28; TW156/252/parser75=50partial+11control+14unconnected,
 CN156/280phase/253supported unchanged. Whole denominator/percentage unknown.
 PHASE1 no build/tests/runtime/native/API/VM/codec/gameDBSQL/migrate/activate/
 deploy. Full goal active; authorized cleanup still policyblocked/zero deleted.
+
+
+## Round370 - actual mixed C67 whole-response publication (2026-10-14)
+
+CUSTOM-0147 connects actual constructed mixed C67 singleton runs to SAME Context
+game-owned source/helper/repository/catalog/presence. Default-off capability;
+actual max_sessions and game-affine drains. Original C24/movement/tick order
+and CurrentPoints retained; actual before/after commit chain and original S31
+holders, LAST Application wrapper captures ONE entire original response/write/
+inputhold. Ordered frame-boundary matching consumes separate identical frames.
+Last actual commit publishes preallocated private candidate; exact private
+map pointer/Session/full64owner/lease/phase/gen/normal INIT and Written/current
+receipt/full savedrow/common definition fenced. Final v6 corrects observer gap:
+full pure private/local tuple checked AFTER ready_lease as well as before,
+including retained active presence registry and common readiness/delivery.
+73 literal edits invert11 current files to exact originals/Git; v4 review and
+v5 intermediate report historical, final v6 independent addendum. Source/11 pins29; no new Python.
+One C67 branch improved; 2 opt-in unhosted phase associations C2S67/S2C31,
+no new chain/opcode/formula/complete route. TW156/252/parser75=50partial+
+11control+14unconnected, unhosted3chains/40bindings/36unique. CN156/280phase/
+253supported/35chains/93bindings/71unique unchanged. Whole denominator/%null.
+Default CLI and C56 action/nativeadoption/cast rights remain OPEN; local Written
+is not client processing. Postcommit later aggregate allocation can fail:
+retire/close, no SQL retry/rollback. Shared453/TWTraditional/native formula
+priority and owner maxHPdiv10 poison rule retained. CNcustom126/150 adapter/
+resources/effects remain qualified separately. PHASE1 no build/tests/runtime/
+native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Goal active; approved
+duplicate cleanup still auto-review blocked, zero deleted/no alternate retry.

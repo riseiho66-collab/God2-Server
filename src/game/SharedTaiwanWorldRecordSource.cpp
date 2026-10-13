@@ -15,6 +15,7 @@ SharedTaiwanWorldRecordSource::Reply SharedTaiwanWorldRecordSource::Reply::wire(
 SharedTaiwanWorldRecordSource::Reply SharedTaiwanWorldRecordSource::Reply::no_reply() {return Reply(true,{});}
 bool SharedTaiwanWorldRecordSource::Reply::native_no_reply() const noexcept {return no_reply_;}
 const std::vector<std::uint8_t>& SharedTaiwanWorldRecordSource::Reply::bytes() const noexcept {return bytes_;}
+std::vector<std::uint8_t> SharedTaiwanWorldRecordSource::Reply::take_bytes() && noexcept {return std::move(bytes_);}
 namespace {
 using Source=SharedTaiwanWorldRecordSource;
 struct Slot {
@@ -68,6 +69,8 @@ struct Owner {
         try {const auto selection=others.selection_item;if(selection)selection->invalidate_active();}
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto move=others.inventory_move;if(move)move->invalidate_active();}
+        catch(...) {if(!failure)failure=std::current_exception();}
+        try {const auto deity=others.deity_selection;if(deity)deity->invalidate_active();}
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto skill=others.native_skills;if(skill)skill->invalidate_active();}
         catch(...) {if(!failure)failure=std::current_exception();}
@@ -167,6 +170,8 @@ struct Owner {
                         return Source::Kind::SelectionItem;
                     if(others.inventory_move && std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record))
                         return Source::Kind::InventoryMove;
+                    if(others.deity_selection && std::holds_alternative<RecoveredDeitySelection::Request>(record))
+                        return Source::Kind::DeitySelection;
                     if(others.native_skills && std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record))
                         return Source::Kind::NativeSkill;
                     return Source::Kind::Others;
@@ -183,7 +188,7 @@ struct Owner {
                             throw std::invalid_argument("TW native skill run requires one complete original sequence");
                         ++end;
                     }
-                }else if(kind!=Source::Kind::SelectionItem && kind!=Source::Kind::InventoryMove)
+                }else if(kind!=Source::Kind::SelectionItem && kind!=Source::Kind::InventoryMove && kind!=Source::Kind::DeitySelection)
                     while(end<records.size() && !records[end].valueless_by_exception() && classify(records[end])==kind)++end;
                 if(end==at || prepared.size()>=budgets.max_runs)throw std::invalid_argument("TW mixed native run budget rejected");
                 Work work{{at,end-at,kind},{},{}};
@@ -230,6 +235,10 @@ struct Owner {
                         const auto* request=std::get_if<RecoveredInventoryMoveRequest::Request>(&records[work.run.offset]);
                         if(!request||!others.inventory_move)throw std::runtime_error("TW C24 actual original run unavailable");
                         const auto dispatch=others.inventory_move->dispatch;reply=dispatch(session,*request);
+                    }else if(work.run.kind==Source::Kind::DeitySelection) {
+                        const auto* request=std::get_if<RecoveredDeitySelection::Request>(&records[work.run.offset]);
+                        if(!request || !others.deity_selection)throw std::runtime_error("TW C67 actual original run unavailable");
+                        const auto dispatch=others.deity_selection->dispatch;reply=dispatch(session,*request);
                     }else if(work.run.kind==Source::Kind::NativeSkill) {
                         if(!others.native_skills)throw std::runtime_error("TW native skill owner unavailable");
                         const auto dispatch=others.native_skills->dispatch;reply=dispatch(session,work.skills);
@@ -239,7 +248,8 @@ struct Owner {
                     if(!reply || (reply->native_no_reply() && !reply->bytes().empty()) ||
                        (!reply->native_no_reply() && reply->bytes().empty()))
                         throw std::runtime_error("TW mixed Others lacks explicit native response decision");
-                    response=reply->bytes();
+                    if(work.run.kind==Source::Kind::DeitySelection)response=std::move(*reply).take_bytes();
+                    else response=reply->bytes();
                 }
                 if(response.size()>budgets.max_output_bytes-output.size())
                     throw std::runtime_error("TW mixed native output byte budget exceeded after committed prefix");
@@ -273,6 +283,8 @@ struct Owner {
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto move=others.inventory_move;if(move)move->release(session);}
         catch(...) {if(!failure)failure=std::current_exception();}
+        try {const auto deity=others.deity_selection;if(deity)deity->release(session);}
+        catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto skill=others.native_skills;if(skill)skill->release(session);}
         catch(...) {if(!failure)failure=std::current_exception();}
         if(failure)std::rethrow_exception(failure);
@@ -296,6 +308,11 @@ SharedTaiwanWorldRecordSource::Binding SharedTaiwanWorldRecordSource::create(
     const auto spectator_close=others.spectator_close;
     if(others.native_skills && (!others.native_skills->dispatch || !others.native_skills->release ||
        !others.native_skills->invalidate_active))throw std::invalid_argument("TW C35 requires complete actual skill owner");
+    if(others.deity_selection && (!others.deity_selection->dispatch || !others.deity_selection->release ||
+       !others.deity_selection->invalidate_active || others.deity_selection->source.expired()))
+        throw std::invalid_argument("TW C67 requires actual same-context selection source");
+    const auto deity_selection_source=others.deity_selection ? others.deity_selection->source :
+        std::weak_ptr<SharedTaiwanOwnedDeitySkillSource>{};
     const bool native_skill_commands=others.native_skills.has_value();
     const bool native_world_skill_requests=others.native_world_skill_requests;
     auto owner=std::make_shared<Owner>(std::move(presence),std::move(movement),std::move(others),std::move(current),budgets,capacity);
@@ -303,7 +320,7 @@ SharedTaiwanWorldRecordSource::Binding SharedTaiwanWorldRecordSource::create(
         [owner](Session& session,std::span<const Record> records){return owner->records(session,records);},
         [owner](Session& session){owner->release(session);},
         [owner]{owner->poison();},
-        spectator6e,spectator_close,native_selection_input,native_skill_commands,native_world_skill_requests
+        spectator6e,spectator_close,native_selection_input,native_skill_commands,native_world_skill_requests,deity_selection_source
     };
 }
 }

@@ -20,6 +20,8 @@ class SqliteNativeEquipmentSnapshotRepository;
 class OwnedInventoryRepository;
 class SqliteOwnedInventoryRepository;
 class SqliteCompanionRepository;
+class RecoveredOwnedCompanions;
+class SharedTaiwanOwnedDeitySkillSource;
 // Explicit Application common-world hosting only. No native frame, placement,
 // scene authority or success callback is supplied by this plan or the host.
 struct SharedWorldHostPlan {
@@ -60,6 +62,10 @@ struct SharedWorldHostPlan {
         // selected30/31/34 evidence supplies no battle actor or87/grant/cost.
         // Borrowed through the game-owner drain; no schema install on access.
         SqliteCompanionRepository* companions=nullptr;
+        // CUSTOM-0147: same actual helper/source through game-owner drain.
+        // Null retains saved-observation-only plans; no synthetic publisher.
+        RecoveredOwnedCompanions* owned_companions=nullptr;
+        std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> owned_deity_skills={};
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in
@@ -109,5 +115,7 @@ struct SharedWorldHostPlan {
     // Explicit complete native-source plan only. Common character keys stay
     // uint64; the full entry and prepared private lease supply the scene handle.
     TaiwanWorldEntryIdentity taiwan_entry_identity=TaiwanWorldEntryIdentity::SelectedCharacter;
+    // Explicit constructed mixed plan only; no ordinary CLI/default activation.
+    bool owned_deity_selection_publication=false;
 };
 }

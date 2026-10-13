@@ -5392,6 +5392,42 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "Earlier helper could prepare old row A S31 while same key row B passed selection CAS, and const wire could allocate on return after successful commit.",
   "replacement": "Connect private committed result to one actual final aggregate response/write epoch and selected skill provider; complete C56 action and comprehensive acceptance."
+},
+{
+  "id": "CUSTOM-0147",
+  "name": "Actual mixed C67 ordered commit and whole original response publication",
+  "authority": "OWNER_SHARED_SOURCE_LIFETIME_AND_LOCAL_WRITE_CUSTODY_NOT_NATIVE_CAST_PERMISSION",
+  "implementation": [
+    "src/db/SqliteCompanionRepository.h",
+    "src/db/SqliteCompanionRepository.cpp",
+    "src/handlers/RecoveredOwnedCompanions.h",
+    "src/handlers/RecoveredOwnedCompanions.cpp",
+    "src/game/SharedTaiwanOwnedDeitySkillSource.h",
+    "src/game/SharedTaiwanOwnedDeitySkillSource.cpp",
+    "src/core/SharedWorldHostPlan.h",
+    "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+    "src/core/Application.cpp",
+    "src/game/SharedTaiwanWorldRecordSource.h",
+    "src/game/SharedTaiwanWorldRecordSource.cpp"
+  ],
+  "native_gap": "Written means local complete response write, not native selected-menu adoption, learned rights, cast permission or C56 action. Default CLI has no world plan.",
+  "rules": {
+    "context": "Explicit default-off world-plan capability constructs one actual game-owned source from same presence/companions/catalog/helper and actual max_sessions. Context and returned typed binding retain that exact source.",
+    "ordered_runs": "Actual constructed mixed world supplier dispatches singleton C67 in original order with existing movement/C24/ticks. Each actual committed before/after selection must continue the previous successful selection. Original prebuilt S31 and immutable private commit are retained without SQL retry or postcommit consumed-row SQL.",
+    "final_response": "LAST Application wrapper captures exactly one complete original returned aggregate. Ordered frame-boundary matching consumes separate physical frames for duplicate equal replies. One actual Session WorldResponseWrite/input hold; publish only last actual committed selection into preallocated candidate.",
+    "current": "Publication requires exact private map pointer, Session incarnation/full64 owner/lease/phase/battle generation/private normal INIT and Written/current whole response. Both callback and publication fences repeat entire private/local tuple after ready_lease observer returns. Same-key successors cannot revive old publications.",
+    "lifetime": "Game-thread retained owner/source/helper; weak callback captures, exact disconnect release and stop/invalidate. Failure after durable prefix retires publication and closes Session without retry/rollback. SavedObservationOnly default remains.",
+    "limits": "Source publication is conditional opt-in; not remote ACK/native adoption/atomic learned grants/C56 cost/status/formulas/action. Later aggregate/receipt allocation can fail after durable work; failure is terminal, not rollback."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "Committed row/S31 alone did not establish one final whole response epoch or handoff to the actual same selected-skill source in the constructed mixed host.",
+  "replacement": "Qualify actual native selected-menu adoption/currentness and connect C56 targets/action/cost/status/effects/settlement/full reply plus default host, then comprehensive native acceptance."
 }
 ]
 }

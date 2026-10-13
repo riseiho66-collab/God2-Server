@@ -1,5 +1,6 @@
 #include "core/SharedTaiwanNativeWorldHostPlan.h"
 #include "game/SharedTaiwanNativeRecordHandlerSource.h"
+#include "handlers/RecoveredOwnedCompanions.h"
 #include <algorithm>
 #include <exception>
 #include <mutex>
@@ -27,6 +28,8 @@ struct Owner {
     OwnedInventoryRepository* owned_inventory;
     SqliteOwnedInventoryRepository* owned_inventory_writer;
     SqliteCompanionRepository* companions;
+    RecoveredOwnedCompanions* owned_companions;
+    std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> owned_deity_skills;
     asio::any_io_executor game;
     std::shared_ptr<SharedWorldHost> common;
     const std::thread::id thread=std::this_thread::get_id();
@@ -52,7 +55,7 @@ struct Owner {
          native_equipment_snapshots(context.native_equipment_snapshots),
          native_equipment_snapshot_writer(context.native_equipment_snapshot_writer),
          owned_inventory(context.owned_inventory),owned_inventory_writer(context.owned_inventory_writer),
-         companions(context.companions),
+         companions(context.companions),owned_companions(context.owned_companions),owned_deity_skills(context.owned_deity_skills),
          game(context.game),common(context.common_world),
          records(std::move(sources.records)),characters_source(std::move(sources.characters)),capacity(sources.actual_session_capacity) {
         if(!valid_taiwan_world_entry_identity(identity) ||
@@ -73,6 +76,28 @@ struct Owner {
            (records && (!records->others.records || !records->others.release ||
                         !records->others.invalidate_active || !records->current)))
             throw std::invalid_argument("TW native mixed plan requires explicit matching nonmovement suppliers");
+        if(owned_deity_skills) {
+            if(!records || !companions || !owned_companions || !native_skills ||
+               !owned_companions->owns_repository(*companions) ||
+               !owned_deity_skills->publication_required() ||
+               !owned_deity_skills->owns_sources(common->presence(),*companions,*native_skills) ||
+               records->others.deity_selection)
+                throw std::invalid_argument("TW C67 publication requires exact constructed mixed Context sources");
+            // AFTER all chat/spectator assembly: no aggregate wrapper can drop
+            // this typed actual supplier. Owner retains its game-affine source.
+            const std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> weak=owned_deity_skills;
+            auto* helper=owned_companions;
+            records->others.deity_selection=SharedTaiwanWorldRecordSource::DeitySelectionBinding{
+                [weak,helper](Session& session,const RecoveredDeitySelection::Request& request)
+                    ->std::optional<SharedTaiwanWorldRecordSource::Reply> {
+                    const auto source=weak.lock();if(!source)return std::nullopt;
+                    auto wire=source->select_deity_for_callback(session,*helper,request);
+                    if(!wire)return std::nullopt;
+                    return SharedTaiwanWorldRecordSource::Reply::wire(std::move(*wire));
+                },
+                [weak](Session& session){if(const auto source=weak.lock())source->release_selection(session);},
+                [weak]{if(const auto source=weak.lock())source->invalidate_selection_callbacks();},weak};
+        }
         auto presence=common->presence();auto visibility=common->visibility();
         entry=SharedTaiwanWorldEntrySource::create(*characters,*maps,std::move(sources.entry),
             characters_source?characters_source->selected:SharedTaiwanNativeCharacterListSource::SelectedSource{},
@@ -95,7 +120,9 @@ struct Owner {
         if(std::this_thread::get_id()!=thread)std::terminate();
         // Real callbacks are game-affine. The plan factory keeps only a weak
         // reference; these owners therefore drain with Application's facades.
-        records_invalidate={};records.reset();characters_source.reset();binding={};movement.reset();entered={};entry={};common.reset();
+        records_invalidate={};records.reset();characters_source.reset();binding={};movement.reset();entered={};entry={};
+        if(owned_deity_skills)owned_deity_skills->stop_selection_publications();
+        owned_deity_skills.reset();common.reset();
     }
     void check() const {
         if(std::this_thread::get_id()!=thread)
@@ -112,7 +139,8 @@ struct Owner {
            context.native_equipment_snapshots!=native_equipment_snapshots ||
            context.native_equipment_snapshot_writer!=native_equipment_snapshot_writer ||
            context.owned_inventory!=owned_inventory || context.owned_inventory_writer!=owned_inventory_writer ||
-           context.companions!=companions ||
+           context.companions!=companions || context.owned_companions!=owned_companions ||
+           context.owned_deity_skills!=owned_deity_skills ||
            context.common_world!=common || context.game!=game || !common->owns_repository(*characters)) {
             invalidate();
             throw std::invalid_argument("TW native host plan cannot join a different Application Context");
@@ -124,6 +152,8 @@ struct Owner {
         const auto character=characters_source?characters_source->invalidate_active:std::function<void()>{};
         std::exception_ptr failure;
         try {if(record)record();}catch(...) {failure=std::current_exception();}
+        try {if(owned_deity_skills)owned_deity_skills->invalidate_selection_callbacks();}
+        catch(...) {if(!failure)failure=std::current_exception();}
         try {if(move)move();}catch(...) {if(!failure)failure=std::current_exception();}
         try {if(character)character();}catch(...) {if(!failure)failure=std::current_exception();}
         if(failure)std::rethrow_exception(failure);
@@ -197,6 +227,13 @@ std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> SharedTaiwanNativeWorldHostPl
     if(!context.common_world || !context.common_world->owns_repository(context.characters) ||
        !context.companions || !context.native_skills)
         throw std::invalid_argument("TW saved skill source requires actual same Context presence/companions/catalog");
+    if(context.owned_deity_skills) {
+        if(!context.owned_companions || !context.owned_companions->owns_repository(*context.companions) ||
+           !context.owned_deity_skills->publication_required() ||
+           !context.owned_deity_skills->owns_sources(context.common_world->presence(),*context.companions,*context.native_skills))
+            throw std::invalid_argument("TW selected publication source differs from actual Context");
+        return context.owned_deity_skills;
+    }
     return SharedTaiwanOwnedDeitySkillSource::create(context.common_world->presence(),
         *context.companions,*context.native_skills);
 }
@@ -710,7 +747,7 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
                 owner->check();return invoke(session,records);
             },
             [owner,release=std::move(actual.release)](Session& session) {owner->check();release(session);},
-            [owner] {owner->invalidate();},actual.spectator6e,actual.spectator_close,actual.native_selection_input,actual.native_skill_commands,actual.native_world_skill_requests
+            [owner] {owner->invalidate();},actual.spectator6e,actual.spectator_close,actual.native_selection_input,actual.native_skill_commands,actual.native_world_skill_requests,actual.deity_selection_source
         };
     };
     return plan;

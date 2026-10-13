@@ -42,3 +42,11 @@ unchanged. Whole denominator/percentage unknown. PHASE1: no build/tests,
 native/runtime/API/VM, packet codec, gameDBSQL, migration, activation/deployment.
 The explicit approved duplicate cleanup remains tool-policy blocked with zero
 files deleted; no alternate deletion mechanism or large resource copies.
+
+
+Round370 connects this private commit/prebuilt S31 to the actual constructed
+mixed C67 supplier and SAME common selected-skill source. The LAST Application
+wrapper captures one complete original response/write/input hold, with ordered
+commit/frame matching and exact private Written/current publication. See
+tw-deity-selection-publication-source-20261014.md / source/11. Opt-in local
+publication does not establish default CLI/C56 action/native adoption/rights.

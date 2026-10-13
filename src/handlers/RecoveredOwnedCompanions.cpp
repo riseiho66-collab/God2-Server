@@ -121,6 +121,14 @@ std::vector<std::vector<std::uint8_t>> RecoveredOwnedCompanions::restore_rows(
     }
     return batches;
 }
+struct RecoveredOwnedCompanions::SelectionPublication::Data {
+    std::vector<std::uint8_t> wire;
+    std::optional<SqliteCompanionRepository::CommittedDeitySelection> committed;
+    explicit Data(const std::vector<std::uint8_t>& value):wire(value) {}
+};
+const SqliteCompanionRepository::CommittedDeitySelection&
+RecoveredOwnedCompanions::SelectionPublication::committed() const noexcept {return *data_->committed;}
+const std::vector<std::uint8_t>& RecoveredOwnedCompanions::SelectionPublication::wire() const noexcept {return data_->wire;}
 std::optional<RecoveredOwnedCompanions::SelectionResult> RecoveredOwnedCompanions::select_deity_with_source(
         std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request) {
     const auto key=request.key;
@@ -133,8 +141,12 @@ std::optional<RecoveredOwnedCompanions::SelectionResult> RecoveredOwnedCompanion
     // after a successful selection. The repository compares this full row.
     auto wire=RecoveredWorldFrame::encode(projection->encode());
     const auto selected=repository_.load_deity_selection(account,character);
+    // CUSTOM-0147: second original frame and its holder allocate PRECOMMIT.
+    // Installing the private commit and returning both owners only move.
+    auto retained=std::make_shared<SelectionPublication::Data>(wire);
     auto committed=repository_.select_deity_with_source(account,character,key,selected,*found);
-    return SelectionResult(std::move(committed),std::move(wire));
+    retained->committed.emplace(std::move(committed));
+    return SelectionResult(SelectionPublication(std::move(retained)),std::move(wire));
 }
 std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_deity(std::uint64_t account,std::uint64_t character,
         const RecoveredDeitySelection::Request& request) {
