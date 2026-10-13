@@ -5102,3 +5102,19 @@ supported lengths unchanged. CN actual host/list/resources/87/effects and
 full native roster/control/auxiliary/queuedHP/poison status remain OPEN.
 PHASE1 static only: no compiler/build/tests/runtime/native/VM/codec/gameDBSQL/
 migrate/activate/deploy. Whole denominator/percentage unknown; goal active.
+
+
+## Round364 - common definition at existing CN command handoff (2026-10-13)
+
+CUSTOM-0142 retains original CN raw plus full common definition through actual
+existing DataAuthority current/prepare/execute. Same sequential snapshot and
+old Skill-prefix private holders retained across Append continuations; no
+cross-source atomic CAS, learned/cost/actor/default-host or postCOMMIT rollback.
+CN126/150 extended profile/resources/actual actor/list/87/commonhost remainOPEN.
+Original553BC0 complete710B/190sites/RET24h plus actual54A6DF caller9formals
+closed; opaque children/currentness remainOPEN. Localbodyclosure1, globalnew
+method/opcode/fullroute/formula credit0. TW156/252 world74=50partial+11control+
+13unconnected; CN156/280phase/253 supported unchanged. Sourcecontract source/5.
+PHASE1 no build/tests/native/runtime/VM/codec/gameDBSQL/migrate/activate/deploy.
+Owner requests stop after round364: finalize publication then pause goal; no
+next round until resume. Whole denominator/percentage unknown.

@@ -25,6 +25,36 @@ bool same_inventory(const Data::InventorySnapshot& a,const Data::InventorySnapsh
         !std::equal(x->second.raw_bytes().begin(),x->second.raw_bytes().end(),y->second.raw_bytes().begin()))return false;
     return true;
 }
+bool has_shared_skill(const Data::Resolved& data) {
+    return std::any_of(data.rows.begin(),data.rows.end(),[](const auto& row){return row.domain==Data::Domain::Skill;});
+}
+bool same_group_identity(const Data::Plan& a,const Data::Plan& b) {
+    return same_cap(a.issuer,b.issuer) && same_cap(a.group,b.group) &&
+        a.actual_issuer_generation==b.actual_issuer_generation && a.actual_group_generation==b.actual_group_generation;
+}
+bool same_selection_values(const CnBattleSkillSelectionSource::Snapshot& a,
+    const CnBattleSkillSelectionSource::Snapshot& b) {
+    const auto& x=a.native();const auto& y=b.native();
+    if(x.scope()!=y.scope() || x.selected_path()!=y.selected_path() || x.selector()!=y.selector() ||
+       x.raw_signed_index()!=y.raw_signed_index() || !same_cap(x.catalog(),y.catalog()) ||
+       !std::equal(x.component_bytes().begin(),x.component_bytes().end(),y.component_bytes().begin(),y.component_bytes().end()) ||
+       !std::equal(x.bank_bytes().begin(),x.bank_bytes().end(),y.bank_bytes().begin(),y.bank_bytes().end()) ||
+       !std::equal(x.index_bytes().begin(),x.index_bytes().end(),y.index_bytes().begin(),y.index_bytes().end()) ||
+       !std::equal(x.flag_bytes().begin(),x.flag_bytes().end(),y.flag_bytes().begin(),y.flag_bytes().end()) ||
+       !std::equal(x.entries().begin(),x.entries().end(),y.entries().begin(),y.entries().end()) ||
+       a.entries().size()!=b.entries().size())return false;
+    for(std::size_t i=0;i<a.entries().size();++i)
+        if(a.entries()[i].native!=b.entries()[i].native || a.entries()[i].definition!=b.entries()[i].definition)return false;
+    return true; // Value/source equality only; never claims equal private Storage.
+}
+bool same_prefix_row(const Data::Row& a,const Data::Row& b) {
+    if(a.request!=b.request || a.domain!=b.domain || a.skill!=b.skill || a.skill_fields!=b.skill_fields ||
+       a.common_definition!=b.common_definition || a.inventory_slot!=b.inventory_slot ||
+       bool(a.item)!=bool(b.item) || bool(a.native_skill_selection)!=bool(b.native_skill_selection))return false;
+    if(a.item && !std::equal(a.item->raw_bytes().begin(),a.item->raw_bytes().end(),
+        b.item->raw_bytes().begin(),b.item->raw_bytes().end()))return false;
+    return !a.native_skill_selection || same_selection_values(*a.native_skill_selection,*b.native_skill_selection);
+}
 struct Input {
     const Data::Scope before;
     const Data::Plan plan;
@@ -113,6 +143,7 @@ struct SharedNativeBattleCommandData::State {
                 if((kind!=0x03 && kind!=0x17 && kind!=0x83 && kind!=0x97) || request.operand()>0xffff)return {};
                 if(!catalog_current(c,scope))return {};
                 const auto word=std::uint16_t(request.operand());
+                std::optional<SharedSkillLookup> common;
                 if(configuration.skill_selection) {
                     const auto& selection=*configuration.skill_selection;
                     // Retain the actual producer/list incarnation, not an
@@ -123,13 +154,20 @@ struct SharedNativeBattleCommandData::State {
                     if(!row.native_skill_selection || !catalog_current(c,scope))return {};
                     const auto actual=selection.source->selected(*row.native_skill_selection,request.operand());
                     if(!actual || !catalog_current(c,scope))return {};
-                    row.skill=actual->definition;
+                    common=configuration.catalog.skills->lookup_shared(
+                        std::uint8_t(actual->definition.kind),std::uint8_t(actual->definition.definition_id));
+                    if(!common || !common->requested_native ||
+                       *common->requested_native!=actual->definition || !catalog_current(c,scope))return {};
                 }else {
                     // Actual common learned/actor/source authority remains
                     // mandatory; definition existence alone grants nothing.
-                    row.skill=configuration.catalog.skills->lookup(std::uint8_t(word>>8),std::uint8_t(word));
+                    common=configuration.catalog.skills->lookup_shared(std::uint8_t(word>>8),std::uint8_t(word));
                 }
-                if(!row.skill || !fence(c,scope))return {};
+                if(!common || !common->requested_native || !fence(c,scope))return {};
+                // Original requested-native CN row stays separate from the
+                // owner-selected complete common profile, names and formal rules.
+                row.skill=std::move(*common->requested_native);
+                row.common_definition=std::move(common->definition);
                 row.skill_fields=god2cn::CnBattleSkillDefinition::read_raw(row.skill->raw_record);
                 if(!row.skill_fields || row.skill_fields->raw_key_word()!=word)return {};
             }else if(domain==Domain::Item) {
@@ -150,11 +188,16 @@ struct SharedNativeBattleCommandData::State {
             if(!again || !fence(c,scope) || !same_inventory(*result.inventory,*again) ||
                !configuration.inventory->current(*c,scope,*result.inventory,nullptr) || !fence(c,scope))return {};
         }
-        return catalog_current(c,scope)?std::optional{std::move(result)}:std::nullopt;
+        // Domains/inventory/later row observers may change a TW counterpart
+        // without changing the qualified CN453 bank. Keep the captured value;
+        // never replace it with a newer definition to make a check succeed.
+        return resolved_resources_current(c,scope,result,nullptr)?std::optional{std::move(result)}:std::nullopt;
     }
-    bool resources_current(const std::shared_ptr<Connection>& c,const Scope& scope,const Input& retained,const Result* actual) const {
+    bool resolved_resources_current(const std::shared_ptr<Connection>& c,const Scope& scope,
+        const Resolved& supplied,const Result* actual) const {
+        const auto data=supplied; // Own all argument values before any observer.
         if(!catalog_current(c,scope))return false;
-        for(const auto& row:retained.data.rows)if(row.skill) {
+        for(const auto& row:data.rows)if(row.skill) {
             if(row.native_skill_selection) {
                 if(!configuration.skill_selection ||
                    !configuration.skill_selection->source->current(*row.native_skill_selection) ||
@@ -163,12 +206,18 @@ struct SharedNativeBattleCommandData::State {
                     *row.native_skill_selection,row.request.operand());
                 if(!selected || selected->definition!=*row.skill || !catalog_current(c,scope))return false;
             }
-            const auto found=configuration.catalog.skills->lookup(std::uint8_t(row.skill->kind),std::uint8_t(row.skill->definition_id));
-            if(!found || *found!=*row.skill || !fence(c,scope))return false;
+            const auto found=configuration.catalog.skills->lookup_shared(
+                std::uint8_t(row.skill->kind),std::uint8_t(row.skill->definition_id));
+            if(!found || !found->requested_native || *found->requested_native!=*row.skill ||
+               !row.common_definition || found->definition!=*row.common_definition || !fence(c,scope))return false;
         }
-        if(retained.data.inventory && (!configuration.inventory->current(*c,scope,*retained.data.inventory,actual) || !fence(c,scope)))
+        if(data.inventory && (!configuration.inventory->current(*c,scope,*data.inventory,actual) || !fence(c,scope)))
             return false;
         return catalog_current(c,scope);
+    }
+    bool resources_current(const std::shared_ptr<Connection>& c,const Scope& scope,
+        const Input& retained,const Result* actual) const {
+        return resolved_resources_current(c,scope,retained.data,actual);
     }
 };
 SharedNativeBattleCommandData::SharedNativeBattleCommandData(std::shared_ptr<State> state):state_(std::move(state)) {}
@@ -189,19 +238,59 @@ std::optional<SharedNativeBattleCommandData::Plan> SharedNativeBattleCommandData
     const Request& request,std::span<const Request> saved,const Plan* saved_plan) {
     State::Operation operation(*state_);
     try {
+        // Own old arguments and Input before acquire/domains/resource observers.
+        const std::vector<Request> prefix(saved.begin(),saved.end());
+        const std::optional<Plan> old_plan=saved_plan ? std::optional{*saved_plan} : std::nullopt;
+        const auto prior=state_->input;
+        const bool prior_shared=!prefix.empty() && prior && has_shared_skill(prior->data);
         const auto c=state_->connection.lock();
-        if(!c || c.get()!=&receiver || !state_->acquire(c,scope) || saved.size()>=state_->configuration.budgets.max_requests) {
+        const auto old_prefix_current=[&] {
+            if(prefix.empty())return !old_plan; // Never borrow a consumed Single as pending.
+            return old_plan && prior && state_->input==prior && !prior->executed &&
+                prior->plan.part==Groups::Part::Append && state_->retained(*prior,prefix,scope,*old_plan) &&
+                state_->resources_current(c,scope,*prior,nullptr) && state_->input==prior && !state_->terminal;
+        };
+        if(!c || c.get()!=&receiver || !state_->acquire(c,scope) || prefix.size()>=state_->configuration.budgets.max_requests ||
+           (prior_shared && !old_prefix_current())) {
             state_->terminal=true;return {};
         }
         // Own all requests before any domain/resource callback; saved physical
         // continuations are never deduplicated, normalized or silently omitted.
-        std::vector<Request> complete(saved.begin(),saved.end());complete.push_back(request);
-        auto data=state_->resolve(c,scope,complete);if(!data) {state_->terminal=true;return {};}
-        if(!state_->configuration.authority->current(*c,Check::BeforeExecute,scope,saved_plan,*data,state_->configuration.catalog,nullptr) ||
-           !state_->fence(c,scope)) {state_->terminal=true;return {};}
-        auto plan=state_->configuration.authority->prepare(*c,scope,*data,saved_plan);
-        if(!plan || !state_->fence(c,scope)) {state_->terminal=true;return {};}
-        state_->input=std::make_shared<Input>(scope,*plan,std::move(*data));
+        std::vector<Request> complete(prefix.begin(),prefix.end());complete.push_back(request);
+        auto data=state_->resolve(c,scope,complete);
+        if(!data) {state_->terminal=true;return {};}
+        const bool shared_group=prior_shared || has_shared_skill(*data);
+        const auto prefix_stable=[&] {
+            if(!shared_group)return true; // Pure Item/Opaque groups keep their old policy.
+            if(!old_prefix_current() || !state_->resolved_resources_current(c,scope,*data,nullptr))return false;
+            if(!prefix.empty()) {
+                if(prior->data.rows.size()!=prefix.size() || data->rows.size()<=prefix.size())return false;
+                for(std::size_t i=0;i<prefix.size();++i)
+                    if(!same_prefix_row(prior->data.rows[i],data->rows[i]))return false;
+            }
+            return !state_->terminal && state_->input==prior;
+        };
+        if(!prefix_stable()) {state_->terminal=true;return {};}
+        if(shared_group && !prefix.empty()) {
+            // Newly resolved equal values do not create the old private native
+            // selection holder. Retain every OLD prefix Row/capability instead.
+            // Inventory validity stays with both actual Current policies and
+            // the used prefix cells; no new whole-bank equality rule is added.
+            for(std::size_t i=0;i<prefix.size();++i)data->rows[i]=prior->data.rows[i];
+        }
+        if(!state_->resolved_resources_current(c,scope,*data,nullptr) || !prefix_stable() ||
+           !state_->configuration.authority->current(*c,Check::BeforeExecute,scope,old_plan ? &*old_plan : nullptr,
+               *data,state_->configuration.catalog,nullptr) ||
+           !state_->resolved_resources_current(c,scope,*data,nullptr) || !prefix_stable()) {state_->terminal=true;return {};}
+        auto plan=state_->configuration.authority->prepare(*c,scope,*data,old_plan ? &*old_plan : nullptr);
+        if(!plan || !state_->resolved_resources_current(c,scope,*data,nullptr) || !prefix_stable() ||
+           (shared_group && !prefix.empty() &&
+            ((plan->part!=Groups::Part::Append && plan->part!=Groups::Part::Final) || !same_group_identity(*old_plan,*plan)))) {
+            state_->terminal=true;return {};
+        }
+        auto next=std::make_shared<Input>(scope,*plan,std::move(*data));
+        if(shared_group && !old_prefix_current()) {state_->terminal=true;return {};}
+        state_->input=std::move(next);
         return plan;
     }catch(...) {state_->terminal=true;throw;}
 }

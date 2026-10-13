@@ -1,6 +1,7 @@
 #pragma once
 #include "cn/world/SharedNativeBattleCommandGroups.h"
 #include "cn/assets/CnSharedSkillCatalog.h"
+#include "db/SharedSkillDefinition.h"
 #include "cn/protocol/CnBattleInventorySlot.h"
 #include "cn/protocol/CnBattleSkillDefinition.h"
 #include "cn/world/CnBattleSkillSelectionSource.h"
@@ -47,6 +48,10 @@ public:
         // Optional actual recovered list evidence. Absence grants nothing;
         // common learned/actor/current qualification remains DataAuthority.
         std::optional<CnBattleSkillSelectionSource::Snapshot> native_skill_selection;
+        // CUSTOM-0142: same-registry owning definition supplied to the actual
+        // DataAuthority callbacks. CN raw/native permission fields above remain
+        // original; common parameter selection is not learned/cost/actor authority.
+        std::optional<SharedSkillDefinition> common_definition{};
     };
     struct Resolved {
         std::vector<Row> rows; // Complete physical arrival order, including opaque rows.

@@ -304,3 +304,13 @@ phase and epoch may release once, preserving read ownership. Retire first on
 failure/drop/exception, before fallible logging; Written stays physical local
 custody, not native ACK/cache/list adoption/turn grant or durable rollback.
 Other passive/ordinary defaults and CN host/list/resources/effects remain open.
+
+CUSTOM-0142 passes the common owning definition through the existing CN C35
+DataAuthority current/prepare/execute handoff. Keep requested native CN raw
+separate; no common TW profile may replace CN wire/permission fields. Recheck
+same owning material across sequential observers; no cross-source atomic CAS.
+Skill group continuations retain the exact old prefix/private selection and
+plan/lease/token rather than replacing it with fresh equal keys. Preserve
+Item/Opaque policy, actual inventory Current and execute-once/result contracts.
+OriginalCN453 missing126/150, extended resources/actor/learned/87/host and
+native formula/cost/acceptance remain independently OPEN.

@@ -5262,6 +5262,32 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "Connect existing actual owner-skill bootstrap to original input continuation while preserving authoritative common learned/persistence rules.",
   "replacement": "Complete native providers and CN actual gameplay adapter, then comprehensive build/tests/current-client acceptance."
+},
+{
+  "id": "CUSTOM-0142",
+  "name": "CN existing C35 common definition handoff and retained skill group prefix",
+  "authority": "OWNER_COMMON_SOURCE_COMPOSITION_NOT_NATIVE_FORMULA_PERMISSION_OR_HOST",
+  "implementation": [
+    "src/cn/world/SharedNativeBattleCommandData.h",
+    "src/cn/world/SharedNativeBattleCommandData.cpp"
+  ],
+  "native_gap": "CN original453 lacks owner126/150; extended native profile/resources, actor/control/learned/committed87 provider and actual common action host remain unqualified.",
+  "rules": {
+    "definition": "Existing qualified CnSharedSkillCatalog.lookup_shared supplies owning common definition plus exact requested native CN row; raw skill_fields are read ONLY from original CN row.",
+    "handoff": "Actual existing DataAuthority current/prepare/execute_group receives owning common value; reobserve the same requested row and full definition around sequential observer cuts, never silently replace.",
+    "continuation": "Skill-containing Append groups retain exact prior plan/requests/lease/token and unconsumed original prefix rows/private native selection holders; equivalent fresh values cannot substitute those private holders.",
+    "mixed": "New suffix is checked, next plan stays Append/Final with same group/issuer capabilities and generations; referenced mixed inventory stays with actual Current and used-cell bytes. Pure Item/Opaque prefix policy remains.",
+    "limits": "Sequential checks are not cross-source atomic CAS. Existing execute-once/actual-result and durable-prefix behavior remain; no retry/rollback after COMMIT, native learned/MP/grant/effects or hosting inferred."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "One common TW/CN skill definition must reach the real existing CN command data handoff while regional wire provenance remains exact.",
+  "replacement": "Complete actual common action authority, native actor/list/profile/learned/persistence providers and CN custom adapters, then comprehensive build/tests/current-client acceptance."
 }
 ]
 }
