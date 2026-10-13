@@ -5134,3 +5134,19 @@ supported unchanged. CN126/150 profile/resources/actor/learned/87/effects open.
 Sourcecontract source/6; native slice facts retained in immutable N365 upstream.
 PHASE1 no build/tests/native/runtime/API/VM/codec/gameDBSQL/migrate/activate/deploy.
 Whole denominator/percentage unknown; full goal active.
+
+
+## Round366 - Taiwan world skill C56 native ingress (2026-10-13)
+
+Original logical7 preserves targetWORD, savedkind/id, live raw byte and
+unwritten tail. Independently default-off request option passes real Others/
+chat/host-plan/Application/Session to existing mandatory wholebatch and ordered
+run callbacks. No C35 continuation/grant reuse, fallback action/reply or default
+Main activation. One raw ingress branch, zero complete bidirectional routes,
+zero formulas. Native234B=whole69+partial165,72sites; targetnamespace/rawbyte
+writer/learned/current player selection/MP/effect/native replies remainOPEN.
+Saved deity ownership cannot stand in for unproved player skill ownership.
+TW parser75=50partial+11control+14unconnected; TW156/252 andCN156/280phase/253
+unchanged. Whole denominator/percentage unknown. PHASE1 no build/tests/runtime/
+native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Owner requests continued
+work; no new pause request. Sourcecontract source/7.

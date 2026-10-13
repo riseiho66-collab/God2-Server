@@ -297,12 +297,13 @@ SharedTaiwanWorldRecordSource::Binding SharedTaiwanWorldRecordSource::create(
     if(others.native_skills && (!others.native_skills->dispatch || !others.native_skills->release ||
        !others.native_skills->invalidate_active))throw std::invalid_argument("TW C35 requires complete actual skill owner");
     const bool native_skill_commands=others.native_skills.has_value();
+    const bool native_world_skill_requests=others.native_world_skill_requests;
     auto owner=std::make_shared<Owner>(std::move(presence),std::move(movement),std::move(others),std::move(current),budgets,capacity);
     return {
         [owner](Session& session,std::span<const Record> records){return owner->records(session,records);},
         [owner](Session& session){owner->release(session);},
         [owner]{owner->poison();},
-        spectator6e,spectator_close,native_selection_input,native_skill_commands
+        spectator6e,spectator_close,native_selection_input,native_skill_commands,native_world_skill_requests
     };
 }
 }

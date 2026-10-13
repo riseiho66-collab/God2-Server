@@ -392,6 +392,9 @@ public:
         bool owned_blacklist=false; // Explicit CUSTOM-0096 handler installed by Application.
         bool owned_party_directory=false; // Explicit CUSTOM-0097 final handler installed.
         bool owned_client_options=false; // CUSTOM-0100 exact B1(7/8) parser source opt-in.
+        // Separate lossless C56 ingress only; actual whole-batch world owner
+        // remains mandatory. No C35 battle/sequence or action authority follows.
+        bool native_world_skill_requests=false;
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,

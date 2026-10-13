@@ -323,3 +323,16 @@ all native grammar/actor/list gates. Require same common value before action,
 without rebasing. After action retain that input but only qualify the actual
 next receipt, never requery consumed old catalog/grant or undo durable work.
 Sequential source checks are not atomic CAS, native formulas or actual host.
+
+Owner language reaffirmation (2026-10-13): this project is primarily C++ with
+Lua. Runtime transport, state, storage and gameplay integration stay in C++20;
+gameplay rules use the existing Lua architecture. Do not implement server
+features or formulas in Python. Do not add or publish per-round Python capture,
+seal, apply, review or stage helpers into this repository. The accumulation of
+one-off research/verification scripts is not acceptable project progress.
+Reuse existing necessary offline tools while auditing their actual dependencies;
+consolidate or remove obsolete helpers without breaking current release/frozen
+checks or discarding native evidence. Never rename scripts to hide their language
+or move large archives elsewhere on C: as purported disk cleanup. Continue the
+authorized shared-skill work in C++/Lua; preserve current candidate source and
+existing saves. Existing PHASE1 limits and native-evidence requirements remain.

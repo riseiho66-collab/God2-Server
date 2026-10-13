@@ -163,7 +163,7 @@ Source::OtherBinding make_binding(const std::shared_ptr<Owner>& owner) {
         [owner](Session& session,std::span<const Source::Record> records){return owner->records(session,records);},
         [owner](Session& session){owner->release(session);},
         [owner]{owner->invalidate();},owner->spectator6e,owner->spectator_close,
-        owner->remaining.selection_item,owner->remaining.inventory_move,owner->remaining.native_skills
+        owner->remaining.selection_item,owner->remaining.inventory_move,owner->remaining.native_skills,owner->remaining.native_world_skill_requests
     };
 }
 }

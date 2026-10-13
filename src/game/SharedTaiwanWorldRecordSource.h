@@ -68,6 +68,9 @@ public:
         // This game-only binding is not a private native input receipt.
         std::optional<InventoryMoveBinding> inventory_move;
         std::optional<SkillBinding> native_skills;
+        // Actual mandatory Others owner explicitly advertises lossless C56
+        // input support. It still supplies Current/action/reply or refusal.
+        bool native_world_skill_requests=false;
     };
     // Mandatory real opcode/whole-batch/run-phase qualification. Current is a
     // pure observer; saved position, phase and battle generation are read again
@@ -86,6 +89,7 @@ public:
         bool spectator_close=false;
         bool native_selection_input=false;
         bool native_skill_commands=false;
+        bool native_world_skill_requests=false; // Separate C56 grammar, never C35 authority.
     };
     static Binding create(std::shared_ptr<SharedWorldPresence>,SharedTaiwanMovementSource::Binding,
         OtherBinding,Current,Budgets,std::size_t actual_session_capacity);
