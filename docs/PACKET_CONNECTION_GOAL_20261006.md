@@ -5281,3 +5281,23 @@ unchanged. S2Cindependentformats17/unclassified109; frontier24immutable.
 Whole denominator/%null. Goalactive; PHASE1 no build/tests/runtime/native/API/
 VM/codec/gameDBSQL/migrate/activate/deploy. Shared453/TWTraditional/maxHPdiv10
 poison/CNcustom126/150/common64 and all frozen/account/save requirements retained.
+
+
+## Round373 - actual default-off staged81/83 raw ingress (2026-10-14)
+
+New owned81 mask/83 self-length raw-WORD header and eight existing C++ paths
+connect explicit actual Others capability through mixed Binding/NativeHostPlan/
+Application/Session. Complete batch parse precedes dispatch; existing mandatory
+Current/action/native reply decision and all old aggregate positions preserved.
+16literal edits/17occurrences,8whole inverses==retained/Git816dbdf,newheader
+creation+one moved-empty bounds refinement. Source/14 pins37/canonical446.
+Native204B/72whole+145B/43partial sites and4B control cell prove conditional
+initialized layout/queueorder; no universal native count cap/WORDnamespace/
+issuer/phase/permission/ACK inferred. Window/subject/rights/stage/apply/common
+rules/once learning+bookdebit+event/save/replay/fullreply/defaultMain stillOPEN.
+Parser77=50partial+11control+16unconnected; pending11; parsercoverage64.9%
+notwholegame. TW156/252/unhosted3/40/36, CN156/280phase/253/35/93/71 unchanged.
+S2Cformats17/unclassified109/frontier24 unchanged; newnativeopcode/formula/
+formalphase/ownerchain/fullroute0; wholedenominator/%null. Goalactive, PHASE1
+staticonly/no newPY. Shared453/TWTraditional/client-primary/maxHPdiv10poison/
+CNcustom126/150/common64 and frozen/account/save requirements all retained.

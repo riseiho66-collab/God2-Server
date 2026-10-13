@@ -80,6 +80,9 @@ public:
         // input support. It still supplies Current/action/reply or refusal.
         bool native_world_skill_requests=false;
         std::optional<DeitySelectionBinding> deity_selection={};
+        // Actual mandatory Others explicitly advertises raw WORLD81/83 support.
+        // Issued window, stage/apply, shared rules/save and reply remain its duty.
+        bool native_preborn_requests=false;
     };
     // Mandatory real opcode/whole-batch/run-phase qualification. Current is a
     // pure observer; saved position, phase and battle generation are read again
@@ -100,6 +103,7 @@ public:
         bool native_skill_commands=false;
         bool native_world_skill_requests=false; // Separate C56 grammar, never C35 authority.
         std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> deity_selection_source={};
+        bool native_preborn_requests=false;
     };
     static Binding create(std::shared_ptr<SharedWorldPresence>,SharedTaiwanMovementSource::Binding,
         OtherBinding,Current,Budgets,std::size_t actual_session_capacity);

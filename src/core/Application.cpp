@@ -6805,6 +6805,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             const auto native_selection_input=taiwan_records.native_selection_input;
                             const auto native_skill_commands=taiwan_records.native_skill_commands;
                             const auto native_world_skill_requests=taiwan_records.native_world_skill_requests;
+                            const auto native_preborn_requests=taiwan_records.native_preborn_requests;
                             common_world_lifetime.vault->install_records(std::move(taiwan_records));
                             game_handlers.movement={};
                             game_handlers.world_records=common_world_lifetime.vault->records_facade();
@@ -6813,6 +6814,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             game_handlers.native_selection_input=native_selection_input;
                             game_handlers.native_skill_commands=native_skill_commands;
                             game_handlers.native_world_skill_requests=native_world_skill_requests;
+                            game_handlers.native_preborn_requests=native_preborn_requests;
                         }else game_handlers.movement=common_world_lifetime.vault->movement_facade();
                     }
                 }

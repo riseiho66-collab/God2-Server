@@ -56,3 +56,10 @@ TW unhosted3chains/40bindings/36unique. CN156/280phase/253supported and
 Whole denominator/percentage unknown. Goal active. PHASE1: no build/tests/
 runtime/native/API/VM/codec/gameDBSQL/migrate/activate/deploy. Accounts/saves,
 native resources/fonts/conversion, frozen features and common tables unchanged.
+
+
+Round373 separately qualifies native staged81/83 conditional producer layout
+and default-off raw ingress through actual Session/Others. This does not supply
+the missing SKB C28 definition/learning authority or book-consumption transaction.
+See tw-preborn-input-source-20261014.md and source/14; WORD namespace/issuer,
+issued-window phase/stage/apply/rights/persistence/replies still OPEN.

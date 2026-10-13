@@ -395,6 +395,8 @@ public:
         // Separate lossless C56 ingress only; actual whole-batch world owner
         // remains mandatory. No C35 battle/sequence or action authority follows.
         bool native_world_skill_requests=false;
+        // Default-off raw WORLD81/83; actual complete batch/operation owner required.
+        bool native_preborn_requests=false;
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,

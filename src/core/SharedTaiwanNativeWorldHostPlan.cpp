@@ -747,7 +747,7 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
                 owner->check();return invoke(session,records);
             },
             [owner,release=std::move(actual.release)](Session& session) {owner->check();release(session);},
-            [owner] {owner->invalidate();},actual.spectator6e,actual.spectator_close,actual.native_selection_input,actual.native_skill_commands,actual.native_world_skill_requests,actual.deity_selection_source
+            [owner] {owner->invalidate();},actual.spectator6e,actual.spectator_close,actual.native_selection_input,actual.native_skill_commands,actual.native_world_skill_requests,actual.deity_selection_source,actual.native_preborn_requests
         };
     };
     return plan;

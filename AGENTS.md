@@ -391,3 +391,13 @@ cannot pass via unchanged Session/position. Preserve old custody-after-mutation
 policy, actual mandatory action and native reply decision; no SQL/retry/rollback.
 No new gameplay/custom rule. SKB learning supplier/WORLD35 issuer stillOPEN;
 source/13 pins36, original29 unchanged. PHASE1/no newPY unchanged.
+
+
+Round373 connects default-off TW staged81/83 raw input through the actual
+Others/Binding/NativeHostPlan/Application/Session capability path. Owned mask
+and self-length ordered raw WORDs preserve zero/duplicates; no catalog/right
+promotion. Complete batch parsing and mandatory Current/action/native replies
+remain. Words moved-empty bounds guarded. Native queue order is not atomicity
+or learning; issuer/phase/window/subject/stage/apply/book-debit/save/replay/full
+replies remain OPEN. Source/14 pins37, parser77 with16 unconnected. No new
+Python/custom rule or complete route; PHASE1 unchanged.
