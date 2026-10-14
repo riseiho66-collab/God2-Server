@@ -612,3 +612,16 @@ formula/defaultactivation/fullroute. No release/Written/liveidentity/visibility
 consume/Finishedunlock/inputresume/ACK, no invented24/39/HP/bag/reset/S30. Actual
 Main/resources/issuedlineage/fullskills/CN/web/wholegame OPEN. Parser77=50/11/16,
 pending12/frontier26 21/105,whole%null; fullTW100goalACTIVE/PHASE1 sourceonly.
+
+Round388 actualHeld Outbox preallocates exactsuccessor beforefullscene/ledger/
+twocontexts/finaljointstored/purecuts thenoneuseconsume. Session exactfuture
+normal/WORLD/checkedbattle pair Current, oldpreps/acceptedterminal/Reserved/Held
+retire; no ordinaryset_state bypass/Disconnected overwrite/halfusable grant.
+Visibility transfers preallocated models/exactdeparture, keeps expectedincarnations
+and weakallendpointregistrations, returnersblocked. Exactunsent cleanup byfail/
+destructor/lifecycle BEFOREhide, no73forunwritten6F/baselineerase/genrollback.
+Original5sterminalslot/deadline/allframes/inputheld; no release/Written/Finished
+unlock/Main/fullcompanionresources/issuedlineage/nativeACK/fullroute. FiveCPP,
+V25all76=71exact5updated/canonical526/no newprojectPY/Lua/opcode/formula/default
+activation. Parser77=50/11/16,pending12/frontier26 21/105/whole%null unchanged;
+fullTW100goalACTIVE/PHASE1/sourceonly/commonCN/web64bit/saves/frozen preserved.

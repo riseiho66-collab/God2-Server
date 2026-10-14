@@ -402,7 +402,7 @@ private:
     };
     // CUSTOM-0133 paired real-strand reservation continuation. A reservation
     // is a held transport cut, not a world write, reset, durable release or ACK.
-    struct ReturnFlight final:Session::NativePkReturnOwner,Session::NativePkReturnOutputOwner {
+    struct ReturnFlight final:Session::NativePkReturnOwner,Session::NativePkReturnOutputOwner,Session::NativePkReturnConsumptionOwner {
         std::weak_ptr<Lifetime> lifetime;
         std::weak_ptr<Binding> binding;
         const std::array<Session::NativePkReturnPreparation,2> preparations;
@@ -416,6 +416,8 @@ private:
         std::optional<cn::SharedActorVisibility::TaiwanPkReturnRecords> records;
         std::optional<Session::NativePkReturnOutputPlan> output_plan;
         std::optional<Session::NativePkReturnOutputHold> output_hold;
+        std::optional<cn::SharedActorVisibility::TaiwanPkReturnConsumption> consumption;
+        bool consumption_failed_seen=false;
         bool output_held_seen=false,output_failed_seen=false;
         bool reserved_seen=false,failed_seen=false;
         ReturnFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
@@ -441,6 +443,10 @@ private:
         void native_pk_return_output_failed(const Session::NativePkReturnOutputHold& value)override{
             const auto life=lifetime.lock();
             if(life&&life->owner)life->owner->return_output_failed(*this,value);
+        }
+        void native_pk_return_consumption_failed(const Session::NativePkReturnConsumption& value)override{
+            const auto life=lifetime.lock();
+            if(life&&life->owner)life->owner->return_consumption_failed(*this,value);
         }
     };
     struct Flight final:Session::NativeBattleSkillPublicationOwner {
@@ -808,7 +814,12 @@ private:
             binding->return_preparing=true;binding->return_reentered=false;
             struct End{bool& busy;~End(){busy=false;}}end{binding->return_preparing};
             const auto current=[&]{return return_output_exact(*binding,flight,value);};
-            const auto& visibility=*binding->departure->visibility;
+            auto& visibility=*binding->departure->visibility;
+            // Allocate exact successor and model/registration snapshots BEFORE
+            // any final full-scene or saved-source observers; no guessed identity.
+            auto successor=visibility.prepare_taiwan_pk_return_consumption(*flight.records,flight.visibility,
+                *flight.reservation,*flight.output_plan,value,binding->return_flight);
+            if(!successor||!current())throw DatabaseError("PK held return lacks its preallocated successor");
             // Survivor input is unchanged: requalify ALL actual scene/pose/name/
             // resource inputs after all strand cuts and before the saved tail.
             if(!visibility.taiwan_pk_return_records_current(*flight.records)||!current())
@@ -823,9 +834,25 @@ private:
             if(!visibility.taiwan_pk_return_records_stored_current(*flight.records)||!current()||
                !visibility.taiwan_pk_return_records_retained_current(*flight.records)||!current())
                 throw DatabaseError("PK held return output stored or retained source changed");
+            flight.consumption.emplace(std::move(*successor));
+            if(!current()||!visibility.consume_taiwan_pk_return(*flight.consumption)||
+               binding->failed||binding->return_reentered||
+               !visibility.taiwan_pk_return_consumption_current(*flight.consumption))
+                throw DatabaseError("PK return successor identity/model commit failed");
             flight.output_held_seen=true;
-            return true; // Actual held queues only; no Written/consume/merge/unlock/input resume.
+            // Old battle/preparation/pair/held predicates are now retired. Only
+            // this actual successor qualifies further work; frames/input stay held.
+            return true;
         }catch(...){flight.output_failed_seen=true;fail(*binding);return false;}
+    }
+    void return_consumption_failed(ReturnFlight& flight,const Session::NativePkReturnConsumption& value){
+        if(!on_thread())return;
+        const auto binding=flight.binding.lock();
+        if(!binding||binding->return_flight.get()!=&flight||!flight.consumption||!binding->departure||
+           !binding->departure->visibility||!binding->departure->visibility->taiwan_pk_return_consumption_matches_transport(
+                *flight.consumption,value))return;
+        flight.consumption_failed_seen=true;
+        fail(*binding); // Exact unsent-model cleanup even if another callback failed first.
     }
     void return_output_failed(ReturnFlight& flight,const Session::NativePkReturnOutputHold& value){
         if(!on_thread())return;
@@ -940,6 +967,8 @@ private:
         }catch(...){fail(*binding);return false;}
     }
     static void fail(Binding& binding)noexcept{
+        if(binding.return_flight&&binding.return_flight->consumption&&binding.departure&&binding.departure->visibility)
+            binding.departure->visibility->cancel_taiwan_pk_return_consumption(*binding.return_flight->consumption);
         if(binding.failed)return;
         binding.failed=true;
         for(const auto& session:binding.sessions)try{session->close();}catch(...){}

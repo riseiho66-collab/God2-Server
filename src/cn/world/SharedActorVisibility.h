@@ -395,12 +395,35 @@ public:
     bool taiwan_pk_return_output_plan_matches(const TaiwanPkReturnRecords&,
         const Session::NativePkReturnOutputPlan&,const TaiwanPkReturnPlan&,
         const Session::NativePkReturnReservation&)const;
+    // CUSTOM-0133 provisional return commit. Exact private Held cohort only;
+    // future Session identities and prepared model nodes, with frames/input held.
+    class TaiwanPkReturnConsumption {
+    public:
+        TaiwanPkReturnConsumption(const TaiwanPkReturnConsumption&)=default;
+        TaiwanPkReturnConsumption& operator=(const TaiwanPkReturnConsumption&)=default;
+    private:
+        friend class SharedActorVisibility;
+        struct State;
+        explicit TaiwanPkReturnConsumption(std::shared_ptr<State> state):state_(std::move(state)){}
+        std::shared_ptr<State> state_;
+    };
+    std::optional<TaiwanPkReturnConsumption> prepare_taiwan_pk_return_consumption(
+        const TaiwanPkReturnRecords&,const TaiwanPkReturnPlan&,const Session::NativePkReturnReservation&,
+        const Session::NativePkReturnOutputPlan&,const Session::NativePkReturnOutputHold&,
+        std::weak_ptr<Session::NativePkReturnConsumptionOwner>);
+    bool consume_taiwan_pk_return(const TaiwanPkReturnConsumption&);
+    bool taiwan_pk_return_consumption_current(const TaiwanPkReturnConsumption&)const;
+    // Failure matching is exact identity even after Current has retired.
+    bool taiwan_pk_return_consumption_matches_transport(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnConsumption&)const noexcept;
+    void cancel_taiwan_pk_return_consumption(const TaiwanPkReturnConsumption&)noexcept;
     void reset_recipient(const Lease&); // Actual native pool reset: invalidate incoming bindings, no invented packets.
     // Generation-qualified source/recipient disconnect or failed-entry cleanup.
     // Departing recipients receive nothing; surviving peers get stored73 when
     // still bound to the old scene. No stale cleanup can remove a successor.
     void release(const Lease&);
 private:
+    void cancel_taiwan_pk_return_consumption_state(TaiwanPkReturnConsumption::State&)noexcept;
     bool taiwan_pk_return_records_fence(const std::shared_ptr<const TaiwanPkReturnRecords::State>&)const;
     bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck,bool stored_only=false)const;
@@ -418,6 +441,7 @@ private:
         std::shared_ptr<const TaiwanAppearanceAfterState> last_taiwan_appearance;
     };
     using Key=std::pair<std::uint64_t,std::uint64_t>;
+    bool taiwan_pk_return_models_match(const std::map<Key,Entry>&)const;
     struct TaiwanAppearanceState;
     bool taiwan_appearance_pending(const Key&) const;
     bool taiwan_appearance_fence(const std::shared_ptr<TaiwanAppearanceState>&,bool published) const;
@@ -449,6 +473,8 @@ private:
     mutable bool taiwan_chat_busy_=false,taiwan_chat_reentered_=false;
     mutable bool current_busy_=false,current_reentered_=false;
     std::map<std::uint64_t,std::shared_ptr<TaiwanPkDepartureState>> taiwan_pk_departures_;
+    // Weak game-owned successor registrations; no registry/token cycle.
+    std::map<std::uint64_t,std::weak_ptr<TaiwanPkReturnConsumption::State>> taiwan_pk_return_consumptions_;
     std::shared_ptr<TaiwanPkDepartureState> taiwan_pk_withdrawing_;
     mutable bool taiwan_pk_reading_=false,taiwan_pk_reentered_=false;
     mutable bool taiwan_return_reading_=false,taiwan_return_reentered_=false;

@@ -43,7 +43,7 @@ struct SharedActorVisibility::TaiwanPkDepartureState {
     bool poisoned=false;
 };
 // CUSTOM-0133 preallocated nodes and ordered native records remain private.
-// There is deliberately no merge/send/consume/resume operation on this plan.
+// This plan is consumed only through its exact private Held successor below.
 struct SharedActorVisibility::TaiwanPkReturnPlan::State {
     State(TaiwanPkDeparture departed,std::array<Lease,2> owners,std::array<RecoveredPosition,2> poses,
         std::array<std::shared_ptr<Session>,2> peers,std::array<Session::NativePkEntryHold,2> entries,
@@ -88,6 +88,21 @@ struct SharedActorVisibility::TaiwanPkReturnRecords::State {
 };
 const std::vector<SharedActorVisibility::TaiwanPkReturnRecords::Record>&
 SharedActorVisibility::TaiwanPkReturnRecords::records()const noexcept {return state_->records;}
+struct SharedActorVisibility::TaiwanPkReturnConsumption::State {
+    State(TaiwanPkReturnRecords source,Session::NativePkReturnOutputPlan output,
+        Session::NativePkReturnOutputHold held,Session::NativePkReturnConsumption successor)
+        :records(std::move(source)),output_plan(std::move(output)),output_hold(std::move(held)),
+         transport(std::move(successor)),expected(records.state_->plan->staged){}
+    const TaiwanPkReturnRecords records;
+    const Session::NativePkReturnOutputPlan output_plan;
+    const Session::NativePkReturnOutputHold output_hold;
+    const Session::NativePkReturnConsumption transport;
+    const std::map<Key,Entry> expected; // Survives node transfer; allocated BEFORE final observers.
+    std::map<std::uint64_t,std::weak_ptr<State>> registrations;
+    std::weak_ptr<State> identity;
+    bool claimed=false,published=false,poisoned=false;
+    ~State(){records.state_->creator->cancel_taiwan_pk_return_consumption_state(*this);}
+};
 void SharedActorVisibility::reject_taiwan_return_reentry()const {
     owner();
     if(taiwan_return_reading_){taiwan_return_reentered_=true;
@@ -113,7 +128,23 @@ bool SharedActorVisibility::taiwan_pk_return_fence(const std::shared_ptr<TaiwanP
             session->battle_generation()==endpoint->second.battle&&
             session->common_world_delivery_current(lease.account,lease.character,lease.generation);
     };
-    for(const auto& [key,entry]:state->baseline){
+    if(!taiwan_pk_return_models_match(state->baseline))return false;
+    for(const auto& [key,actor]:state->actors){
+        const auto receiver=actor.native.connection.lock();
+        std::size_t count=0;
+        for(const auto& [present,entry]:entries_)if(present.second==key.second)++count;
+        for(const auto& [prepared,other]:state->actors)if(prepared.second==key.second)++count;
+        if(!endpoint(actor.source,actor.source_connection)||!endpoint(actor.recipient,receiver)||
+           outward_pending(actor.source)||outward_pending(actor.recipient)||
+           taiwan_appearance_pending(key)||entries_.contains(key)||count>128)return false;
+    }
+    // Departure must still have no incident old models, including empty plans.
+    for(const auto& [key,entry]:entries_)for(const auto& lease:state->leases)
+        if(key.first==lease.session||key.second==lease.session)return false;
+    return true;
+}
+bool SharedActorVisibility::taiwan_pk_return_models_match(const std::map<Key,Entry>& expected)const {
+    for(const auto& [key,entry]:expected){
         const auto actual=entries_.find(key);
         if(actual==entries_.end()||!matches(entry.binding,actual->second)||
            actual->second.position!=entry.position||actual->second.last_taiwan_appearance!=entry.last_taiwan_appearance)
@@ -143,18 +174,6 @@ bool SharedActorVisibility::taiwan_pk_return_fence(const std::shared_ptr<TaiwanP
         },entry.native);
         if(!same)return false;
     }
-    for(const auto& [key,actor]:state->actors){
-        const auto receiver=actor.native.connection.lock();
-        std::size_t count=0;
-        for(const auto& [present,entry]:entries_)if(present.second==key.second)++count;
-        for(const auto& [prepared,other]:state->actors)if(prepared.second==key.second)++count;
-        if(!endpoint(actor.source,actor.source_connection)||!endpoint(actor.recipient,receiver)||
-           outward_pending(actor.source)||outward_pending(actor.recipient)||
-           taiwan_appearance_pending(key)||entries_.contains(key)||count>128)return false;
-    }
-    // Departure must still have no incident old models, including empty plans.
-    for(const auto& [key,entry]:entries_)for(const auto& lease:state->leases)
-        if(key.first==lease.session||key.second==lease.session)return false;
     return true;
 }
 bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>& state,
@@ -542,10 +561,122 @@ bool SharedActorVisibility::taiwan_pk_return_output_plan_matches(const TaiwanPkR
         Session::native_pk_return_output_plan_matches(output,reservation,identity)&&
         taiwan_pk_return_records_matches(records,plan,reservation);
 }
+std::optional<SharedActorVisibility::TaiwanPkReturnConsumption>
+SharedActorVisibility::prepare_taiwan_pk_return_consumption(const TaiwanPkReturnRecords& records,
+        const TaiwanPkReturnPlan& plan,const Session::NativePkReturnReservation& reservation,
+        const Session::NativePkReturnOutputPlan& output,const Session::NativePkReturnOutputHold& held,
+        std::weak_ptr<Session::NativePkReturnConsumptionOwner> owner_source){
+    owner();
+    if(!taiwan_pk_return_output_plan_matches(records,output,plan,reservation)||
+       !Session::native_pk_return_output_matches(held,output,reservation))return {};
+    const auto source=records.state_->plan;
+    for(const auto& [id,endpoint]:source->endpoints)
+        if(const auto at=taiwan_pk_return_consumptions_.find(id);
+           at!=taiwan_pk_return_consumptions_.end()&&!at->second.expired())return {};
+    // Complete successor/expected entries/registration nodes precede all final
+    // resource, scene and SQL observers performed by the actual Outbox owner.
+    auto transport=Session::prepare_native_pk_return_consumption(held,std::move(owner_source));
+    auto state=std::make_shared<TaiwanPkReturnConsumption::State>(records,output,held,std::move(transport));
+    state->identity=state;
+    for(const auto& [id,endpoint]:source->endpoints)state->registrations.emplace(id,state);
+    if(!taiwan_pk_return_output_plan_matches(records,output,plan,reservation)||
+       !Session::native_pk_return_output_matches(held,output,reservation))return {};
+    return TaiwanPkReturnConsumption(std::move(state));
+}
+bool SharedActorVisibility::consume_taiwan_pk_return(const TaiwanPkReturnConsumption& token){
+    owner();const auto state=token.state_;
+    if(!state||state->claimed||state->poisoned||state->records.state_->creator.get()!=this)return false;
+    const auto records=state->records.state_;const auto source=records->plan;
+    if(!taiwan_pk_return_records_fence(records)||
+       !Session::native_pk_return_output_matches(state->output_hold,state->output_plan,records->reservation))return false;
+    for(const auto& [id,endpoint]:source->endpoints){
+        const auto at=taiwan_pk_return_consumptions_.find(id);
+        if(at!=taiwan_pk_return_consumptions_.end()&&!at->second.expired())return false;
+    }
+    state->claimed=true; // Once, even a failed transition must never be retried.
+    if(!Session::consume_native_pk_return_output(state->transport)){
+        state->poisoned=true;source->poisoned=true;return false;
+    }
+    // No observer, send, allocation or ordinary set_state between Session commit
+    // and transfer of the previously qualified exact nodes/departure markers.
+    try{
+        for(const auto& [id,endpoint]:source->endpoints)
+            if(const auto at=taiwan_pk_return_consumptions_.find(id);at!=taiwan_pk_return_consumptions_.end())
+                taiwan_pk_return_consumptions_.erase(at); // Only an expired registration admitted above.
+        taiwan_pk_return_consumptions_.merge(state->registrations);
+        state->published=true; // Cleanup covers any partial node transfer.
+        entries_.merge(source->staged);
+        generation_+=state->expected.size();
+        for(const auto& lease:source->leases){
+            const auto at=taiwan_pk_departures_.find(lease.session);
+            if(at==taiwan_pk_departures_.end()||at->second!=source->departure.state_)
+                throw std::logic_error("Return lost its exact old departure marker");
+            taiwan_pk_departures_.erase(at);
+        }
+        if(!source->staged.empty()||!state->registrations.empty()||
+           !taiwan_pk_return_consumption_current(token))throw std::logic_error("Return successor registry commit retired");
+        return true;
+    }catch(...){cancel_taiwan_pk_return_consumption(token);return false;}
+}
+bool SharedActorVisibility::taiwan_pk_return_consumption_current(const TaiwanPkReturnConsumption& token)const{
+    owner();const auto state=token.state_;
+    if(!state||state->poisoned||!state->claimed||!state->published||
+       state->records.state_->creator.get()!=this||taiwan_return_reading_||taiwan_return_reentered_)return false;
+    const auto records=state->records.state_;const auto source=records->plan;
+    const std::weak_ptr<const void> identity(records);
+    if(source->poisoned||source->identity!=identity_||
+       !Session::native_pk_return_consumption_matches(state->transport,state->output_hold,state->output_plan,records->reservation)||
+       !Session::native_pk_return_consumption_records_matches(state->transport,identity)||
+       generation_!=source->base_generation+state->expected.size()||
+       entries_.size()!=source->baseline.size()+state->expected.size()||taiwan_pk_return_pending(source)||
+       !taiwan_pk_return_models_match(source->baseline)||!taiwan_pk_return_models_match(state->expected))return false;
+    for(const auto& lease:source->leases)
+        if(taiwan_pk_departures_.contains(lease.session))return false;
+    for(const auto& [id,endpoint]:source->endpoints){
+        const auto at=taiwan_pk_return_consumptions_.find(id);
+        if(at==taiwan_pk_return_consumptions_.end()||at->second.lock()!=state||
+           !presence_->retained_ready_current(endpoint.lease)||!endpoint.session||endpoint.session->closing())return false;
+        bool returning=false;for(const auto& lease:source->leases)returning|=lease==endpoint.lease;
+        if(!returning&&(taiwan_pk_departed(endpoint.lease)||endpoint.session->state()!=SessionState::InWorld||
+           endpoint.session->battle_generation()!=endpoint.battle||
+           !endpoint.session->common_world_delivery_current(endpoint.lease.account,endpoint.lease.character,endpoint.lease.generation)))return false;
+    }
+    return Session::native_pk_return_consumption_current(state->transport);
+}
+bool SharedActorVisibility::taiwan_pk_return_consumption_matches_transport(const TaiwanPkReturnConsumption& token,
+        const Session::NativePkReturnConsumption& value)const noexcept{
+    return thread_==std::this_thread::get_id()&&token.state_&&
+        token.state_->records.state_->creator.get()==this&&token.state_->transport==value;
+}
+void SharedActorVisibility::cancel_taiwan_pk_return_consumption_state(TaiwanPkReturnConsumption::State& state)noexcept{
+    // Token custody is game-only; weak registry values never retain it on IO.
+    if(thread_!=std::this_thread::get_id()||state.records.state_->creator.get()!=this)return;
+    state.poisoned=true;
+    if(!state.claimed)return; // An unused preallocation leaves the original source untouched.
+    state.records.state_->plan->poisoned=true;
+    for(const auto& [id,endpoint]:state.records.state_->plan->endpoints){
+        const auto at=taiwan_pk_return_consumptions_.find(id);
+        if(at!=taiwan_pk_return_consumptions_.end()&&!at->second.owner_before(state.identity)&&
+           !state.identity.owner_before(at->second))taiwan_pk_return_consumptions_.erase(at);
+    }
+    if(state.published)for(const auto& [key,expected]:state.expected){
+        const auto at=entries_.find(key);
+        if(at!=entries_.end()&&matches(expected.binding,at->second))entries_.erase(at);
+    }
+    // No hide/release/S73 for a6F cohort that is still held and never written;
+    // no restore of old markers, generation rollback or successor deletion.
+}
+void SharedActorVisibility::cancel_taiwan_pk_return_consumption(const TaiwanPkReturnConsumption& token)noexcept{
+    if(token.state_)cancel_taiwan_pk_return_consumption_state(*token.state_);
+}
 bool SharedActorVisibility::taiwan_pk_departed(const Lease& lease)const noexcept {
     // The in-progress pair stays blocked even if an exact lifecycle release
     // reenters cancellation. Old markers never block a successor lease.
     if(taiwan_pk_withdrawing_)for(const auto& owner:taiwan_pk_withdrawing_->leases)if(owner==lease)return true;
+    // Future identities alone do not permit ordinary world publication/input.
+    if(const auto at=taiwan_pk_return_consumptions_.find(lease.session);at!=taiwan_pk_return_consumptions_.end())
+        if(const auto pending=at->second.lock();pending&&!pending->poisoned)
+            for(const auto& returning:pending->records.state_->plan->leases)if(returning==lease)return true;
     const auto found=taiwan_pk_departures_.find(lease.session);
     if(found==taiwan_pk_departures_.end())return false;
     for(const auto& owner:found->second->leases)if(owner==lease)return true;
@@ -1733,7 +1864,15 @@ void SharedActorVisibility::reset_recipient(const Lease& original_lease) {
 void SharedActorVisibility::release(const Lease& original_lease) {
     reject_taiwan_return_reentry();
     const auto lease=original_lease;
-    owner();const auto keepalive=taiwan_appearance_.empty()?std::shared_ptr<SharedActorVisibility>{}:shared_from_this();
+    owner();
+    // Lifecycle may arrive before the asynchronous cohort failure callback.
+    // Detach exact UNSENT successor models before generic hide can emit73.
+    if(const auto at=taiwan_pk_return_consumptions_.find(lease.session);at!=taiwan_pk_return_consumptions_.end())
+        if(const auto pending=at->second.lock()){
+            const auto endpoint=pending->records.state_->plan->endpoints.find(lease.session);
+            if(endpoint!=pending->records.state_->plan->endpoints.end()&&endpoint->second.lease==lease)
+                cancel_taiwan_pk_return_consumption_state(*pending);
+        }const auto keepalive=taiwan_appearance_.empty()?std::shared_ptr<SharedActorVisibility>{}:shared_from_this();
     std::shared_ptr<TaiwanPkDepartureState> retiring;std::size_t retiring_index=0;
     if(const auto found=taiwan_pk_departures_.find(lease.session);found!=taiwan_pk_departures_.end())
         for(std::size_t i=0;i<2;++i)if(found->second->leases[i]==lease){

@@ -5680,3 +5680,23 @@ pending12/frontier26 21formats105gaps/whole%null unchanged. FullTW100-first/CN/
 fourWS/commoncore/64bit/saves/frozen andPHASE1 sourceonly/no builds/tests/runtime/
 native/codec/gameDBSQL/activate/deploy continue. Details:
 docs/research/tw-return-output-hold-source-20261014.md.
+
+## Round388 - Actual held return successor source commit (2026-10-14)
+
+Configured Outbox Held now preallocates exactsuccessor beforefullscene/resources,
+originalsavedpairedledger/twocontexts/finaljointstored thenpurecuts. One-use
+SessionfutureNormal/WORLD/checkedbattle identities replace oldacceptedterminal/
+preparation/Reserved/Held predicates with exactsuccessorCurrent; ordinary
+set_state safeguards stay. Visibility transfers preallocated nodes/exactold
+departures, retains expectedincarnations/baseline/generation/fullleases and weak
+allendpoint registrations; returner genericvisibility staysblocked. Failure/token
+destruction/lifecycle pre-hide remove exactunsentmodels without73/baselineerase/
+generationrollback or touching successorleases. No stronggameState onnetwork.
+Original5sdeadline/terminalslot/input/framesheld; IOrelease/wholeWritten/Finished
+unlock/recovery/fullcompanionresources/issuedlineage/realMainPKbackend remainOPEN.
+FiveexistingCPP/V25all76pins71exact5updated/canonical526/no newprojectPY/Lua/
+nativecuts/opcode/formula/defaultactivation/fullroute. Parser77=50/11/16, pending12,
+frontier26 21/105, whole%null unchanged. TW100-first/CNnative126150/fourWS/common
+core64bit/saves/frozen andPHASE1 no build/tests/runtime/native/VM/codec/gameDBSQL/
+migrate/schema/activate/deploy/fullgoalACTIVE continue. Details:
+docs/research/tw-return-consume-source-20261014.md.
