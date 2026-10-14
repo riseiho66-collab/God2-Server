@@ -739,7 +739,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             // Startup and --migrate-only retain installed exact50 storage even with gameplay disabled.
             const GuildRelations53FlagsDraft flags53{config.owned_guild_membership_enabled,config.owned_guild_announcements_enabled,config.owned_guild_officers_enabled,config.owned_guild_succession_enabled,config.owned_guild_relations53_enabled};
             const auto migrations=configured_guild_relations53(config.database,flags53);
-            SqliteDatabase database(config.database,migrations);database.initialize();database.migrate();
+            SqliteDatabase database(config.database,migrations,config.taiwan_skill_profile);database.initialize();database.migrate();
             // Actual helper outlives Context suppliers and game-owned drains.
             RecoveredOwnedCompanions owned_companions(database.companions());
             // One same-repository host on this game owner, retained through all
@@ -905,7 +905,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 },
                 [&database](std::int64_t kind, std::int64_t definition_id) {
                     return database.native_skill_catalog().lookup(
-                        NativeSkillCatalog::current_dataset_id,kind,definition_id);
+                        database.native_skill_catalog().taiwan_dataset_id(),kind,definition_id);
                 },
                 [&database](std::int64_t kind, std::int64_t definition_id) {
                     return database.native_skill_book_catalog().lookup(kind,definition_id);

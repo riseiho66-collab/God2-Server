@@ -28,10 +28,12 @@ public:
     static std::optional<TaiwanNativeDeityRosterPrefix> from_reset_and_records(
             std::span<const std::vector<std::uint8_t>> actual_batches,
             std::span<const NativeSkillRecord> owned_definitions,
-            bool issued_activation_records=false) {
-        TaiwanNativeDeityRosterPrefix next;
+            bool issued_activation_records=false,
+            NativeTaiwanSkillProfile profile=NativeTaiwanSkillProfile::Historical448) {
+        if(!native_taiwan_skill_dataset_id(profile))return std::nullopt;
+        TaiwanNativeDeityRosterPrefix next;next.profile_=profile;
         for(const auto& definition:owned_definitions) {
-            if(!valid_definition(definition))return std::nullopt;
+            if(!valid_definition(definition,profile))return std::nullopt;
             if(!next.catalog_records_.empty() && definition.source!=next.catalog_records_.front().source)
                 return std::nullopt;
             const auto old=std::find_if(next.catalog_records_.begin(),next.catalog_records_.end(),
@@ -71,6 +73,7 @@ public:
         return next;
     }
 
+    NativeTaiwanSkillProfile profile() const noexcept {return profile_;}
     const std::array<Row,row_capacity>& rows() const noexcept {return rows_;}
     std::uint8_t roster_count() const noexcept {return roster_count_;}
     std::int8_t selected_row() const noexcept {return selected_row_;}
@@ -78,6 +81,7 @@ public:
     const std::vector<std::vector<std::uint8_t>>& actual_batches() const noexcept {return actual_batches_;}
 private:
     TaiwanNativeDeityRosterPrefix()=default;
+    NativeTaiwanSkillProfile profile_=NativeTaiwanSkillProfile::Historical448;
     std::array<Row,row_capacity> rows_;
     std::uint8_t roster_count_=0;
     std::int8_t selected_row_=-1;
@@ -104,20 +108,16 @@ private:
     static bool same_identity(const NativeSkillRecord& a,const NativeSkillRecord& b) noexcept {
         return a.kind==b.kind && a.definition_id==b.definition_id;
     }
-    static bool valid_definition(const NativeSkillRecord& r) noexcept {
-        static constexpr std::array<std::int64_t,4> bank_counts{121,129,87,111};
+    static bool valid_definition(const NativeSkillRecord& r,NativeTaiwanSkillProfile profile) noexcept {
         const auto& s=r.source;
-        // This is explicitly the historical448 material profile. Current453
-        // filesystem evidence is a different epoch, never a refreshed baseline.
-        // These are metadata/geometry checks; actual raw SHA recomputation and
-        // full catalog Current/readset equality remain the real caller's duty.
-        return s.dataset_id==NativeSkillCatalog::current_dataset_id && s.row_count==448 &&
-            s.native_image_sha256==TaiwanNativeSkillCommand::image_sha256 &&
-            s.source_sha256==historical_catalog_sha256 && s.decoded_sha256==historical_catalog_sha256 &&
-            text(s.source_path) && text(s.source_section) && text(s.loader_rva) && text(s.lookup_rva) &&
-            r.kind>=0 && r.kind<4 && r.definition_id>=1 &&
-            r.definition_id<=bank_counts[std::size_t(r.kind)] && r.source_record_index>=0 &&
-            r.source_record_index<s.row_count && sha(r.record_sha256) && r.raw_record.size()==110 &&
+        const auto counts=native_taiwan_skill_bank_counts(profile);
+        // Explicit pinned material epoch; raw digest/full-row Current remain
+        // the actual caller's responsibility. A profile never grants a skill.
+        if(!native_taiwan_skill_source_matches(s,profile) || r.kind<0 || r.kind>=4 ||
+           r.definition_id<1 || r.definition_id>counts[std::size_t(r.kind)])return false;
+        std::int64_t ordinal=r.definition_id-1;
+        for(std::size_t i=0;i<std::size_t(r.kind);++i)ordinal+=counts[i];
+        return r.source_record_index==ordinal && sha(r.record_sha256) && r.raw_record.size()==110 &&
             r.raw_record[0]==r.definition_id && r.raw_record[1]==r.kind &&
             r.source_offset==8+r.kind*0x6e04+(r.definition_id-1)*110;
     }

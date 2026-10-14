@@ -239,6 +239,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_pk_main_host397', {}).get('source_paths', [])) |
                    set(ledger.get('tw_pk_zero_deity398', {}).get('source_paths', [])) |
                    set(ledger.get('tw_learning_publication399', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_installed453_profile400', {}).get('source_paths', [])) |
                    {'src/core/Application.cpp', 'src/protocol/RecoveredWorldRecords.h'})
     # A missing file is a report error, never silent qualification/completion.
     digests = {p: hashlib.sha256((SERVER / p).read_bytes()).hexdigest() for p in paths}
@@ -454,6 +455,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_pk_main_host397': ledger.get('tw_pk_main_host397'),
         'tw_pk_zero_deity398': ledger.get('tw_pk_zero_deity398'),
         'tw_learning_publication399': ledger.get('tw_learning_publication399'),
+        'tw_installed453_profile400': ledger.get('tw_installed453_profile400'),
         'current_catalog_supplied':current_catalog is not None,
         'tw_supplemental_producer_evidence': ledger.get('tw_supplemental_producer_evidence'),
         'cn_unresolved_receiver_evidence': ledger.get('cn_unresolved_receiver_evidence'),

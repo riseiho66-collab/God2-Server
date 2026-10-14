@@ -1503,7 +1503,20 @@ void SqliteOwnedPkRoomRepository::settle(const Ticket& ticket,const BattleCheckp
 NativeSkillRecord SqliteOwnedPkRoomRepository::scalar_definition(std::uint16_t key){
     const auto kind=key>>8,id=key&0xff;
     if(kind>1||!id)throw DatabaseError("PK scalar definition requires kind0/1 and nonzero ID");
-    auto row=NativeSkillCatalog(db_).lookup(NativeSkillCatalog::current_dataset_id,kind,id);
+    const NativeSkillCatalog catalog(db_,taiwan_profile_);
+    // The installed epoch is independently qualified; it never falls back to
+    // an old dataset or accepts a different source merely sharing its image.
+    auto row=taiwan_profile_==NativeTaiwanSkillProfile::Installed453?
+        catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),kind,id):
+        catalog.lookup(catalog.taiwan_dataset_id(),kind,id);
+    if(taiwan_profile_==NativeTaiwanSkillProfile::Installed453 && row) {
+        const auto counts=native_taiwan_skill_bank_counts(taiwan_profile_);
+        std::int64_t ordinal=id-1;
+        for(std::size_t i=0;i<std::size_t(kind);++i)ordinal+=counts[i];
+        if(!native_taiwan_skill_source_matches(row->source,taiwan_profile_) ||
+           id>counts[std::size_t(kind)] || row->source_record_index!=ordinal)
+            throw DatabaseError("PK installed Taiwan skill source epoch or row geometry mismatch");
+    }
     if(!row||row->source.native_image_sha256!=RecoveredBattleCommand::image_sha256)
         throw DatabaseError("PK native scalar presentation lacks matching current catalog definition");
     return std::move(*row);

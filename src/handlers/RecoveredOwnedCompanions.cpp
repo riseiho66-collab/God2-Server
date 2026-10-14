@@ -102,7 +102,8 @@ bool RecoveredOwnedCompanions::normal_entry_prefix_current(const Restoration& re
     const auto saved=restoration;
     const auto owned=expected; // Retain caller material before SQL observers.
     const auto actual=normal_entry_prefix_impl(saved,catalog);
-    return actual && !prefix_reentered_ && actual->rows()==owned.rows() &&
+    return actual && !prefix_reentered_ && actual->profile()==owned.profile() &&
+        owned.profile()==catalog.taiwan_profile() && actual->rows()==owned.rows() &&
         actual->roster_count()==owned.roster_count() && actual->selected_row()==owned.selected_row() &&
         actual->catalog_records()==owned.catalog_records() && actual->actual_batches()==owned.actual_batches();
 }
@@ -118,16 +119,16 @@ std::optional<TaiwanNativeDeityRosterPrefix> RecoveredOwnedCompanions::normal_en
             if(std::any_of(definitions.begin(),definitions.end(),[&](const auto& record) {
                 return record.kind==raw[2] && record.definition_id==raw[3];
             }))continue;
-            auto definition=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,raw[2],raw[3]);
+            auto definition=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),raw[2],raw[3]);
             if(prefix_reentered_ || !definition)return std::nullopt;
             definitions.push_back(std::move(*definition));
         }
     }
     auto model=TaiwanNativeDeityRosterPrefix::from_reset_and_records(restoration.batches(),definitions,
-        bool(restoration.learning_source()));
+        bool(restoration.learning_source()),catalog.taiwan_profile());
     if(!model || prefix_reentered_)return std::nullopt;
     for(const auto& expected:model->catalog_records()) {
-        const auto actual=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
+        const auto actual=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),expected.kind,expected.definition_id);
         if(prefix_reentered_ || !actual || *actual!=expected)return std::nullopt;
     }
     if(!restoration_current(restoration) || prefix_reentered_)return std::nullopt;

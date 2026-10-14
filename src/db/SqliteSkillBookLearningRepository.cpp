@@ -296,7 +296,7 @@ bool SqliteSkillBookLearningRepository::observation_current(const ObservationDat
     if(!state_current(*wanted.state))return false;
     const auto book=books_.lookup_item(wanted.book.item_id);
     const auto common=skills_.lookup_shared_definition_main(wanted.book.kind,wanted.book.definition_id);
-    const auto native=skills_.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,wanted.book.kind,wanted.book.definition_id);
+    const auto native=skills_.lookup_main_digest_checked(skills_.taiwan_dataset_id(),wanted.book.kind,wanted.book.definition_id);
     return book==std::optional{wanted.book}&&common&&native&&common->requested_native==native&&
         common->definition==wanted.common&&state_current(*wanted.state);
 }
@@ -340,10 +340,17 @@ std::optional<SqliteSkillBookLearningRepository::Observation> SqliteSkillBookLea
     if(selected==state->roster.rows().end())throw DatabaseError("Skill book selection is dangling");
     if(!RecoveredDeityState::has_current_skill_icon(book->kind,book->definition_id))return std::nullopt;
     const auto common=skills_.lookup_shared_definition_main(book->kind,book->definition_id);
-    const auto native=skills_.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,book->kind,book->definition_id);
+    const auto native=skills_.lookup_main_digest_checked(skills_.taiwan_dataset_id(),book->kind,book->definition_id);
     if(!common||!native||common->requested_native!=native||!common->definition.chosen_profile)return std::nullopt;
-    if(std::none_of(common->definition.profiles.begin(),common->definition.profiles.end(),[](const auto& profile){
-        return profile.region==SharedSkillRegion::Taiwan&&profile.qualification==SharedSkillRowQualification::OriginalRowPinned;
+    if(std::none_of(common->definition.profiles.begin(),common->definition.profiles.end(),[&](const auto& profile){
+        // Original skills only: installed equivalence retains the exact original
+        // bytes under its own453 epoch; reserves/custom/CN never become rights.
+        return profile.region==SharedSkillRegion::Taiwan&&
+            native_taiwan_skill_source_matches(profile.source,skills_.taiwan_profile())&&
+            ((skills_.taiwan_profile()==NativeTaiwanSkillProfile::Historical448&&
+              profile.qualification==SharedSkillRowQualification::OriginalRowPinned)||
+             (skills_.taiwan_profile()==NativeTaiwanSkillProfile::Installed453&&
+              profile.qualification==SharedSkillRowQualification::InstalledEquivalentRowPinned));
     }))return std::nullopt;
     std::optional<std::size_t> cell_index;
     for(std::size_t index=0;index<state->inventory.cells.size();++index) {
@@ -513,7 +520,7 @@ std::optional<SqliteSkillBookLearningRepository::Committed> SqliteSkillBookLearn
         if(sqlite3_total_changes64(db)!=start+intended||!state_current(after))throw DatabaseError("Skill book complete staged after changed");
         const auto book=books_.lookup_item(before.book.item_id);
         const auto common=skills_.lookup_shared_definition_main(before.book.kind,before.book.definition_id);
-        const auto native=skills_.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,before.book.kind,before.book.definition_id);
+        const auto native=skills_.lookup_main_digest_checked(skills_.taiwan_dataset_id(),before.book.kind,before.book.definition_id);
         if(book!=std::optional{before.book}||!common||!native||common->requested_native!=native||common->definition!=before.common||
            sqlite3_total_changes64(db)!=start+intended||!state_current(after))throw DatabaseError("Skill book definition changed before COMMIT");
     };

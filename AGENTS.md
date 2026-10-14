@@ -787,3 +787,14 @@ successor/fullReturnScene/native6F/resources/selection/opaqueorder/Extended64
 acceptance OPEN. FiveexistingCPP/V36pins91/sourceonly/no newPY/Lua/native/default
 activation/fullroutes. Parser77=50/11/16,pending12/frontier26 21/105,whole%null;
 TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.
+
+Round400 connects explicit installed453 TW source epoch through actual
+Config/immutable Database/Catalog/PK repository and Main native/common readers,
+issued/owned deity/native command/primary/prefix/Current/learning/PK readsets.
+Historical448/default7676/SKB bindings and907 pins preserved. Distinct installed
+equivalent original448 qualification checksall110raw/digest/offset/ordinal+5
+laterbanks; no reserved/custom/CN nativegrant, icon or formula invented.
+Installed dataset import/activation, fulllearnedCompanion/Player successor,
+nativeReturn/current6F/resources/selection/numerics/nativeacceptance remainOPEN.
+Sourceonly/V37/no newPY; parser77=50/11/16,pending12/frontier26 21/105,fullroutes0
+whole%null; TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.

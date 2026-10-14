@@ -193,15 +193,16 @@ private:
     }
     static bool valid_definition(const NativeSkillRecord& r) noexcept {
         const auto& s=r.source;
-        return r.raw_record.size()==110 && r.kind>=0 && r.kind<=3 &&
-            r.definition_id>=1 && r.definition_id<=255 && r.raw_record[0]==r.definition_id &&
-            r.raw_record[1]==r.kind && r.source_offset==8+r.kind*0x6e04+(r.definition_id-1)*110 &&
-            r.source_record_index>=0 && r.source_record_index<s.row_count &&
-            s.row_count>0 && s.row_count<=1020 && s.native_image_sha256==image_sha256 &&
-            s.dataset_id==NativeSkillCatalog::current_dataset_id && !s.source_path.empty() &&
-            !s.source_section.empty() && !s.loader_rva.empty() && !s.lookup_rva.empty() &&
-            hex_sha(r.record_sha256) && hex_sha(s.source_sha256) &&
-            s.source_sha256==s.decoded_sha256;
+        const bool historical=native_taiwan_skill_source_matches(s,NativeTaiwanSkillProfile::Historical448);
+        if(!historical && !native_taiwan_skill_source_matches(s,NativeTaiwanSkillProfile::Installed453))return false;
+        const auto counts=native_taiwan_skill_bank_counts(historical?
+            NativeTaiwanSkillProfile::Historical448:NativeTaiwanSkillProfile::Installed453);
+        if(r.kind<0 || r.kind>=4 || r.definition_id<1 || r.definition_id>counts[std::size_t(r.kind)])return false;
+        std::int64_t ordinal=r.definition_id-1;
+        for(std::size_t i=0;i<std::size_t(r.kind);++i)ordinal+=counts[i];
+        return r.raw_record.size()==110 && r.raw_record[0]==r.definition_id && r.raw_record[1]==r.kind &&
+            r.source_record_index==ordinal && r.source_offset==8+r.kind*0x6e04+(r.definition_id-1)*110 &&
+            hex_sha(r.record_sha256);
     }
     static bool pattern(std::uint8_t scope,std::uint16_t mask,std::uint16_t candidates) noexcept {
         struct Row {std::uint8_t scope,anchor;std::uint16_t mask;};

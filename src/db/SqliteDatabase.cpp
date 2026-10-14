@@ -131,8 +131,12 @@ struct SqliteDatabase::Impl {
         }
     };
 };
-SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration> migrations)
-    : path_(std::move(path)), migrations_(std::move(migrations)) {}
+SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration> migrations,
+    NativeTaiwanSkillProfile taiwan_skill_profile)
+    : path_(std::move(path)), migrations_(std::move(migrations)), taiwan_skill_profile_(taiwan_skill_profile) {
+    if(!native_taiwan_skill_dataset_id(taiwan_skill_profile_))
+        throw DatabaseError("Invalid Taiwan skill source profile");
+}
 SqliteDatabase::~SqliteDatabase() = default;
 void SqliteDatabase::initialize() {
     if (impl_) return;
@@ -168,7 +172,7 @@ void SqliteDatabase::initialize() {
     candidate->native_map_catalog = std::make_unique<NativeMapCatalog>(raw);
     candidate->native_enemy_display_catalog = std::make_unique<NativeEnemyDisplayCatalog>(raw);
     candidate->native_supply_catalog = std::make_unique<NativeSupplyCatalog>(raw);
-    candidate->native_skill_catalog = std::make_unique<NativeSkillCatalog>(raw);
+    candidate->native_skill_catalog = std::make_unique<NativeSkillCatalog>(raw,taiwan_skill_profile_);
     candidate->native_skill_book_catalog = std::make_unique<NativeSkillBookCatalog>(raw);
     candidate->native_quest_catalog = std::make_unique<NativeQuestCatalog>(raw);
     candidate->native_multi_message_catalog = std::make_unique<NativeMultiMessageCatalog>(raw);
@@ -437,7 +441,7 @@ std::unique_ptr<SqliteOwnedPkRoomRepository> SqliteDatabase::make_owned_pk_room_
     if(!migrated_)throw DatabaseError("Migrate before owned PK room access");
     auto* raw=impl_->connection.get();
     SqliteOwnedPkRoomRepository::require_schema(raw);
-    return std::make_unique<SqliteOwnedPkRoomRepository>(raw);
+    return std::make_unique<SqliteOwnedPkRoomRepository>(raw,taiwan_skill_profile_);
 }
 void SqliteDatabase::install_owned_pk_terminal_resource_schema(){
     if(!migrated_)throw DatabaseError("Migrate before explicit PK terminal resource extension");
@@ -454,7 +458,7 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
     OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed,
     OwnedTaiwanPkEntryPreparation::Companions companions,OwnedTaiwanPkEntryPreparation::Players players){
     if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
-       !rooms.uses_connection(impl_->connection.get()))
+       !rooms.uses_connection(impl_->connection.get())||rooms.taiwan_profile()!=taiwan_skill_profile_)
         throw DatabaseError("TW PK preparation requires actual common Database/presence/room sources");
     // These existing accessors only assemble the exact same-Database readers/
     // writers; they perform no schema installation or source population.
@@ -476,7 +480,8 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
     // CUSTOM-0120 fail invalid owner composition before file I/O or reader
     // assembly. These checks are identities, never SQL/schema qualification.
     if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
-       !rooms.uses_connection(impl_->connection.get())||!sessions||!initializations||!peers||!seed)
+       !rooms.uses_connection(impl_->connection.get())||rooms.taiwan_profile()!=taiwan_skill_profile_||
+       !sessions||!initializations||!peers||!seed)
         throw DatabaseError("TW PK archive preparation requires actual sources and resolver owners");
     auto catalog=TaiwanNativeFightCatalog::from_archive_file(archive_path);
     // Full immutable catalog owns its bytes. Only the established same-DB

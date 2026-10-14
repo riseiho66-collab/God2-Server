@@ -78,12 +78,12 @@ struct SharedTaiwanIssuedSkillSource::State {
             ready(s,*item->next);
     }
     bool definition_current(const NativeSkillRecord& expected) const {
-        const auto actual=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
+        const auto actual=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),expected.kind,expected.definition_id);
         return !poisoned && actual && *actual==expected;
     }
     bool model_current(Session& s,const Storage& saved) const {
         if(!ready(s,saved))return false;
-        const auto source=catalog.lookup_main_source(NativeSkillCatalog::current_dataset_id);
+        const auto source=catalog.lookup_main_source(catalog.taiwan_dataset_id());
         if(!source || *source!=saved.model.snapshot().catalog_source || !ready(s,saved))return false;
         for(const auto& bank:saved.model.snapshot().banks) {
             for(const auto& row:bank.definitions)
@@ -104,7 +104,7 @@ struct SharedTaiwanIssuedSkillSource::State {
                     if(definition && (!definition_current(*definition) || !ready(s,saved)))return false;
             }
         }
-        const auto after=catalog.lookup_main_source(NativeSkillCatalog::current_dataset_id);
+        const auto after=catalog.lookup_main_source(catalog.taiwan_dataset_id());
         return after && *after==saved.model.snapshot().catalog_source && ready(s,saved);
     }
     std::uint64_t next_revision() const {
@@ -186,7 +186,7 @@ std::optional<SharedTaiwanIssuedSkillSource::Ticket> SharedTaiwanIssuedSkillSour
     {
         State::Operation operation(*state);
         if(saved->origin.lock()!=state || !state->retained(s,saved))return std::nullopt;
-        definition=state->catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,kind,id);
+        definition=state->catalog.lookup_main_digest_checked(state->catalog.taiwan_dataset_id(),kind,id);
         if(!definition || !state->retained(s,saved))return std::nullopt;
     }
     const auto next=saved->model.apply87(bytes,*definition);if(!next)return std::nullopt;
@@ -253,7 +253,7 @@ std::optional<SharedTaiwanIssuedSkillSource::Publication> SharedTaiwanIssuedSkil
                 const auto record=remaining.first(3);
                 const auto kind=std::uint8_t(record[2]&0x3fu),id=record[1];
                 if(kind>3 || !id)return std::nullopt;
-                const auto definition=state->catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,kind,id);
+                const auto definition=state->catalog.lookup_main_digest_checked(state->catalog.taiwan_dataset_id(),kind,id);
                 if(!definition || !state->retained(s,saved))return std::nullopt;
                 next=projected->apply87(record,*definition);remaining=remaining.subspan(3);
             } else if(remaining[0]==0x38) {

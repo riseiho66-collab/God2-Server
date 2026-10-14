@@ -88,6 +88,14 @@ Config Config::load(const std::filesystem::path& path) {
     if(j.at("database").at("type")!="sqlite") throw std::runtime_error("Database backend is not implemented");
     c.packet_dump=p.at("packet_dump").get<bool>();
     c.database=resolve(j.at("database").at("path").get<std::string>());
+    if(j.at("database").contains("taiwan_skill_profile")) {
+        const auto& profile=j.at("database").at("taiwan_skill_profile");
+        if(!profile.is_string())throw std::runtime_error("Taiwan skill profile string required");
+        const auto value=profile.get<std::string>();
+        if(value=="historical448")c.taiwan_skill_profile=NativeTaiwanSkillProfile::Historical448;
+        else if(value=="installed453")c.taiwan_skill_profile=NativeTaiwanSkillProfile::Installed453;
+        else throw std::runtime_error("Unknown Taiwan skill source profile");
+    }
     c.script_root=resolve(j.at("lua").at("script_root").get<std::string>());
     c.bootstrap=resolve(j.at("lua").at("bootstrap").get<std::string>());
     c.hot_reload=j.at("lua").at("hot_reload").get<bool>();

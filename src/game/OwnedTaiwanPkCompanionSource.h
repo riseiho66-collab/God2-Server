@@ -250,7 +250,7 @@ private:
         bool local(const Material& m)const{
             const auto peer=session.lock();
             // Private game-owner receipt BEFORE any mutable Session fields.
-            if(reentered || !identities() || !peer ||
+            if(reentered || !identities() || m.prefix.profile()!=catalog.taiwan_profile() || !peer ||
                !peer->normal_world_initialization_current_on_game(m.initialization) ||
                !m.initialization.entry_written())return false;
             if((m.phase!=SessionState::CharacterSelected && m.phase!=SessionState::InWorld) ||
@@ -292,7 +292,8 @@ private:
         }
         bool stored_current(const Material& m,sqlite3* actual){
             Read read(*this);
-            if(!read.entered || actual!=db || !identities() || sqlite3_get_autocommit(db))return false;
+            if(!read.entered || actual!=db || !identities() ||
+               m.prefix.profile()!=catalog.taiwan_profile() || sqlite3_get_autocommit(db))return false;
             const auto changes=sqlite3_total_changes64(db);
             // Only concrete closed SQL reads. Never invoke live helper Current or
             // Session/presence/world-init callbacks inside the room transaction.
@@ -316,7 +317,7 @@ private:
             }
             for(const auto& expected:m.prefix.catalog_records()){
                 const auto actual_record=catalog.lookup_main_digest_checked(
-                    NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
+                    catalog.taiwan_dataset_id(),expected.kind,expected.definition_id);
                 if(reentered || !actual_record || *actual_record!=expected)return false;
             }
             return !reentered && !sqlite3_get_autocommit(db) && sqlite3_total_changes64(db)==changes;

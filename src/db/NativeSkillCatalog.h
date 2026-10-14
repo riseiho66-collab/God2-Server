@@ -41,9 +41,13 @@ struct SharedSkillLookup {
 class NativeSkillCatalog final {
 public:
     static constexpr char current_dataset_id[] = "current-skill-catalog-v1";
+    static constexpr char installed_dataset_id[] = "tw-installed-cbspec2-3adcda70-149c1b45-453-v1";
 
     // The caller owns the connection and keeps it alive during every lookup.
-    explicit NativeSkillCatalog(sqlite3* db);
+    explicit NativeSkillCatalog(sqlite3* db,
+        NativeTaiwanSkillProfile taiwan_profile=NativeTaiwanSkillProfile::Historical448);
+    const char* taiwan_dataset_id() const noexcept {return native_taiwan_skill_dataset_id(taiwan_profile_);}
+    NativeTaiwanSkillProfile taiwan_profile() const noexcept {return taiwan_profile_;}
     bool uses_connection(const sqlite3* db) const noexcept {return db_==db;}
 
     // Missing keys return nullopt. Invalid selectors, corrupt matched rows and
@@ -75,5 +79,6 @@ public:
 private:
     std::optional<NativeSkillRecord> lookup_impl(const std::string&,std::int64_t,std::int64_t,bool main_schema) const;
     sqlite3* db_;
+    const NativeTaiwanSkillProfile taiwan_profile_;
 };
 }

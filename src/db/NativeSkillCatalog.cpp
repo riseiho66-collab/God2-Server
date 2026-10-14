@@ -83,8 +83,10 @@ SharedSkillNativeBinding shared_binding(const NativeSkillRecord& r,SharedSkillRe
 }
 }
 
-NativeSkillCatalog::NativeSkillCatalog(sqlite3* db) : db_(db) {
+NativeSkillCatalog::NativeSkillCatalog(sqlite3* db,NativeTaiwanSkillProfile profile)
+    : db_(db),taiwan_profile_(profile) {
     if (!db_) throw DatabaseError("Null native skill catalog connection");
+    if(!native_taiwan_skill_dataset_id(profile))throw DatabaseError("Invalid Taiwan skill source profile");
 }
 
 std::uint16_t NativeSkillRecord::client_mp_threshold() const {
@@ -112,7 +114,7 @@ std::optional<SharedSkillLookup> NativeSkillCatalog::lookup_shared_definition_ma
     // Existing joined reads validate selectors and corrupt rows even on this
     // explicit path. A missing CN counterpart never drops a valid TW snapshot.
     SharedReadScope scope(db_);
-    auto tw=lookup_main(current_dataset_id,kind,definition_id);
+    auto tw=lookup_main(taiwan_dataset_id(),kind,definition_id); // Exact selected epoch; no historical fallback.
     auto cn=lookup_main("cn-native-cbspec2-582f2695-857b52e3-v1",kind,definition_id);
     std::optional<SharedSkillNativeBinding> t,c;
     if(tw)t=shared_binding(*tw,SharedSkillRegion::Taiwan);

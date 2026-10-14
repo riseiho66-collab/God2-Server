@@ -946,6 +946,21 @@ const Pin* qualify(SharedSkillNativeBinding& b,std::uint8_t kind,std::uint8_t id
     b.qualification=SharedSkillRowQualification::MetadataSnapshotOnly;
     if(b.raw[0]!=id || b.raw[1]!=kind ||
        b.source.source_sha256!=b.source.decoded_sha256)return nullptr;
+    // Independently retained installed453 contains every original448 TW raw
+    // row unchanged. Only those original pins gain this distinct qualification:
+    // bank0 ordinals stay fixed; the five added bank0 rows shift later banks.
+    if(b.region==SharedSkillRegion::Taiwan && native_taiwan_skill_source_matches(
+            b.source,NativeTaiwanSkillProfile::Installed453)) {
+        for(const auto& p:pins) {
+            if(p.region!=SharedSkillRegion::Taiwan || p.kind!=kind || p.id!=id ||
+               p.row_count!=448 || std::string(p.source_digest)!=
+               "7676acd93f164d071f7681a3fe74de94d65892759dbf2e69e3c0f748423d2f51" ||
+               b.record_sha256!=p.digest || b.source_record_index!=p.ordinal+(kind?5:0) ||
+               b.source_offset!=p.offset || b.raw!=p.expected)continue;
+            b.qualification=SharedSkillRowQualification::InstalledEquivalentRowPinned;
+            return &p;
+        }
+    }
     for(const auto& p:pins) {
         if(p.region!=b.region || p.kind!=kind || p.id!=id ||
            b.source.source_sha256!=p.source_digest || b.record_sha256!=p.digest ||
@@ -998,6 +1013,7 @@ const char* shared_skill_qualification_name(SharedSkillRowQualification q) noexc
     switch(q) {
     case SharedSkillRowQualification::OriginalRowPinned:return "OriginalRowPinned";
     case SharedSkillRowQualification::OwnerRowPinned:return "OwnerRowPinned";
+    case SharedSkillRowQualification::InstalledEquivalentRowPinned:return "InstalledEquivalentRowPinned";
     default:return "MetadataSnapshotOnly";
     }
 }

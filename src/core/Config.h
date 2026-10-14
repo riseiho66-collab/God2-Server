@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include "protocol/ProtocolMode.h"
+#include "db/NativeSkillSource.h"
 namespace god2 {
 struct Config {
     ProtocolMode protocol_mode=ProtocolMode::Fixture;
@@ -128,6 +129,8 @@ struct Config {
     bool owned_battle_pose_enabled=false; // CUSTOM-0103 actual diagnostic battle symbol source only
     // CUSTOM-0149: same-source owned initial player publisher; explicit opt-in.
     bool owned_initial_player_enabled=false;
+    // Explicit source epoch only. Existing configurations retain historical448.
+    NativeTaiwanSkillProfile taiwan_skill_profile=NativeTaiwanSkillProfile::Historical448;
     void validate_owned_whole_bag_moves() const;
     static Config load(const std::filesystem::path& path);
 };

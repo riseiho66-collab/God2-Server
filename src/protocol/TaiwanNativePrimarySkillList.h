@@ -409,19 +409,21 @@ private:
             return (c>='0' && c<='9') || (c>='a' && c<='f');});
     }
     static bool valid_source(const NativeSkillSource& s) noexcept {
-        return s.dataset_id==NativeSkillCatalog::current_dataset_id &&
-            s.native_image_sha256==TaiwanNativeSkillCommand::image_sha256 &&
-            s.row_count>0 && s.row_count<=1020 && !s.source_path.empty() &&
-            !s.source_section.empty() && !s.loader_rva.empty() && !s.lookup_rva.empty() &&
-            hex_sha(s.source_sha256) && s.source_sha256==s.decoded_sha256;
+        return native_taiwan_skill_source_matches(s,NativeTaiwanSkillProfile::Historical448) ||
+            native_taiwan_skill_source_matches(s,NativeTaiwanSkillProfile::Installed453);
     }
     static bool valid_definition(const NativeSkillRecord& r,const NativeSkillSource& source) noexcept {
-        // Metadata shape/key/source equality only. The real game source must
-        // re-read and compare full actual catalog rows; no hash recomputation.
-        return r.source==source && r.raw_record.size()==110 && r.kind>=0 && r.kind<=3 &&
-            r.definition_id>=1 && r.definition_id<=255 && r.raw_record[0]==r.definition_id &&
-            r.raw_record[1]==r.kind && r.source_record_index>=0 &&
-            r.source_record_index<source.row_count && hex_sha(r.record_sha256) &&
+        // Exact explicit profile and full source equality; no catalog promotion
+        // or learned/turn authority is inferred from these geometry checks.
+        if(r.source!=source || !valid_source(source) || r.kind<0 || r.kind>=4)return false;
+        const auto profile=native_taiwan_skill_source_matches(source,NativeTaiwanSkillProfile::Historical448)?
+            NativeTaiwanSkillProfile::Historical448:NativeTaiwanSkillProfile::Installed453;
+        const auto counts=native_taiwan_skill_bank_counts(profile);
+        if(r.definition_id<1 || r.definition_id>counts[std::size_t(r.kind)])return false;
+        std::int64_t ordinal=r.definition_id-1;
+        for(std::size_t i=0;i<std::size_t(r.kind);++i)ordinal+=counts[i];
+        return r.raw_record.size()==110 && r.raw_record[0]==r.definition_id && r.raw_record[1]==r.kind &&
+            r.source_record_index==ordinal && hex_sha(r.record_sha256) &&
             r.source_offset==8+r.kind*0x6e04+(r.definition_id-1)*110;
     }
     static bool valid_roster_row(const RosterSkillRow& row,const NativeSkillSource& source) noexcept {

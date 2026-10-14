@@ -157,7 +157,13 @@ public:
         std::optional<std::string> terminal_resources_;
         std::optional<std::string> finished_return_;
     };
-    explicit SqliteOwnedPkRoomRepository(sqlite3* db):db_(db),owners_(db){require_schema(db_);require_round_schema(db_);}
+    explicit SqliteOwnedPkRoomRepository(sqlite3* db,
+        NativeTaiwanSkillProfile profile=NativeTaiwanSkillProfile::Historical448)
+        :db_(db),owners_(db),taiwan_profile_(profile){
+        if(!native_taiwan_skill_dataset_id(profile))throw DatabaseError("Invalid PK Taiwan skill source profile");
+        require_schema(db_);require_round_schema(db_);
+    }
+    NativeTaiwanSkillProfile taiwan_profile()const noexcept{return taiwan_profile_;}
     // Identity only; no read, schema installation or admission permission.
     bool uses_connection(const sqlite3* supplied)const noexcept{return supplied==db_;}
     static void install_schema(sqlite3*); // explicit caller; never called on read
@@ -231,6 +237,7 @@ private:
     };
     sqlite3* db_;
     SqliteRecoveredCharacterRepository owners_; // SAME SQLite connection
+    const NativeTaiwanSkillProfile taiwan_profile_;
     std::shared_ptr<Issuer> issuer_=std::make_shared<Issuer>();
     static void validate(const Input&);
     static std::string readset(const Input&);

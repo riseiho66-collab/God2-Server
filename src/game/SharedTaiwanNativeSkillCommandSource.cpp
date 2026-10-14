@@ -74,7 +74,7 @@ struct Owner {
     }
     bool base_definition_current(Session& session,const Source::Scope& scope,const NativeSkillRecord& expected) const {
         if(!ready(session,scope,true))return false;
-        const auto actual=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
+        const auto actual=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),expected.kind,expected.definition_id);
         return actual && *actual==expected && ready(session,scope,true);
     }
     bool definition_current(Session& session,const Source::Scope& scope,const NativeSkillRecord& expected) const {
@@ -123,7 +123,7 @@ struct Owner {
             const auto selection=issued->select(session,first.raw_operand());
             if(!selection || first.actor_position()!=selection->lookup().actor_position ||
                first.side_flag()!=selection->lookup().side_flag || !ready(session,*scope,true))return std::nullopt;
-            const auto definition=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,first.kind(),first.definition_id());
+            const auto definition=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),first.kind(),first.definition_id());
             if(!definition || definition->source.native_image_sha256!=TaiwanNativeSkillCommand::image_sha256 ||
                *definition!=selection->lookup().definition ||
                !base_definition_current(session,*scope,*definition))return std::nullopt;

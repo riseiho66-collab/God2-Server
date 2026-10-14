@@ -65,7 +65,8 @@ class SqliteOwnedBlacklistRepository;
 class SqliteDatabase final : public Database {
 public:
     explicit SqliteDatabase(std::filesystem::path path,
-                            std::vector<Migration> migrations = default_sqlite_migrations());
+                            std::vector<Migration> migrations = default_sqlite_migrations(),
+                            NativeTaiwanSkillProfile taiwan_skill_profile = NativeTaiwanSkillProfile::Historical448);
     ~SqliteDatabase() override;
     SqliteDatabase(const SqliteDatabase&) = delete;
     SqliteDatabase& operator=(const SqliteDatabase&) = delete;
@@ -246,6 +247,7 @@ private:
     struct Impl;
     std::filesystem::path path_;
     std::vector<Migration> migrations_;
+    const NativeTaiwanSkillProfile taiwan_skill_profile_;
     std::unique_ptr<Impl> impl_;
     bool migrated_ = false;
 };

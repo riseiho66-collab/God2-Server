@@ -184,17 +184,23 @@ struct SharedTaiwanOwnedDeitySkillSource::Impl {
             input.request().kind()==definition.kind && input.request().definition_id()==definition.definition_id &&
             s.normal_world_initialization_current_on_game(input.initialization()) && local(s,scope);
     }
-    static bool qualified(const NativeSkillRecord& r,std::uint8_t kind,std::uint8_t id) {
+    static bool qualified(const NativeSkillRecord& r,std::uint8_t kind,std::uint8_t id,
+                          NativeTaiwanSkillProfile profile) {
         // Main catalog lookup checks metadata, raw row shape/key and all110
         // bytes against the stored digest. Here pin
         // native image, raw key and original110-byte row geometry explicitly.
-        return r.kind==kind && r.definition_id==id && r.raw_record.size()==110 &&
+        const auto counts=native_taiwan_skill_bank_counts(profile);
+        if(!native_taiwan_skill_source_matches(r.source,profile) || kind>=4 ||
+           id<1 || id>counts[std::size_t(kind)])return false;
+        std::int64_t ordinal=id-1;
+        for(std::size_t i=0;i<std::size_t(kind);++i)ordinal+=counts[i];
+        return r.source_record_index==ordinal && r.kind==kind && r.definition_id==id && r.raw_record.size()==110 &&
             r.raw_record[0]==id && r.raw_record[1]==kind &&
             r.source.native_image_sha256==TaiwanNativeSkillCommand::image_sha256 &&
             r.source_offset==8+r.kind*0x6e04+(r.definition_id-1)*110;
     }
     bool definition_current(const NativeSkillRecord& expected) const {
-        const auto actual=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
+        const auto actual=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),expected.kind,expected.definition_id);
         return !reentered && actual && *actual==expected;
     }
     bool common_definition_current(const NativeSkillRecord& native,const SharedSkillDefinition& common) const {
@@ -361,8 +367,9 @@ std::optional<SharedTaiwanOwnedDeitySkillSource::Observation> SharedTaiwanOwnedD
         publication=at->second->published;
         if(!state->publication_current(session,publication) || publication->lease!=scope->lease)return std::nullopt;
     }
-    auto definition=state->catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,kind,id);
-    if(!definition || !Impl::qualified(*definition,kind,id) || !state->ready(session,*scope))return std::nullopt;
+    auto definition=state->catalog.lookup_main_digest_checked(state->catalog.taiwan_dataset_id(),kind,id);
+    if(!definition || !native_taiwan_skill_source_matches(definition->source,state->catalog.taiwan_profile()) ||
+       !Impl::qualified(*definition,kind,id,state->catalog.taiwan_profile()) || !state->ready(session,*scope))return std::nullopt;
     auto saved=state->companions.load_selected_deity_skill(scope->lease.account,scope->lease.character,kind,id);
     if(!saved || (publication && (!state->publication_current(session,publication) ||
        !Impl::matches_saved(*publication,*saved))) || !state->ready(session,*scope) || !state->definition_current(*definition) ||

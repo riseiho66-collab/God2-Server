@@ -9,7 +9,9 @@
 
 namespace god2 {
 enum class SharedSkillRegion { Taiwan, China };
-enum class SharedSkillRowQualification { MetadataSnapshotOnly, OriginalRowPinned, OwnerRowPinned };
+enum class SharedSkillRowQualification {
+    MetadataSnapshotOnly, OriginalRowPinned, OwnerRowPinned, InstalledEquivalentRowPinned
+};
 enum class SharedSkillStatus {
     SingleProfile, VerifiedEqualPayload, BorrowedCNReserve, CNPopulatedTWEmpty,
     OwnerSelectedTWCompleteConflict, UnresolvedRegionalProfiles, OwnerCustom
