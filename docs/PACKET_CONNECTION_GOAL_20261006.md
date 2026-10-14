@@ -5797,3 +5797,20 @@ wholeinventory OPEN; parser77=50/11/16,pending12/frontier26 21/105,whole%null.
 TW100firstACTIVE/commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.
 
 Details: docs/research/tw-pk-whole-response-source-20261014.md
+
+## Round394 - Complete original learning closed SQL source (2026-10-14)
+
+Round394 connects original complete learning savedtuple toactual roomSQL:
+opaque originalRestoration/sameDB/privateissuer/thread ->private borrowedread
+Operation ->unchanged fullstate_current inventory/equipment/root/pose/roster/
+fullheaders/events/books+namespace/reentry/changes ->actualCompanionSource
+stored_current andexistingRoom ownerchecks. Genericbattlebusy guards unchanged;
+borrowedread neverclears foreignissuer flags/no nestedTx/liveCurrent/rebase.
+ALL existing JSON/readsetbytes preserved; no newdigest/permission/playerflag.
+FiveexistingCPP/V31pins derivedfrom90/no newprojectPY/Lua/native/formula/opcode/
+defaultactivation/fullroute. ActualMainfullplayerWritten source/backend/mixedC69/
+fullreturn/issuedlearninglineage/rehydration/nativeacceptance/wholeinventory OPEN.
+Parser77=50/11/16,pending12/frontier26 21/105,whole%null; TW100firstACTIVE/common
+CN/web64/saves/frozen/PHASE1sourceonly unchanged.
+
+Details: docs/research/tw-pk-learning-closed-source-20261014.md

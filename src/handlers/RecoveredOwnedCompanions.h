@@ -53,6 +53,9 @@ public:
     Restoration restore_deities_with_source(std::uint64_t account,std::uint64_t character,
         SqliteSkillBookLearningRepository&);
     bool restoration_current(const Restoration&);
+    // Learning-present original restoration only. The caller separately checks
+    // the original closed roster/room cut; no source is restored or issued here.
+    bool restoration_learning_current_in_transaction(const Restoration&,sqlite3* actual_connection);
     // CUSTOM-0148 explicit actual readset + genuinely retained activation source.
     // Deity records only; legacy account/character restoration and pets unchanged.
     // Caller requalifies the actual repository readset before/after this projection.

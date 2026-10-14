@@ -167,20 +167,26 @@ struct SqliteSkillBookLearningRepository::PlanData {
     RecoveredInventory::SlotUpdate update;
 };
 struct SqliteSkillBookLearningRepository::Operation {
+    enum class Scope {Own,ExistingTransactionRead};
     SqliteSkillBookLearningRepository& repo;
-    explicit Operation(SqliteSkillBookLearningRepository& value):repo(value) {
+    const Scope scope;
+    explicit Operation(SqliteSkillBookLearningRepository& value,Scope mode=Scope::Own):repo(value),scope(mode) {
         repo.owner();
-        if(repo.busy_||repo.inventory_.writing_||repo.equipment_.writing_||repo.companions_.readset_reading_) {
+        if(repo.busy_||repo.inventory_.writing_||repo.equipment_.writing_||repo.companions_.readset_reading_||
+           (scope==Scope::ExistingTransactionRead&&(repo.inventory_.issuer_active_||repo.equipment_.issuer_active_))) {
             repo.poisoned_=true;repo.inventory_.reentered_=repo.equipment_.reentered_=true;
             repo.companions_.readset_reentered_=true;throw DatabaseError("Skill book operation reentered");
         }
-        if(!sqlite3_get_autocommit(repo.inventory_.db_))throw DatabaseError("Skill book operation requires own transaction");
+        if(scope==Scope::Own) {
+            if(!sqlite3_get_autocommit(repo.inventory_.db_))throw DatabaseError("Skill book operation requires own transaction");
+        } else if(sqlite3_get_autocommit(repo.inventory_.db_))
+            throw DatabaseError("Skill book closed restoration requires existing transaction");
         repo.busy_=true;repo.poisoned_=false;
         repo.inventory_.writing_=repo.equipment_.writing_=true;
         repo.inventory_.reentered_=repo.equipment_.reentered_=false;
     }
     ~Operation(){repo.busy_=false;repo.inventory_.writing_=repo.equipment_.writing_=false;
-        repo.inventory_.issuer_active_=repo.equipment_.issuer_active_=false;}
+        if(scope==Scope::Own)repo.inventory_.issuer_active_=repo.equipment_.issuer_active_=false;}
 };
 
 SqliteSkillBookLearningRepository::SqliteSkillBookLearningRepository(SqliteOwnedInventoryRepository& inventory,
@@ -308,6 +314,19 @@ SqliteSkillBookLearningRepository::Restoration SqliteSkillBookLearningRepository
 bool SqliteSkillBookLearningRepository::restoration_current(const Restoration& value) {
     Operation operation(*this);ReadScope read(inventory_.db_);
     const bool same=state_current(*value.state_);read.finish();return same;
+}
+bool SqliteSkillBookLearningRepository::restoration_current_in_transaction(
+    const Restoration& value,sqlite3* actual_connection) {
+    owner();
+    const auto owned=value; // Retain the original private issuer before SQL hooks.
+    if(!actual_connection||actual_connection!=inventory_.db_||!owned.state_||
+       owned.state_->repository!=this||owned.state_->identity.lock()!=identity_)return false;
+    Operation operation(*this,Operation::Scope::ExistingTransactionRead);
+    const auto changes=sqlite3_total_changes64(actual_connection);
+    const bool same=state_current(*owned.state_);
+    namespaces();
+    return same&&owned.state_->repository==this&&owned.state_->identity.lock()==identity_&&
+        sqlite3_total_changes64(actual_connection)==changes;
 }
 std::optional<SqliteSkillBookLearningRepository::Observation> SqliteSkillBookLearningRepository::observe(
     std::uint64_t account,std::uint64_t character,std::uint8_t slot,std::uint16_t item) {

@@ -4909,6 +4909,25 @@
         "whole_route_complete": false,
         "default_activated": false,
         "product_execution": false
+      },
+      "complete_learning_closed_sql_source": {
+        "round": 394,
+        "document": "docs/research/tw-pk-learning-closed-source-20261014.md",
+        "source_paths": [
+          "src/db/SqliteSkillBookLearningRepository.cpp",
+          "src/db/SqliteSkillBookLearningRepository.h",
+          "src/game/OwnedTaiwanPkCompanionSource.h",
+          "src/handlers/RecoveredOwnedCompanions.cpp",
+          "src/handlers/RecoveredOwnedCompanions.h"
+        ],
+        "source_connected": true,
+        "publication_authority": "exact original private learning Restoration repository/identity and full retained saved tuple in the actual existing room transaction",
+        "all_existing_readset_and_serializer_bytes_preserved": true,
+        "raw_scalar_factory_bypass": false,
+        "actual_Main_backend_hosted": false,
+        "whole_route_complete": false,
+        "default_activated": false,
+        "product_execution": false
       }
 },
 {

@@ -106,6 +106,10 @@ public:
     std::optional<Committed> commit(const Plan&,Current);
     Restoration restore(std::uint64_t account,std::uint64_t character);
     bool restoration_current(const Restoration&);
+    // Original private restoration only, on the actual same connection in an
+    // already active transaction. Read-only qualification, not room authority;
+    // preserves generic pending-battle rejection and never opens a transaction.
+    bool restoration_current_in_transaction(const Restoration&,sqlite3* actual_connection);
 private:
     void owner() const;
     void namespaces() const;

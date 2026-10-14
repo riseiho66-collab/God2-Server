@@ -81,6 +81,15 @@ bool RecoveredOwnedCompanions::restoration_current(const Restoration& restoratio
     }
     return repository_.deity_roster_current(restoration.deity_roster());
 }
+bool RecoveredOwnedCompanions::restoration_learning_current_in_transaction(
+        const Restoration& restoration,sqlite3* actual_connection) {
+    const auto owned=restoration;
+    return actual_connection&&repository_.uses_connection(actual_connection)&&
+        owned.learning_source()&&owned.learning_repository_&&
+        owned.learning_repository_->owns_companions(repository_)&&
+        owned.learning_repository_->restoration_current_in_transaction(
+            *owned.learning_source(),actual_connection);
+}
 std::optional<TaiwanNativeDeityRosterPrefix> RecoveredOwnedCompanions::normal_entry_prefix(
         const Restoration& restoration,const NativeSkillCatalog& catalog) {
     PrefixRead read(*this);

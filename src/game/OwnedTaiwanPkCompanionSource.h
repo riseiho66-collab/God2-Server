@@ -181,9 +181,16 @@ private:
             Read read(*this);
             if(!read.entered || actual!=db || !identities() || sqlite3_get_autocommit(db))return false;
             const auto changes=sqlite3_total_changes64(db);
-            // Only concrete closed SQL reads. Never invoke helper Current or
+            // Only concrete closed SQL reads. Never invoke live helper Current or
             // Session/presence/world-init callbacks inside the room transaction.
             if(!repository.deity_roster_current_in_transaction(m.restoration.deity_roster()))return false;
+            // CUSTOM-0129 / CUSTOM-0148 original learning-present publication
+            // includes the complete private inventory/equipment/header/event
+            // source, not merely roster/catalog or exposed active skills.
+            // This delegates ONLY a closed read on this existing actual scope.
+            if(m.restoration.learning_source()&&
+               !helper.restoration_learning_current_in_transaction(m.restoration,actual))return false;
+            if(reentered||sqlite3_get_autocommit(db)||sqlite3_total_changes64(db)!=changes)return false;
             for(const auto* name:{"native_data_sources","native_skill_catalog"}){
                 sqlite_detail::Statement shadow(db,"SELECT 1 FROM temp.sqlite_master WHERE name=? COLLATE NOCASE OR tbl_name=? COLLATE NOCASE LIMIT 1");
                 shadow.bind(1,std::string(name));shadow.bind(2,std::string(name));
