@@ -8,9 +8,11 @@
 #include <utility>
 #include <functional>
 #include <vector>
+#include <thread>
 struct sqlite3;
 
 namespace god2 {
+struct RecoveredPlayerSnapshot;
 class SqliteNativeCharacterSummarySnapshotRepository;
 class SqliteCompanionRepository;
 class SelectedDeitySkillReadset;
@@ -140,6 +142,10 @@ public:
     std::uint64_t reserve_battle(std::uint64_t account,std::uint64_t character,
         const CharacterResources& expected) override;
     std::optional<CharacterResources> load_resources(std::uint64_t account,std::uint64_t character) override;
+    // CUSTOM-0149 original saved role/resources in one guarded own read scope.
+    // No seed, import, Session authority or replay permission is manufactured.
+    std::optional<RecoveredPlayerSnapshot> load_initial_player_snapshot(
+        std::uint64_t account,std::uint64_t character);
     CharacterResources commit_resources(std::uint64_t account,std::uint64_t character,
         const std::optional<CharacterResources>& expected,CharacterResources next) override;
     // CUSTOM-0139: additive typed variants for existing noncheckpoint storage.
@@ -241,5 +247,7 @@ private:
     CharacterResources commit_resources_in_transaction(std::uint64_t account,std::uint64_t character,
         const std::optional<CharacterResources>& expected,CharacterResources next);
     sqlite3* db_;
+    const std::thread::id initial_player_thread_=std::this_thread::get_id();
+    bool initial_player_reading_=false,initial_player_reentered_=false;
 };
 }

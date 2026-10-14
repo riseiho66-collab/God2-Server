@@ -1,5 +1,6 @@
 #include "db/SqliteRecoveredCharacterRepository.h"
 #include "db/SqliteSupport.h"
+#include "handlers/RecoveredPlayerSnapshot.h"
 #include "db/SqliteCompanionRepository.h"
 #include "game/ShunyingSanshazhan.h"
 #include "game/ThousandBulls.h"
@@ -398,6 +399,76 @@ std::optional<CharacterResources> SqliteRecoveredCharacterRepository::load_resou
        !value.max_hp || value.hp>value.max_hp || value.mp>value.max_mp || !value.revision ||
        value.design_id!="CUSTOM-0012") throw DatabaseError("Invalid resource row");
     return value;
+}
+
+std::optional<RecoveredPlayerSnapshot> SqliteRecoveredCharacterRepository::load_initial_player_snapshot(
+        std::uint64_t account,std::uint64_t character) {
+    if(std::this_thread::get_id()!=initial_player_thread_)
+        throw DatabaseError("Initial player snapshot game owner mismatch");
+    if(initial_player_reading_) {
+        initial_player_reentered_=true;
+        throw DatabaseError("Initial player snapshot read reentered");
+    }
+    if(!db_||!sqlite3_get_autocommit(db_))
+        throw DatabaseError("Initial player snapshot requires its own read transaction");
+    auto* const connection=db_;
+    const auto changes=sqlite3_total_changes64(connection); // Before any SQL hook.
+    initial_player_reading_=true;initial_player_reentered_=false;
+    struct Reading {bool& active;~Reading(){active=false;}} reading{initial_player_reading_};
+    // BEGIN failure never acquires rollback ownership of a foreign transaction.
+    sqlite_detail::execute(connection,"BEGIN");
+    struct ReadScope {
+        sqlite3* db;bool owned=true;
+        ~ReadScope(){if(owned&&!sqlite3_get_autocommit(db))sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}
+    } read{connection};
+    const auto fence=[&] {
+        if(sqlite3_get_autocommit(connection)) {
+            read.owned=false;
+            throw DatabaseError("Initial player snapshot lost its read transaction");
+        }
+        if(db_!=connection||std::this_thread::get_id()!=initial_player_thread_||
+           !initial_player_reading_||initial_player_reentered_||
+           sqlite3_total_changes64(connection)!=changes)
+            throw DatabaseError("Initial player snapshot source changed or reentered");
+    };
+    const auto namespaces=[&] {
+        constexpr const char* names="('recovered_characters','character_resources','character_role_snapshots')";
+        {
+            const auto sql=std::string("SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ")+names+
+                " OR tbl_name COLLATE NOCASE IN "+names+" LIMIT 1";
+            sqlite_detail::Statement shadow(connection,sql.c_str());fence();
+            const bool found=shadow.row();fence();
+            if(found)throw DatabaseError("Initial player snapshot TEMP source shadow rejected");
+        }
+        fence();
+        {
+            const auto sql=std::string("SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ")+names;
+            sqlite_detail::Statement tables(connection,sql.c_str());fence();
+            const bool found=tables.row();fence();
+            if(!found||tables.integer(0)!=3)
+                throw DatabaseError("Initial player snapshot requires actual main source tables");
+            const bool more=tables.row();fence();
+            if(more)throw DatabaseError("Initial player snapshot main source table count changed");
+        }
+        fence();
+        {
+            const auto sql=std::string("SELECT 1 FROM main.sqlite_master WHERE type='trigger' AND tbl_name COLLATE NOCASE IN ")+names+" LIMIT 1";
+            sqlite_detail::Statement triggers(connection,sql.c_str());fence();
+            const bool found=triggers.row();fence();
+            if(found)throw DatabaseError("Initial player snapshot source triggers rejected");
+        }
+        fence();
+    };
+    fence();namespaces();
+    auto result=RecoveredPlayerSnapshot::load_for_world_entry(*this,account,character);
+    fence();namespaces();fence();
+    sqlite_detail::execute(connection,"COMMIT");
+    read.owned=false; // Successful commit cannot roll back a later transaction.
+    if(db_!=connection||std::this_thread::get_id()!=initial_player_thread_||
+       !initial_player_reading_||initial_player_reentered_||
+       !sqlite3_get_autocommit(connection)||sqlite3_total_changes64(connection)!=changes)
+        throw DatabaseError("Initial player snapshot completion changed or reentered");
+    return result;
 }
 
 bool SqliteRecoveredCharacterRepository::has_settled_diagnostic_battle(

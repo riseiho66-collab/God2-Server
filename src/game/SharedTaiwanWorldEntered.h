@@ -9,8 +9,9 @@ namespace god2 {
 class SharedTaiwanWorldEntered {
 public:
     using Lease=SharedWorldPresence::Lease;
-    // Exclusive ownership of initial deity records only; no player/pet policy.
-    enum class InitialDeityPublisher {External,ApplicationOwned};
+    // External/deity-only defaults; explicit saved player/deity ownership.
+    // No pet ownership or native ordering guarantee is implied.
+    enum class InitialDeityPublisher {External,ApplicationOwned,ApplicationOwnedPlayerAndDeities};
     struct Scope {
         Lease lease;
         RecoveredWorldEntryView entry;
@@ -58,6 +59,10 @@ public:
     // game owner. Mandatory supplier/Current own the complete actual sets and
     // native material, including explicit empty decisions. Absence rejects.
     // Providers must not retain Session/Scope references, yield or pump events.
+    // CUSTOM-0149 ApplicationOwnedPlayerAndDeities additionally requires the
+    // actual Source/Current to qualify that no earlier companion/pet binding
+    // or HP-loss side effect precedes the saved player publication, including
+    // opaque descendants. The exact overlap check is not that semantic proof.
     static SharedTaiwanWorldLifecycle::AsyncOwner create(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,Source,
         TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter,

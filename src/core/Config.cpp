@@ -654,6 +654,17 @@ Config Config::load(const std::filesystem::path& path) {
            !c.recovered_account_auth || !c.recovered_dual_connection || c.mock_login))
             throw std::runtime_error("Owned skill-book learning requires authenticated native TW world and movement");
     }
+    if(j.contains("world") && j.at("world").contains("owned_initial_player")) {
+        const auto& player=j.at("world").at("owned_initial_player");
+        if(!player.is_object() || !player.at("enabled").is_boolean())
+            throw std::runtime_error("Owned initial player bool required");
+        c.owned_initial_player_enabled=player.at("enabled").get<bool>();
+        if(c.owned_initial_player_enabled && (!c.owned_skillbook_learning_enabled ||
+           c.protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate ||
+           !c.recovered_world_entry || !c.recovered_movement || !c.recovered_account_auth ||
+           !c.recovered_dual_connection || c.mock_login))
+            throw std::runtime_error("Owned initial player requires owned skill-book learning and authenticated native TW dual-connection world and movement");
+    }
     if(j.contains("world") && j.at("world").contains("owned_beast_panel")) {
         const auto& beast=j.at("world").at("owned_beast_panel");
         if(!beast.is_object()||!beast.at("enabled").is_boolean())throw std::runtime_error("Owned beast panel bool required");

@@ -162,6 +162,15 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
                        return record.opcode==0x30 || record.opcode==0x31 ||
                               record.opcode==0x34 || record.opcode==0x35;
                    })) {fail(state);return;}
+                // CUSTOM-0149 exclusive saved player/deity publisher. Keep the
+                // old deity-only predicate unchanged and reject every actual
+                // conflicting boundary before any initial queue/installation.
+                if(deity_publisher==Entered::InitialDeityPublisher::ApplicationOwnedPlayerAndDeities &&
+                   std::any_of(native_records->begin(),native_records->end(),[](const auto& record) {
+                       return record.opcode==0x22 || record.opcode==0x24 ||
+                              record.opcode==0x30 || record.opcode==0x31 ||
+                              record.opcode==0x34 || record.opcode==0x35;
+                   })) {fail(state);return;}
             }
             state->incoming=visibility->prepare_initial_taiwan_recipient(lease,session.shared_from_this(),std::move(material.incoming));
             if(!state->incoming || !current(state,false,Entered::Check::AfterSupply)) {fail(state);return;}
@@ -219,7 +228,8 @@ SharedTaiwanWorldEntered::Native::Native(ReplyDecision selected,std::vector<std:
 SharedTaiwanWorldLifecycle::AsyncOwner SharedTaiwanWorldEntered::create(
     std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<Visibility> visibility,Source source,
     TaiwanWorldEntryIdentity identity,InitialDeityPublisher deity_publisher) {
-    if((deity_publisher!=InitialDeityPublisher::External && deity_publisher!=InitialDeityPublisher::ApplicationOwned) ||
+    if((deity_publisher!=InitialDeityPublisher::External && deity_publisher!=InitialDeityPublisher::ApplicationOwned &&
+        deity_publisher!=InitialDeityPublisher::ApplicationOwnedPlayerAndDeities) ||
        !valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !source || !visibility->owns_presence(presence))
         throw std::invalid_argument("TW entered requires exact common owners and actual native scene supplier");
     auto state=std::make_shared<SceneOwner>();state->presence=std::move(presence);

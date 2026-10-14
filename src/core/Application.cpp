@@ -602,6 +602,10 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
     config.validate_owned_whole_bag_moves();
     if(config.owned_whole_bag_moves_enabled && world_plan)
         throw std::invalid_argument("Normal-entry whole bag moves cannot borrow or compete with an explicit shared world plan");
+    // CUSTOM-0149: reject programmatic Config too, before any DB/listener/source.
+    if(config.owned_initial_player_enabled && (!world_plan || !config.owned_skillbook_learning_enabled ||
+       !world_plan->supports_app_owned_initial_deities || !world_plan->supports_app_owned_initial_player))
+        throw std::invalid_argument("Initial player requires an exclusive native player and deity world plan");
     const bool deity_selection_publication=world_plan && world_plan->owned_deity_selection_publication;
     if(deity_selection_publication && (!world_plan->make_taiwan_world_records || !world_plan->make_taiwan_movement))
         throw std::invalid_argument("Owned deity selection publication requires an actual constructed mixed world plan");
@@ -734,6 +738,10 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             if(world_plan) {
                 if(config.owned_skillbook_learning_enabled && !world_plan->supports_app_owned_initial_deities)
                     throw std::invalid_argument("Owned skill learning requires the actual exclusive initial deity publisher");
+                // CUSTOM-0149: only a real exclusive player/deity native owner.
+                if(config.owned_initial_player_enabled && (!config.owned_skillbook_learning_enabled ||
+                   !world_plan->supports_app_owned_initial_player))
+                    throw std::invalid_argument("Initial player requires the actual exclusive player and deity publisher");
                 common_world=std::make_shared<SharedWorldHost>(database.recovered_characters());
                 if(deity_selection_publication)
                     owned_deity_skill_source=SharedTaiwanOwnedDeitySkillSource::create(
@@ -775,7 +783,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     &database.native_skill_catalog(),entry_snapshots,summary_accounts,summary_snapshots,summary_writer,entry_writer,
                     &database.native_enemy_display_catalog(),equipment_snapshots,equipment_writer,owned_inventory,owned_inventory_writer,
                     &database.companions(),&owned_companions,owned_deity_skill_source,
-                    config.owned_skillbook_learning_enabled};
+                    config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
@@ -955,6 +963,11 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 // CUSTOM-0129 retains the actual published source once. Stale
                 // learning/selection/INIT lineage is never reset or reminted.
                 std::optional<OwnedTaiwanPkCompanionSource::Observation> pk_publication;
+                // CUSTOM-0149: exact initial saved22/24 component and its own
+                // slice of the ORIGINAL shared response, never a full-player grant.
+                std::shared_ptr<const RecoveredPlayerSnapshot> initial_player;
+                std::shared_ptr<const std::vector<std::uint8_t>> initial_player_frame;
+                std::size_t initial_player_wire_offset=0;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -2272,6 +2285,57 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             // Genuine cached supplier for the configured preparation owner.
             // It also qualifies actual PK readiness below. No restore, send,
             // per-frame receipt conversion or strong holder callback cycle.
+            // CUSTOM-0149: consume only this one-shot saved player component.
+            // All immutable inputs are copied BEFORE saved observers. A local
+            // full socket write is not native cache adoption/full player readiness.
+            bool initial_player_reading=false,initial_player_reentered=false;
+            const auto initial_player_current=[&](const std::shared_ptr<Session>& peer,
+                    const Session::NormalWorldInitialization& initialization) {
+                if(initial_player_reading){initial_player_reentered=true;return false;}
+                const auto host=common_initial_deities;
+                if(!host || !peer)return false;
+                host->preflight();
+                initial_player_reading=true;initial_player_reentered=false;
+                struct End {bool& value;~End(){value=false;}} end{initial_player_reading};
+                const auto id=peer->id(),account=peer->account_id,character=peer->character_id;
+                const auto at=host->attempts.find(id);
+                if(at==host->attempts.end())return false;
+                const auto attempt=at->second;const auto source=attempt->source;
+                const auto player=source->initial_player;const auto frame=source->initial_player_frame;
+                const auto offset=source->initial_player_wire_offset;
+                const auto whole=source->whole_response;const auto wire=source->whole_response_wire;
+                const auto local=[&] {
+                    const auto now=host->attempts.find(id);
+                    const auto issued=owned_companion_restoration_sources.find(id);
+                    return !initial_player_reentered && host==common_initial_deities && host->live &&
+                        !host->busy && !host->reentered && now!=host->attempts.end() && now->second==attempt &&
+                        issued!=owned_companion_restoration_sources.end() && issued->second==source &&
+                        source->session.lock()==peer && source->account==account && source->character==character &&
+                        source->phase_at_restore==SessionState::InWorld && !source->battle_generation_at_restore &&
+                        source->all_submission_calls_returned && source->initial_player==player &&
+                        source->initial_player_frame==frame && source->initial_player_wire_offset==offset &&
+                        source->whole_response==whole && source->whole_response_wire==wire &&
+                        player && player->role && frame && !frame->empty() && whole && wire &&
+                        offset<=wire->size() && frame->size()<=wire->size()-offset &&
+                        std::equal(frame->begin(),frame->end(),wire->begin()+offset) && whole->wire()==*wire &&
+                        whole->status()==Session::WorldResponseWriteStatus::Written && !peer->closing() &&
+                        peer->id()==id && peer->account_id==account && peer->character_id==character &&
+                        peer->state()==SessionState::InWorld && !peer->battle_generation() && peer->recovered_world_ready() &&
+                        source->normal_initialization && source->normal_initialization->same_initialization(initialization) &&
+                        initialization.entry_written() && peer->normal_world_initialization_current_on_game(initialization) &&
+                        peer->world_response_write_current_on_game(*whole) &&
+                        attempt->lease.session==id && attempt->lease.account==account && attempt->lease.character==character &&
+                        common_world && common_world->presence()->retained_ready_current(attempt->lease) &&
+                        peer->common_world_delivery_current(account,character,attempt->lease.generation) &&
+                        !peer->common_world_entry_current(account,character,attempt->lease.generation);
+                };
+                if(!local())return false;
+                // Same concrete connection: one closed readonly scope qualifies
+                // both saved tuples, namespaces and changes across ALL reads.
+                const auto saved=supply_repository.load_initial_player_snapshot(account,character);
+                return local() && saved && saved->resources==player->resources && saved->role==player->role &&
+                    saved->logical_before_companion_binding==player->logical_before_companion_binding && local();
+            };
             const OwnedTaiwanPkEntryPreparation::Companions pk_companions=[&](
                     const std::shared_ptr<Session>& peer,const Session::NormalWorldInitialization& initialization)
                     ->std::optional<OwnedTaiwanPkCompanionSource::Observation>{
@@ -2321,7 +2385,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         retained.prefix.catalog_records()==prefix->catalog_records()&&
                         retained.prefix.actual_batches()==prefix->actual_batches();
                 };
-                if(!local()||!observation->current()||!local())return {};
+                if(!local() || (config.owned_initial_player_enabled && !initial_player_current(peer,initialization)) ||
+                   !local() || !observation->current() || !local() ||
+                   (config.owned_initial_player_enabled && !initial_player_current(peer,initialization)) || !local())return {};
                 return observation;
             };
             bool pk_peer_reading=false,pk_peer_reentered=false;
@@ -2417,7 +2483,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             return whole_wire && whole->wire()==*whole_wire && whole_batches==batches.size() &&
                                 !submitted && receipts.empty() &&
                                 whole->status()==Session::WorldResponseWriteStatus::Written &&
-                                peer->world_response_write_current_on_game(*whole) && source_local();
+                                peer->world_response_write_current_on_game(*whole) &&
+                                (!config.owned_initial_player_enabled || initial_player_current(peer,*initialization)) &&
+                                source_local();
                         }
                         if(submitted!=batches.size() || receipts.size()!=batches.size())return false;
                         for(std::size_t i=0;i<receipts.size();++i)
@@ -7006,8 +7074,9 @@ if(guild_officer_runtime && player_guild(session) &&
                     }
                 }
                 if(common_world && config.owned_skillbook_learning_enabled) {
-                    if(!game_handlers.world_records || !world_plan || !world_plan->supports_app_owned_initial_deities)
-                        throw std::invalid_argument("Initial deity publisher requires the actual exclusive native mixed host");
+                    if(!game_handlers.world_records || !world_plan || !world_plan->supports_app_owned_initial_deities ||
+                       (config.owned_initial_player_enabled && !world_plan->supports_app_owned_initial_player))
+                        throw std::invalid_argument("Initial deity/player publisher requires the actual exclusive native mixed host");
                     common_initial_deities=std::make_shared<CommonInitialDeityPublisher>(config.max_sessions);
                     const auto host=common_initial_deities;
                     const auto original=game_handlers.world_records;
@@ -7041,8 +7110,9 @@ if(guild_officer_runtime && player_guild(session) &&
                             const auto decoded=logical?RecoveredTaiwanServerRecords::read(*logical):std::nullopt;
                             if(!decoded)throw std::logic_error("Initial deity delegate lacks complete native record boundaries");
                             for(const auto& record:*decoded)
-                                if(record.opcode==0x30 || record.opcode==0x31 || record.opcode==0x34 || record.opcode==0x35)
-                                    throw std::logic_error("Initial deity delegate conflicts with the exclusive saved sender");
+                                if(record.opcode==0x30 || record.opcode==0x31 || record.opcode==0x34 || record.opcode==0x35 ||
+                                   (config.owned_initial_player_enabled && (record.opcode==0x22 || record.opcode==0x24)))
+                                    throw std::logic_error("Initial delegate conflicts with the exclusive saved sender");
                             at+=size;
                         }
                         const auto actual=session.weak_from_this().lock();
@@ -7083,6 +7153,25 @@ if(guild_officer_runtime && player_guild(session) &&
                                 !session.common_world_entry_current(account,character,attempt->lease.generation);
                         };
                         if(!local())throw std::logic_error("Initial deity sender retired before reading saved source");
+                        // CUSTOM-0149: capture the full saved player BEFORE learning
+                        // observers. Missing role/resources cannot silently leave
+                        // the exclusive player route without its required22/24.
+                        std::shared_ptr<const RecoveredPlayerSnapshot> player;
+                        if(config.owned_initial_player_enabled) {
+                            auto saved=supply_repository.load_initial_player_snapshot(account,character);
+                            if(!local() || !saved || !saved->role)
+                                throw std::logic_error("Initial player lacks its complete saved role and resources");
+                            player=std::make_shared<const RecoveredPlayerSnapshot>(std::move(*saved));
+                            lineage->initial_player=player;
+                        }
+                        const auto player_current=[&] {
+                            if(!local() || lineage->initial_player!=player)return false;
+                            if(!player)return !config.owned_initial_player_enabled;
+                            const auto saved=supply_repository.load_initial_player_snapshot(account,character);
+                            return local() && lineage->initial_player==player && saved &&
+                                saved->resources==player->resources && saved->role==player->role &&
+                                saved->logical_before_companion_binding==player->logical_before_companion_binding && local();
+                        };
                         auto material=std::make_shared<const RecoveredOwnedCompanions::Restoration>(
                             owned_companions.restore_deities_with_source(account,character,database.skill_book_learning()));
                         lineage->material=material;
@@ -7097,8 +7186,10 @@ if(guild_officer_runtime && player_guild(session) &&
                             const auto position=presence->saved_position(attempt->lease);
                             return current && *current==attempt->lease && position && *position==equipment.position && local();
                         };
-                        if(!qualified() || !owned_companions.restoration_current(*material) || !qualified() ||
-                           !owned_companions.restoration_current(*material) || !local())
+                        if(!qualified() || (player && !player_current()) ||
+                           !owned_companions.restoration_current(*material) || !qualified() || (player && !player_current()) ||
+                           !owned_companions.restoration_current(*material) || !local() ||
+                           (player && (!qualified() || !player_current() || !local())))
                             throw std::logic_error("Initial deity source changed before submission");
                         owned_companion_restoration_sources.emplace(session.id(),lineage);
                         const auto issued=[&] {
@@ -7106,6 +7197,20 @@ if(guild_officer_runtime && player_guild(session) &&
                             return local() && at!=owned_companion_restoration_sources.end() && at->second==lineage &&
                                 lineage->material==material;
                         };
+                        // The actual source contract qualifies every earlier
+                        // native/provider binding and opaque HP side effect.
+                        // Never guess pet opcodes to replace that qualification.
+                        // Keep the ORIGINAL prefix, then saved22/24, then deities.
+                        if(player) {
+                            auto frame=std::make_shared<const std::vector<std::uint8_t>>(
+                                RecoveredWorldFrame::encode(player->logical_before_companion_binding));
+                            if(!issued() || !player_current() || !qualified() ||
+                               frame->size()>response->max_size()-response->size())
+                                throw std::logic_error("Initial player source changed before submission");
+                            lineage->initial_player_wire_offset=response->size();
+                            lineage->initial_player_frame=frame;
+                            response->insert(response->end(),frame->begin(),frame->end());
+                        }
                         for(const auto& batch:material->batches()) {
                             if(!issued())throw std::logic_error("Initial deity sender retired during submission");
                             auto frame=RecoveredWorldFrame::encode(batch);
@@ -7113,7 +7218,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 throw std::length_error("Initial deity aggregate exceeds native output storage");
                             response->insert(response->end(),frame.begin(),frame.end());
                         }
-                        if(!material->batches().empty()) {
+                        if(player || !material->batches().empty()) {
                             // Original Tick frames remain BEFORE the new deity
                             // suffix. One physical callback response, no push
                             // bypass, fake per-frame observation or dummy FIFO.
@@ -7124,6 +7229,9 @@ if(guild_officer_runtime && player_guild(session) &&
                             lineage->whole_response=std::make_shared<const Session::WorldResponseWrite>(write);
                             lineage->whole_response_batch_count=material->batches().size();
                         }
+                        if(player && (!issued() || !player_current() || !qualified() ||
+                           !owned_companions.restoration_current(*material) || !qualified() || !player_current() || !issued()))
+                            throw std::logic_error("Initial player/deity source changed before returning its original response");
                         lineage->all_submission_calls_returned=true;
                         if(!issued())throw std::logic_error("Initial deity sender retired after submitted prefix");
                         return response; // Original prefix and owned deity suffix in the SAME actual FIFO response.

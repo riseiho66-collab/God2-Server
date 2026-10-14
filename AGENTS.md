@@ -714,3 +714,18 @@ defaultactivation/fullroute. ActualMainfullplayerWritten source/backend/mixedC69
 fullreturn/issuedlearninglineage/rehydration/nativeacceptance/wholeinventory OPEN.
 Parser77=50/11/16,pending12/frontier26 21/105,whole%null; TW100firstACTIVE/common
 CN/web64/saves/frozen/PHASE1sourceonly unchanged.
+
+Round395 connects real initial saved22/24 component in common native publisher.
+Defaultoff CUSTOM0149 Config/Context/actualfactoryguard beforeprovider +exact
+Owner bit -> newpolicy rejects22/24+deity nativeaggregate overlap beforequeue.
+Actual pureTick wholeprefix rejects overlap, exactWritten2A/fullLease/pose ->
+fullCUSTOM12/13 snapshot BEFORElearning observers/repeatedsavedtuple ->original
+prefix +real22/24frame +deitysuffix SAMEactualWWR/inputhold evenzero-deities.
+Separateoriginalsnapshot/frameoffset/fullwire/currentWritten/savedtuple consumer
+joinsactualoptin PKcompanion source. Old broadplayerflag/defaultdeity-only path
+preserved; nativepet/opaque earlyeffects remain explicitproviderpremise, no
+nativeformula/extendedHPnarrowing/ACK/replay/defaultactivation/fullroute claim.
+NineexistingCPP/V32pins derivedfrom90/no newprojectPY/Lua/nativebytes/opcode.
+Fullplayer/auxtext/nullMainbackend/mixedC69/fullreturn/issuedlearninglineage/
+extendedwire/nativeacceptance/wholeinventory OPEN. Parser77=50/11/16,pending12,
+frontier26 21/105,whole%null; TW100firstACTIVE/sharedCNweb/saves/PHASE1only.

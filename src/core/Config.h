@@ -126,6 +126,8 @@ struct Config {
     bool owned_party_directory_enabled=false; // CUSTOM-0097 transient discovery opt-in
     bool owned_client_options_enabled=false; // CUSTOM-0100 opaque preference WORD; no gameplay authority
     bool owned_battle_pose_enabled=false; // CUSTOM-0103 actual diagnostic battle symbol source only
+    // CUSTOM-0149: same-source owned initial player publisher; explicit opt-in.
+    bool owned_initial_player_enabled=false;
     void validate_owned_whole_bag_moves() const;
     static Config load(const std::filesystem::path& path);
 };

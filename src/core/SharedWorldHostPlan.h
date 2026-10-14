@@ -69,6 +69,8 @@ struct SharedWorldHostPlan {
         // CUSTOM-0148: Application exclusively publishes initial30/31/34/35.
         // Default native scene ownership of all initial records is unchanged.
         bool app_owned_initial_deities=false;
+        // CUSTOM-0149 explicit saved player22/24 publisher; requires deities.
+        bool app_owned_initial_player=false;
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in
@@ -122,5 +124,7 @@ struct SharedWorldHostPlan {
     bool owned_deity_selection_publication=false;
     // Advertised only by a factory enforcing the exact initial deity policy.
     bool supports_app_owned_initial_deities=false;
+    // CUSTOM-0149 actual factory enforcing exclusive player/deity boundaries.
+    bool supports_app_owned_initial_player=false;
 };
 }

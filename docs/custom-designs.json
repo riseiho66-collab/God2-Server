@@ -5650,6 +5650,41 @@
     "complete_bidirectional_route": false,
     "build_tests_runtime_SQL_activation_deployment": false
   }
+},
+{
+  "id": "CUSTOM-0149",
+  "name": "Exclusive common-world initial saved player component publication",
+  "authority": "OWNER_AUTHORIZED_CUSTOM_SOURCE_COMPOSITION_WITH_QUALIFIED_NATIVE22_24_NOT_NATIVE_RULE_RECOVERY",
+  "implementation": [
+    "src/core/Application.cpp",
+    "src/core/Config.cpp",
+    "src/core/Config.h",
+    "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+    "src/core/SharedWorldHostPlan.h",
+    "src/db/SqliteRecoveredCharacterRepository.cpp",
+    "src/db/SqliteRecoveredCharacterRepository.h",
+    "src/game/SharedTaiwanWorldEntered.cpp",
+    "src/game/SharedTaiwanWorldEntered.h"
+  ],
+  "native_gap": "Full native player/pet/opaque receiver ordering and Main auxiliary/text/fullplayer/PK/backend/return source remain incomplete. No remote adoption or native formula follows from local socket Written.",
+  "rules": {
+    "source": "Actual CUSTOM0012 resources and required full CUSTOM0013 saved role through unchanged RecoveredPlayerSnapshot; original2A Written INIT/full activeLease/pose/learning witness, snapshot before learning observers and repeated full saved tuple cuts.",
+    "order": "Unchanged actual completed native Tick prefix -> one original encoded full22 plus17B24 -> original deity batches, same original whole WWR/inputhold. Exclusive initial nativeaggregate and delegatedTick prefix reject22/24/30/31/34/35 overlap before queue or returning output.",
+    "provider_condition": "Actual native full scene/initial supplier and native install own qualification of every earlier binding/HP side effect including pet/opaque descendants. No guessed pet prohibition or completed generic source claim.",
+    "custody": "Separate private original snapshot/frame/offset/wholewire/WWR tied to exact one-shot attempt/Session/privateINIT/fullLease; actual Written plus repeated saved resources/role consumed by opt-in companion source eligibility. No old broad fullplayer flag, grant, ACK, rebase or replay.",
+    "width": "Existing native unsignedDWORD HP projection only; no Extended64 narrowing/clipping/new formula. Full role bytes/revisions/provenance retained.",
+    "activation": "Default-off world.owned_initial_player.enabled requires existing learning/deity ownership and actual native plan capability. Factory guard before external SourceFactory, exact Context capture, old policies/defaults preserved."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "document": "docs/research/tw-initial-player-publication-source-20261014.md",
+  "reason": "Connect the real missing initial saved22/24 publisher instead of promoting a legacy call-return flag or deity write into complete player authority.",
+  "replacement": "Recover native full initial/opaque side-effect ordering, qualify fullplayer auxiliary/text/actual mixed PK backend/fullreturn/issued learning lineage and Extended64 wire/client profile, then centralized builds/tests/native acceptance."
 }
 ]
 }
