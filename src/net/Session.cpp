@@ -3796,6 +3796,18 @@ bool Session::native_pk_return_reservation_current(const NativePkReturnReservati
         second->native_pk_return_preparation_current(data->preparations[1]) &&
         data->phase.load()==NativePkReturnReservation::Data::Phase::Reserved;
 }
+bool Session::native_pk_return_reservation_matches(const NativePkReturnReservation& reservation,
+        const std::array<std::shared_ptr<Session>,2>& sessions,
+        const std::array<NativePkReturnPreparation,2>& preparations) noexcept {
+    // Prove the owning game thread before examining private prepared state.
+    // Equal actor/account keys or two independent Current results cannot join
+    // one scene plan to an unrelated genuine Reserved pair.
+    if(!native_pk_return_reservation_current(reservation))return false;
+    const auto data=reservation.data_;
+    if(data->sessions[0].lock()!=sessions[0] || data->sessions[1].lock()!=sessions[1] ||
+       data->preparations!=preparations)return false;
+    return native_pk_return_reservation_current(reservation);
+}
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){
     // CUSTOM-0115 explicit exact accepted entry. Raw output is never room,

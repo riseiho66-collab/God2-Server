@@ -74,6 +74,19 @@ struct SharedActorVisibility::TaiwanPkReturnPlan::State {
     std::vector<OwnedTaiwanPkReturnRoleTextSource::EndpointObservation> endpoint_rows;
     bool poisoned=false;
 };
+// Owning source only: visibility does not retain this token, so there is no
+// owner/token registry cycle. The actual game owner retains and destroys it.
+struct SharedActorVisibility::TaiwanPkReturnRecords::State {
+    State(std::shared_ptr<SharedActorVisibility> owner,std::shared_ptr<TaiwanPkReturnPlan::State> source,
+        Session::NativePkReturnReservation reserved,std::vector<Record> ordered)
+        :creator(std::move(owner)),plan(std::move(source)),reservation(std::move(reserved)),records(std::move(ordered)){}
+    std::shared_ptr<SharedActorVisibility> creator;
+    std::shared_ptr<TaiwanPkReturnPlan::State> plan;
+    Session::NativePkReturnReservation reservation;
+    const std::vector<Record> records;
+};
+const std::vector<SharedActorVisibility::TaiwanPkReturnRecords::Record>&
+SharedActorVisibility::TaiwanPkReturnRecords::records()const noexcept {return state_->records;}
 void SharedActorVisibility::reject_taiwan_return_reentry()const {
     owner();
     if(taiwan_return_reading_){taiwan_return_reentered_=true;
@@ -392,6 +405,96 @@ bool SharedActorVisibility::taiwan_pk_return_stored_current(const TaiwanPkReturn
 }
 bool SharedActorVisibility::taiwan_pk_return_retained_current(const TaiwanPkReturnPlan& plan)const {
     owner();return taiwan_pk_return_fence(plan.state_);
+}
+bool SharedActorVisibility::taiwan_pk_return_records_fence(
+        const std::shared_ptr<const TaiwanPkReturnRecords::State>& state)const {
+    owner();
+    if(taiwan_return_reading_){
+        taiwan_return_reentered_=true;if(state&&state->plan)state->plan->poisoned=true;return false;
+    }
+    return state&&state->creator.get()==this&&state->plan&&
+        Session::native_pk_return_reservation_matches(state->reservation,state->plan->sessions,state->plan->preparations)&&
+        taiwan_pk_return_fence(state->plan)&&
+        Session::native_pk_return_reservation_matches(state->reservation,state->plan->sessions,state->plan->preparations);
+}
+std::optional<SharedActorVisibility::TaiwanPkReturnRecords> SharedActorVisibility::prepare_taiwan_pk_return_records(
+        const TaiwanPkReturnPlan& plan,const Session::NativePkReturnReservation& reservation){
+    owner();
+    if(taiwan_return_reading_){taiwan_return_reentered_=true;if(plan.state_)plan.state_->poisoned=true;return {};}
+    // Own actual private inputs before allocation or any scene/repository observer.
+    const auto source=plan.state_;const auto reserved=reservation;
+    const auto creator=weak_from_this().lock();
+    if(!creator||creator.get()!=this||!source||
+       !Session::native_pk_return_reservation_matches(reserved,source->sessions,source->preparations)||
+       !taiwan_pk_return_fence(source))return {};
+    std::vector<TaiwanPkReturnRecords::Record> ordered;ordered.reserve(source->actors.size());
+    std::map<Key,bool> emitted; // bool identifies exact incoming directed edges.
+    const auto append=[&](const TaiwanReturnActor& supplied,const god2cn::Bytes& bytes,bool incoming){
+        const Key key{supplied.source.session,supplied.recipient.session};
+        const auto found=source->actors.find(key);
+        if(found==source->actors.end())return false;
+        const auto& actor=found->second;const auto receiver=actor.native.connection.lock();
+        const auto from=source->endpoints.find(key.first),to=source->endpoints.find(key.second);
+        const auto logical=RecoveredRemoteActor::encode_logical(actor.native.spawn);
+        if(actor.source!=supplied.source||actor.recipient!=supplied.recipient||
+           from==source->endpoints.end()||to==source->endpoints.end()||
+           from->second.lease!=actor.source||to->second.lease!=actor.recipient||
+           from->second.session!=actor.source_connection||to->second.session!=receiver||
+           !receiver||bytes.size()!=logical.size()||!std::equal(bytes.begin(),bytes.end(),logical.begin()))return false;
+        if(const auto duplicate=emitted.find(key);duplicate!=emitted.end()){
+            // Only a mutual outgoing copy already present in incoming is skipped.
+            if(incoming||!duplicate->second)return false;
+            bool returning_source=false,returning_recipient=false;
+            for(const auto& lease:source->leases){returning_source|=lease==actor.source;returning_recipient|=lease==actor.recipient;}
+            return returning_source&&returning_recipient;
+        }
+        emitted.emplace(key,incoming);
+        ordered.push_back(TaiwanPkReturnRecords::Record(actor.source,actor.recipient,
+            actor.source_connection,receiver,bytes));
+        return true;
+    };
+    // Each returning recipient keeps its supplied incoming order.
+    for(std::size_t member=0;member<2;++member){
+        const auto& actors=source->scene.incoming[member];const auto& records=source->incoming_records[member];
+        if(actors.size()!=records.size())return {};
+        for(std::size_t at=0;at<actors.size();++at)
+            if(actors[at].recipient!=source->leases[member]||!append(actors[at],records[at],true))return {};
+    }
+    // CUSTOM-0133 deterministic normal-observer composition: member0 then1,
+    // preserving within-member order. Not a recovered joint native sender order.
+    for(std::size_t member=0;member<2;++member){
+        const auto& actors=source->scene.outgoing[member];const auto& records=source->outgoing_records[member];
+        if(actors.size()!=records.size())return {};
+        for(std::size_t at=0;at<actors.size();++at)
+            if(actors[at].source!=source->leases[member]||!append(actors[at],records[at],false))return {};
+    }
+    if(ordered.size()!=source->actors.size()||emitted.size()!=source->actors.size())return {};
+    // All logical copies/holders and token storage precede the actual observers.
+    // A deliberate empty source remains empty; no frame or placeholder is added.
+    const auto state=std::make_shared<const TaiwanPkReturnRecords::State>(creator,source,reserved,std::move(ordered));
+    if(!taiwan_pk_return_records_fence(state)||
+       !taiwan_pk_return_read(source,TaiwanReturnCheck::Retained)||
+       !taiwan_pk_return_records_fence(state))return {};
+    return TaiwanPkReturnRecords(state);
+}
+bool SharedActorVisibility::taiwan_pk_return_records_current(const TaiwanPkReturnRecords& records)const {
+    const auto state=records.state_;
+    return taiwan_pk_return_records_fence(state)&&
+        taiwan_pk_return_read(state->plan,TaiwanReturnCheck::Retained)&&taiwan_pk_return_records_fence(state);
+}
+bool SharedActorVisibility::taiwan_pk_return_records_stored_current(const TaiwanPkReturnRecords& records)const {
+    const auto state=records.state_;
+    return taiwan_pk_return_records_fence(state)&&
+        taiwan_pk_return_read(state->plan,TaiwanReturnCheck::Retained,true)&&taiwan_pk_return_records_fence(state);
+}
+bool SharedActorVisibility::taiwan_pk_return_records_retained_current(const TaiwanPkReturnRecords& records)const {
+    const auto state=records.state_;return taiwan_pk_return_records_fence(state);
+}
+bool SharedActorVisibility::taiwan_pk_return_records_matches(const TaiwanPkReturnRecords& records,
+        const TaiwanPkReturnPlan& plan,const Session::NativePkReturnReservation& reservation)const {
+    const auto state=records.state_;const auto source=plan.state_;const auto reserved=reservation;
+    return taiwan_pk_return_records_fence(state)&&state->plan==source&&state->reservation==reserved&&
+        taiwan_pk_return_records_fence(state);
 }
 bool SharedActorVisibility::taiwan_pk_departed(const Lease& lease)const noexcept {
     // The in-progress pair stays blocked even if an exact lifecycle release

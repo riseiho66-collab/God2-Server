@@ -350,12 +350,51 @@ public:
     // Registry/Session only, for the final cut after actual read-only ledger
     // qualification. This does not refresh resource/text/saved-position data.
     bool taiwan_pk_return_retained_current(const TaiwanPkReturnPlan&)const;
+    // CUSTOM-0133 immutable full6F return subset, bound to the exact private
+    // plan and reserved pair. No send/merge/consume/WORLD or input permission.
+    class TaiwanPkReturnRecords {
+    public:
+        class Record {
+        public:
+            const Lease& source() const noexcept {return source_;}
+            const Lease& recipient() const noexcept {return recipient_;}
+            const std::shared_ptr<Session>& source_session() const noexcept {return source_session_;}
+            const std::shared_ptr<Session>& recipient_session() const noexcept {return recipient_session_;}
+            const std::vector<std::uint8_t>& logical() const noexcept {return logical_;}
+        private:
+            friend class SharedActorVisibility;
+            Record(Lease source,Lease recipient,std::shared_ptr<Session> from,
+                std::shared_ptr<Session> to,std::vector<std::uint8_t> logical)
+                :source_(std::move(source)),recipient_(std::move(recipient)),
+                 source_session_(std::move(from)),recipient_session_(std::move(to)),logical_(std::move(logical)){}
+            Lease source_,recipient_;
+            std::shared_ptr<Session> source_session_,recipient_session_;
+            std::vector<std::uint8_t> logical_;
+        };
+        TaiwanPkReturnRecords(const TaiwanPkReturnRecords&)=default;
+        TaiwanPkReturnRecords& operator=(const TaiwanPkReturnRecords&)=default;
+        bool operator==(const TaiwanPkReturnRecords&)const=default;
+        const std::vector<Record>& records() const noexcept;
+    private:
+        friend class SharedActorVisibility;
+        struct State;
+        explicit TaiwanPkReturnRecords(std::shared_ptr<const State> state):state_(std::move(state)){}
+        std::shared_ptr<const State> state_;
+    };
+    std::optional<TaiwanPkReturnRecords> prepare_taiwan_pk_return_records(
+        const TaiwanPkReturnPlan&,const Session::NativePkReturnReservation&);
+    bool taiwan_pk_return_records_current(const TaiwanPkReturnRecords&)const;
+    bool taiwan_pk_return_records_stored_current(const TaiwanPkReturnRecords&)const;
+    bool taiwan_pk_return_records_retained_current(const TaiwanPkReturnRecords&)const;
+    bool taiwan_pk_return_records_matches(const TaiwanPkReturnRecords&,const TaiwanPkReturnPlan&,
+        const Session::NativePkReturnReservation&)const;
     void reset_recipient(const Lease&); // Actual native pool reset: invalidate incoming bindings, no invented packets.
     // Generation-qualified source/recipient disconnect or failed-entry cleanup.
     // Departing recipients receive nothing; surviving peers get stored73 when
     // still bound to the old scene. No stale cleanup can remove a successor.
     void release(const Lease&);
 private:
+    bool taiwan_pk_return_records_fence(const std::shared_ptr<const TaiwanPkReturnRecords::State>&)const;
     bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck,bool stored_only=false)const;
     void reject_taiwan_return_reentry()const;

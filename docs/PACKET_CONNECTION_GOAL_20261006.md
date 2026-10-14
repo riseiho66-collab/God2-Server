@@ -5624,3 +5624,29 @@ Parser77=50partial+11control+16unconnected/pending12/frontier26 21formats105gaps
 and whole%null unchanged. FullTW100-first/CN/web/commoncore/numeric/saves/frozen
 and PHASE1 no build/tests/runtime/native/codec/gameDBSQL/deploy remain. Details:
 docs/research/tw-paired-return-reservation-source-20261014.md.
+
+## Round386 - Owning return records at actual Reserved continuation (2026-10-14)
+
+The actual configured Outbox Reserved callback now receives and retains owning
+full6F records from its exact private Visibility plan and actual Session pair.
+A pure ordered Session/preparation identity join prevents two unrelated genuine
+Current tokens from being joined. Allocation precedes source observers; exact
+private plan/pair/creating registry, actual endpoint Sessions/full leases and
+immutable bytes stay owned through saved resource/context reads and the final
+joint stored cut, followed only by pure retained guards. Reentry/staleness fails.
+
+Returning incoming order and mutual-edge deduplication are preserved. Survivor
+outgoing member0 then1 is a labeled CUSTOM0133 deterministic composition;
+original joint native sender order remains unknown. Deliberate empty scenes
+stay empty without fake replies. Only existing full6F is handed off, without
+inventing24/39/HP/pet/inventory records, a reset or complete return aggregate.
+
+Five existing C++ files change. Source23 pins76 = prior74 (71exact/3updated)
+plus existingVisibility2. No new project Python/Lua/opcode/formula/default
+activation or complete route. Actual sender/liveidentity/visibility consume/
+Finished durable release/input resume/issued lineage/Main backend remain OPEN;
+the original five-second deadline remains. Parser77=50partial/11control/16open,
+pending12/frontier26 21formats105gaps and whole%null remain unchanged. Full
+TW100-first/CN/fourWS/commoncore/numeric/saves/frozen scope and PHASE1 source
+only/no build/tests/runtime/native/codec/gameDBSQL/activate/deploy continue.
+Details: docs/research/tw-return-record-publication-source-20261014.md.

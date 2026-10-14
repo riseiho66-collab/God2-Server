@@ -565,3 +565,31 @@ WORLD/reset/liveidentity/unlock/resume/ACK. CPP3/Source22pins74(71oldexact2updat
 1added),newPY/Lua/native/opcode/rule0; fullsender/visibilityconsume/Finishedrelease/
 issuedlineage/Appbackend/fullskills/CN/web/wholegame remainOPEN. Parser77=50/11/16,
 pending12/frontier26 21/105/whole%null; activeTW100fullgoal/PHASE1 retained.
+
+Owner disk/QA requirement (2026-10-14): reclaim actual C: space; never move
+garbage elsewhere on C: or create large backup/compressed archives and call
+that cleanup. Confirmed unused duplicate sandboxes, old test installs and
+expired build output go to C:/Users/risei/Desktop/要刪除清理 for owner manual
+deletion. Report actually reclaimed versus pending manual deletion separately.
+Reuse one current QA sandbox per project; keep necessary parallel isolation
+bounded and retire it promptly. Check active tasks/processes/dependencies/saves/
+settings before cleanup; preserve source/current resources/necessary baselines.
+Equal content does not prove equal use, and junction/shared hardlink sizes must
+not inflate reclaim estimates. Entire Desktop/God2 including all projects and
+artifacts must remain below30000000000 bytes; check after large outputs. Moving
+within C: or replacing with links is not space reclamation.
+
+Round386 connects actual Reserved Outbox to private owning full6F records.
+Session pure matcher joins exact ordered Sessions/private preps to samepair
+after GameThread/current proof. Visibility owns exactplan/pair/registry and
+source/recipient actualSessions/fullLeases/immutableorderedbytes; allocations
+precede sourceobservers, finalpure cuts retain exactaffinity. Returning incoming
+order preserved; mutual directededges once; survivor outgoing0 then1 is labeled
+CUSTOM0133 deterministic composition, not recovered jointnativeorder. Empty
+scene remains empty/no dummywrite. Outbox finalledger/contexts/jointstored cut
+precedes pure records/plan/pair guards and retention, under original reentryguard.
+Five existingCPP/no newPY/Lua/formula/opcode/defaultactivation/fullroute; V23pins76
+(71oldexact3updated+2existingVisibility). No send/merge/liveWORLD/identity/Finished
+unlock/inputresume/adoption; original5sdeadline holds. Mainbackend/issuedlineage/
+fullreturn/skills/CN/web/wholegame OPEN. Parser77=50/11/16,pending12,frontier26
+21/105,whole%null; fullTW100 goalACTIVE and PHASE1 sourceonly retained.

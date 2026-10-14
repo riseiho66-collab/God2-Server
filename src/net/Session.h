@@ -545,6 +545,11 @@ public:
         std::array<std::shared_ptr<Session>,2>,std::array<NativePkReturnPreparation,2>,
         std::weak_ptr<NativePkReturnOwner>);
     static bool native_pk_return_reservation_current(const NativePkReturnReservation&) noexcept;
+    // CUSTOM-0133 exact ordered join to the same private prepared pair.
+    // A separately current plan/reservation does not establish this affinity.
+    static bool native_pk_return_reservation_matches(const NativePkReturnReservation&,
+        const std::array<std::shared_ptr<Session>,2>&,
+        const std::array<NativePkReturnPreparation,2>&) noexcept;
     // Separate retained-entry PK output only; old skill sender grammar stays
     // unchanged. Exact durable grant/result authority belongs to weak owner.
     void send_native_pk_output(const NativePkEntryHold&,NativeBattleSkill,

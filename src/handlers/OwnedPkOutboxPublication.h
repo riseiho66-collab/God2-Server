@@ -411,6 +411,9 @@ private:
         const std::array<std::uint64_t,2> revisions;
         const std::array<std::array<std::uint8_t,4>,2> payloads;
         std::optional<Session::NativePkReturnReservation> reservation;
+        // Owning exact private plan/pair and ordered full6F records for the
+        // actual later sender. This subset alone cannot publish a return.
+        std::optional<cn::SharedActorVisibility::TaiwanPkReturnRecords> records;
         bool reserved_seen=false,failed_seen=false;
         ReturnFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
                 std::array<Session::NativePkReturnPreparation,2> prepared,
@@ -711,7 +714,9 @@ private:
            !binding.departure->visibility || !binding.departure->presence)return false;
         const auto at=bindings_.find(binding.ticket.id());
         if(at==bindings_.end() || at->second.get()!=&binding ||
-           !Session::native_pk_return_reservation_current(value))return false;
+           !Session::native_pk_return_reservation_matches(value,binding.sessions,flight.preparations))return false;
+        if(flight.records && !binding.departure->visibility->taiwan_pk_return_records_matches(
+                *flight.records,flight.visibility,value))return false;
         for(std::uint8_t i=0;i<2;++i){
             const auto& own=binding.terminal_inputs[i];
             if(!own || !own->barrier || !own->ready_seen || !own->accepted_seen || own->failed_seen ||
@@ -731,14 +736,17 @@ private:
         try{
             if(binding->return_preparing){binding->return_reentered=true;
                 throw DatabaseError("PK paired return reservation reentered its source");}
-            if(flight.reserved_seen || !return_exact(*binding,flight,value))
+            if(flight.reserved_seen || flight.records || !return_exact(*binding,flight,value))
                 throw DatabaseError("PK reservation lacks both original real strand cuts");
             binding->return_preparing=true;binding->return_reentered=false;
             struct End{bool& busy;~End(){busy=false;}}end{binding->return_preparing};
-            const auto current=[&]{return return_exact(*binding,flight,value);};
-            const auto& visibility=*binding->departure->visibility;
-            if(!visibility.taiwan_pk_return_current(flight.visibility) || !current())
-                throw DatabaseError("PK reserved return complete scene changed");
+            auto& visibility=*binding->departure->visibility;
+            // Preallocate every owned record/endpoint before any final saved
+            // observers. Mint only from THIS plan and THIS actual Reserved pair.
+            auto records=visibility.prepare_taiwan_pk_return_records(flight.visibility,value);
+            const auto current=[&]{return return_exact(*binding,flight,value) && records &&
+                visibility.taiwan_pk_return_records_matches(*records,flight.visibility,value);};
+            if(!current())throw DatabaseError("PK reserved return complete owning records changed");
             if(rooms_.require_terminal_resources_saved(binding->ticket.id(),
                     {flight.final_writes[0]->logical,flight.final_writes[1]->logical})!=flight.revisions[0] || !current())
                 throw DatabaseError("PK reserved return lost its actual saved resource ledger");
@@ -748,9 +756,12 @@ private:
                     throw DatabaseError("PK reserved return lost its exact terminal context");
             // SQL observers above precede the final joint stored cut; only
             // pure retained whole-pair/registry fences follow that observer.
-            if(!visibility.taiwan_pk_return_stored_current(flight.visibility) || !current() ||
-               !visibility.taiwan_pk_return_retained_current(flight.visibility) || !current())
+            if(!visibility.taiwan_pk_return_records_stored_current(*records) || !current() ||
+               !visibility.taiwan_pk_return_records_retained_current(*records) || !current())
                 throw DatabaseError("PK reserved return stored or retained source changed");
+            flight.records.emplace(std::move(*records)); // Shared owning token; no borrowed vector or dummy write.
+            if(!return_exact(*binding,flight,value))
+                throw DatabaseError("PK reserved return lost its retained owning records");
             flight.reserved_seen=true;
             return true; // Held prerequisite only; deadlines/input/output/world states stay unchanged.
         }catch(...){flight.failed_seen=true;fail(*binding);return false;}
