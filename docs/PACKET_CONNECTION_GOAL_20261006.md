@@ -6037,3 +6037,19 @@ fullroutesadded0/percentnull;453繁體/clientformulas/maxHPpoison10分1/common
 CNfourWS/saves/fonts/text/shared64numerics and907pinsbyteexact preserved.
 
 Details: docs/research/tw-ordinary-actor-resource-bank-source-20261015.md
+
+## Round408 - Native TW actor lookup and caller references (2026-10-15)
+
+Round408 connects actualnativeHero452260/452460keytransform andROMwrappers.
+Original588F90order bfhw correctsC407narrative bhfw; table/formalBYTE/ActType
+0..2/Head5rows/minimumvariantwidth2/452420modifier qualified. Nativeprivate
+request retainsactual52F550root/SEPARATEmodel+1Cprefix/CWD/bank0..511/exactrow;
+wholeRequest+ROMVALUEbeforevalidation+fullaction binding, no Current/cachegrant.
+TwoexistingCPP, V45pins116=114same2updated,canonical591,no newprojectPY/Lua/
+CMake/EXE. FullfreshActorProfile/ReturnScene/completepopulation/allsurvivor
+savedworldequipmentreadset/opaque9_17/nativeacceptance OPEN; routesadded0 and
+percentnull. TW100firstACTIVE/commonCNfourWS/saves/453繁體/clientformulas/
+maxHPpoison10分1/fonts/text/shared64/coin99999999999/stack99/levels/907pins
+preserved. PHASE1no build/test/runtime/native/codec/SQL/migrate/activate/deploy.
+
+Details: docs/research/tw-actor-native-lookup-source-20261015.md

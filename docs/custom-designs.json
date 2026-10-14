@@ -5261,6 +5261,25 @@
           "src/core/SharedTaiwanNativeWorldHostPlan.cpp"
         ],
         "evidence": "docs/research/tw-ordinary-actor-resource-bank-source-20261015.md"
+      },
+      "ordinary_actor_native_lookup_source": {
+        "classification": "NATIVE_VERIFIED_BYTE_KEY_AND_WRAPPERS_WITH_CUSTOM0133_SOURCE_ADAPTER_NOT_WORLD_GRANT",
+        "round": 408,
+        "actual_component_table_order": "bfhw",
+        "prior_C407_bhfw_note_corrected_by_original_bytes": true,
+        "five_BYTE_Hero_lookup_and_ActType_transforms": true,
+        "safe_five_Head_rows_and_ActType0_2_only": true,
+        "native_minimum_width2_variant_not_truncated": true,
+        "private_native_caller_reference_whole_request_identity": true,
+        "cached_process_root_model_prefix_CWD_bank_operand_separate": true,
+        "private_ROM_value_before_validation": true,
+        "resource_cache_owner_Current_and_complete_ActorProfile_ReturnScene": false,
+        "default_enabled": false,
+        "source_paths": [
+          "src/game/TaiwanNativeActorResourceBank.h",
+          "src/game/TaiwanNativeActorResourceBank.cpp"
+        ],
+        "evidence": "docs/research/tw-actor-native-lookup-source-20261015.md"
       }
     },
     {

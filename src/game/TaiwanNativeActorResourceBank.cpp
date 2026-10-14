@@ -132,11 +132,46 @@ const TaiwanNativeActorResourceBank::Drv* TaiwanNativeActorResourceBank::find_dr
 const TaiwanNativeActorResourceBank::Hero* TaiwanNativeActorResourceBank::find_hero(std::string_view key) const noexcept {
     for(const auto& record:hero_)if(record.key==key)return &record;return nullptr;
 }
+std::optional<std::string> TaiwanNativeActorResourceBank::native_hero_key(const HeroLookup& input) {
+    const auto component=static_cast<std::uint8_t>(input.component);
+    if(component>3 || input.act_type>=3)return std::nullopt;
+    // Exact original570C6C/570C7C and588F90 bytes. Previous research note's
+    // "bhfw" order was incorrect: native component order is b,f,h,w.
+    constexpr std::array<std::uint8_t,15> head={0,0,9,1,5,5,2,6,6,3,7,7,4,8,8};
+    constexpr std::array<std::uint8_t,3> feet={0,1,1};
+    constexpr std::array<char,4> letters={'b','f','h','w'};
+    auto index=input.component_index;
+    switch(input.component) {
+    case Component::Body:index=static_cast<std::uint8_t>(index+3u*input.act_type);break;
+    case Component::Feet:index=feet[input.act_type];break;
+    case Component::Head:
+        // Native performs an unchecked index*3 lookup; inverse4522E0's scan
+        // proves these five rows. Never read an adjacent unrelated constant.
+        if(index>=5)return std::nullopt;
+        index=head[static_cast<std::size_t>(index)*3+input.act_type];break;
+    case Component::Weapon:break;
+    }
+    // Native CString format589140: r%d%c%d%02d. Width2 is a MINIMUM, not
+    // truncation to two digits. All arithmetic above is the native BYTE domain.
+    auto variant=std::to_string(input.variant);if(variant.size()<2)variant.insert(variant.begin(),'0');
+    return "r"+std::to_string(static_cast<unsigned>(input.family)+1)+letters[component]+
+        std::to_string(index)+variant;
+}
+const TaiwanNativeActorResourceBank::Hero* TaiwanNativeActorResourceBank::find_hero(const HeroLookup& input) const {
+    const auto key=native_hero_key(input);return key?find_hero(*key):nullptr;
+}
+std::optional<std::uint8_t> TaiwanNativeActorResourceBank::native_component_modifier(
+        const HeroLookup& input,std::uint8_t sixth) const {
+    const auto* source=find_hero(input);if(!source)return std::nullopt;
+    const auto value=source->component_modifier;
+    return value>=2?static_cast<std::uint8_t>(value+sixth):value;
+}
 TaiwanNativeActorResourceBank::ResolvedRom::ResolvedRom(std::shared_ptr<const TaiwanNativeActorResourceBank> bank,
         Family family,std::size_t ordinal,TaiwanNativeResourceSelection selected,
-        std::shared_ptr<const TaiwanNativeRomAsset> rom,std::uint32_t action)
+        std::shared_ptr<const TaiwanNativeRomAsset> rom,std::uint32_t action,
+        std::shared_ptr<const NativeRomRequest> native_request)
     :bank_(std::move(bank)),family_(family),ordinal_(ordinal),selected_(std::move(selected)),
-     rom_(std::move(rom)),action_operand_(action) {}
+     rom_(std::move(rom)),action_operand_(action),native_request_(std::move(native_request)) {}
 namespace {
 bool selected_row(const std::vector<std::uint8_t>& filename,const TaiwanNativeResourceSelection& selected,
         const std::shared_ptr<const TaiwanNativeRomAsset>& rom,std::uint32_t action) {
@@ -174,5 +209,62 @@ std::shared_ptr<const TaiwanNativeActorResourceBank::ResolvedRom> TaiwanNativeAc
     auto owned_rom=std::make_shared<const TaiwanNativeRomAsset>(*rom);
     return std::shared_ptr<const ResolvedRom>(new ResolvedRom(std::move(bank),ResolvedRom::Family::Hero,
         source->ordinal,selected,std::move(owned_rom),action));
+}
+TaiwanNativeActorResourceBank::NativeRomRequest::NativeRomRequest(
+        std::shared_ptr<const TaiwanNativeActorResourceBank> bank,ResolvedRom::Family family,std::size_t ordinal,
+        NativeRomContext context,TaiwanNativeResourceSelection::Request request)
+    :bank_(std::move(bank)),family_(family),ordinal_(ordinal),context_(std::move(context)),request_(std::move(request)) {}
+namespace {
+std::optional<TaiwanNativeResourceSelection::Request> wrapped_request(
+        const TaiwanNativeActorResourceBank::NativeRomContext& context,
+        std::string_view directory,const std::vector<std::uint8_t>& filename) {
+    const auto printable=[](const auto& bytes){return std::all_of(bytes.begin(),bytes.end(),
+        [](auto c){return c>=0x20 && c<0x7f;});};
+    if(context.actual_52f550_root.empty() || filename.empty() || !printable(context.actual_52f550_root) ||
+       !printable(context.actual_model_prefix) || !printable(filename) ||
+       !context.actual_working_directory.is_absolute() || context.actual_manager_bank_operand>=512)return std::nullopt;
+    std::wstring root;for(const auto c:context.actual_52f550_root)root.push_back(static_cast<wchar_t>(c));
+    const std::filesystem::path root_path(root);
+    if(!root_path.has_root_name() || !root_path.has_root_directory())return std::nullopt;
+    // 52F550 sees a leading backslash: exact %s%s, with no inserted separator
+    // or normalized spelling. Both caller path locals are bounded to256 here.
+    auto reference=context.actual_52f550_root;
+    reference.insert(reference.end(),directory.begin(),directory.end());
+    reference.insert(reference.end(),filename.begin(),filename.end());
+    if(reference.size()>=256 || context.actual_model_prefix.size()>=256-reference.size())return std::nullopt;
+    return TaiwanNativeResourceSelection::Request{TaiwanNativeResourceSelection::Kind::RomBinary,
+        std::move(reference),context.actual_model_prefix,context.actual_working_directory,context.actual_manager_bank_operand};
+}
+bool same_request(const TaiwanNativeResourceSelection::Request& a,const TaiwanNativeResourceSelection::Request& b) {
+    return a.kind==b.kind && a.original_reference==b.original_reference && a.native_prefix==b.native_prefix &&
+        a.actual_working_directory==b.actual_working_directory && a.full_bank_operand==b.full_bank_operand;
+}
+}
+std::shared_ptr<const TaiwanNativeActorResourceBank::NativeRomRequest> TaiwanNativeActorResourceBank::native_drv_request(
+        std::shared_ptr<const TaiwanNativeActorResourceBank> bank,std::uint32_t ordinal,const NativeRomContext& context) {
+    if(!bank)return {};const auto* source=bank->find_drv(ordinal);if(!source)return {};
+    const auto request=wrapped_request(context,"\\Data2\\Rom\\Drv\\",source->filename);if(!request)return {};
+    return std::shared_ptr<const NativeRomRequest>(new NativeRomRequest(std::move(bank),ResolvedRom::Family::Drv,
+        source->ordinal,context,*request));
+}
+std::shared_ptr<const TaiwanNativeActorResourceBank::NativeRomRequest> TaiwanNativeActorResourceBank::native_hero_request(
+        std::shared_ptr<const TaiwanNativeActorResourceBank> bank,const HeroLookup& lookup,const NativeRomContext& context) {
+    if(!bank)return {};const auto* source=bank->find_hero(lookup);if(!source)return {};
+    const auto request=wrapped_request(context,"\\Data2\\Rom\\RoleDoll\\",source->filename);if(!request)return {};
+    return std::shared_ptr<const NativeRomRequest>(new NativeRomRequest(std::move(bank),ResolvedRom::Family::Hero,
+        source->ordinal,context,*request));
+}
+std::shared_ptr<const TaiwanNativeActorResourceBank::ResolvedRom> TaiwanNativeActorResourceBank::bind_native_rom(
+        std::shared_ptr<const NativeRomRequest> native_request,const TaiwanNativeResourceSelection& selected,
+        std::shared_ptr<const TaiwanNativeRomAsset> rom,std::uint32_t action) {
+    if(!native_request || !rom || !same_request(native_request->request_,selected.request()))return {};
+    // Copy the value BEFORE validation; retain immutable Storage rather than
+    // the caller's potentially reassignable public asset object's address.
+    auto owned=std::make_shared<const TaiwanNativeRomAsset>(*rom);
+    if(owned->source()!=selected.actual_source() || owned->encoded_bytes()!=selected.encoded_bytes() ||
+       !owned->find_action(action))return {};
+    const auto bank=native_request->bank_;const auto family=native_request->family_;const auto ordinal=native_request->ordinal_;
+    return std::shared_ptr<const ResolvedRom>(new ResolvedRom(bank,family,ordinal,selected,
+        std::move(owned),action,std::move(native_request)));
 }
 }
