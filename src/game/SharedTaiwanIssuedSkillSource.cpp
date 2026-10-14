@@ -50,7 +50,8 @@ struct SharedTaiwanIssuedSkillSource::State {
                 s.id()==saved.lease.session && s.account_id==saved.lease.account && s.character_id==saved.lease.character &&
                 s.battle_generation()==saved.battle_generation && s.recovered_world_ready() &&
                 s.common_world_delivery_current(saved.lease.account,saved.lease.character,saved.lease.generation) &&
-                !s.common_world_entry_current(saved.lease.account,saved.lease.character,saved.lease.generation);
+                !s.common_world_entry_current(saved.lease.account,saved.lease.character,saved.lease.generation) &&
+                presence->retained_ready_current(saved.lease);
         };
         if(!local())return false;
         const auto lease=presence->ready_lease(saved.lease.session,saved.lease.account,saved.lease.character);

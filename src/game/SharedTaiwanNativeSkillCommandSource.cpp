@@ -49,7 +49,8 @@ struct Owner {
                 session.state()==SessionState::InBattle || session.state()==SessionState::InWorld) &&
             session.recovered_world_ready() &&
             session.common_world_delivery_current(lease.account,lease.character,lease.generation) &&
-            !session.common_world_entry_current(lease.account,lease.character,lease.generation);
+            !session.common_world_entry_current(lease.account,lease.character,lease.generation) &&
+            presence->retained_ready_current(lease);
     }
     bool ready(Session& session,const Source::Scope& scope,bool before) const {
         if(!local(session,scope,before))return false;

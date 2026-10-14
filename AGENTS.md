@@ -455,3 +455,16 @@ no qualifiedactor/qty/ACK;TW savedWORD doesnot provezerotail. Sevenread-onlycont
 canonical475/source17all45exact;no C++/Lua/PY/newrule change. Actualbooktarget/
 identity/one atomicbook+learn+event/native result stillOPEN. Do notreuseprivate
 C28/aliasinversion/mapdiagnostic aslearning. PHASE1/fullscope remain.
+
+
+Round379 actualTW C35 andIssuedSkillSource localpredicates now requirepure
+retained_ready_current(fullLease) before/finalafter originalvirtualobservers.
+Finalpositionobserver couldretire/replace registry thenreturnoldpose/Session;
+actualaction/privateissuedpublication nowrejectretiredsource.2CPP/2literal/
+2wholeinverses exact;postactionrealnextreceipt/phase/position/nooldCurrent
+preserved. Source18 pins47,old44exact,canonical480;no newPY/rule/fullroute.
+Native raw559B177sites +composedS34whole458/135;oldselector297/93refonly.
+Fullflag!=0menu vs&1keyselector vs&2aux distinct;S34append0/S35overwrite3,
+saved34alonecannot supplylegitimateactivationhistory/grant. Inactiveglobal
+markers/opaquechildren/currentaffinitypremises retained. Actualbook+learn+
+event/target/eligibility/TWresult/Main stillOPEN. TW100priority/PHASE1 retained.

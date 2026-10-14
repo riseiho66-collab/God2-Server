@@ -5420,3 +5420,31 @@ fullroute0;whole denominator/%null;goalactive. PHASE1 no build/tests/runtime/
 native/API/VM/codec/gameDBSQL/migration/activation/deploy;allcommon/frozen/save
 requirements retained. NextactualSKB material/binding/savedselectedskill readset
 andgenuine learning/event transaction/TWpublication;no unusedtypedframework.
+
+
+## Round379 - actual TW command and issued publication presence (2026-10-14)
+
+Two existing CPP localpredicates appendpure retained_ready_current(fullLease).
+Finalvirtual load_position couldretire/replaceregistry while returningoldpose
+andunchangedSession/storage. ActualC35 finalCurrent->action andpostactionready,
+issuedinstall/select/current/privatependingnativepublication nowrejectretired
+sources. EarliermixedBeforeRun isnot a fencearoundlaterinnerobservers. No new
+observer/SQL/rule/retry oroldconsumedCurrent afteraction;nextreceipt preserved.
+2literal/2wholeinverses==oldrefs/Git872876c;independentfullsourcePASS. Source18
+retains45oldpaths/updatesC35pin/addsactualIssuedheader+CPP=47,old44exact;
+canonical480/newPY0. Nativewholemenu510/160+newS34fragments49/17=raw559/177,data0.
+ComposedS34whole458/135 reuses351prefix+58tail;oldselector297/93referenceonly.
+Menu fullflag!=0 vskey&1/aux&2;S34append0/S35overwrite3 distinct. Duplicaterow
+skipsownappend/helpers;existingpuremodelmatches,logging/UIchildren opaque.
+Inactiveglobalmarker/currentvisible/catalogaffinitypremises;notuniversalC56
+gate/grant. Saved34cannot encodelegitimateS35 history;absentskillcannotborrow
+privatealready-presentreadset. Equipment/townreceipt/Luacallbackarenotactual
+book+learn+durableevent operation. Target/eligibility/rules/save/replay/TWfull
+result/Main/adoption stillOPEN. Native260oldmembers7764367B reused;old295extra
+nested293seal separatelypinnedreferenceonly,notfull293packageverification.
+Frontier26 exact21/105;parser77=50partial+11control+16unconnected/pending11,
+64.9%parseronly;TW156/252/3/40/36,CN156/280phase/253/35/93/71 unchanged.2actual
+sourcebranches improved,newopcode/formula/phase/ownerchain/format/fullroute0;
+wholedenominator/%null,goalactive/TW100priority. PHASE1 no build/tests/runtime/
+native/API/VM/codec/gameDBSQL/migration/activation/deploy;allcommon/frozen/save
+requirements retained.

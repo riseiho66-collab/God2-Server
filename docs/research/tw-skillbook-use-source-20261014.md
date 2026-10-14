@@ -93,3 +93,11 @@ credit0; whole denominator/%null. Goal active; no build/tests/runtime/native/
 API/VM/product codec/gameDBSQL/import/migration/activation/deployment.
 Preserve453/TW Traditional/client-primary formulas/poison CURRENT MAXIMUM HP/10/
 CNcustom126/150/common64/fonts/conversion/frozen/account/save requirements.
+
+
+Round379 repairs actual TW C35/issued-list private publication final-observer
+retirement cuts, preserving real postaction next qualification. Native menu
+fullflag!=0, key-selector&1 and aux&2 are distinct; saved34 presence cannot
+substitute for legitimate S35 state/history or learning authority. Actual
+book+learn+event transaction remains OPEN. See tw-skill-command-presence-source-
+20261014.md / source18; no default flags3, unused coordinator or route credit.
