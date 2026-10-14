@@ -5374,3 +5374,25 @@ parser77=50partial+11control+16unconnected/pending11,64.9%parseronly. TW156/252/
 PHASE1/no build/tests/runtime/native/API/VM/codec/gameDBSQL/migration/activation/
 deploy;all453/TWTraditional/clientprimary/maxHPdiv10/CNcustom126/150/common64/
 frozen/save/account requirements retained.
+
+
+## Round377 - actual TW staged window and selected-row publisher (2026-10-14)
+
+Two authentic complete native bodies1289B/401sites establish actual481E19
+window construction andA0 continuation:returnedAX->U232E14;R160 candidate
+builder;existing actualpublishers U8688C=R/U86888=R+90 connect selectedD0 only
+under same currentbindings/lifetime. All selectedcuts equal mapped/PE;UIchildren
+opaque,initial/finalhandle maydiffer,no finalrow attestation/servergrant.
+ActualTW genericOthers andCN suppliedstage/consume/postcommit boundary reviewed.
+No confirmed TW durable-prefixbug;externalprepare/apply/qualify/TWreply remain
+OPEN. Bounded src/scripts census does not proveglobalabsence;originalregex
+correct,exactcodepointaddendum resolves rootrenderingconcern. No unusedtyped
+framework or C++/Lua change. Source/17 all45pins exact,canonical467/newPY0.
+Next actualmaterial49A330->49B5E0 C28cause/SKB/savedowner andauthoritativeWORLD35
+event/save/publication;do notinfer every83 bookdebit or reuse oldCurrent after
+commit. No opcode/formula/phase/ownerchain/receiveformat/fullroute credit.
+Frontier26 exact21/105;parser77=50partial+11control+16unconnected/pending11,
+64.9% parseronly. TW156/252/3/40/36,CN156/280phase/253/35/93/71 unchanged;
+wholedenominator/%null,goalactive. PHASE1 no build/tests/runtime/native/API/VM/
+productcodec/gameDBSQL/migration/activation/deploy. Preserve all453/TWTraditional/
+clientprimary/maxHPdiv10poison/CNcustom126/150/common64/frozen/account/save.

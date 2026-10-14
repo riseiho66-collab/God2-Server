@@ -433,3 +433,14 @@ children opaque. Separate84 reference45B/13 has no actual caller/WORLDphase,
 so remains unregistered. ABI typo retained plusadditive12Bcaller-stack correction.
 Next TW A0window4FDC30/eventowner affiliation; actualoperation/save stillOPEN.
 Frontier26 immutable21/105;PHASE1/no newPY/full goal preserved.
+
+
+Round377 closes native initial A0window/role/event affiliation:two whole1289B/
+401sites,data0. Actual481E19 creator stores returnedAX intoU232E14;A0child
+usesR160==(R+90)+D0 ONLY while same current bindings/lifetime remain. UIchildren
+opaque;no postchild row/window attestation or grant/bookdebit. Source/17 all45
+pins exact;no C++/Lua behavior change. ActualTW Others/CN supplied stage/consume/
+postcommit operation boundary reviewed;no confirmed TWdurable-prefix bug.
+Actualissuer/apply/save/replay/TWreply stillOPEN;no unusedtypedframework.
+Next actualmaterial49A330->49B5E0 cause/SKB/savedowner andWORLD35 eventpublisher.
+Canonical467/frontier26 exact21/105/newroute0;PHASE1/no newPY/fullgoal retained.

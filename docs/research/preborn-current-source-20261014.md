@@ -76,3 +76,10 @@ client-primary formulas, owner poison CURRENT MAXIMUM HP/10 and CNcustom126/
 150 requirements remain. PHASE1 static only: no build/tests/runtime/native/API/
 VM/product codec/gameDBSQL/import/migration/activation/deployment. Preserve
 saves/accounts/resources/fonts/conversion/frozen features and common C++/Lua.
+
+
+Round377 qualifies the next actual TW A0 continuation/window creator and
+initial selected-row publisher relationship, with explicit opaque-child/current
+binding premises. Actual TW Others/CN supplied operation boundary has no new
+confirmed TW durable-prefix defect; issuer/apply/save/TW reply remain OPEN.
+See tw-preborn-window-owner-source-20261014.md. Source/17 pins stay exact.
