@@ -468,3 +468,20 @@ Fullflag!=0menu vs&1keyselector vs&2aux distinct;S34append0/S35overwrite3,
 saved34alonecannot supplylegitimateactivationhistory/grant. Inactiveglobal
 markers/opaquechildren/currentaffinitypremises retained. Actualbook+learn+
 event/target/eligibility/TWresult/Main stillOPEN. TW100priority/PHASE1 retained.
+
+
+Round380 follows the actual TW target-item C26 source alongside the qualified
+C25 confirmation. Metadata11A masks01+08 targeted arm precedes master ranges,
+after equippable04; do not generalize378's C25 to all skill books. Actual actor
+candidate source is Main466E47->4FB290 and466F6D->465FA0(-12)->4964D0.
+All four candidates ARE initializedFFFFFFFF:466E3F PUSH shifts ESP, so following
+[ESP+5C] addresses original+58. Initial sealedN380 mistake retained with additive
+correction; root/newdoc final native review PASS. Target actor is not a learning
+grant/selected deity. NormalC26 rawtail opaque; pending15C6 is separateAD body12.
+Newraw141B39sites; old303 whole/callers reference only. ActualMain MED CAS/Lua
+and legacy self mapping reviewed, no demonstrated staleSession/identity bug;
+no speculative guard/unused coordinator/newCPP/Lua/PY/rule. Source18 all47 exact,
+canonical492; explicitC25/C26 book pending group11->12. Parser77/50partial/
+11control/16unconnected and frontier26 21/105 unchanged; fullroute0/whole%null.
+Actual book/actor/material/subject/eligibility/atomic learning+debit+event/replay/
+complete native result still OPEN. TW100 priority/PHASE1/frozen/fullgoal retained.

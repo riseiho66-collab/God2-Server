@@ -101,3 +101,13 @@ fullflag!=0, key-selector&1 and aux&2 are distinct; saved34 presence cannot
 substitute for legitimate S35 state/history or learning authority. Actual
 book+learn+event transaction remains OPEN. See tw-skill-command-presence-source-
 20261014.md / source18; no default flags3, unused coordinator or route credit.
+
+
+Round380 direction precision: the C25 ordinary/master analysis above applies
+to the remaining non-targeted branch. After the equippable04 arm, metadata11A
+masks01+08 select the target cursor BEFORE the numeric master comparisons;
+actual actor-target use proceeds through4964D0 normalC26, with a separate15C6
+AD branch. Old MED self proof alone is not SKB/deity authority. Actual Main
+actor candidate linkage now reuses303; all four candidates are initialized
+FFFFFFFF after accounting for PUSH-relative addressing. See
+[the targeted-use boundary](tw-skillbook-target-source-20261014.md).

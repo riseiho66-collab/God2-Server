@@ -5448,3 +5448,35 @@ sourcebranches improved,newopcode/formula/phase/ownerchain/format/fullroute0;
 wholedenominator/%null,goalactive/TW100priority. PHASE1 no build/tests/runtime/
 native/API/VM/codec/gameDBSQL/migration/activation/deploy;allcommon/frozen/save
 requirements retained.
+
+
+## Round380 - TW targeted item and skill-book variant boundary (2026-10-14)
+
+Actual target producer4964D0 is whole121B31sites; authentic Main frame prefix
+is partial20B8sites, totalnew141B39sites/data0. NormalC26 logical7 owns targetWORD,
+pendingitemWORD/slotBYTE and an unwritten local tail. Pending15C6 instead queues
+AD body12, only body+4 WORDtarget/+A BYTE4 written; no AD registration/effect.
+Actual non-self-restricted actor target chain466E47->4FB290,466F6D->465FA0(-12)
+->46611B->4964D0 reuses old303 whole1180/426+446/140 andMain338/97. Matching
+writes link actorDWORD0; no selected deity/commonDB identity/learning grant.
+Root caught an ESP alias error in initialN380: PUSH EDX shifts ESP-4, so the
+following [ESP+5C] is originalframe+58. All four candidates initializedFFFFFFFF.
+Original seal preserved with additive correction; final doc native review PASS.
+
+Correct378's overly broadC25 direction: after equippable04, metadata01+08 target
+cursor precedes numeric master ranges. C25 andC26 SKB variants need distinct
+actual ownership/subject/eligibility/learning+debit+durableevent/save/replay/full
+native result suppliers. Existing Main C26 MED71 catalog/Lua/prebuiltS41+S24/
+scalar inventory-resourceCAS is real but not learning. Current pure Lua exposes
+no shown Session retirement capability. Legacy0050 exactDBID actor mapping is
+consistent with its actual entry; independent scene-handle profile replaces
+that legacy whole callback. No confirmed source defect or speculative CPP edit.
+
+One explicit pending source group for C25/C26 book variants raises11->12; no
+new connected opcode/phase/ownerchain/formula/receiveformat/fullroute. Canonical
+492, source18 all47 pins unchanged, newCPP/Lua/PY/rule0. Parser77=50partial+
+11control+16unconnected,64.9%parser-only; frontier26 formats21/unclassified105.
+TW156/252/3chains40bindings36unique and CN156/280phase/253/35chains93bindings71unique
+unchanged. Whole denominator/percentage unknown, goalactive/TW100 first. Native
+157 historical members7364185B reused; no original image/large archive copies.
+PHASE1/no build/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deploy.
