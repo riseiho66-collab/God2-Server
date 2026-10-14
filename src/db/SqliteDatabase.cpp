@@ -685,22 +685,34 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         auto actor_saved_source=make_owned_taiwan_return_actor_saved_source(presence);
         return_source=[resolvers,role_text_source,actor_saved_source,presence](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
             ->std::optional<cn::SharedActorVisibility::TaiwanReturnScene>{
-        if(resolvers->stopped)return {};
+        if(resolvers->stopped||request.actor_input)return {}; // Backend alone issues it.
+        auto supplied=request; // Own the complete request before any observer.
         const auto population=presence->observe_ready_population();
         if(resolvers->stopped||!population||!presence->retained_population_current(*population))return {};
         const auto saved_rows=actor_saved_source->observe_population(population->characters());
         if(resolvers->stopped||!saved_rows||!presence->retained_population_current(*population)||
            !saved_rows->matches_population(population->characters()))return {};
-        auto value=resolvers->return_scene(request);
+        const auto actor_input=std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput>(
+            new OwnedTaiwanReturnActorSavedSource::PopulationInput(actor_saved_source,*population,*saved_rows,role_text_source));
+        supplied.actor_input=actor_input;
+        auto value=resolvers->return_scene(supplied);
         if(resolvers->stopped||!value||!value->current||
-           (value->role_text_source&&value->role_text_source!=role_text_source)||
-           value->ready_population||value->actor_saved_source||value->actor_saved_rows||
-           !actor_saved_source->current(*saved_rows)||resolvers->stopped||
+           (value->role_text_source&&value->role_text_source!=role_text_source))return {};
+        const bool typed=bool(value->actor_input);
+        if(typed){
+            if(value->actor_input!=actor_input||!value->ready_population||!value->actor_saved_rows||
+               value->actor_saved_source!=actor_saved_source||*value->ready_population!=*population||
+               *value->actor_saved_rows!=*saved_rows)return {};
+        }else if(value->ready_population||value->actor_saved_source||value->actor_saved_rows||
+                 !value->actor_profile_equipment.empty()||value->actor_profile_equipment_required)return {};
+        if(!actor_saved_source->current(*saved_rows)||resolvers->stopped||
            !presence->retained_population_current(*population))return {};
         value->role_text_source=role_text_source;
         value->ready_population=*population;
         value->actor_saved_source=actor_saved_source;
         value->actor_saved_rows=*saved_rows;
+        value->actor_input=actor_input;
+        value->actor_profile_equipment_required=typed;
         const auto current=value->current;
         value->current=[resolvers,current,presence,actor_saved_source,population=*population,saved_rows=*saved_rows]
                 (cn::SharedActorVisibility::TaiwanReturnCheck check){

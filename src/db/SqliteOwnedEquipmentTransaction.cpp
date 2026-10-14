@@ -259,4 +259,50 @@ bool SqliteOwnedEquipmentTransaction::committed_current(const Committed& token) 
     const bool current=NativeEquipmentSnapshot::same_root(wanted.inventory.root,wanted.equipment.root)&&stored_current(same,wanted);
     sqlite_detail::execute(db,"COMMIT");read.finished=true;return current;
 }
+bool SqliteOwnedEquipmentTransaction::committed_current_in_scope(sqlite3* connection,const Committed& token) {
+    owner();
+    const Committed retained=token; // Own the immutable input BEFORE SQL hooks.
+    if(closed_reading_){closed_poisoned_=true;return false;}
+    if(inventory_.writing_||equipment_.writing_){
+        inventory_.reentered_=equipment_.reentered_=true;return false;
+    }
+    if(closed_poisoned_||inventory_.issuer_active_||equipment_.issuer_active_||
+       inventory_.reentered_||equipment_.reentered_||connection!=inventory_.db_||
+       connection!=equipment_.db_||!connection||sqlite3_get_autocommit(connection)||
+       retained.identity_!=identity_||retained.inventory_.identity_!=inventory_.identity_||
+       retained.equipment_.identity_!=equipment_.identity_||
+       !owns_sources(inventory_.accounts_,inventory_.characters_))return false;
+    const auto changes=sqlite3_total_changes64(connection);
+    // These flags belong to this read only after the foreign-operation checks.
+    // Reentry flags remain sticky; no foreign issuer flag is reset on exit.
+    closed_reading_=true;inventory_.writing_=equipment_.writing_=true;
+    struct Exit {
+        SqliteOwnedEquipmentTransaction& joint;
+        ~Exit(){joint.inventory_.writing_=joint.equipment_.writing_=false;joint.closed_reading_=false;}
+    } exit{*this};
+    const auto fence=[&] {
+        owner();
+        if(closed_poisoned_||!closed_reading_||!inventory_.writing_||!equipment_.writing_||
+           inventory_.issuer_active_||equipment_.issuer_active_||inventory_.reentered_||equipment_.reentered_||
+           connection!=inventory_.db_||connection!=equipment_.db_||sqlite3_get_autocommit(connection)||
+           sqlite3_total_changes64(connection)!=changes||
+           !owns_sources(inventory_.accounts_,inventory_.characters_)){
+            closed_poisoned_=true;throw DatabaseError("Joint equipment closed read changed or reentered");
+        }
+    };
+    const auto namespaces=[&] {
+        sqlite_detail::Statement shadow(connection,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('accounts','recovered_characters','recovered_positions','battle_reservations','battle_settlements','owned_inventory_headers','owned_item_instances','owned_inventory_cells','owned_item_native_aliases','character_native_equipment_snapshots') OR tbl_name COLLATE NOCASE IN ('accounts','recovered_characters','recovered_positions','battle_reservations','battle_settlements','owned_inventory_headers','owned_item_instances','owned_inventory_cells','owned_item_native_aliases','character_native_equipment_snapshots')");
+        if(shadow.row())throw DatabaseError("Joint equipment closed TEMP namespace rejected");fence();
+        sqlite_detail::Statement tables(connection,"SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ('accounts','recovered_characters','recovered_positions','battle_reservations','battle_settlements','owned_inventory_headers','owned_item_instances','owned_inventory_cells','owned_item_native_aliases','character_native_equipment_snapshots')");
+        if(!tables.row()||tables.integer(0)!=10||tables.row())throw DatabaseError("Joint equipment closed read requires main tables");fence();
+        sqlite_detail::Statement triggers(connection,"SELECT 1 FROM main.sqlite_master WHERE type='trigger' AND tbl_name COLLATE NOCASE IN ('accounts','recovered_characters','recovered_positions','battle_reservations','battle_settlements','owned_inventory_headers','owned_item_instances','owned_inventory_cells','owned_item_native_aliases','character_native_equipment_snapshots')");
+        if(triggers.row())throw DatabaseError("Joint equipment closed trigger namespace rejected");fence();
+    };
+    fence();
+    const State wanted{retained.inventory_.snapshot(),retained.equipment_.snapshot()};
+    const Before same{wanted.inventory,wanted.equipment};
+    namespaces();
+    const bool current=NativeEquipmentSnapshot::same_root(wanted.inventory.root,wanted.equipment.root)&&stored_current(same,wanted);
+    fence();namespaces();fence();return current;
+}
 }

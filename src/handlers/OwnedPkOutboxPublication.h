@@ -71,6 +71,9 @@ public:
         std::array<Session::NativePkReturnPreparation,2> preparations;
         std::array<Session::NativeBattleSkill,2> final_writes;
         std::array<std::array<std::uint8_t,4>,2> terminal_payloads;
+        // CUSTOM-0133 actual backend privately issues this complete population
+        // input before the mandatory scene supplier. Publication never mints it.
+        std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput> actor_input={};
     };
     using ReturnSceneSource=std::function<std::optional<cn::SharedActorVisibility::TaiwanReturnScene>(const ReturnSceneRequest&)>;
     explicit OwnedPkOutboxPublication(OwnedPkRoomState& rooms,ReturnSceneSource return_scene={},

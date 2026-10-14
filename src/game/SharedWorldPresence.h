@@ -81,6 +81,7 @@ public:
     public:
         ReadyPopulation(const ReadyPopulation&)=default;
         ReadyPopulation& operator=(const ReadyPopulation&)=default;
+        bool operator==(const ReadyPopulation& other) const noexcept {return data_==other.data_;}
         std::span<const ReadyCharacter> characters() const noexcept;
     private:
         friend class SharedWorldPresence;

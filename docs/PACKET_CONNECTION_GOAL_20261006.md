@@ -6072,3 +6072,25 @@ coin99999999999/stack99/nativelevels/907 originalpins preserved. PHASE1 no
 build/test/runtime/native/VM/gamecodec/DBSQL/migrate/activate/deploy.
 
 Details: docs/research/tw-return-actor-saved-source-20261015.md
+
+## Round410 - Actual return profile input and equipment join (2026-10-15)
+
+Round410 connects actual backend privately issued PopulationInput BEFORE
+mandatory full ReturnScene supplier; whole request copied before observers.
+Typed supplier must return exact same input/population/readset/source nodes.
+Private ProfileEquipment joins actual same-writers Committed tuple to exact
+saved row/current root/pose/rendering handle; historical mismatch rejects/
+never rebases. Closed joint reader shares actual saved+role final read scope
+and FinishedRoom transaction; no nested transaction/provider/live callback.
+Pure no-allocation fences cover each selected source and exact6F components/
+transform/scalars to privateDA witness, CUSTOM fresh projection not native
+remoteDAafter-cache display/currentEquipPermission/50-rowcanonicalSlot proof.
+Legacy mandatory complete supplier remains; fullfreshActorProfile/resources/
+status/receiver/EA/completeReturnScene stillOPEN. NineexistingCPP, V47pins120
+=111same7updated2addedExistingJoint, canonical597, no newCPP/PY/Lua/CMake/
+EXE. Routesadded0, wholepercentnull, fullTW100firstACTIVE/commonCNfourWS/
+saves/453繁體/clientformulas/maxHPpoison10分1/shared64/coin99999999999/
+stack99/nativelevels/fonts/text/907pins preserved. PHASE1 no build/test/
+runtime/native/VM/gamecodec/gameDBSQL/migrate/schema/activate/deploy.
+
+Details: docs/research/tw-return-profile-input-source-20261015.md

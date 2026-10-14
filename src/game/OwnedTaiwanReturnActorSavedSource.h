@@ -2,6 +2,7 @@
 #include "db/NativeWorldEntrySnapshotRepository.h"
 #include "db/NativeEquipmentSnapshotRepository.h"
 #include "db/OwnedInventoryRepository.h"
+#include "db/SqliteOwnedEquipmentTransaction.h"
 #include "game/OwnedTaiwanPkReturnRoleTextSource.h"
 #include "game/SharedWorldPresence.h"
 #include <memory>
@@ -24,6 +25,7 @@ class OwnedTaiwanReturnActorSavedSource final {
     friend class SqliteDatabase;
     struct Identity {};
     struct Data;
+    struct ProfileData;
 public:
     struct Material {
         SharedWorldPresence::ReadyCharacter actor;
@@ -47,18 +49,61 @@ public:
         std::shared_ptr<const Data> data_;
     };
     using Snapshot=Readset;
+    class PopulationInput final {
+    public:
+        const std::shared_ptr<OwnedTaiwanReturnActorSavedSource>& source() const noexcept{return source_;}
+        const SharedWorldPresence::ReadyPopulation& population() const noexcept{return population_;}
+        const Readset& readset() const noexcept{return readset_;}
+        const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>& role_text_source() const noexcept{return role_text_source_;}
+    private:
+        friend class SqliteDatabase;
+        PopulationInput(std::shared_ptr<OwnedTaiwanReturnActorSavedSource> source,
+            SharedWorldPresence::ReadyPopulation population,Readset readset,
+            std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource> role_text_source={})
+            :source_(std::move(source)),population_(std::move(population)),readset_(std::move(readset)),
+             role_text_source_(std::move(role_text_source)){}
+        const std::shared_ptr<OwnedTaiwanReturnActorSavedSource> source_;
+        const SharedWorldPresence::ReadyPopulation population_;
+        const Readset readset_;
+        const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource> role_text_source_;
+    };
+    // Consistent saved tuple input for explicit CUSTOM fresh projection.
+    // No native equip permission, canonical-slot or item-to-appearance authority.
+    // Historical snapshots are never rebased or relabelled as current.
+    class ProfileEquipment final {
+    public:
+        ProfileEquipment(const ProfileEquipment&)=default;
+        ProfileEquipment& operator=(const ProfileEquipment&)=default;
+        ProfileEquipment(ProfileEquipment&& other) noexcept:data_(other.data_){}
+        ProfileEquipment& operator=(ProfileEquipment&& other) noexcept{data_=other.data_;return *this;}
+        const Readset& saved_readset() const noexcept;
+        std::size_t row_index() const noexcept;
+        const OwnedInventorySnapshot& inventory() const noexcept;
+        const NativeEquipmentSnapshot& equipment() const noexcept;
+        bool operator==(const ProfileEquipment& other) const noexcept{return data_==other.data_;}
+    private:
+        friend class OwnedTaiwanReturnActorSavedSource;
+        explicit ProfileEquipment(std::shared_ptr<const ProfileData> data):data_(std::move(data)){}
+        std::shared_ptr<const ProfileData> data_;
+    };
     OwnedTaiwanReturnActorSavedSource(const OwnedTaiwanReturnActorSavedSource&)=delete;
     OwnedTaiwanReturnActorSavedSource& operator=(const OwnedTaiwanReturnActorSavedSource&)=delete;
     bool owns_presence(const std::shared_ptr<SharedWorldPresence>&) const noexcept;
     bool owns_readset(const Readset&) const noexcept;
+    bool owns_profile_equipment(const ProfileEquipment&) const noexcept;
+    bool profile_equipment_matches(const ProfileEquipment&,const Readset&,std::size_t) const noexcept;
+    std::optional<ProfileEquipment> observe_profile_equipment(const Readset&,std::size_t) const;
+    bool profile_equipment_current(const ProfileEquipment&) const;
+    bool profile_equipment_stored_current_in_scope(sqlite3*,const ProfileEquipment&) const;
     std::optional<Readset> observe_population(std::span<const SharedWorldPresence::ReadyCharacter>) const;
     bool current(const Readset&) const;
     bool current_with_role_text(const Readset&,const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>&,
         std::span<const OwnedTaiwanPkReturnRoleTextSource::Observation>,
-        std::span<const OwnedTaiwanPkReturnRoleTextSource::EndpointObservation>) const;
+        std::span<const OwnedTaiwanPkReturnRoleTextSource::EndpointObservation>,
+        std::span<const ProfileEquipment> profiles={}) const;
     // Borrow the actual room connection/transaction. No BEGIN/COMMIT, Session,
     // Presence observer, provider, live Current or new observation in this cut.
-    bool stored_current_in_scope(sqlite3*,const Readset&) const;
+    bool stored_current_in_scope(sqlite3*,const Readset&,std::span<const ProfileEquipment> profiles={}) const;
 private:
     OwnedTaiwanReturnActorSavedSource(sqlite3*,SqliteAccountRepository&,SqliteRecoveredCharacterRepository&,
         SqliteNativeWorldEntrySnapshotRepository&,SqliteNativeEquipmentSnapshotRepository&,
@@ -71,6 +116,7 @@ private:
     SqliteNativeWorldEntrySnapshotRepository& worlds_;
     SqliteNativeEquipmentSnapshotRepository& equipment_;
     SqliteOwnedInventoryRepository& inventory_;
+    mutable SqliteOwnedEquipmentTransaction joint_;
     const std::shared_ptr<SharedWorldPresence> presence_;
     const std::weak_ptr<const void> database_lifetime_;
     const std::shared_ptr<const Identity> identity_=std::make_shared<const Identity>();
@@ -84,5 +130,7 @@ private:
     bool registry_current(const Readset&) const;
     std::optional<Material> read_actor(const SharedWorldPresence::ReadyCharacter&,sqlite3_int64) const;
     bool stored(const Readset&,sqlite3_int64) const;
+    bool profile_shape(const ProfileEquipment&) const noexcept;
+    bool profiles_stored(const Readset&,std::span<const ProfileEquipment>,sqlite3_int64) const;
 };
 }

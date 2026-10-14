@@ -21,6 +21,25 @@ struct OwnedTaiwanReturnActorSavedSource::Data {
     Data(const OwnedTaiwanReturnActorSavedSource* source,std::shared_ptr<const Identity> key,std::vector<Material> material)
         :owner(source),identity(std::move(key)),rows(std::move(material)){}
 };
+struct OwnedTaiwanReturnActorSavedSource::ProfileData {
+    const OwnedTaiwanReturnActorSavedSource* const owner;
+    const std::shared_ptr<const Identity> identity;
+    const Readset saved;
+    const std::size_t index;
+    const SqliteOwnedEquipmentTransaction::Committed committed;
+    ProfileData(const OwnedTaiwanReturnActorSavedSource* source,std::shared_ptr<const Identity> key,
+        Readset readset,std::size_t row,SqliteOwnedEquipmentTransaction::Committed receipt)
+        :owner(source),identity(std::move(key)),saved(std::move(readset)),index(row),committed(std::move(receipt)){}
+};
+const OwnedTaiwanReturnActorSavedSource::Readset&
+OwnedTaiwanReturnActorSavedSource::ProfileEquipment::saved_readset() const noexcept{return data_->saved;}
+std::size_t OwnedTaiwanReturnActorSavedSource::ProfileEquipment::row_index() const noexcept{return data_->index;}
+const OwnedInventorySnapshot& OwnedTaiwanReturnActorSavedSource::ProfileEquipment::inventory() const noexcept {
+    return data_->committed.inventory().snapshot();
+}
+const NativeEquipmentSnapshot& OwnedTaiwanReturnActorSavedSource::ProfileEquipment::equipment() const noexcept {
+    return data_->committed.equipment().snapshot();
+}
 bool OwnedTaiwanReturnActorSavedSource::Material::operator==(const Material& b) const {
     return same_actor(actor,b.actor)&&world==b.world&&equipment==b.equipment&&inventory==b.inventory;
 }
@@ -66,7 +85,7 @@ OwnedTaiwanReturnActorSavedSource::OwnedTaiwanReturnActorSavedSource(sqlite3* db
         SqliteRecoveredCharacterRepository& characters,SqliteNativeWorldEntrySnapshotRepository& worlds,
         SqliteNativeEquipmentSnapshotRepository& equipment,SqliteOwnedInventoryRepository& inventory,
         std::shared_ptr<SharedWorldPresence> presence,std::weak_ptr<const void> lifetime)
-    :db_(db),accounts_(accounts),characters_(characters),worlds_(worlds),equipment_(equipment),inventory_(inventory),
+    :db_(db),accounts_(accounts),characters_(characters),worlds_(worlds),equipment_(equipment),inventory_(inventory),joint_(inventory,equipment),
      presence_(std::move(presence)),database_lifetime_(std::move(lifetime)) {
     if(!owns_database()||!presence_||!presence_->owns_repository(characters_))
         throw DatabaseError("TW actor saved source requires exact private same-DB owners");
@@ -74,7 +93,7 @@ OwnedTaiwanReturnActorSavedSource::OwnedTaiwanReturnActorSavedSource(sqlite3* db
 bool OwnedTaiwanReturnActorSavedSource::owns_database() const noexcept {
     return !database_lifetime_.expired()&&db_&&accounts_.uses_connection(db_)&&characters_.uses_connection(db_)&&
         worlds_.owns_sources(accounts_,characters_)&&equipment_.owns_sources(accounts_,characters_)&&
-        inventory_.owns_sources(accounts_,characters_)&&!poisoned_;
+        inventory_.owns_sources(accounts_,characters_)&&joint_.owns_writers(inventory_,equipment_)&&!poisoned_;
 }
 bool OwnedTaiwanReturnActorSavedSource::owns_presence(const std::shared_ptr<SharedWorldPresence>& p) const noexcept {
     if(thread_!=std::this_thread::get_id())return false;
@@ -85,6 +104,67 @@ bool OwnedTaiwanReturnActorSavedSource::owns_readset(const Readset& value) const
     if(thread_!=std::this_thread::get_id())return false;
     if(reading_){poisoned_=true;return false;}
     return identity_current(value);
+}
+bool OwnedTaiwanReturnActorSavedSource::profile_shape(const ProfileEquipment& value) const noexcept {
+    if(!value.data_||value.data_->owner!=this||value.data_->identity!=identity_||
+       !identity_current(value.data_->saved)||value.data_->index>=value.data_->saved.materials().size())return false;
+    const auto& row=value.data_->saved.materials()[value.data_->index];
+    const auto& equipment=value.equipment();
+    return row.equipment&&row.actor.lease.actor_handle&&row.actor.lease.actor_handle<=0xfff&&
+        value.inventory()==row.inventory&&equipment==*row.equipment&&
+        NativeEquipmentSnapshot::same_root(equipment.root,row.actor.character)&&
+        equipment.position==row.actor.position&&equipment.actor_handle==row.actor.lease.actor_handle;
+}
+bool OwnedTaiwanReturnActorSavedSource::owns_profile_equipment(const ProfileEquipment& value) const noexcept {
+    if(thread_!=std::this_thread::get_id())return false;
+    if(reading_){poisoned_=true;return false;}
+    return profile_shape(value);
+}
+bool OwnedTaiwanReturnActorSavedSource::profile_equipment_matches(const ProfileEquipment& value,
+        const Readset& saved,std::size_t index) const noexcept {
+    if(thread_!=std::this_thread::get_id())return false;
+    if(reading_){poisoned_=true;return false;}
+    return profile_shape(value)&&value.data_->saved==saved&&value.data_->index==index;
+}
+bool OwnedTaiwanReturnActorSavedSource::profiles_stored(const Readset& saved,
+        std::span<const ProfileEquipment> profiles,sqlite3_int64 changes) const {
+    for(const auto& profile:profiles){
+        if(!profile_shape(profile)||profile.data_->saved!=saved)return false;
+        if(!joint_.committed_current_in_scope(db_,profile.data_->committed))return false;
+        fence(changes,false);
+    }
+    return true;
+}
+std::optional<OwnedTaiwanReturnActorSavedSource::ProfileEquipment>
+OwnedTaiwanReturnActorSavedSource::observe_profile_equipment(const Readset& value,std::size_t index) const {
+    try{
+        Operation operation(*this);const Readset saved=value;
+        if(!identity_current(saved)||index>=saved.materials().size()||!saved.materials()[index].equipment)return {};
+        const auto changes=sqlite3_total_changes64(db_);fence(changes,true);
+        const auto& row=saved.materials()[index];
+        auto receipt=joint_.observe_committed(row.actor.lease.account,row.actor.lease.character);
+        fence(changes,true);if(!receipt)return {};
+        ProfileEquipment result(std::make_shared<const ProfileData>(this,identity_,saved,index,std::move(*receipt)));
+        if(!profile_shape(result))return {};
+        for(const auto& member:saved.materials()){if(!presence_->ready(member.actor.lease))return {};fence(changes,true);}
+        {
+            ReadScope scope(*this);scope.begin(changes);
+            if(!stored(saved,changes)||!profiles_stored(saved,std::span<const ProfileEquipment>(&result,1),changes))return {};
+            fence(changes,false);scope.finish(changes);
+        }
+        if(!profile_shape(result)||!registry_current(saved))return {};fence(changes,true);return result;
+    }catch(const std::exception&){return {};}
+}
+bool OwnedTaiwanReturnActorSavedSource::profile_equipment_current(const ProfileEquipment& value) const {
+    if(thread_!=std::this_thread::get_id())return false;
+    const ProfileEquipment retained=value;
+    return current_with_role_text(retained.saved_readset(),{}, {}, {},std::span<const ProfileEquipment>(&retained,1));
+}
+bool OwnedTaiwanReturnActorSavedSource::profile_equipment_stored_current_in_scope(
+        sqlite3* connection,const ProfileEquipment& value) const {
+    if(thread_!=std::this_thread::get_id())return false;
+    const ProfileEquipment retained=value;
+    return stored_current_in_scope(connection,retained.saved_readset(),std::span<const ProfileEquipment>(&retained,1));
 }
 void OwnedTaiwanReturnActorSavedSource::fence(sqlite3_int64 changes,bool autocommit) const {
     // Once an ended owned transaction is observed, retire rollback ownership
@@ -185,7 +265,8 @@ bool OwnedTaiwanReturnActorSavedSource::current(const Readset& value) const {
 bool OwnedTaiwanReturnActorSavedSource::current_with_role_text(const Readset& value,
         const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>& role,
         std::span<const OwnedTaiwanPkReturnRoleTextSource::Observation> texts,
-        std::span<const OwnedTaiwanPkReturnRoleTextSource::EndpointObservation> endpoints) const {
+        std::span<const OwnedTaiwanPkReturnRoleTextSource::EndpointObservation> endpoints,
+        std::span<const ProfileEquipment> profiles) const {
     try{
         Operation operation(*this);
         // Own inputs before any live/SQLite observer can replace the caller's
@@ -193,7 +274,9 @@ bool OwnedTaiwanReturnActorSavedSource::current_with_role_text(const Readset& va
         const Readset retained=value;const auto role_owner=role;
         const std::vector<OwnedTaiwanPkReturnRoleTextSource::Observation> text_rows(texts.begin(),texts.end());
         const std::vector<OwnedTaiwanPkReturnRoleTextSource::EndpointObservation> endpoint_rows(endpoints.begin(),endpoints.end());
+        const std::vector<ProfileEquipment> profile_rows(profiles.begin(),profiles.end());
         if(!identity_current(retained)||(!role_owner&&(!text_rows.empty()||!endpoint_rows.empty())))return false;
+        for(const auto& profile:profile_rows)if(!profile_shape(profile)||profile.data_->saved!=retained)return false;
         const auto changes=sqlite3_total_changes64(db_);fence(changes,true);
         if(role_owner&&!role_owner->owns_presence(presence_))return false;
         fence(changes,true);
@@ -201,18 +284,23 @@ bool OwnedTaiwanReturnActorSavedSource::current_with_role_text(const Readset& va
         {
             ReadScope scope(*this);scope.begin(changes);
             if(!stored(retained,changes)||(role_owner&&!role_owner->stored_current_in_scope(db_,text_rows,endpoint_rows)))return false;
+            if(!profiles_stored(retained,profile_rows,changes))return false;
             fence(changes,false);scope.finish(changes);
         }
         if(!registry_current(retained))return false;fence(changes,true);return true;
     }catch(const std::exception&){return false;}
 }
-bool OwnedTaiwanReturnActorSavedSource::stored_current_in_scope(sqlite3* connection,const Readset& value) const {
+bool OwnedTaiwanReturnActorSavedSource::stored_current_in_scope(sqlite3* connection,const Readset& value,
+        std::span<const ProfileEquipment> profiles) const {
     try{
         Operation operation(*this);
         const Readset retained=value;
+        const std::vector<ProfileEquipment> profile_rows(profiles.begin(),profiles.end());
         if(connection!=db_||sqlite3_get_autocommit(db_)||!identity_current(retained))return false;
+        for(const auto& profile:profile_rows)if(!profile_shape(profile)||profile.data_->saved!=retained)return false;
         const auto changes=sqlite3_total_changes64(db_);fence(changes,false);
-        return stored(retained,changes);
+        if(!stored(retained,changes)||!profiles_stored(retained,profile_rows,changes))return false;
+        fence(changes,false);return true;
     }catch(const std::exception&){return false;}
 }
 }

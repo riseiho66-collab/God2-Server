@@ -407,6 +407,14 @@ public:
         std::optional<SharedWorldPresence::ReadyPopulation> ready_population;
         std::shared_ptr<god2::OwnedTaiwanReturnActorSavedSource> actor_saved_source;
         std::optional<god2::OwnedTaiwanReturnActorSavedSource::Readset> actor_saved_rows;
+        // Exact backend-issued input node for the typed complete supplier.
+        std::shared_ptr<const god2::OwnedTaiwanReturnActorSavedSource::PopulationInput> actor_input={};
+        // Only rendering-selected rows need this genuine same-writers joined
+        // equipment witness. Its absence never manufactures appearance.
+        std::vector<god2::OwnedTaiwanReturnActorSavedSource::ProfileEquipment> actor_profile_equipment;
+        // Set by the actual backend for its typed-input supplier only. Legacy
+        // complete suppliers retain their existing appearance/source contract.
+        bool actor_profile_equipment_required=false;
     };
     class TaiwanPkReturnPlan {
     public:

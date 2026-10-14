@@ -115,11 +115,17 @@ bool SharedActorVisibility::taiwan_pk_return_population_fence(const std::shared_
     owner();if(!state)return false;
     const auto& scene=state->scene;
     const bool population=bool(scene.ready_population),source=bool(scene.actor_saved_source),rows=bool(scene.actor_saved_rows);
-    if(!population && !source && !rows)return true; // Existing full supplier contract.
+    if(!population && !source && !rows)return !scene.actor_input&&
+        scene.actor_profile_equipment.empty()&&!scene.actor_profile_equipment_required; // Existing full supplier contract.
     if(!population || !source || !rows || !scene.actor_saved_source->owns_presence(presence_) ||
        !scene.actor_saved_source->owns_readset(*scene.actor_saved_rows) ||
        !presence_->retained_population_current(*scene.ready_population) ||
        !scene.actor_saved_rows->matches_population(scene.ready_population->characters()))return false;
+    if(scene.actor_input&&(scene.actor_input->source()!=scene.actor_saved_source||
+       scene.actor_input->role_text_source()!=scene.role_text_source||
+       scene.actor_input->population()!=*scene.ready_population||
+       scene.actor_input->readset()!=*scene.actor_saved_rows))return false;
+    if(scene.actor_profile_equipment_required&&!scene.actor_input)return false;
     // A complete population is not the visible edge list. Every selected
     // endpoint and both actual returners must belong to this same full readset.
     const auto ready=scene.ready_population->characters();
@@ -127,6 +133,36 @@ bool SharedActorVisibility::taiwan_pk_return_population_fence(const std::shared_
         std::size_t matches=0;
         for(const auto& actor:ready)
             if(actor.lease.session==session && actor.lease==endpoint.lease && actor.position==endpoint.position)++matches;
+        if(matches!=1)return false;
+    }
+    const auto& profiles=scene.actor_profile_equipment;
+    for(std::size_t i=0;i<profiles.size();++i){
+        const auto& observed=profiles[i];
+        const auto row=observed.row_index();
+        if(row>=ready.size()||
+           !scene.actor_saved_source->profile_equipment_matches(observed,*scene.actor_saved_rows,row))return false;
+        for(std::size_t j=0;j<i;++j)if(profiles[j].row_index()==row)return false;
+        bool selected=false;
+        for(const auto& [key,actor]:state->actors)if(actor.source==ready[row].lease){selected=true;break;}
+        if(!selected)return false;
+    }
+    if(scene.actor_profile_equipment_required)for(const auto& [key,actor]:state->actors){
+        std::size_t matches=0;
+        for(const auto& observed:profiles)if(ready[observed.row_index()].lease==actor.source){
+            ++matches;
+            // CUSTOM-0133 fresh ordinary appearance projection, not a remote
+            // DA-after-cache display claim. Pure byte equality with the exact
+            // private joined witness; no parser, allocation or observer here.
+            const auto& raw=observed.equipment().record;
+            if(raw.size()!=NativeEquipmentSnapshot::record_bytes)return false;
+            const auto spawn=RecoveredRemoteActor::encode_logical(actor.native.spawn);
+            for(std::size_t component=0;component<8;++component)
+                if(spawn[21+component]!=raw[NativeEquipmentSnapshot::inventory_bytes+3+component])return false;
+            if(spawn[77]!=raw[NativeEquipmentSnapshot::inventory_bytes+11]||
+               spawn[78]!=raw[NativeEquipmentSnapshot::inventory_bytes+12]||
+               spawn[79]!=raw[NativeEquipmentSnapshot::inventory_bytes+13]||
+               spawn[80]!=raw[NativeEquipmentSnapshot::inventory_bytes+14])return false;
+        }
         if(matches!=1)return false;
     }
     return true;
@@ -223,7 +259,8 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                 if(in_scope){
                     // Both known closed readers share the actual room's one
                     // transaction. No scene/session/resource/provider callbacks.
-                    if(!saved->stored_current_in_scope(in_scope,*state->scene.actor_saved_rows)||!valid())return false;
+                    if(!saved->stored_current_in_scope(in_scope,*state->scene.actor_saved_rows,
+                            state->scene.actor_profile_equipment)||!valid())return false;
                     if(source&&(!source->owns_presence(presence_)||state->role_rows.size()!=state->actors.size()||
                        state->endpoint_rows.size()!=state->endpoints.size()||
                        !source->stored_current_in_scope(in_scope,state->role_rows,state->endpoint_rows)||!valid()))return false;
@@ -232,7 +269,7 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                 if(source&&(!source->owns_presence(presence_)||state->role_rows.size()!=state->actors.size()||
                    state->endpoint_rows.size()!=state->endpoints.size()))return false;
                 return saved->current_with_role_text(*state->scene.actor_saved_rows,source,
-                    state->role_rows,state->endpoint_rows)&&valid();
+                    state->role_rows,state->endpoint_rows,state->scene.actor_profile_equipment)&&valid();
             }
             if(!source)return !in_scope&&valid();
             return source->owns_presence(presence_)&&state->role_rows.size()==state->actors.size()&&
@@ -361,7 +398,7 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
             // population together with all optional role/guild/endpoint rows.
             // No external source callbacks follow this joint cut.
             if(!saved_source->current_with_role_text(*state->scene.actor_saved_rows,role_source,
-                    state->role_rows,state->endpoint_rows)||!valid())return false;
+                    state->role_rows,state->endpoint_rows,state->scene.actor_profile_equipment)||!valid())return false;
         }else if(role_source&&(!role_source->stored_current(state->role_rows,state->endpoint_rows)||!valid()))return false;
         return valid();
     }catch(...){state->poisoned=true;return false;}

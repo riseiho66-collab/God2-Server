@@ -5306,6 +5306,37 @@
           "src/game/OwnedTaiwanReturnActorSavedSource.cpp"
         ],
         "evidence": "docs/research/tw-return-actor-saved-source-20261015.md"
+      },
+      "return_profile_input_source410": {
+        "classification": "CUSTOM0133_ACTUAL_TYPED_BACKEND_POPULATION_INPUT_AND_JOINED_SAVED_PROFILE_EQUIPMENT_PARTIAL_ROUTE",
+        "round": 410,
+        "private_backend_PopulationInput_before_mandatory_supplier": true,
+        "same_private_population_and_readset_node_required": true,
+        "immutable_request_copied_before_observers": true,
+        "same_writers_joint_committed_equipment_receipt_exact_saved_row": true,
+        "historical_root_pose_actor_mismatch_not_rebased": true,
+        "actual_same_connection_closed_equipment_reader": true,
+        "final_saved_role_equipment_one_scope_and_FinishedRoom_borrowed_cut": true,
+        "typed_selected_sources_exact_private_equipment_receipt_coverage": true,
+        "pure_full6F_component_transform_scalar_equals_private_DA_witness": true,
+        "canonical_inventory_slot_to_raw50_row_semantic_authority_qualified": false,
+        "native_equip_permission_or_original_writer_invocation_qualified": false,
+        "legacy_complete_supplier_contract_preserved": true,
+        "full_actor_profile_resources_selection_producer": false,
+        "arbitrary_schema_changing_observer_or_silent_transaction_replacement_qualified": false,
+        "default_enabled": false,
+        "source_paths": [
+          "src/db/SqliteOwnedEquipmentTransaction.h",
+          "src/db/SqliteOwnedEquipmentTransaction.cpp",
+          "src/game/OwnedTaiwanReturnActorSavedSource.h",
+          "src/game/OwnedTaiwanReturnActorSavedSource.cpp",
+          "src/game/SharedWorldPresence.h",
+          "src/handlers/OwnedPkOutboxPublication.h",
+          "src/cn/world/SharedActorVisibility.h",
+          "src/cn/world/SharedActorVisibility.cpp",
+          "src/db/SqliteDatabase.cpp"
+        ],
+        "evidence": "docs/research/tw-return-profile-input-source-20261015.md"
       }
     },
     {

@@ -116,6 +116,10 @@ public:
     // Single consistent read scope over BOTH current tuples and actual common
     // root/position/battle state. Never compose two independently current reads.
     bool committed_current(const Committed&);
+    // Borrow the actual caller-owned transaction. Private joint/writer identity
+    // and the complete stored/common tuple are checked without live callbacks,
+    // BEGIN, COMMIT, rollback or clearing another operation's issuer flags.
+    bool committed_current_in_scope(sqlite3*,const Committed&);
     // Preparation-time exact full old tuple, in one actual consistent read
     // scope. Equality proves current material, never action/equip permission.
     bool before_current(const Before&);
@@ -136,5 +140,6 @@ private:
     SqliteNativeEquipmentSnapshotRepository& equipment_;
     SqliteNativeWorldEntrySnapshotRepository* worlds_=nullptr;
     const std::shared_ptr<const Identity> identity_=std::make_shared<const Identity>();
+    bool closed_reading_=false,closed_poisoned_=false;
 };
 }
