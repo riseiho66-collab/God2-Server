@@ -3296,6 +3296,29 @@
         },
         "paired_settlement": "resolve_collected explicit CUSTOM two-owner order and skip-second-on-lethal; one shared Battle staged; RecoveredPkActionProjection sends bulk88 only at final executed action; settle transaction CAS checkpoint, round phase and two replies, full dual-owner/definition readset recheck.",
         "later_round_grants": "REJECTED_PENDING_FRESH_NATIVE_RAW_GRANT_AND_COUNTER_EVIDENCE"
+      },
+      "native_actor_identity_source": {
+        "round": 392,
+        "document": "docs/research/tw-pk-native-identity-source-20261014.md",
+        "source_paths": [
+          "src/core/Application.cpp",
+          "src/db/SqliteOwnedPkRoomRepository.cpp",
+          "src/game/OwnedTaiwanPkAppearanceSource.h",
+          "src/game/OwnedTaiwanPkPlayerEntrySource.h",
+          "src/handlers/OwnedPkInvitationService.h",
+          "src/handlers/OwnedTaiwanPkEntryPreparation.h",
+          "src/net/Session.cpp",
+          "src/net/Session.h",
+          "src/protocol/RecoveredPkEntryProjection.h"
+        ],
+        "source_connected": true,
+        "identity_authority": "actual private original INIT incarnation and same ready Presence lease; full64 saved owner retained",
+        "legacy_selected_character_preserved": true,
+        "raw_scalar_factory_bypass": false,
+        "actual_Main_backend_hosted": false,
+        "whole_route_complete": false,
+        "default_activated": false,
+        "product_execution": false
       }
     },
     {

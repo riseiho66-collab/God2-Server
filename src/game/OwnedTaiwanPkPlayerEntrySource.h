@@ -1,5 +1,6 @@
 #pragma once
 #include "game/OwnedTaiwanPkCombatSource.h"
+#include "game/TaiwanWorldEntryIdentity.h"
 #include "db/SqliteRoleTextRepository.h"
 #include "protocol/RecoveredBattleBootstrap.h"
 #include "text/LegacyChineseCodec.h"
@@ -36,6 +37,7 @@ public:
         const Material& material()const noexcept{return *material_;}
         const OwnedTaiwanPkCombatSource::Observation& combat()const noexcept;
         std::uint16_t recipient_codepage()const;
+        TaiwanWorldEntryIdentity identity_profile()const noexcept;
         RecoveredBattleIdentity::Record identity(std::uint8_t position,std::uint16_t recipient_codepage)const;
         bool current()const;
         bool uses_connection(const sqlite3*)const noexcept;
@@ -49,12 +51,14 @@ public:
         std::shared_ptr<const Material> material_;
     };
     static std::optional<Observation> observe(sqlite3*,SqliteRoleTextRepository&,
-        OwnedTaiwanPkCombatSource::Observation);
+        OwnedTaiwanPkCombatSource::Observation,
+        TaiwanWorldEntryIdentity=TaiwanWorldEntryIdentity::SelectedCharacter);
 private:
     struct State {
         sqlite3* db;
         SqliteRoleTextRepository& texts;
         OwnedTaiwanPkCombatSource::Observation combat;
+        const TaiwanWorldEntryIdentity identity_profile;
         const std::thread::id thread=std::this_thread::get_id();
         bool reading=false,reentered=false;
         struct Operation {
@@ -91,7 +95,13 @@ private:
             const auto& appearance=combat.appearance().material();
             const auto& root=appearance.equipment.root;
             const auto role=RecoveredRoleLevel::parse(combat.material().role.logical);
-            if(!root.id||root.id>0xfff||root.id!=appearance.lease.actor_handle||
+            if(!root.id||root.id!=appearance.lease.character||
+               !valid_taiwan_world_entry_identity(identity_profile)||
+               !qualified_taiwan_scene_handle(appearance.lease.actor_handle)||
+               (identity_profile==TaiwanWorldEntryIdentity::QualifiedSceneHandle&&
+                   !combat.appearance().qualified_scene_identity())||
+               (identity_profile==TaiwanWorldEntryIdentity::SelectedCharacter&&
+                   (root.id>0xfff||root.id!=appearance.lease.actor_handle))||
                appearance.config_flag>1||!role||!role->level()||
                (root.name_codepage!=936&&root.name_codepage!=950))return {};
             const auto secondary=texts.load(root.account_id,root.id);
@@ -128,6 +138,9 @@ private:
 inline const OwnedTaiwanPkCombatSource::Observation& OwnedTaiwanPkPlayerEntrySource::Observation::combat()const noexcept{
     return state_->combat;
 }
+inline TaiwanWorldEntryIdentity OwnedTaiwanPkPlayerEntrySource::Observation::identity_profile()const noexcept{
+    return state_->identity_profile;
+}
 inline std::uint16_t OwnedTaiwanPkPlayerEntrySource::Observation::recipient_codepage()const{
     // Actual accepted tail grammar admits only0/1, and Session stores this
     // exact flag as client language. No arbitrary nonzero-to-page conversion.
@@ -145,7 +158,11 @@ inline RecoveredBattleIdentity::Record OwnedTaiwanPkPlayerEntrySource::Observati
     if(primary.empty()||primary.size()>15||primary.find('\0')!=std::string::npos||
        LegacyChineseCodec::decode(primary,page==936)!=material_->primary_utf8)
         throw std::invalid_argument("TW PK primary name cannot project losslessly");
-    const auto character=state_->combat.appearance().material().lease.character;
+    const auto& lease=state_->combat.appearance().material().lease;
+    // Only the genuine private INIT/equipment/Lease source may select this
+    // independent native actor. Saved owner/text identity remains full64.
+    const auto character=state_->identity_profile==TaiwanWorldEntryIdentity::QualifiedSceneHandle?
+        lease.actor_handle:lease.character;
     if(!character||character>0xfff)throw std::invalid_argument("TW PK player identity exceeds qualified domain");
     RecoveredBattleIdentity::Bytes bytes{};
     bytes[0]=0x1c;bytes[1]=position;bytes[2]=material_->level;
@@ -165,10 +182,11 @@ inline bool OwnedTaiwanPkPlayerEntrySource::Observation::stored_current_in_room_
     return state_->stored_current(*material_,db);
 }
 inline std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> OwnedTaiwanPkPlayerEntrySource::observe(
-        sqlite3* db,SqliteRoleTextRepository& texts,OwnedTaiwanPkCombatSource::Observation combat){
-    if(!db||!texts.uses_connection(db)||!combat.uses_connection(db)||
+        sqlite3* db,SqliteRoleTextRepository& texts,OwnedTaiwanPkCombatSource::Observation combat,
+        TaiwanWorldEntryIdentity identity){
+    if(!valid_taiwan_world_entry_identity(identity)||!db||!texts.uses_connection(db)||!combat.uses_connection(db)||
        !sqlite3_get_autocommit(db)||!combat.current())return {};
-    auto state=std::make_shared<State>(State{db,texts,std::move(combat)});
+    auto state=std::make_shared<State>(State{db,texts,std::move(combat),identity});
     std::optional<Material> material;
     {State::Operation operation(*state);State::ReadScope scope(db);material=state->read();scope.finish();}
     if(!material)return {};

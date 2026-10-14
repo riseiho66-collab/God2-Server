@@ -676,3 +676,16 @@ formula/opcode/defaultactivation/fullroute. Mainnullauthority/mixedC69facade/
 fullScene/resources/wholeWWRlineage/64DB-to-nativeactor mapping/nativeadoption/
 wholeinventoryOPEN; parser77=50/11/16,pending12/frontier26 21/105/whole%null.
 FullTW100first ACTIVE/commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.
+
+Round392 connects full64 saved-character versus exact native scene actor PK
+identity: private original Entry records genuine prepared_actor profile;
+opaque exactINIT+samePresenceLease receipt ->Main/C69 exact actor lookup ->
+actualEntryPreparation/player/privateownedprojection ->full64Preparedcharacters
+and separatehandle readset ->Roomnamespace/privateINITretainedjoin ->actual
+Session S1C sender. Duplicate native actors rejected; legacySelectedCharacter,
+rawfactories/ten-peer-fields/readsets/storage/controllers/locks remain unchanged.
+NineexistingCPP/V29pins derive84 plus existingmissing sources; no newprojectPY/
+Lua/native/formula/opcode/defaultactivation/fullroute. ActualMainnullauthority/
+mixedfacade/fullScene/wholeWWRlearnedlineage/fullactions/wholeinventory remain
+OPEN; parser77=50/11/16,pending12/frontier26 21/105,whole%null. TW100firstACTIVE,
+commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.

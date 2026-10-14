@@ -123,7 +123,8 @@ public:
             if(!appearance||!local())return {};
             combat[i]=OwnedTaiwanPkCombatSource::observe(db_,characters_,auxiliary_,std::move(*appearance));
             if(!combat[i]||!local())return {};
-            players[i]=OwnedTaiwanPkPlayerEntrySource::observe(db_,texts_,*combat[i]);
+            players[i]=OwnedTaiwanPkPlayerEntrySource::observe(db_,texts_,*combat[i],
+                peers[i].native_identity?TaiwanWorldEntryIdentity::QualifiedSceneHandle:TaiwanWorldEntryIdentity::SelectedCharacter);
             if(!players[i]||!local())return {};
             vitals[i]=OwnedTaiwanPkVitalSource::observe(*combat[i]);
             if(!vitals[i]||!local())return {};
@@ -191,11 +192,15 @@ private:
         return (prebattle_phase==SessionState::CharacterSelected||prebattle_phase==SessionState::InWorld)&&
             !session->closing()&&session->state()==prebattle_phase&&session->id()==peer.session&&
             session->account_id==peer.account&&session->character_id==peer.character&&
-            session->battle_generation()==peer.battle_generation;
+            session->battle_generation()==peer.battle_generation&&
+            (!peer.native_identity||(peer.native_identity->owns_presence(presence_)&&
+                peer.native_identity->matches_initialization(initialization)&&peer.native_identity->current()));
     }
     bool lease_current(const SharedWorldPresence::Lease& lease,const Peer& peer)const{
         if(!open()||lease.session!=peer.session||lease.account!=peer.account||lease.character!=peer.character||
-           presence_->ready_lease(peer.session,peer.account,peer.character)!=std::optional{lease})return false;
+           presence_->ready_lease(peer.session,peer.account,peer.character)!=std::optional{lease}||
+           (peer.native_identity&&peer.native_identity->actor_handle()!=lease.actor_handle)||
+           (!peer.native_identity&&lease.actor_handle!=peer.character))return false;
         // Initial lease pose and current saved pose differ after movement.
         // PK world_generation is independently reobserved through Resolve.
         return presence_->saved_position(lease)==std::optional{peer.position}&&open();

@@ -2310,7 +2310,8 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     const auto account=peer->account_id,character=peer->character_id;
                     const auto battle=peer->battle_generation();
                     const auto phase=peer->state();
-                    if(!account || !character || character>UINT32_MAX)return {};
+                    if(!account || !character ||
+                       (taiwan_entry_identity==TaiwanWorldEntryIdentity::SelectedCharacter&&character>UINT32_MAX))return {};
                     const auto local=[&] {
                         const auto at=party_sessions.find(id);
                         const auto gen=pk_world_generations.find(id);
@@ -2384,7 +2385,20 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     if(!local() || recovered_movement->current_location(id,account,character)!=position || !local())return {};
                     if(ready)ready=owned_player_and_companions_projected.contains(id) && transport_current();
                     if(!local())return {};
-                    return OwnedPkInvitationService::Peer{id,account,character,generation,battle,*position,ready,blocked};
+                    std::optional<OwnedPkInvitationService::NativeIdentity> native_identity;
+                    if(taiwan_entry_identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle){
+                        if(!common_world||!initialization||!transport_current())return {};
+                        const auto presence=common_world->presence();
+                        const auto lease=presence->ready_lease(id,account,character);
+                        if(!lease||!local())return {};
+                        native_identity=OwnedPkInvitationService::NativeIdentity::observe(peer,*initialization,presence,*lease);
+                        if(!native_identity||!local()||!transport_current()||
+                           presence->saved_position(*lease)!=position||!local()||
+                           recovered_movement->current_location(id,account,character)!=position||!local()||
+                           !native_identity->current()||!transport_current()||!local())return {};
+                    }
+                    return OwnedPkInvitationService::Peer{id,account,character,generation,battle,*position,ready,blocked,
+                        std::move(native_identity)};
                 } catch(...) {
                     // A failed passive PK source observer cannot interrupt the
                     // original unrelated world handler or manufacture readiness.
@@ -2394,7 +2408,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             OwnedPkInvitationService pk_invitations(pk_peer,
                 [&](std::uint32_t character)->std::optional<OwnedPkInvitationService::Peer> {
                     std::optional<OwnedPkInvitationService::Peer> result;
-                    for(const auto&[id,weak]:party_sessions)if(const auto peer=pk_peer(id);peer&&peer->character==character){
+                    for(const auto&[id,weak]:party_sessions)if(const auto peer=pk_peer(id);peer&&peer->native_actor()==std::optional{character}){
                         if(result)return {};result=peer;
                     }
                     return result;

@@ -8,6 +8,7 @@
 #include "game/OwnedTaiwanPkInitialContextSource.h"
 #include "protocol/RecoveredBattleBootstrap.h"
 #include "protocol/RecoveredBattlePlayerGrant.h"
+#include <algorithm>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -54,6 +55,8 @@ struct RecoveredPkEntryProjection {
     public:
         const std::array<std::vector<std::uint8_t>,2>& records()const noexcept{return records_;}
         const std::array<std::uint64_t,2>& characters()const noexcept{return characters_;}
+        // Present only on the actual owned-player independent scene path.
+        const std::optional<std::array<std::uint16_t,2>>& native_actor_handles()const noexcept{return native_actor_handles_;}
         // Exact validated raw-vital values retained for shared-room admission;
         // an actor cannot enter with resources different from its wire view.
         const std::array<std::array<std::uint32_t,4>,2>& resources()const noexcept{return resources_;}
@@ -84,6 +87,7 @@ struct RecoveredPkEntryProjection {
              notification_bounds_(notification_bounds){}
         std::array<std::vector<std::uint8_t>,2> records_;
         std::array<std::uint64_t,2> characters_;
+        std::optional<std::array<std::uint16_t,2>> native_actor_handles_;
         std::array<std::array<std::uint32_t,4>,2> resources_;
         std::array<std::uint16_t,2> levels_;
         std::array<RecoveredBattlePlayerGrant::Bytes,2> grants_;
@@ -171,7 +175,27 @@ struct RecoveredPkEntryProjection {
         };
         std::array players{player(0,page0),player(1,page0)};
         OwnedAppearances appearances{sources[0].combat().appearance(),sources[1].combat().appearance()};
-        auto prepared=prepare_waiting_notification_owned(players,views,catalog,std::move(appearances));
+        const bool independent=std::any_of(sources.begin(),sources.end(),[](const auto& source){
+            return source.identity_profile()==TaiwanWorldEntryIdentity::QualifiedSceneHandle;
+        });
+        auto prepared=[&](){
+            if(!independent)return prepare_waiting_notification_owned(players,views,catalog,std::move(appearances));
+            // No public raw/scalar factory receives this private source route.
+            auto result=prepare_impl(players,views,true,true,&sources);
+            const auto select=[&](std::size_t i,std::uint8_t position){
+                const auto record=RecoveredBattlePlayerAppearance::at_position(players[i].appearance,position);
+                auto source=catalog.select(record);
+                if(!source)throw std::invalid_argument("PK ordinary appearance lacks exact Fight resource rows");
+                return std::move(*source);
+            };
+            result.fight_sources_=FightSources{select(0,0),select(1,14),select(1,0),select(0,14)};
+            for(const auto& source:appearances)if(!source.current())
+                throw std::invalid_argument("PK owned appearance source changed during projection");
+            result.owned_appearances_=std::move(appearances);
+            result.native_actor_handles_=std::array<std::uint16_t,2>{
+                players[0].identity.identity_word(),players[1].identity.identity_word()};
+            return result;
+        }();
         // The second recipient may use a different page. Rebuild the complete
         // relative view before publication; never relabel the first view bytes.
         players={player(0,page1),player(1,page1)};
@@ -257,7 +281,8 @@ struct RecoveredPkEntryProjection {
         return prepared;
     }
 private:
-    static Prepared prepare_impl(const std::array<Player,2>& players,const std::array<View,2>& views,bool waiting,bool notification){
+    static Prepared prepare_impl(const std::array<Player,2>& players,const std::array<View,2>& views,bool waiting,bool notification,
+            const OwnedPlayers* owned_players=nullptr){
         std::array<std::array<std::uint32_t,4>,2> resources{};
         std::array<std::uint16_t,2> levels{};
         for(std::size_t i=0;i<2;++i){
@@ -266,7 +291,7 @@ private:
         }
         for(const auto& view:views)if(!RecoveredBattlePlayerGrant::parse(view.initial_control))
             throw std::invalid_argument("PK requires a qualified primary owner-slot0 grant");
-        auto records=logical(players,views);
+        auto records=owned_players?logical_owned(players,views,*owned_players):logical(players,views);
         if(waiting)for(auto& bytes:records)bytes.resize(bytes.size()-17);
         std::optional<ControlMasks> bounds;
         if(notification){
@@ -291,6 +316,29 @@ public:
         return {one(players[0],players[1],views[0]),one(players[1],players[0],views[1])};
     }
 private:
+    // Only the owning-player factory calls this path. Each profile retains
+    // its own full saved owner and exact private native actor proof.
+    static std::array<std::vector<std::uint8_t>,2> logical_owned(
+            const std::array<Player,2>& players,const std::array<View,2>& views,const OwnedPlayers& sources){
+        for(std::size_t i=0;i<2;++i){
+            const auto& source=sources[i];const auto& m=source.combat().appearance().material();
+            if(!source.current()||players[i].character!=m.lease.character||
+               !qualified_taiwan_scene_handle(m.lease.actor_handle)||
+               players[i].identity.identity_word()!=m.lease.actor_handle||
+               !valid_taiwan_world_entry_identity(source.identity_profile()))
+                throw std::invalid_argument("PK native identity requires the exact owned player source");
+            if(source.identity_profile()==TaiwanWorldEntryIdentity::SelectedCharacter)validate(players[i]);
+            else{
+                // Validation-only local wire namespace. Original characters
+                // are never rewritten in Prepared or supplied room identity.
+                auto native=players[i];native.character=m.lease.actor_handle;validate(native);
+            }
+        }
+        if(players[0].character==players[1].character||
+           players[0].identity.identity_word()==players[1].identity.identity_word())
+            throw std::invalid_argument("PK requires distinct owned roles and native actors");
+        return {one(players[0],players[1],views[0]),one(players[1],players[0],views[1])};
+    }
     static void validate(const Player&p){
         // Native world FC1C0 uses low12-bit identity; FAC70's lookup is exact.
         // Do not fabricate a cache alias for a wider saved/server role ID.

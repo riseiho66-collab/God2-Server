@@ -165,10 +165,12 @@ struct Session::NormalWorldInitialization::Entry {
     const std::uint64_t account,character,battle;
     const RecoveredWorldEntry::Frame frame;
     const std::vector<std::uint8_t> logical;
+    const bool qualified_scene_identity; // Set only by the actual validated prepared_actor hook.
     std::atomic<bool> written{false},retired{false};
     Entry(std::weak_ptr<Session> owner,std::uint64_t a,std::uint64_t c,std::uint64_t b,
-          RecoveredWorldEntry::Frame wire,std::vector<std::uint8_t> bytes)
-        :session(std::move(owner)),account(a),character(c),battle(b),frame(std::move(wire)),logical(std::move(bytes)) {}
+          RecoveredWorldEntry::Frame wire,std::vector<std::uint8_t> bytes,bool qualified=false)
+        :session(std::move(owner)),account(a),character(c),battle(b),frame(std::move(wire)),logical(std::move(bytes)),
+         qualified_scene_identity(qualified) {}
 };
 struct Session::NormalWorldInitialization::Data {
     const std::shared_ptr<Entry> entry;
@@ -186,6 +188,7 @@ const RecoveredWorldEntry::Frame& Session::NormalWorldInitialization::entry_fram
 const std::vector<std::uint8_t>& Session::NormalWorldInitialization::entry_logical() const noexcept {return data_->entry->logical;}
 const std::vector<std::uint8_t>& Session::NormalWorldInitialization::accepted_tail() const noexcept {return data_->tail;}
 std::uint8_t Session::NormalWorldInitialization::config_flag() const noexcept {return data_->config;}
+bool Session::NormalWorldInitialization::qualified_scene_identity() const noexcept {return data_->entry->qualified_scene_identity;}
 bool Session::NormalWorldInitialization::entry_written() const noexcept {
     return data_->entry->written.load() && !data_->entry->retired.load();
 }
@@ -2326,7 +2329,7 @@ struct Session::Impl {
                     auto logical=RecoveredWorldFrame::decode(*world_frame);
                     if(logical && logical->size()==37 && logical->front()==0x2a)
                         normal_entry=std::make_shared<NormalWorldInitialization::Entry>(self,
-                            entry_account,selected,entry_battle,*world_frame,std::move(*logical));
+                            entry_account,selected,entry_battle,*world_frame,std::move(*logical),prepared_actor.has_value());
                 }
             } catch(...) {}
             asio::post(s.strand,[self,selected,created,world_frame,prepared_actor,normal_entry=std::move(normal_entry)] {
@@ -4096,10 +4099,22 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     }
     const auto own=RecoveredBattleIdentity::parse_logical((*records)[3].bytes);
     const auto other=RecoveredBattleIdentity::parse_logical((*records)[6].bytes);
+    // CUSTOM-0086 preserve historical SelectedCharacter equality. Only the
+    // actual original qualified INIT may use its independently prepared actor.
+    // This is not a caller actor scalar or a mask of incoming S1C identity.
+    std::uint64_t own_actor=request.character;
+    if(data->entry->qualified_scene_identity){
+        const auto entry=RecoveredWorldEntryView::read(data->entry->frame);
+        if(!entry||!qualified_taiwan_scene_handle(entry->actor_handle)||
+           !std::equal(entry->logical.begin(),entry->logical.end(),
+               data->entry->logical.begin(),data->entry->logical.end()))
+            throw std::invalid_argument("Native PK entry lacks its actual qualified normal actor");
+        own_actor=entry->actor_handle;
+    }
     if(!own || !other || own->position()!=0 || other->position()!=14 ||
        !own->displayed_level() || !other->displayed_level() ||
        (own->variant()&0x6000)!=0x2000 || (other->variant()&0x6000)!=0x2000 ||
-       own->identity_word()!=request.character || !other->identity_word() ||
+       own->identity_word()!=own_actor || !other->identity_word() ||
        own->identity_word()==other->identity_word())
         throw std::invalid_argument("Native PK entry player identities mismatch");
     for(const auto index:{4u,5u,7u}) {

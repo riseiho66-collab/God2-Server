@@ -5764,3 +5764,20 @@ wholeinventoryOPEN; parser77=50/11/16,pending12/frontier26 21/105/whole%null.
 FullTW100first ACTIVE/commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.
 
 Details: docs/research/tw-pk-backend-lifecycle-source-20261014.md.
+
+## Round392 - Exact native actor and saved character identity (2026-10-14)
+
+Round392 connects full64 saved-character versus exact native scene actor PK
+identity: private original Entry records genuine prepared_actor profile;
+opaque exactINIT+samePresenceLease receipt ->Main/C69 exact actor lookup ->
+actualEntryPreparation/player/privateownedprojection ->full64Preparedcharacters
+and separatehandle readset ->Roomnamespace/privateINITretainedjoin ->actual
+Session S1C sender. Duplicate native actors rejected; legacySelectedCharacter,
+rawfactories/ten-peer-fields/readsets/storage/controllers/locks remain unchanged.
+NineexistingCPP/V29pins derive84 plus existingmissing sources; no newprojectPY/
+Lua/native/formula/opcode/defaultactivation/fullroute. ActualMainnullauthority/
+mixedfacade/fullScene/wholeWWRlearnedlineage/fullactions/wholeinventory remain
+OPEN; parser77=50/11/16,pending12/frontier26 21/105,whole%null. TW100firstACTIVE,
+commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.
+
+Details: docs/research/tw-pk-native-identity-source-20261014.md

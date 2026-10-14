@@ -148,9 +148,14 @@ bool owned_appearance_current(const SqliteOwnedPkRoomRepository::Input& input,sq
         const auto& m=source.material();const auto& p=i==0?input.pair.challenger:input.pair.recipient;
         // SharedWorldPresence generation and Application PK world_generation
         // are distinct namespaces. Retain both, never assert numerical equality.
+        const auto actor=p.native_actor();
         if(!source.uses_connection(db)||m.lease.session!=p.session||m.lease.account!=p.account||
-           m.lease.character!=p.character||m.lease.actor_handle!=p.character||
-           m.battle_generation!=p.battle_generation||m.equipment.position!=p.position||!source.current())return false;
+           m.lease.character!=p.character||!actor||!qualified_taiwan_scene_handle(m.lease.actor_handle)||
+           m.lease.actor_handle!=*actor||m.battle_generation!=p.battle_generation||
+           m.equipment.position!=p.position)return false;
+        if(p.native_identity&&(!p.native_identity->retained_matches_appearance(source)||
+           !p.native_identity->current()))return false; // Live INIT/presence only outside room SQL.
+        if(!source.current())return false;
     }
     if(input.combat_sources)for(const auto& source:*input.combat_sources)
         if(!source.uses_connection(db)||!source.current())return false;
@@ -363,7 +368,8 @@ void SqliteOwnedPkRoomRepository::install_finished_return_schema(sqlite3* db){
 void SqliteOwnedPkRoomRepository::validate(const Input& in){
     const auto& a=in.pair.challenger;const auto& b=in.pair.recipient;
     if(!a.session||!b.session||a.session==b.session||!a.account||!b.account||
-       !a.character||!b.character||a.character==b.character||a.character>0xfff||b.character>0xfff||
+       !a.character||!b.character||a.character==b.character||
+       (!a.native_identity&&a.character>0xfff)||(!b.native_identity&&b.character>0xfff)||
        !a.world_generation||!b.world_generation||!a.ready||!b.ready||a.blocked||b.blocked||
        a.position.area!=b.position.area||a.position.scene!=b.position.scene||
        !a.position.revision||!b.position.revision||
@@ -371,6 +377,42 @@ void SqliteOwnedPkRoomRepository::validate(const Input& in){
        b.battle_generation>=static_cast<std::uint64_t>(INT64_MAX)||
        in.entry.characters()!=std::array<std::uint64_t,2>{a.character,b.character})
         throw DatabaseError("Invalid PK owned pair");
+    const bool independent_actor=a.native_identity.has_value()||b.native_identity.has_value();
+    if(independent_actor!=in.entry.native_actor_handles().has_value())
+        throw DatabaseError("PK native actor profile differs from its private Prepared source");
+    if(independent_actor){
+        // Qualified native identities require the actual complete owned entry,
+        // not a public scalar handle or a wider saved ID cast into native bytes.
+        if(!in.combat_sources||!in.entry.owned_appearances()||!in.entry.owned_players()||
+           !in.entry.owned_vitals()||!in.entry.owned_initial_grants()||!in.entry.owned_initial_contexts())
+            throw DatabaseError("PK native actor profile lacks complete private owned entry sources");
+        const auto& handles=*in.entry.native_actor_handles();
+        if(!qualified_taiwan_scene_handle(handles[0])||!qualified_taiwan_scene_handle(handles[1])||
+           handles[0]==handles[1])throw DatabaseError("PK native actors must be exact distinct scene handles");
+    }
+    for(std::size_t i=0;i<2;++i){
+        const auto& peer=i==0?a:b;const auto actor=peer.native_actor();
+        if(!actor||!*actor||*actor>0xfff||
+           (independent_actor&&(*in.entry.native_actor_handles())[i]!=*actor))
+            throw DatabaseError("PK native actor does not match its original peer and private Prepared");
+        if(in.entry.owned_players()){
+            const auto profile=(*in.entry.owned_players())[i].identity_profile();
+            if(profile!=(peer.native_identity?TaiwanWorldEntryIdentity::QualifiedSceneHandle:
+                    TaiwanWorldEntryIdentity::SelectedCharacter))
+                throw DatabaseError("PK owned player profile differs from its original peer identity");
+        }
+        if(peer.native_identity){
+            const auto& source=(*in.entry.owned_appearances())[i];
+            const auto& material=source.material();
+            if(!peer.native_identity->retained_matches_appearance(source)||
+               material.lease.session!=peer.session||material.lease.account!=peer.account||
+               material.lease.character!=peer.character||material.battle_generation!=peer.battle_generation||
+               material.lease.actor_handle!=*actor)
+                throw DatabaseError("PK native actor proof differs from exact private INIT/presence/appearance");
+            // Retained graph only: ACTIVE/Finished/recovery must not demand an
+            // old live normal-world Current after its original battle consume.
+        }
+    }
     if(in.profile_readset_sha256.size()!=64||!std::all_of(in.profile_readset_sha256.begin(),in.profile_readset_sha256.end(),
        [](char c){return (c>='0'&&c<='9')||(c>='a'&&c<='f');}))
         throw DatabaseError("PK profile readset requires an explicit SHA256 binding");
@@ -535,6 +577,41 @@ std::string SqliteOwnedPkRoomRepository::readset(const Input& in){
         {"grants",in.entry.grants()},{"command_contexts",in.entry.command_contexts()},
         {"waiting_control",in.entry.waiting_control()},{"initial_control_masks",in.initial_control_masks},
         {"profile_readset_sha256",in.profile_readset_sha256}};
+    if(in.pair.challenger.native_identity||in.pair.recipient.native_identity){
+        // ONLY the opted private identity profile adds this binding. Historical
+        // peers, source objects, JSON keys and digest bytes stay unchanged.
+        if(!in.entry.native_actor_handles()||!in.entry.owned_appearances())
+            throw DatabaseError("PK native identity readset lacks exact private Prepared/appearance");
+        Json mappings=Json::array();
+        for(std::size_t i=0;i<2;++i){
+            const auto& peer=i==0?in.pair.challenger:in.pair.recipient;
+            const auto actor=peer.native_actor();
+            if(!actor||!*actor||*actor>0xfff||(*in.entry.native_actor_handles())[i]!=*actor)
+                throw DatabaseError("PK native identity readset differs from exact peer/Prepared actor");
+            auto row=Json{{"owner",Json::array({peer.session,peer.account,peer.character,
+                    peer.world_generation,peer.battle_generation})},
+                {"identity_profile",peer.native_identity?"qualified-scene-handle":"selected-character-legacy"},
+                {"native_actor",*actor}};
+            if(peer.native_identity){
+                const auto& source=(*in.entry.owned_appearances())[i];const auto& material=source.material();
+                if(!peer.native_identity->retained_matches_appearance(source))
+                    throw DatabaseError("PK native identity readset private namespace/INIT changed");
+                row["original_lease"]=Json::array({material.lease.session,material.lease.account,
+                    material.lease.character,material.lease.generation,material.lease.actor_handle});
+                row["initial_position"]=appearance_position(material.lease.position);
+                row["normal_entry_frame"]=material.entry_frame;
+                row["normal_entry_logical"]=material.entry_logical;
+                row["accepted_tail"]=material.accepted_tail;
+                row["config_flag"]=material.config_flag;
+                row["source_battle_generation"]=material.battle_generation;
+            }
+            mappings.push_back(std::move(row));
+        }
+        result["native_actor_mapping"]=Json{{"design_id","CUSTOM-0107"},
+            {"authority","private-current-normal-INIT-and-exact-presence-lease-at-admission;retained-original-identity-after-battle"},
+            {"saved_controller_domain","full-uint64-DB-identity;never-native-actor-alias"},
+            {"prepared_native_actor_handles",*in.entry.native_actor_handles()},{"sources",mappings}};
+    }
     if(in.entry.initial_notification_bounds()){
         // Only the new profile adds fields; legacy readset bytes stay intact.
         result["initial_control_mode"]="CUSTOM-0104-bounded-notification";

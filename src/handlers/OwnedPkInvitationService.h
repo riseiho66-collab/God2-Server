@@ -3,6 +3,7 @@
 #include "protocol/RecoveredPkEntryProjection.h"
 #include "protocol/RecoveredWorldRecords.h"
 #include "game/RecoveredPosition.h"
+#include "game/TaiwanWorldEntryIdentity.h"
 #include <chrono>
 #include <functional>
 #include <limits>
@@ -17,10 +18,97 @@ namespace god2 {
 class OwnedPkInvitationService {
 public:
     using Clock=std::chrono::steady_clock;
+    // Source identity receipt, never a caller-selected actor scalar. Private
+    // INIT incarnation and the complete ready common lease qualify this map;
+    // saved character ownership remains full64 throughout the room lifecycle.
+    class NativeIdentity {
+    public:
+        static std::optional<NativeIdentity> observe(const std::shared_ptr<Session>& session,
+                Session::NormalWorldInitialization initialization,
+                const std::shared_ptr<SharedWorldPresence>& presence,const SharedWorldPresence::Lease& supplied_lease){
+            const auto lease=supplied_lease;
+            if(!session||!presence||!session->normal_world_initialization_current_on_game(initialization)||
+               !initialization.entry_written()||!initialization.qualified_scene_identity())return {};
+            const auto phase=session->state();const auto battle=session->battle_generation();
+            const auto entry=RecoveredWorldEntryView::read(initialization.entry_frame());
+            if(session->closing()||(phase!=SessionState::CharacterSelected&&phase!=SessionState::InWorld)||
+               session->id()!=lease.session||session->account_id!=lease.account||session->character_id!=lease.character||
+               !lease.session||!lease.account||!lease.character||!lease.generation||
+               !qualified_taiwan_scene_handle(lease.actor_handle)||!entry||initialization.config_flag()>1||
+               entry->actor_handle!=lease.actor_handle||entry->area!=lease.position.area||entry->scene!=lease.position.scene||
+               entry->x!=lease.position.x||entry->y!=lease.position.y||
+               initialization.entry_logical()!=std::vector<std::uint8_t>(entry->logical.begin(),entry->logical.end()))return {};
+            NativeIdentity result(session,std::move(initialization),presence,lease,battle,phase);
+            if(!result.current())return {};return result;
+        }
+        std::uint16_t actor_handle()const noexcept{return lease_.actor_handle;}
+        bool owns_presence(const std::shared_ptr<SharedWorldPresence>& value)const noexcept{
+            return !presence_.owner_before(value)&&!value.owner_before(presence_);
+        }
+        bool matches_initialization(const Session::NormalWorldInitialization& value)const noexcept{
+            return initialization_.same_initialization(value);
+        }
+        bool matches_peer(std::uint64_t session,std::uint64_t account,std::uint64_t character,
+                std::uint64_t battle)const noexcept{
+            return lease_.session==session&&lease_.account==account&&lease_.character==character&&battle_==battle;
+        }
+        bool retained_matches(const SharedWorldPresence::Lease& lease,const RecoveredWorldEntry::Frame& frame,
+                const std::vector<std::uint8_t>& logical,const std::vector<std::uint8_t>& tail,
+                std::uint8_t flag,std::uint64_t battle)const noexcept{
+            return lease_==lease&&battle_==battle&&initialization_.entry_frame()==frame&&
+                initialization_.entry_logical()==logical&&initialization_.accepted_tail()==tail&&
+                initialization_.config_flag()==flag;
+        }
+        bool retained_matches_appearance(const OwnedTaiwanPkAppearanceSource::Observation& source)const noexcept{
+            const auto presence=presence_.lock();const auto& m=source.material();
+            return presence&&source.owns_presence(presence)&&source.owns_initialization(initialization_)&&
+                retained_matches(m.lease,m.entry_frame,m.entry_logical,m.accepted_tail,m.config_flag,m.battle_generation);
+        }
+        bool current()const{
+            // Only the original game owner may consult live Session/registry.
+            if(thread_!=std::this_thread::get_id())return false;
+            const auto session=session_.lock();const auto presence=presence_.lock();
+            if(!session||!presence||!session->normal_world_initialization_current_on_game(initialization_)||
+               !initialization_.entry_written()||session->closing()||session->state()!=phase_||
+               !matches_peer(session->id(),session->account_id,session->character_id,session->battle_generation()))return false;
+            return presence->ready_lease(lease_.session,lease_.account,lease_.character)==std::optional{lease_}&&
+                session->normal_world_initialization_current_on_game(initialization_)&&!session->closing()&&
+                session->state()==phase_&&matches_peer(session->id(),session->account_id,session->character_id,
+                    session->battle_generation())&&presence->retained_ready_current(lease_);
+        }
+        bool operator==(const NativeIdentity& other)const noexcept{
+            return lease_==other.lease_&&battle_==other.battle_&&phase_==other.phase_&&thread_==other.thread_&&
+                initialization_.same_initialization(other.initialization_)&&
+                !session_.owner_before(other.session_)&&!other.session_.owner_before(session_)&&
+                !presence_.owner_before(other.presence_)&&!other.presence_.owner_before(presence_);
+        }
+    private:
+        NativeIdentity(std::weak_ptr<Session> session,Session::NormalWorldInitialization initialization,
+                std::weak_ptr<SharedWorldPresence> presence,SharedWorldPresence::Lease lease,
+                std::uint64_t battle,SessionState phase)
+            :session_(std::move(session)),initialization_(std::move(initialization)),presence_(std::move(presence)),
+             lease_(std::move(lease)),battle_(battle),phase_(phase){}
+        std::weak_ptr<Session> session_;
+        Session::NormalWorldInitialization initialization_;
+        std::weak_ptr<SharedWorldPresence> presence_;
+        SharedWorldPresence::Lease lease_;
+        std::uint64_t battle_;
+        SessionState phase_;
+        std::thread::id thread_=std::this_thread::get_id();
+    };
     struct Peer {
         std::uint64_t session{},account{},character{},world_generation{},battle_generation{};
         RecoveredPosition position;
         bool ready{},blocked{};
+        std::optional<NativeIdentity> native_identity{};
+        std::optional<std::uint32_t> native_actor()const noexcept{
+            if(native_identity){
+                if(!native_identity->matches_peer(session,account,character,battle_generation))return {};
+                return native_identity->actor_handle();
+            }
+            if(!character||character>UINT32_MAX)return {};
+            return static_cast<std::uint32_t>(character); // Historical selected-character profile only.
+        }
         bool operator==(const Peer&)const=default;
     };
     struct Pair {Peer challenger,recipient;bool operator==(const Pair&)const=default;};
@@ -96,7 +184,8 @@ public:
         if(r.control!=RecoveredPk69::Control::Invite)return answer(sender,r,now);
         if(!RecoveredPk69::right_click(r)||!resolve_||!target_||!rule_||!publish_||!rooms_)return Outcome::Denied;
         const auto source=resolve_(sender),destination=target_(r.second);
-        if(!source||!destination||source->character!=r.first||destination->character!=r.second)return Outcome::Denied;
+        if(!source||!destination||source->native_actor()!=std::optional{r.first}||
+           destination->native_actor()!=std::optional{r.second})return Outcome::Denied;
         Pair pair{*source,*destination};
         if(!eligible(pair)||occupied(source->session)||occupied(destination->session)||!rule_(pair))return Outcome::Denied;
         auto* authority=rooms_();if(!authority)return Outcome::RoomUnavailable;
@@ -167,7 +256,8 @@ private:
     static bool eligible(const Pair&p){
         const auto&a=p.challenger;const auto&b=p.recipient;
         return a.session&&b.session&&a.session!=b.session&&a.account&&b.account&&
-            a.character&&b.character&&a.character!=b.character&&a.character<=UINT32_MAX&&b.character<=UINT32_MAX&&
+            a.character&&b.character&&a.character!=b.character&&a.native_actor()&&b.native_actor()&&
+            a.native_actor()!=b.native_actor()&&
             a.world_generation&&b.world_generation&&a.ready&&b.ready&&!a.blocked&&!b.blocked&&
             a.position.area==b.position.area&&a.position.scene==b.position.scene;
     }

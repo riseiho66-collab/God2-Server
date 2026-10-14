@@ -132,6 +132,8 @@ public:
     public:
         NormalWorldInitialization(const NormalWorldInitialization&)=default;
         NormalWorldInitialization& operator=(const NormalWorldInitialization&)=default;
+        bool same_initialization(const NormalWorldInitialization& other) const noexcept{return data_==other.data_;}
+        bool qualified_scene_identity() const noexcept; // Actual original prepared-actor branch only; no grant.
         const RecoveredWorldEntry::Frame& entry_frame() const noexcept;
         const std::vector<std::uint8_t>& entry_logical() const noexcept;
         const std::vector<std::uint8_t>& accepted_tail() const noexcept;
