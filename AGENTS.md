@@ -658,3 +658,21 @@ NineexistingCPP/V27all80=old76(71exact5updated)+4concretesources/canonical534;
 no newprojectPY/Lua/native/formula/opcode/defaultactivation/fullroute. Parser77=
 50/11/16,pending12/frontier26 21/105/whole%null. Main/resources/issuedlineage/
 fullactions/nativeadoption/wholeinventoryOPEN, fullTW100first ACTIVE/PHASE1only.
+
+Round391 fixes actualbackend ownership across return: canonicalopaque
+ReturnFlight lifecycle actualHeld Returning BEFOREconsume, finalfullscene/saved/
+jointstored/purecuts FOLLOWreceiver. DriveroldPKprocessingquiesces; Admission
+privateStageComplete/Ticketincarnation/Sessions/holds/heldsubmittedpurejoin.
+Adopted onlypostdurableReceipt/model/privateSession/pureRoomretire BEFOREgame
+yield; exactAdmissionCompleteAttempt +DriverPair/index retirednoclose/SQL/
+oldCurrent. SharedPair/localcallbackretention/freshupper_bound/adoptedcleanup
+preventdanglingvisit andstop/destructor healthyclose/repeatedPKquota accumulation.
+Configuredweakreceiverexpiryfailclosed/privatefactorycoordinator preallocated/
+armedonlyaftergraph/retiredbeforeborrowedteardown; Invitationoffersmustdrain.
+Conditionalfactoryfinishedschemapreflight BEFOREarchive/explicitDBwrapper
+SOURCEONLY/no install-on-read/defaultMain/nativeACK. SevenexistingCPP/V28all84
+=old80(77exact3updated)+4concretesources/canonical537/no newprojectPY/Lua/native/
+formula/opcode/defaultactivation/fullroute. Mainnullauthority/mixedC69facade/
+fullScene/resources/wholeWWRlineage/64DB-to-nativeactor mapping/nativeadoption/
+wholeinventoryOPEN; parser77=50/11/16,pending12/frontier26 21/105/whole%null.
+FullTW100first ACTIVE/commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.

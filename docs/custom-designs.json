@@ -5098,6 +5098,19 @@
     "default_activated": false,
     "whole_route_complete": false,
     "build_tests_runtime_SQL_activation_deployment": false
+  },
+  "return_backend_lifecycle_source": {
+    "classification": "ROUND391_EXACT_CANONICAL_BACKEND_RETURN_OWNERSHIP_LIFECYCLE_SOURCE",
+    "problem": "Actual Driver dirtytimer/oldPKhold checks afterconsume close returningSessions; persistentDriverPair/index+AdmissionCompleteAttempt rejectrepeatedPK andclosehealthyreturned peers onstop/destruction.",
+    "authority": "Opaque preallocated actual ReturnFlight identity/weakoriginalBinding+Lifetime+Sessions/immutableTicketincarnation+privateholds; exactownPublication privateCurrent, canonicalweakDriver subscriber andprivateBackendAdmissioncoordinator. No scalar/JSONconstructor, oldCurrentfailurepermission or nativeACK.",
+    "handoff": "ActualHeld Returning BEFOREconsume, followedbyfullscene/savedledger/contexts/finalstored/purecuts; exactDriveroldPKprocessing quiesced and actualAdmissionStageComplete purejoin. Adopted onlyafterdurableReceipt/model/privateSession/pureRoomretire BEFOREgameyield, actualAdmissionAttempt+DriverPair/index retirednoclose. Actualtwo read-start history remainsseparate.",
+    "lifetime": "SharedPair allocatedprebind/localheldthroughcallback/freshupper_bound traversal, adoptedflag harmlesscleanup; weakconfiguredreceiverexpiry failclosed, oldabsencepreserved. Privatecoordinator allocatedpregraph/armedafterfullassembly/retiredbeforeteardown; InvitationServiceborrowedoffers mustdrain.",
+    "schema": "ExplicitSqliteDatabasefinishedschemawrapper SOURCEONLY; conditionalfactoryrequirewhenreturn_sourceconfigured BEFOREarchive/sourceassembly; neverinstall-on-read/defaultMain/SQLexecution.",
+    "limits": "Mainnullauthority/authenticmixedC69facade/fullsupplier/wholeWWRlineage/QualifiedSceneHandlefull64DB-to-nativeactor mapping/nativeadoption/fullinventory OPEN. No newwire/rule/defaultactivation/fullroutecredit.",
+    "source_connected": true,
+    "default_activated": false,
+    "whole_route_complete": false,
+    "build_tests_runtime_SQL_activation_deployment": false
   }
 },
 {

@@ -10,7 +10,7 @@ namespace god2 {
 // executor. Construct after Lua initialization and drain/destroy Admission
 // before this owner. No asynchronous callback captures Lua or this owner.
 // This does not install Application hosting, invent seed/coefficients/order,
-// schedule idle retries, rehydrate a room or return players to WORLD.
+// schedule idle retries, rehydrate a room or supply ReturnScene material.
 class OwnedTaiwanPkLuaBasicOwner final {
     friend class OwnedTaiwanPkBasicDriver;
 public:
@@ -22,8 +22,10 @@ public:
     using WorldDeparture=OwnedPkOutboxPublication::WorldDeparture;
 
     OwnedTaiwanPkLuaBasicOwner(OwnedPkRoomState& rooms,LuaEngine& lua,
-            Parameters parameters,std::array<std::uint8_t,2> server_order,ReturnSceneSource return_scene={})
-        :lua_(lua),parameters_(checked(parameters)),order_(checked(server_order)),publication_(rooms,std::move(return_scene)){}
+            Parameters parameters,std::array<std::uint8_t,2> server_order,ReturnSceneSource return_scene={},
+            std::weak_ptr<OwnedPkOutboxPublication::ReturnLifecycleOwner> lifecycle={})
+        :lua_(lua),parameters_(checked(parameters)),order_(checked(server_order)),
+         publication_(rooms,std::move(return_scene),std::move(lifecycle)){}
     OwnedTaiwanPkLuaBasicOwner(const OwnedTaiwanPkLuaBasicOwner&)=delete;
     OwnedTaiwanPkLuaBasicOwner& operator=(const OwnedTaiwanPkLuaBasicOwner&)=delete;
 
@@ -52,6 +54,10 @@ public:
         return advance(session);
     }
 private:
+    // Exact own Publication/private Flight identity, including adopted history.
+    bool return_lifecycle_current(const OwnedPkOutboxPublication::ReturnLifecycle& value)const noexcept{
+        return publication_.return_lifecycle_current(value);
+    }
     // CUSTOM-0124 actual later game-timer visit, NOT an idle certificate.
     // The original Session strand staging remains the ACK/prefix authority.
     std::optional<Advance> advance_from_scheduled_turn(Session& session){return advance(session);}

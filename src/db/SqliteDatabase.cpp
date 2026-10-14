@@ -389,6 +389,10 @@ void SqliteDatabase::install_owned_pk_terminal_resource_schema(){
     if(!migrated_)throw DatabaseError("Migrate before explicit PK terminal resource extension");
     SqliteOwnedPkRoomRepository::install_terminal_resource_schema(impl_->connection.get());
 }
+void SqliteDatabase::install_owned_pk_finished_return_schema(){
+    if(!migrated_)throw DatabaseError("Migrate before explicit PK finished return extension");
+    SqliteOwnedPkRoomRepository::install_finished_return_schema(impl_->connection.get());
+}
 std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan_pk_entry_preparation(
     SqliteOwnedPkRoomRepository& rooms,std::shared_ptr<SharedWorldPresence> presence,
     TaiwanNativeFightCatalog catalog,OwnedTaiwanPkEntryPreparation::Sessions sessions,
@@ -445,6 +449,9 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     // This owned basic backend now consumes terminal saved resources. Require
     // its explicit extension before archive I/O; never install/migrate here.
     SqliteOwnedPkRoomRepository::require_terminal_resource_schema(impl_->connection.get());
+    if(return_scene)SqliteOwnedPkRoomRepository::require_finished_return_schema(impl_->connection.get());
+    // Historical preparation-only callers still have no return supplier and
+    // require no new extension. A configured full return never installs on read.
     const auto path=archive_path; // Stable explicit path, no default/current-directory substitution.
     auto resolvers=std::make_shared<OwnedTaiwanPkRoomBackend::Resolvers>(
         OwnedTaiwanPkRoomBackend::Resolvers{std::move(sessions),std::move(initializations),
@@ -503,8 +510,9 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         return value;
         };
     }
+    auto return_lifecycle=std::make_shared<OwnedTaiwanPkRoomBackend::ReturnLifecycleCoordinator>();
     auto driver=std::make_unique<OwnedTaiwanPkBasicDriver>(std::move(game),*rooms,lua,parameters,order,retry,
-        std::move(return_source));
+        std::move(return_source),std::weak_ptr<OwnedPkOutboxPublication::ReturnLifecycleOwner>(return_lifecycle));
     // CUSTOM-0130 capture actual owners BEFORE argument evaluation can move
     // them into Admission. The genuine Attempt token reaches the same driver.
     const auto departure_visibility=visibility;const auto departure_presence=presence;
@@ -522,7 +530,8 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     // captures a partly constructed backend. On exceptions local reverse-order
     // destruction also retires Admission before driver/state/repository.
     return std::unique_ptr<OwnedTaiwanPkRoomBackend>(new OwnedTaiwanPkRoomBackend(std::move(resolvers),
-        std::move(repository),std::move(rooms),std::move(preparation),std::move(driver),std::move(admission)));
+        std::move(return_lifecycle),std::move(repository),std::move(rooms),std::move(preparation),
+        std::move(driver),std::move(admission)));
 }
 std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe_owned_taiwan_pk_companions(
         RecoveredOwnedCompanions& helper,std::shared_ptr<Session> session,

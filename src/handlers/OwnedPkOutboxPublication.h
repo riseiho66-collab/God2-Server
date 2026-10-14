@@ -22,10 +22,36 @@ class OwnedPkOutboxPublication final {
     struct Flight;
     struct TerminalFlight;
     struct ReturnFlight;
+    struct ReturnLifecycleState;
     struct Lifetime {OwnedPkOutboxPublication* owner;};
 public:
     using Ticket=OwnedPkRoomState::Ticket;
     using Repository=OwnedPkRoomState::Repository;
+    // CUSTOM-0133 original private backend ownership, never a native ACK,
+    // saved-ID grant or permission to reconstruct a retired battle.
+    enum class ReturnLifecyclePhase {Prepared,Returning,Adopted,Failed};
+    class ReturnLifecycle {
+    public:
+        ReturnLifecycle(const ReturnLifecycle&)=default;
+        ReturnLifecycle& operator=(const ReturnLifecycle&)=default;
+        bool operator==(const ReturnLifecycle& other)const noexcept{return state_==other.state_;}
+        ReturnLifecyclePhase phase()const noexcept;
+        const Ticket& ticket()const noexcept;
+        const std::array<Session::NativePkEntryHold,2>& holds()const noexcept;
+        std::shared_ptr<Session> session(std::size_t index)const noexcept;
+    private:
+        friend class OwnedPkOutboxPublication;
+        explicit ReturnLifecycle(std::shared_ptr<ReturnLifecycleState> state):state_(std::move(state)){}
+        std::shared_ptr<ReturnLifecycleState> state_;
+    };
+    class ReturnLifecycleOwner {
+    public:
+        virtual ~ReturnLifecycleOwner()=default;
+        // Returning quiesces the old PK owner before consume. Adopted retires
+        // that exact owner after durable/model/Session/Room acceptance, before
+        // subsequent gameplay. Real read-start history remains separate.
+        virtual bool native_pk_return_lifecycle(const ReturnLifecycle&)=0;
+    };
     // CUSTOM-0130 genuine departure is optional on historical bindings. Its
     // actual registry/presence and privately minted token stay together; raw
     // markers, same IDs or another visibility instance are not substitutes.
@@ -47,8 +73,12 @@ public:
         std::array<std::array<std::uint8_t,4>,2> terminal_payloads;
     };
     using ReturnSceneSource=std::function<std::optional<cn::SharedActorVisibility::TaiwanReturnScene>(const ReturnSceneRequest&)>;
-    explicit OwnedPkOutboxPublication(OwnedPkRoomState& rooms,ReturnSceneSource return_scene={})
-        :rooms_(rooms),lifetime_(std::make_shared<Lifetime>(Lifetime{this})),return_scene_source_(std::move(return_scene)){}
+    explicit OwnedPkOutboxPublication(OwnedPkRoomState& rooms,ReturnSceneSource return_scene={},
+            std::weak_ptr<ReturnLifecycleOwner> lifecycle_owner={})
+        :rooms_(rooms),lifetime_(std::make_shared<Lifetime>(Lifetime{this})),return_scene_source_(std::move(return_scene)),
+         return_lifecycle_owner_(std::move(lifecycle_owner)),
+         return_lifecycle_required_(return_lifecycle_owner_.owner_before(std::weak_ptr<ReturnLifecycleOwner>{})||
+            std::weak_ptr<ReturnLifecycleOwner>{}.owner_before(return_lifecycle_owner_)){}
     ~OwnedPkOutboxPublication(){
         lifetime_->owner=nullptr;
         for(auto& [id,binding]:bindings_)fail(*binding);
@@ -400,6 +430,20 @@ private:
             if(life&&life->owner)life->owner->terminal_failed(*this,session,value);
         }
     };
+    struct ReturnLifecycleState {
+        ReturnLifecycleState(const std::shared_ptr<Lifetime>& source,const std::shared_ptr<Binding>& original,
+                const Ticket& value,const std::array<std::shared_ptr<Session>,2>& peers,
+                const std::array<Session::NativePkEntryHold,2>& entries)
+            :lifetime(source),binding(original),ticket(value),sessions{peers[0],peers[1]},holds(entries){}
+        const std::weak_ptr<Lifetime> lifetime;
+        const std::weak_ptr<Binding> binding;
+        const Ticket ticket;
+        const std::array<std::weak_ptr<Session>,2> sessions;
+        const std::array<Session::NativePkEntryHold,2> holds;
+        const std::thread::id thread=std::this_thread::get_id();
+        ReturnLifecyclePhase phase=ReturnLifecyclePhase::Prepared;
+        bool returning_accepted=false,adopted_accepted=false;
+    };
     // CUSTOM-0133 paired real-strand reservation continuation. A reservation
     // is a held transport cut, not a world write, reset, durable release or ACK.
     struct ReturnFlight final:Session::NativePkReturnOwner,Session::NativePkReturnOutputOwner,Session::NativePkReturnConsumptionOwner,Session::NativePkReturnPublicationOwner,Session::NativePkReturnFinalisationOwner {
@@ -425,7 +469,8 @@ private:
         std::optional<Repository::FinishedReturnReleasePlan> release_plan;
         std::optional<Repository::FinishedReturnReleaseReceipt> release_receipt;
         bool finalisation_ready_seen=false,finalisation_returned_seen=false,finalisation_failed_seen=false;
-        bool visibility_finished=false;
+        bool visibility_finished=false,runtime_room_retired=false;
+        const ReturnLifecycle lifecycle; // Preallocated original private ownership.
         bool output_held_seen=false,output_failed_seen=false;
         bool reserved_seen=false,failed_seen=false;
         ReturnFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
@@ -434,10 +479,10 @@ private:
                 std::array<Session::NativeBattleSkill,2> outputs,
                 std::array<std::uint64_t,2> versions,
                 std::array<std::array<std::uint8_t,4>,2> contexts,
-                std::array<Session::NativePkTerminalBarrier,2> terminals)
+                std::array<Session::NativePkTerminalBarrier,2> terminals,ReturnLifecycle handoff)
             :lifetime(std::move(life)),binding(std::move(owner)),preparations(std::move(prepared)),
              visibility(std::move(plan)),final_writes(std::move(outputs)),revisions(versions),payloads(contexts),
-             terminal_barriers(std::move(terminals)){}
+             terminal_barriers(std::move(terminals)),lifecycle(std::move(handoff)){}
         bool native_pk_return_reserved(const Session::NativePkReturnReservation& value)override{
             const auto life=lifetime.lock();
             return life&&life->owner&&life->owner->return_reserved(*this,value);
@@ -535,6 +580,8 @@ private:
     OwnedPkRoomState& rooms_;
     std::shared_ptr<Lifetime> lifetime_;
     const ReturnSceneSource return_scene_source_;
+    const std::weak_ptr<ReturnLifecycleOwner> return_lifecycle_owner_;
+    const bool return_lifecycle_required_;
     Bindings bindings_;
     SessionIndex by_session_;
     const std::thread::id thread_=std::this_thread::get_id();
@@ -743,7 +790,8 @@ private:
                     std::array<std::array<std::uint8_t,4>,2>{binding->terminal_inputs[0]->payload,
                                                           binding->terminal_inputs[1]->payload},
                     std::array<Session::NativePkTerminalBarrier,2>{*binding->terminal_inputs[0]->barrier,
-                                                                  *binding->terminal_inputs[1]->barrier});
+                                                                  *binding->terminal_inputs[1]->barrier},
+                    prepare_return_lifecycle(binding));
                 if(!pair_current() || binding->return_flight)
                     throw DatabaseError("PK return reservation lost its exact prepared pair");
                 binding->return_flight=continuation; // Strong game owner before either real strand post.
@@ -828,6 +876,58 @@ private:
             return true; // Frames stay held; no IO release or WORLD/input grant.
         }catch(...){flight.failed_seen=true;fail(*binding);return false;}
     }
+    ReturnLifecycle prepare_return_lifecycle(const std::shared_ptr<Binding>& binding){
+        return ReturnLifecycle(std::make_shared<ReturnLifecycleState>(lifetime_,binding,
+            binding->ticket,binding->sessions,binding->holds));
+    }
+    // Private Lua/Driver join only. Exact own Publication/Binding/Flight identity
+    // authenticates immutable original history, never false old PK Current.
+    bool return_lifecycle_current(const ReturnLifecycle& token)const noexcept{
+        try{
+            const auto state=token.state_;
+            if(!on_thread()||!state||state->thread!=std::this_thread::get_id()||
+               state->lifetime.lock()!=lifetime_||lifetime_->owner!=this)return false;
+            const auto binding=state->binding.lock();
+            if(!binding||binding->failed||binding->return_reentered||!binding->return_flight||
+               binding->return_flight->lifecycle.state_!=state||!state->ticket.same_incarnation(binding->ticket)||
+               state->holds!=binding->holds)return false;
+            const auto at=bindings_.find(binding->ticket.id());
+            if(at==bindings_.end()||at->second!=binding)return false;
+            for(std::size_t i=0;i<2;++i)
+                if(state->sessions[i].lock()!=binding->sessions[i])return false;
+            const auto& flight=*binding->return_flight;
+            if(state->phase==ReturnLifecyclePhase::Returning)
+                return !state->adopted_accepted&&!flight.finalisation_failed_seen;
+            if(state->phase!=ReturnLifecyclePhase::Adopted||!state->returning_accepted||
+               !flight.visibility_finished||!flight.runtime_room_retired||!flight.finalisation||
+               flight.finalisation->status()!=Session::NativePkReturnFinalisationStatus::Returned||
+               !flight.release_plan||!flight.release_receipt||
+               !flight.release_plan->durably_committed()||
+               !flight.release_receipt->matches(*flight.release_plan))return false;
+            return true;
+        }catch(...){return false;}
+    }
+    bool notify_return_lifecycle(ReturnFlight& flight,ReturnLifecyclePhase phase){
+        const auto state=flight.lifecycle.state_;
+        if(!state||state->thread!=std::this_thread::get_id()||
+           (phase==ReturnLifecyclePhase::Returning?
+                state->phase!=ReturnLifecyclePhase::Prepared:
+                phase!=ReturnLifecyclePhase::Adopted||state->phase!=ReturnLifecyclePhase::Returning||
+                    !state->returning_accepted||state->adopted_accepted))return false;
+        state->phase=phase;
+        if(!return_lifecycle_current(flight.lifecycle)){state->phase=ReturnLifecyclePhase::Failed;return false;}
+        bool accepted=!return_lifecycle_required_;
+        if(return_lifecycle_required_){
+            const auto source=return_lifecycle_owner_.lock();
+            if(source)try{accepted=source->native_pk_return_lifecycle(flight.lifecycle);}catch(...){}
+        }
+        if(!accepted||!return_lifecycle_current(flight.lifecycle)){
+            state->phase=ReturnLifecyclePhase::Failed;return false;
+        }
+        if(phase==ReturnLifecyclePhase::Returning)state->returning_accepted=true;
+        else state->adopted_accepted=true;
+        return true;
+    }
     bool return_output_exact(const Binding& binding,const ReturnFlight& flight,
             const Session::NativePkReturnOutputHold& value)const{
         return !flight.output_failed_seen && flight.reserved_seen && flight.records &&
@@ -852,6 +952,10 @@ private:
             auto successor=visibility.prepare_taiwan_pk_return_consumption(*flight.records,flight.visibility,
                 *flight.reservation,*flight.output_plan,value,binding->return_flight);
             if(!successor||!current())throw DatabaseError("PK held return lacks its preallocated successor");
+            // Transfer old PK processing BEFORE consume invalidates its holds.
+            // Full scene/saved/joint stored fences still FOLLOW this callback.
+            if(!notify_return_lifecycle(flight,ReturnLifecyclePhase::Returning)||!current())
+                throw DatabaseError("PK return lacks its exact pending backend ownership handoff");
             // Survivor input is unchanged: requalify ALL actual scene/pose/name/
             // resource inputs after all strand cuts and before the saved tail.
             if(!visibility.taiwan_pk_return_records_current(*flight.records)||!current())
@@ -1008,6 +1112,9 @@ private:
             // input indexes and this finished runtime Room, without observers.
             if(!rooms_.retire_finished_return_release(binding->ticket.id(),*flight.release_receipt))
                 throw DatabaseError("Return old runtime room retirement failed");
+            flight.runtime_room_retired=true;
+            if(!notify_return_lifecycle(flight,ReturnLifecyclePhase::Adopted))
+                throw DatabaseError("Return backend ownership adoption failed after durable release");
             binding->return_finished=true;
             for(std::uint8_t i=0;i<2;++i){
                 const auto at=by_session_.find(binding->sessions[i]->id());
@@ -1178,6 +1285,7 @@ private:
     }
     static void fail(Binding& binding)noexcept{
         if(binding.return_finished)return; // Successful historical custody is harmless.
+        if(binding.return_flight)binding.return_flight->lifecycle.state_->phase=ReturnLifecyclePhase::Failed;
         if(binding.return_flight&&binding.return_flight->consumption&&binding.departure&&binding.departure->visibility)
             binding.departure->visibility->cancel_taiwan_pk_return_consumption(*binding.return_flight->consumption);
         if(binding.failed)return;
@@ -1188,4 +1296,16 @@ private:
         // return. A prior explicit terminal resource COMMIT stays durable.
     }
 };
+inline OwnedPkOutboxPublication::ReturnLifecyclePhase
+OwnedPkOutboxPublication::ReturnLifecycle::phase()const noexcept{
+    return state_&&state_->thread==std::this_thread::get_id()?state_->phase:ReturnLifecyclePhase::Failed;
+}
+inline const OwnedPkOutboxPublication::Ticket&
+OwnedPkOutboxPublication::ReturnLifecycle::ticket()const noexcept{return state_->ticket;}
+inline const std::array<Session::NativePkEntryHold,2>&
+OwnedPkOutboxPublication::ReturnLifecycle::holds()const noexcept{return state_->holds;}
+inline std::shared_ptr<Session>
+OwnedPkOutboxPublication::ReturnLifecycle::session(std::size_t index)const noexcept{
+    return state_&&state_->thread==std::this_thread::get_id()&&index<2?state_->sessions[index].lock():nullptr;
+}
 }

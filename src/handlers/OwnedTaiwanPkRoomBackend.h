@@ -11,7 +11,8 @@ class SqliteDatabase;
 // supplied executor again at bind. Database, initialized Lua, executor and
 // external callback captures outlive it. InvitationService borrows a RAW
 // RoomAuthority pointer: drain its offers/completions BEFORE stop/destruction.
-// This is not Application hosting, terminal settlement/return or recovery.
+// Configured return uses the exact private Driver/Admission lifecycle below.
+// Full Application hosting, actor mapping and reconnect recovery remain open.
 class OwnedTaiwanPkRoomBackend final:public OwnedPkInvitationService::AsyncRoomAuthority {
     friend class SqliteDatabase;
 public:
@@ -19,7 +20,11 @@ public:
     using Parameters=OwnedTaiwanPkBasicDriver::Parameters;
     using ReturnSceneSource=OwnedTaiwanPkBasicDriver::ReturnSceneSource; // CUSTOM-0133
     using NativeBatch=OwnedTaiwanPkBasicDriver::NativeBatch;
-    ~OwnedTaiwanPkRoomBackend() override=default;
+    ~OwnedTaiwanPkRoomBackend() override{
+        stopped_=true;resolvers_->stopped=true;retire_return_lifecycle();
+        // Members then drain Admission before Driver/Publication and borrowed
+        // Room/repository. External Invitation offers already must be drained.
+    }
     OwnedTaiwanPkRoomBackend(const OwnedTaiwanPkRoomBackend&)=delete;
     OwnedTaiwanPkRoomBackend& operator=(const OwnedTaiwanPkRoomBackend&)=delete;
 
@@ -46,6 +51,7 @@ public:
     void disconnected(Session& session){check_thread();driver_->disconnected(session);}
     void stop(){
         check_thread();if(stopped_)return;stopped_=true;resolvers_->stopped=true;
+        retire_return_lifecycle(); // Before any callback or borrowed Admission teardown.
         // Keep Admission alive even if stop was requested from one of its
         // synchronous source callbacks. Invalidate weak entry callbacks first;
         // cancel reservations/close active peers, then cancel scheduled output.
@@ -53,6 +59,21 @@ public:
         admission_->stop();driver_->stop();
     }
 private:
+    static bool admission_return_lifecycle(OwnedPkEntryAdmission& admission,
+            const OwnedPkOutboxPublication::ReturnLifecycle& token)noexcept{
+        return admission.receive_return_lifecycle(token);
+    }
+    // Allocated by the one common factory before Driver/Admission construction.
+    // Its private pointer is armed only after both owners are fully assembled;
+    // Driver holds only a weak subscriber, never a RAW borrowed callback target.
+    struct ReturnLifecycleCoordinator final:OwnedPkOutboxPublication::ReturnLifecycleOwner {
+        OwnedPkEntryAdmission* admission=nullptr;
+        bool stopped=false;
+        bool native_pk_return_lifecycle(const OwnedPkOutboxPublication::ReturnLifecycle& token)override{
+            if(stopped||!admission)return false;
+            return OwnedTaiwanPkRoomBackend::admission_return_lifecycle(*admission,token);
+        }
+    };
     struct Resolvers {
         Preparation::Sessions sessions;
         Preparation::Initializations initializations;
@@ -65,6 +86,7 @@ private:
     // Exactly one instance of every potentially mutable callable. Preparation
     // and Admission forward into this bundle, never copy its function targets.
     const std::shared_ptr<Resolvers> resolvers_;
+    const std::shared_ptr<ReturnLifecycleCoordinator> return_lifecycle_;
     const std::thread::id thread_=std::this_thread::get_id();
     bool stopped_=false;
     // Reverse destruction order is essential: Admission callbacks/holds first,
@@ -76,12 +98,21 @@ private:
     const std::unique_ptr<OwnedPkEntryAdmission> admission_;
 
     OwnedTaiwanPkRoomBackend(std::shared_ptr<Resolvers> resolvers,
+            std::shared_ptr<ReturnLifecycleCoordinator> return_lifecycle,
             std::unique_ptr<SqliteOwnedPkRoomRepository> repository,
             std::unique_ptr<OwnedPkRoomState> rooms,std::shared_ptr<Preparation> preparation,
             std::unique_ptr<OwnedTaiwanPkBasicDriver> driver,
             std::unique_ptr<OwnedPkEntryAdmission> admission)
-        :resolvers_(std::move(resolvers)),repository_(std::move(repository)),rooms_(std::move(rooms)),
-         preparation_(std::move(preparation)),driver_(std::move(driver)),admission_(std::move(admission)){}
+        :resolvers_(std::move(resolvers)),return_lifecycle_(std::move(return_lifecycle)),
+         repository_(std::move(repository)),rooms_(std::move(rooms)),
+         preparation_(std::move(preparation)),driver_(std::move(driver)),admission_(std::move(admission)){
+        // No callback/SQL/allocation: only the actual private matching Admission
+        // is made visible after the complete backend ownership graph exists.
+        return_lifecycle_->admission=admission_.get();
+    }
+    void retire_return_lifecycle()noexcept{
+        return_lifecycle_->stopped=true;return_lifecycle_->admission=nullptr;
+    }
     void check_thread()const{
         if(thread_!=std::this_thread::get_id())throw std::logic_error("PK backend game owner mismatch");
     }

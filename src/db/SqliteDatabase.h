@@ -116,6 +116,7 @@ public:
     void install_owned_pk_room_schema();
     void install_owned_pk_round_schema();
     void install_owned_pk_terminal_resource_schema();
+    void install_owned_pk_finished_return_schema(); // CUSTOM-0133 explicit opt-in only.
     std::unique_ptr<SqliteOwnedPkRoomRepository> make_owned_pk_room_repository();
     // CUSTOM-0112 explicit preparation source on this exact common connection.
     // No raw connection escapes, schema installation, reservation or sends at
@@ -137,7 +138,10 @@ public:
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed,
         OwnedTaiwanPkEntryPreparation::Companions={});
     // CUSTOM-0125 complete source composition of preparation/admission/basic
-    // transport on this connection. Explicit policy/archive/live owners only;
+    // transport on this connection, including exact Driver/Admission retirement
+    // for a configured return supplier. Its existing finished-return schema must
+    // be explicit before construction; absent historical return stays absent.
+    // Explicit policy/archive/live owners only;
     // no schema install, callback invocation, reservation, sends or App install.
     // Drain InvitationService offers before stop/destruction; this Database,
     // initialized Lua/executor and callback dependencies must outlive backend.

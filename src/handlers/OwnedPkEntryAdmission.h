@@ -1,5 +1,6 @@
 #pragma once
 #include "handlers/OwnedPkRoomState.h"
+#include "handlers/OwnedPkOutboxPublication.h"
 #include "cn/world/SharedActorVisibility.h"
 #include "net/Session.h"
 #include <array>
@@ -15,6 +16,7 @@ namespace god2 {
 // All borrowed room/repository/source dependencies and this owner must drain
 // on their actual game executor before shutdown. No client ACK is invented.
 class OwnedPkEntryAdmission final:public OwnedPkInvitationService::AsyncRoomAuthority {
+    friend class OwnedTaiwanPkRoomBackend;
     struct Attempt;
     struct Lifetime {OwnedPkEntryAdmission* owner;};
 public:
@@ -165,6 +167,27 @@ private:
     std::map<std::uint64_t,std::shared_ptr<Attempt>> attempts_;
     const std::thread::id thread_=std::this_thread::get_id();
     bool preparing_=false,stopped_=false;
+    // CUSTOM-0133 factory-private sibling of the actual Driver/Publication.
+    // The Driver first proves its own opaque Publication token and exact Pair.
+    // Returning is only a pure complete-admission join; Adopted retires only
+    // that original successful Attempt, without SQL, old Current or close.
+    bool receive_return_lifecycle(const OwnedPkOutboxPublication::ReturnLifecycle& token)noexcept{
+        if(thread_!=std::this_thread::get_id()||stopped_)return false;
+        const auto phase=token.phase();
+        if(phase!=OwnedPkOutboxPublication::ReturnLifecyclePhase::Returning&&
+           phase!=OwnedPkOutboxPublication::ReturnLifecyclePhase::Adopted)return false;
+        const auto at=attempts_.find(token.ticket().id());if(at==attempts_.end())return false;
+        const auto attempt=at->second;
+        if(!attempt||attempt->stage!=Stage::Complete||attempt->completion||
+           !attempt->ticket.same_incarnation(token.ticket())||!attempt->submitted[0]||!attempt->submitted[1]||
+           !attempt->held[0]||!attempt->held[1])return false;
+        for(std::size_t i=0;i<2;++i)
+            if(!attempt->holds[i]||*attempt->holds[i]!=token.holds()[i]||
+               !attempt->sessions[i]||attempt->sessions[i]!=token.session(i))return false;
+        if(phase==OwnedPkOutboxPublication::ReturnLifecyclePhase::Adopted)
+            attempts_.erase(at); // No abandon/completion/close; only this complete original incarnation.
+        return true;
+    }
     void stop_on_game()noexcept{
         stopped_=true;lifetime_->owner=nullptr;
         for(auto& [id,attempt]:attempts_)cancel(*attempt,false);
