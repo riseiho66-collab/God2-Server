@@ -61,6 +61,7 @@ constexpr auto skill_sequence_timeout = std::chrono::seconds(5);
 // Installed only by the real posted world-records game job below. A foreign
 // public caller cannot nominate itself as game owner or read game-owned IDs.
 thread_local const Session* observed_world_callback=nullptr;
+thread_local std::span<const RecoveredWorldRecords::Record> observed_world_records;
 thread_local bool* observed_response_poison=nullptr;
 thread_local std::atomic<Session::WorldResponseWriteStatus>* observed_response_status=nullptr;
 thread_local std::atomic<Session::NormalWorldResponseStatus>* observed_normal_response_status=nullptr;
@@ -82,16 +83,16 @@ void poison_world_response() noexcept {
 }
 struct WorldRecordsObservationScope {
     bool response_poisoned=false;
-    explicit WorldRecordsObservationScope(const Session& session) {
+    explicit WorldRecordsObservationScope(const Session& session,std::span<const RecoveredWorldRecords::Record> records) {
         if(observed_world_callback) {
             poison_world_response();
             throw std::logic_error("World observation callback reentry rejected");
         }
-        observed_world_callback=&session;observed_response_poison=&response_poisoned;
+        observed_world_callback=&session;observed_world_records=records;observed_response_poison=&response_poisoned;
         observed_response_status=nullptr;observed_normal_response_status=nullptr;observed_callback_admission_status=nullptr;
     }
     ~WorldRecordsObservationScope(){
-        observed_response_status=nullptr;observed_normal_response_status=nullptr;observed_callback_admission_status=nullptr;observed_response_poison=nullptr;observed_world_callback=nullptr;
+        observed_response_status=nullptr;observed_normal_response_status=nullptr;observed_callback_admission_status=nullptr;observed_response_poison=nullptr;observed_world_records={};observed_world_callback=nullptr;
     }
     WorldRecordsObservationScope(const WorldRecordsObservationScope&)=delete;
     WorldRecordsObservationScope& operator=(const WorldRecordsObservationScope&)=delete;
@@ -173,6 +174,19 @@ struct Session::NormalWorldInitialization::Entry {
         :session(std::move(owner)),account(a),character(c),battle(b),frame(std::move(wire)),logical(std::move(bytes)),
          qualified_scene_identity(qualified) {}
 };
+struct Session::NativeTaiwanReceiverSelector::Data {
+    const std::shared_ptr<NormalWorldInitialization::Entry> entry;
+    const std::uint64_t revision; // Local accepted-occurrence identity, not native nonce.
+    const std::array<std::uint8_t,4> context;
+    Data(std::shared_ptr<NormalWorldInitialization::Entry> source,std::uint64_t epoch,
+        std::array<std::uint8_t,4> received):entry(std::move(source)),revision(epoch),context(received){}
+};
+std::uint64_t Session::NativeTaiwanReceiverSelector::source_revision()const noexcept {return data_->revision;}
+bool Session::NativeTaiwanReceiverSelector::reported_simplified()const noexcept {return data_->context[2]!=0;}
+std::uint16_t Session::NativeTaiwanReceiverSelector::wire_codepage()const noexcept {
+    return reported_simplified()?936:950; // Same-page native6F branch only.
+}
+const std::array<std::uint8_t,4>& Session::NativeTaiwanReceiverSelector::context_payload()const noexcept {return data_->context;}
 struct Session::NormalWorldInitialization::Data {
     const std::shared_ptr<Entry> entry;
     const std::vector<std::uint8_t> tail;
@@ -180,10 +194,15 @@ struct Session::NormalWorldInitialization::Data {
     // CUSTOM-0132 physical Entry::battle/Written stay the actual original IO.
     const std::uint64_t effective_battle;
     const std::weak_ptr<const Data> previous;
-    Data(std::shared_ptr<Entry> source,std::vector<std::uint8_t> bytes,std::uint8_t flag)
-        :entry(std::move(source)),tail(std::move(bytes)),config(flag),effective_battle(entry->battle) {}
-    Data(std::shared_ptr<const Data> prior,std::uint64_t future)
-        :entry(prior->entry),tail(prior->tail),config(prior->config),effective_battle(future),previous(std::move(prior)) {}
+    const std::shared_ptr<const NativeTaiwanReceiverSelector::Data> receiver_selector;
+    Data(std::shared_ptr<Entry> source,std::vector<std::uint8_t> bytes,std::uint8_t flag,
+        std::shared_ptr<const NativeTaiwanReceiverSelector::Data> selector)
+        :entry(std::move(source)),tail(std::move(bytes)),config(flag),effective_battle(entry->battle),
+         receiver_selector(std::move(selector)) {}
+    Data(std::shared_ptr<const Data> prior,std::uint64_t future,
+        std::shared_ptr<const NativeTaiwanReceiverSelector::Data> latest)
+        :entry(prior->entry),tail(prior->tail),config(prior->config),effective_battle(future),previous(std::move(prior)),
+         receiver_selector(std::move(latest)) {}
 };
 const RecoveredWorldEntry::Frame& Session::NormalWorldInitialization::entry_frame() const noexcept {return data_->entry->frame;}
 const std::vector<std::uint8_t>& Session::NormalWorldInitialization::entry_logical() const noexcept {return data_->entry->logical;}
@@ -287,14 +306,16 @@ struct Session::NativePkTerminalBarrier::Data {
     const NativePkEntryHold entry;
     const NativeBattleSkill final;
     const std::weak_ptr<NativePkTerminalOwner> source;
+    const std::shared_ptr<const NativeTaiwanReceiverSelector::Data> receiver_selector;
     std::mutex finalisation_mutex;
     std::weak_ptr<NativePkReturnFinalisation::Data> finalisation; // No Term→Final→Term strong cycle.
     std::atomic<Phase> phase{Phase::Draining};
     std::atomic<bool> accepted{false},ready_notified{false},failed_notified{false},armed{false},acknowledged{false},ack_handoff_failed{false};
     Data(std::weak_ptr<Session> s,asio::any_io_executor executor,NativePkEntryHold hold,
-         NativeBattleSkill output,std::weak_ptr<NativePkTerminalOwner> owner)
+         NativeBattleSkill output,std::weak_ptr<NativePkTerminalOwner> owner,
+         std::shared_ptr<const NativeTaiwanReceiverSelector::Data> selector)
         :session(std::move(s)),game(std::move(executor)),entry(std::move(hold)),
-         final(std::move(output)),source(std::move(owner)){}
+         final(std::move(output)),source(std::move(owner)),receiver_selector(std::move(selector)){}
 };
 
 struct Session::NativePkReturnPreparation::Data {
@@ -741,6 +762,38 @@ struct Session::Impl {
     std::optional<RecoveredWorldReady> world_ready;
     std::atomic<std::shared_ptr<NormalWorldInitialization::Entry>> normal_entry;
     std::atomic<std::shared_ptr<const NormalWorldInitialization::Data>> normal_initialization;
+    // Serial GAME only. Original INIT tail/config remain immutable history.
+    std::shared_ptr<const NativeTaiwanReceiverSelector::Data> receiver_selector;
+    std::uint64_t receiver_selector_revision=0;
+    std::shared_ptr<const NativeTaiwanReceiverSelector::Data> make_receiver_selector(
+            const std::shared_ptr<NormalWorldInitialization::Entry>& entry,
+            const std::array<std::uint8_t,4>& payload){
+        if(!entry||entry->game_thread!=std::this_thread::get_id()||entry->session.lock().get()!=&owner||
+           entry->retired.load()||payload[2]>1||payload[3]||
+           receiver_selector_revision==std::numeric_limits<std::uint64_t>::max())return {};
+        const auto world=RecoveredWorldEntryView::read(entry->frame);
+        if(!world||world->actor_handle!=(std::uint16_t(payload[0])|(std::uint16_t(payload[1])<<8)))return {};
+        const auto next=receiver_selector_revision+1;
+        auto result=std::make_shared<const NativeTaiwanReceiverSelector::Data>(entry,next,payload);
+        receiver_selector_revision=next;return result;
+    }
+    void accept_receiver_selector_records(std::span<const RecoveredWorldRecords::Record> records,
+            const std::shared_ptr<NativePkTerminalBarrier::Data>& terminal){
+        const auto normal=normal_initialization.load();
+        bool seen=false;
+        auto next=receiver_selector;
+        for(const auto& record:records)if(const auto* context=std::get_if<RecoveredWorldRecords::ContextNotification>(&record)){
+            seen=true;
+            // A terminal retains THIS original callback's exact source node.
+            if(terminal&&terminal->receiver_selector&&terminal->receiver_selector->context==context->payload)
+                next=terminal->receiver_selector;
+            else if(normal&&normal->entry&&normal->entry->written.load())
+                next=make_receiver_selector(normal->entry,context->payload);
+            else next.reset();
+        }
+        // Invalid accepted reports retire the old selector, never default it.
+        if(seen)receiver_selector=std::move(next);
+    }
     const std::shared_ptr<NormalWorldOutputHandle::Sync> normal_output_sync=
         std::make_shared<NormalWorldOutputHandle::Sync>();
     void retire_normal_output() noexcept {
@@ -2391,7 +2444,8 @@ struct Session::Impl {
         const auto tail_size=normal_tail_size;
         const auto observable=normal_tail_observable;
         const auto config=world_ready->config_flag();
-        asio::post(game,[self=owner.shared_from_this(),entry,tail,tail_size,observable,config] {
+        const auto context=world_ready->context_payload();
+        asio::post(game,[self=owner.shared_from_this(),entry,tail,tail_size,observable,config,context] {
             auto& s=*self->impl_;
             bool accepted=false;
             std::shared_ptr<const NormalWorldInitialization::Data> initialization;
@@ -2408,8 +2462,12 @@ struct Session::Impl {
                    s.normal_entry.load()==entry && !entry->retired.load() && !s.close_requested.load() &&
                    entry->session.lock().get()==self.get() && entry->account==self->account_id &&
                    entry->character==self->character_id && entry->battle==self->battle_generation())
-                    initialization=std::make_shared<const NormalWorldInitialization::Data>(entry,
-                        std::vector<std::uint8_t>(tail.begin(),tail.begin()+tail_size),config);
+                    {
+                        const auto selector=s.make_receiver_selector(entry,context);
+                        initialization=std::make_shared<const NormalWorldInitialization::Data>(entry,
+                            std::vector<std::uint8_t>(tail.begin(),tail.begin()+tail_size),config,selector);
+                        s.receiver_selector=selector;
+                    }
             } catch(...) {}
             asio::post(s.strand,[self,accepted,initialization=std::move(initialization)] {
                 auto& s=*self->impl_;
@@ -2879,7 +2937,7 @@ struct Session::Impl {
                     if(has_battle_command && self->state()!=SessionState::InBattle)
                         throw std::runtime_error("Recovered attack outside battle state");
                     if(s.character_handlers.world_records) {
-                        WorldRecordsObservationScope observation_scope(*self);
+                        WorldRecordsObservationScope observation_scope(*self,records);
                         Impl::SelectionScope input_scope(s,records);
                         auto result=s.character_handlers.world_records(*self,records);
                         accepted=result.has_value() && (!s.normal_callback_admission_capture || !observation_scope.response_poisoned);
@@ -2937,6 +2995,13 @@ struct Session::Impl {
             if(response_write && (!accepted || response_write->receipt->wire!=response ||
                response_write->receipt->status.load()!=WorldResponseWriteStatus::Pending)) {
                 response_write->fail();accepted=false;
+            }
+            // Publish only after all actual callback/response-component checks.
+            if(accepted)try{s.accept_receiver_selector_records(records,terminal_ack);}
+            catch(...){
+                s.receiver_selector.reset();accepted=false;
+                if(normal_response)normal_response->fail();
+                if(response_write)response_write->fail();
             }
             if(admission && !accepted)admission->fail(); // Existing response-prefix checks apply symmetrically.
             try {asio::post(s.strand,[self,accepted,terminal_ack,response_write,input_lease,normal_response,admission,response=std::move(response),
@@ -4221,7 +4286,8 @@ bool Session::native_pk_entry_written_current(const NativePkEntryHold& hold)cons
         account_id==data->request.account && character_id==data->request.character;
 }
 Session::NativePkTerminalBarrier Session::prepare_native_pk_terminal_barrier(
-        const NativePkEntryHold& hold,NativeBattleSkill final,std::weak_ptr<NativePkTerminalOwner> source) {
+        const NativePkEntryHold& hold,NativeBattleSkill final,std::weak_ptr<NativePkTerminalOwner> source,
+        const RecoveredWorldRecords::ContextNotification& original_context) {
     // CUSTOM-0131 Publication owns Finished/context semantics. This TLS proves
     // the actual synchronous Session world callback, not arbitrary caller IDs.
     if(observed_world_callback!=this || !native_pk_entry_written_current(hold) || !final ||
@@ -4232,8 +4298,16 @@ Session::NativePkTerminalBarrier Session::prepare_native_pk_terminal_barrier(
     if(final->session!=id() || final->account!=request.account || final->character!=request.character ||
        final->common_generation!=request.common_generation || final->battle_generation!=hold.committed_battle_generation())
         throw std::logic_error("Native PK terminal final delivery differs from private entry identity");
+    // Exact original parsed input address, not a copied/scalar C1C argument.
+    const auto actual=std::find_if(observed_world_records.begin(),observed_world_records.end(),[&](const auto& record){
+        return std::get_if<RecoveredWorldRecords::ContextNotification>(&record)==&original_context;
+    });
+    if(actual==observed_world_records.end()||!observed_response_poison||*observed_response_poison)
+        throw std::logic_error("PK terminal selector lacks original C1C occurrence");
+    const auto selector=impl_->make_receiver_selector(hold.data_->initialization.data_->entry,original_context.payload);
+    if(!selector)throw std::logic_error("PK terminal selector differs from exact native identity/0or1 report");
     auto data=std::make_shared<NativePkTerminalBarrier::Data>(shared_from_this(),impl_->game,
-        hold,std::move(final),std::move(source));
+        hold,std::move(final),std::move(source),selector);
     std::shared_ptr<NativePkTerminalBarrier::Data> absent;
     if(!impl_->native_pk_terminal.compare_exchange_strong(absent,data))
         throw std::logic_error("Native PK terminal barrier already pending");
@@ -4292,7 +4366,10 @@ Session::NativePkReturnPreparation Session::prepare_native_pk_return_generation(
        entry->initialization.data_->effective_battle!=request.prebattle_generation)
         throw std::logic_error("PK return lacks its original WORLD namespace or checked next generation");
     const auto future=request.prebattle_generation+2;
-    auto normal=std::make_shared<const NormalWorldInitialization::Data>(entry->initialization.data_,future);
+    const auto selector=barrier.data_->receiver_selector;
+    if(!selector||impl_->receiver_selector!=selector)
+        throw std::logic_error("PK return lacks latest accepted original C1C selector");
+    auto normal=std::make_shared<const NormalWorldInitialization::Data>(entry->initialization.data_,future,selector);
     auto identity=std::make_shared<const WorldDeliveryIdentity>(WorldDeliveryIdentity{
         original->account,original->character,original->world_generation,future});
     NativePkReturnPreparation result(std::make_shared<const NativePkReturnPreparation::Data>(
@@ -4315,10 +4392,42 @@ bool Session::native_pk_return_preparation_current(const NativePkReturnPreparati
         original->world_generation && original->battle_generation==request.prebattle_generation &&
         prior->effective_battle==request.prebattle_generation && future->previous.lock()==prior &&
         future->entry==prior->entry && future->tail==prior->tail && future->config==prior->config &&
+        future->receiver_selector && future->receiver_selector==data->terminal.data_->receiver_selector &&
+        impl_->receiver_selector==future->receiver_selector &&
         future->effective_battle==request.prebattle_generation+2 &&
         data->world_identity->account==original->account && data->world_identity->character==original->character &&
         data->world_identity->world_generation==original->world_generation &&
         data->world_identity->battle_generation==future->effective_battle;
+}
+std::optional<Session::NativeTaiwanReceiverSelector> Session::native_taiwan_receiver_selector_on_game()const {
+    const auto init=impl_->normal_initialization.load();
+    if(!init||!normal_world_initialization_current_on_game(NormalWorldInitialization(init))||!init->entry->written.load())return {};
+    const auto source=impl_->receiver_selector;
+    if(!source||source->entry!=init->entry)return {};
+    const NativeTaiwanReceiverSelector result(source);
+    return native_taiwan_receiver_selector_current(result)?std::optional{result}:std::nullopt;
+}
+std::optional<Session::NativeTaiwanReceiverSelector> Session::native_taiwan_return_receiver_selector(
+        const NativePkReturnPreparation& prepared)const {
+    if(!native_pk_return_preparation_current(prepared))return {};
+    const auto source=prepared.data_->initialization.data_->receiver_selector;
+    if(!source||impl_->receiver_selector!=source)return {};
+    const NativeTaiwanReceiverSelector result(source);
+    return native_taiwan_receiver_selector_current(result)?std::optional{result}:std::nullopt;
+}
+bool Session::native_taiwan_receiver_selector_current(const NativeTaiwanReceiverSelector& selector)const noexcept {
+    const auto source=selector.data_;
+    if(!source||!source->entry||source->entry->game_thread!=std::this_thread::get_id()||
+       source->entry->session.lock().get()!=this)return false;
+    const auto entry=source->entry;
+    if(impl_->receiver_selector!=source||entry->retired.load()||!entry->written.load()||closing()||
+       !recovered_world_ready()||impl_->mode!=ProtocolMode::God2CharacterConnection||
+       account_id!=entry->account||character_id!=entry->character)return false;
+    const auto normal=impl_->normal_initialization.load();
+    if(normal&&normal->entry==entry&&normal_world_initialization_current_on_game(NormalWorldInitialization(normal)))return true;
+    const auto terminal=impl_->native_pk_terminal.load();
+    return terminal&&terminal->receiver_selector==source&&
+        native_pk_terminal_barrier_accepted_current(NativePkTerminalBarrier(terminal));
 }
 void Session::fail_native_pk_return_reservation(
         const std::shared_ptr<NativePkReturnReservation::Data>& data) noexcept {

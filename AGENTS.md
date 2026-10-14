@@ -857,3 +857,19 @@ stillOPEN. TW156/252/parser77=50/11/16/pending12/format22/unclassified104/V27,
 fullroutesadded0/percentnull. No newprojectPY/Lua/CMake/clientbinary, no product
 execution. TW100firstACTIVE/commonCNweb/skills453繁體/clientformulas/saves/fonts/
 text/numerics/PHASE1 retained.
+
+Round406 connects actualSession-ownedacceptedC1C receiver selector source.
+Exactnormalpayload/privateEntry/Written; actualterminaloriginalobjectaddress
+withinownparsedcallback, fullRoom/finalwrite/binding+acceptedbarrier retained.
+Latestterminalflag can differinitial: newprivateNode separatefromoldtail/config,
+realPrep/Consumed/newnormalINIT joined, oldequalbits notCurrent. Adopt onlyafter
+ALLfinalcallback/responseguards; invalidacceptedretiresold, allocfailurefails
+capturedresponses. ActualReturn factory capturespairPrep/survivorWrittenINIT,
+canonicalraw-or-typedprofile; typedONLYNO_ADAPTATION source-bit/pageequality,
+common/role/guild/visibility/chatCurrent sourceidentity retained. Nofakeglobals/
+OSNLSattestation/renderACK/fullactorproducer. EightexistingCPP;V43pins112=109old
+104unchanged5updated+3existingCPPadded, canonical585; no newprojectPY/Lua/CMake/
+clientbinary. TW156/252/parser77=50/11/16/pending12/format22/unclassified104/V27,
+fullroutesadded0/percentnull. Fullactorbank/currentresource/audience/opaque9/17/
+return/gameplay/numerics/nativeacceptanceOPEN. TW100firstACTIVE; commonCNweb,
+453繁體/clientformulas/maxHPpoison10分1/saves/fonts/text/numerics/PHASE1preserved.

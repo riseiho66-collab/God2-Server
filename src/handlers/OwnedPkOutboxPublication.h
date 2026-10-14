@@ -234,7 +234,7 @@ public:
         if(!control&&!attack&&!context)return NativeBatch::Idle;
         const auto viewer=indexed->second.viewer;
         if(context){
-            observe_terminal_context(*binding,session,viewer,context->payload);
+            observe_terminal_context(*binding,session,viewer,*context);
             return NativeBatch::TerminalContextObserved;
         }
         const auto phase=rooms_.round(binding->ticket.id());
@@ -618,7 +618,8 @@ private:
                 binding.sessions,binding.holds,viewer);
     }
     void observe_terminal_context(Binding& binding,Session& session,std::uint8_t viewer,
-            const std::array<std::uint8_t,4>& payload){
+            const RecoveredWorldRecords::ContextNotification& context){
+        const auto& payload=context.payload;
         // Native shared queue can coalesce1C with Tick. Whole-frame
         // classification above already excluded unrelated world operations;
         // supporting those and actually resuming WORLD remain separate work.
@@ -645,7 +646,7 @@ private:
                 const auto owned=bindings_.at(binding.ticket.id());
                 if(owned.get()!=&binding)throw DatabaseError("PK terminal input lost its private binding");
                 auto flight=std::make_shared<TerminalFlight>(lifetime_,owned,viewer,payload,revision,written);
-                auto barrier=session.prepare_native_pk_terminal_barrier(binding.holds[viewer],written,flight);
+                auto barrier=session.prepare_native_pk_terminal_barrier(binding.holds[viewer],written,flight,context);
                 flight->barrier=std::move(barrier);
                 binding.terminal_inputs[viewer]=std::move(flight);
             }

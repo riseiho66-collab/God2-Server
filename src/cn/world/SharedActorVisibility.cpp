@@ -162,10 +162,7 @@ bool SharedActorVisibility::taiwan_pk_return_models_match(const std::map<Key,Ent
                 if(RecoveredRemoteActor::encode_logical(now->spawn)!=RecoveredRemoteActor::encode_logical(before.spawn)||
                    RecoveredRemoteActorMove::encode_logical(now->movement)!=RecoveredRemoteActorMove::encode_logical(before.movement)||
                    RecoveredRemoteActorRemove::encode_logical(now->removal)!=RecoveredRemoteActorRemove::encode_logical(before.removal))return false;
-                return !now->raw_name_state||(now->raw_name_state->source_revision==before.raw_name_state->source_revision&&
-                    now->raw_name_state->wire_codepage==before.raw_name_state->wire_codepage&&
-                    now->raw_name_state->actual_global_word_d8==before.raw_name_state->actual_global_word_d8&&
-                    now->raw_name_state->actual_global_word_da==before.raw_name_state->actual_global_word_da);
+                return !now->raw_name_state||now->raw_name_state->same_source(*before.raw_name_state);
             }else{
                 if(god2cn::CnRemoteActor::encode_logical(now->spawn)!=god2cn::CnRemoteActor::encode_logical(before.spawn)||
                    god2cn::CnRemoteActorMove::encode_logical(now->movement)!=god2cn::CnRemoteActorMove::encode_logical(before.movement)||
@@ -221,8 +218,8 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                presence_->saved_position(actor.recipient)!=std::optional{actor.recipient_position}||!valid()||
                !actor.qualification->current()||!valid())return false;
             const auto receiver=actor.native.connection.lock();const auto raw=*actor.native.raw_name_state;
-            if(!receiver||!raw.current(*receiver,raw.source_revision,raw.wire_codepage,
-                    raw.actual_global_word_d8,raw.actual_global_word_da)||!valid())return false;
+            if(!receiver||!raw.current(*receiver)||!valid()||
+               !raw.permits_source_codepage(RecoveredRemoteRoleText::source_codepage(actor.native.spawn)))return false;
             // CUSTOM-0134 this private paired return authority already qualified
             // BOTH genuine terminal preparations; ordinary departed wrappers
             // remain closed. Reuse the actual common stored-name owner, never
@@ -237,10 +234,7 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                     const auto* native=std::get_if<Taiwan>(&*projected);
                     if(!native||native->connection.lock()!=receiver||native->common_name_source!=issuer||
                        !native->raw_name_state||
-                       native->raw_name_state->source_revision!=raw.source_revision||
-                       native->raw_name_state->wire_codepage!=raw.wire_codepage||
-                       native->raw_name_state->actual_global_word_d8!=raw.actual_global_word_d8||
-                       native->raw_name_state->actual_global_word_da!=raw.actual_global_word_da||
+                       !native->raw_name_state->same_source(raw)||
                        RecoveredRemoteActorMove::encode_logical(native->movement)!=RecoveredRemoteActorMove::encode_logical(actor.native.movement)||
                        RecoveredRemoteActorRemove::encode_logical(native->removal)!=RecoveredRemoteActorRemove::encode_logical(actor.native.removal))return false;
                     const auto after=RecoveredRemoteActor::encode_logical(native->spawn);
@@ -269,16 +263,15 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                 const auto& observation=state->role_rows.at(role_index++);
                 const auto& saved=observation.row();
                 const auto source_page=RecoveredRemoteRoleText::source_codepage(actor.native.spawn);
-                // Both actual531C10 operands and the explicit receiving page
-                // must agree; Session language/protocol alone supplies neither.
-                const bool receiver_simplified=raw.actual_global_word_d8==4&&raw.actual_global_word_da==2;
-                if((raw.wire_codepage==936)!=receiver_simplified)return false;
+                // Raw NLS authority remains explicit; a typed accepted C1C
+                // selects only exact same-page bytes, without adaptation.
+                if(!raw.available()||!raw.permits_source_codepage(source_page))return false;
                 const auto text=SqliteRoleTextRepository::project(saved,source_page);
                 if(!text)return false;
                 const auto end=std::find(text->begin(),text->end(),0);
                 const std::string_view bytes(reinterpret_cast<const char*>(text->data()),
                     static_cast<std::size_t>(end-text->begin()));
-                if(!NativePeerRoleTextCodec::project(bytes,source_page,raw.wire_codepage))return false;
+                if(!NativePeerRoleTextCodec::project(bytes,source_page,raw.wire_codepage()))return false;
                 const auto secondary=RecoveredRemoteRoleText::with_source_text(actor.native.spawn,*text);
                 if(!secondary||!valid())return false;
                 // Native2D assigns the local saved third string; remote6F61
@@ -289,7 +282,7 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                 const auto guild_name=guild?LegacyChineseCodec::encode(guild->name_utf8,source_page==936):std::string{};
                 if(guild&&LegacyChineseCodec::decode(guild_name,source_page==936)!=guild->name_utf8)return false;
                 const auto local_name=RecoveredGuildChat::name(guild_name);
-                if(!NativePeerRoleTextCodec::project(guild_name,source_page,raw.wire_codepage)||!valid())return false;
+                if(!NativePeerRoleTextCodec::project(guild_name,source_page,raw.wire_codepage())||!valid())return false;
                 auto projected_bytes=RecoveredRemoteActor::encode_logical(*secondary);
                 std::copy(local_name.begin()+1,local_name.end(),projected_bytes.begin()+61);
                 const auto projected=RecoveredRemoteActor::parse_logical(projected_bytes);
@@ -353,6 +346,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
             RecoveredRemoteActorRemove::encode_logical(a.native.removal)==RecoveredRemoteActorRemove::encode_logical(b.native.removal);
     };
     std::map<Key,std::uint8_t> occurrences;
+    std::map<std::uint64_t,std::shared_ptr<const TaiwanReceiverTextState>> receiver_profiles;
     // CUSTOM-0137 an empty scene is not permission to omit the returning pair's
     // actual current roots/poses. Actor loops below retain exact deduplication.
     for(std::size_t i=0;i<2;++i)
@@ -371,9 +365,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
                actor.source.actor_handle>0xfff||actor.source_position.area!=actor.recipient_position.area||
                actor.source_position.scene!=actor.recipient_position.scene||
                !actor.actor_override||!actor.qualification||!actor.qualification->revision||!actor.qualification->current||
-               !actor.qualification->receiver_text||
-               !actor.qualification->receiver_text->source_revision||!actor.qualification->receiver_text->current||
-               (actor.qualification->receiver_text->wire_codepage!=950&&actor.qualification->receiver_text->wire_codepage!=936)||
+
                actor.native.spawn.identity()!=actor.source.actor_handle||actor.native.removal.identity()!=actor.source.actor_handle||
                actor.native.movement.identity()!=actor.source.actor_handle||
                actor.native.spawn.x()!=actor.source_position.x||actor.native.spawn.y()!=actor.source_position.y||
@@ -382,6 +374,22 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
             // This path is remote only; its self consumer has different state.
             if(const auto& replay=actor.actor_override->replay();replay&&
                (replay->identity()!=actor.source.actor_handle||replay->is_self(actor.recipient.actor_handle)))return {};
+            // Concrete receiving profile producer, after exact private endpoint
+            // checks. Never derive fake D8/DA from a public language scalar.
+            std::shared_ptr<const TaiwanReceiverTextState> profile;
+            if(actor.qualification->receiver_text)
+                profile=std::make_shared<const TaiwanReceiverTextState>(*actor.qualification->receiver_text);
+            else{
+                const auto member=pair_index(actor.recipient);
+                const auto selector=member?receiver->native_taiwan_return_receiver_selector(state->preparations[*member]):
+                    receiver->native_taiwan_receiver_selector_on_game();
+                if(!selector)return {};
+                profile=std::make_shared<const TaiwanReceiverTextState>(*selector);
+            }
+            if(!profile->available())return {};
+            const auto [canonical,first_profile]=receiver_profiles.emplace(actor.recipient.session,profile);
+            if(!first_profile&&!canonical->second->same_source(*profile))return {};
+            profile=canonical->second;
             // Complete supplied actor/resources/override remains mandatory.
             // Text2/3 are replaced only by the factory-owned actual saved source.
             // Optional common stored first-name source is qualified privately
@@ -405,7 +413,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
             const auto [found,inserted]=state->actors.emplace(key,actor);
             if(!inserted&&!equal(found->second,actor))return {};
             // Explicit canonical actual receiver witness, no name/byte rewrite.
-            found->second.native.raw_name_state=*actor.qualification->receiver_text;
+            found->second.native.raw_name_state=*profile;
             state->record_slots[key].push_back({i,side,records.size()});
             records.emplace_back(record.begin(),record.end());
         }
@@ -923,10 +931,7 @@ bool SharedActorVisibility::chat_actor_snapshot_current(const ChatActorSnapshot&
                RecoveredRemoteActorRemove::encode_logical(actual.removal)!=RecoveredRemoteActorRemove::encode_logical(expected->removal) ||
                RecoveredRemoteActorMove::encode_logical(actual.movement)!=RecoveredRemoteActorMove::encode_logical(expected->movement) ||
                bool(actual.raw_name_state)!=bool(expected->raw_name_state))return false;
-            return !actual.raw_name_state || (actual.raw_name_state->source_revision==expected->raw_name_state->source_revision &&
-                actual.raw_name_state->wire_codepage==expected->raw_name_state->wire_codepage &&
-                actual.raw_name_state->actual_global_word_d8==expected->raw_name_state->actual_global_word_d8 &&
-                actual.raw_name_state->actual_global_word_da==expected->raw_name_state->actual_global_word_da);
+            return !actual.raw_name_state || actual.raw_name_state->same_source(*expected->raw_name_state);
         }else {
             if(god2cn::CnRemoteActor::encode_logical(actual.spawn)!=god2cn::CnRemoteActor::encode_logical(expected->spawn) ||
                god2cn::CnRemoteActorRemove::encode_logical(actual.removal)!=god2cn::CnRemoteActorRemove::encode_logical(expected->removal) ||
@@ -1857,12 +1862,12 @@ std::optional<SharedActorVisibility::TaiwanChatActor> SharedActorVisibility::tai
     const auto receiver=native->connection.lock();
     if(!receiver || !native->raw_name_state)return std::nullopt;
     const auto state=*native->raw_name_state;
-    if(!state.source_revision || !state.current || (state.wire_codepage!=936 && state.wire_codepage!=950))return std::nullopt;
+    if(!state.available())return std::nullopt;
     const auto logical=RecoveredRemoteActor::encode_logical(native->spawn);
     const auto first=std::uint32_t(logical[1])|(std::uint32_t(logical[2])<<8)|
         (std::uint32_t(logical[3])<<16)|(std::uint32_t(logical[4])<<24);
     const bool raw_selector=(first&(std::uint32_t{1}<<25))!=0;
-    const bool actual_selector=state.actual_global_word_d8==4 && state.actual_global_word_da==2;
+    const bool actual_selector=state.simplified();
     if(raw_selector!=actual_selector)return std::nullopt; // Actual postadapted names need their own issuer.
     const auto same_entry=[&] {
         if(taiwan_chat_reentered_ || !chat_actor_snapshot_current(*retained))return false;
@@ -1870,10 +1875,7 @@ std::optional<SharedActorVisibility::TaiwanChatActor> SharedActorVisibility::tai
         if(actual==entries_.end() || !matches(binding,actual->second) || actual->second.position!=position)return false;
         const auto tw=std::get_if<Taiwan>(&actual->second.native);
         return tw && tw->connection.lock()==receiver && RecoveredRemoteActor::encode_logical(tw->spawn)==logical &&
-            tw->raw_name_state && tw->raw_name_state->source_revision==state.source_revision &&
-            tw->raw_name_state->wire_codepage==state.wire_codepage &&
-            tw->raw_name_state->actual_global_word_d8==state.actual_global_word_d8 &&
-            tw->raw_name_state->actual_global_word_da==state.actual_global_word_da;
+            tw->raw_name_state && tw->raw_name_state->same_source(state);
     };
     const auto qualify=[&] {
         if(!same_entry())return false;
@@ -1893,12 +1895,12 @@ std::optional<SharedActorVisibility::TaiwanChatActor> SharedActorVisibility::tai
     };
     if(!qualify())return std::nullopt;
     const auto phase=receiver->state();const auto battle=receiver->battle_generation();
-    const bool current_before=state.current(*receiver,state.source_revision,state.wire_codepage,state.actual_global_word_d8,state.actual_global_word_da);
+    const bool current_before=state.current(*receiver);
     if(!current_before || !qualify() || receiver->state()!=phase || receiver->battle_generation()!=battle)return std::nullopt;
     const auto begin=logical.begin()+29,end_name=std::find(begin,logical.begin()+45,0);
     if(end_name==logical.begin()+45)return std::nullopt;
     const std::string name(begin,end_name);
-    const bool current_after=state.current(*receiver,state.source_revision,state.wire_codepage,state.actual_global_word_d8,state.actual_global_word_da);
+    const bool current_after=state.current(*receiver);
     if(!current_after || !qualify() || receiver->state()!=phase || receiver->battle_generation()!=battle)return std::nullopt;
     return TaiwanChatActor{receiver,native->spawn.identity(),name,state};
 }

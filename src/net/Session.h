@@ -124,6 +124,24 @@ public:
         explicit WorldResponseWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
         std::shared_ptr<Data> data_;
     };
+    // Immutable actual accepted C1C report, not OS/NLS/cache attestation.
+    // No scalar constructor. Equality identifies the original occurrence.
+    class NativeTaiwanReceiverSelector {
+    public:
+        NativeTaiwanReceiverSelector(const NativeTaiwanReceiverSelector&)=default;
+        NativeTaiwanReceiverSelector& operator=(const NativeTaiwanReceiverSelector&)=default;
+        bool operator==(const NativeTaiwanReceiverSelector&)const=default;
+        std::uint64_t source_revision()const noexcept;
+        bool reported_simplified()const noexcept;
+        std::uint16_t wire_codepage()const noexcept;
+        const std::array<std::uint8_t,4>& context_payload()const noexcept;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit NativeTaiwanReceiverSelector(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
+    };
     // Actual local normal-entry transcript: exact issued S2A, accepted raw tail
     // and successful existing world_ready hook. A private copy can be Pending
     // while that S2A's async_write completes. Neither state attests the remote
@@ -635,11 +653,18 @@ public:
     // after the entry pending handoff clears. No native ACK/turn permission.
     bool native_pk_entry_written_current(const NativePkEntryHold&)const noexcept;
     NativePkTerminalBarrier prepare_native_pk_terminal_barrier(const NativePkEntryHold&,
-        NativeBattleSkill,std::weak_ptr<NativePkTerminalOwner>);
+        NativeBattleSkill,std::weak_ptr<NativePkTerminalOwner>,
+        const RecoveredWorldRecords::ContextNotification& original_context);
     bool native_pk_terminal_barrier_ready_current(const NativePkTerminalBarrier&)const noexcept;
     bool native_pk_terminal_barrier_accepted_current(const NativePkTerminalBarrier&)const noexcept;
     NativePkReturnPreparation prepare_native_pk_return_generation(const NativePkTerminalBarrier&);
     bool native_pk_return_preparation_current(const NativePkReturnPreparation&)const noexcept;
+    // Own game only, genuine current Written INIT/latest accepted C1C.
+    // Return factory uses exact accepted private preparation, not old config.
+    std::optional<NativeTaiwanReceiverSelector> native_taiwan_receiver_selector_on_game()const;
+    std::optional<NativeTaiwanReceiverSelector> native_taiwan_return_receiver_selector(
+        const NativePkReturnPreparation&)const;
+    bool native_taiwan_receiver_selector_current(const NativeTaiwanReceiverSelector&)const noexcept;
     static NativePkReturnReservation reserve_native_pk_return_pair(
         std::array<std::shared_ptr<Session>,2>,std::array<NativePkReturnPreparation,2>,
         std::weak_ptr<NativePkReturnOwner>);

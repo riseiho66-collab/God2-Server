@@ -18,7 +18,7 @@ struct SharedPublishedChatNameSource::Observed {
     std::string name;
     std::uint64_t name_source_revision;
     std::uint16_t native_name_page;
-    std::optional<std::pair<std::uint16_t,std::uint16_t>> taiwan_globals;
+    std::optional<cn::SharedActorVisibility::TaiwanReceiverTextState> taiwan_globals; // Exact profile source, including typed C1C epoch.
 };
 struct SharedPublishedChatNameSource::Storage {
     std::shared_ptr<const Identity> identity;
@@ -81,15 +81,15 @@ std::optional<SharedPublishedChatNameSource::Observed> SharedPublishedChatNameSo
     const auto tw=visibility_->taiwan_chat_actor(binding,source.position);
     if(reentered_ || !identities_->current(lookup) || reentered_)return std::nullopt;
     Receiver receiver;std::uint32_t actor=0;std::string name;std::uint64_t revision=0;std::uint16_t native_page=0;
-    std::optional<std::pair<std::uint16_t,std::uint16_t>> globals;
+    std::optional<cn::SharedActorVisibility::TaiwanReceiverTextState> globals;
     std::optional<cn::SharedActorVisibility::MainlandRawNameState> cn_state;
     if(tw) {
         const auto c=tw->connection.lock();
-        if(!c || (tw->raw_name_state.wire_codepage!=936 && tw->raw_name_state.wire_codepage!=950))return std::nullopt;
-        native_page=tw->raw_name_state.wire_codepage;
+        if(!c || !tw->raw_name_state.available())return std::nullopt;
+        native_page=tw->raw_name_state.wire_codepage();
         receiver=c;actor=tw->native_actor_identity;name=tw->native_name_bytes;
-        revision=tw->raw_name_state.source_revision;
-        globals=std::pair{tw->raw_name_state.actual_global_word_d8,tw->raw_name_state.actual_global_word_da};
+        revision=tw->raw_name_state.source_revision();
+        globals=tw->raw_name_state;
     }else {
         const auto cn=visibility_->mainland_chat_actor(binding,source.position);
         if(reentered_ || !identities_->current(lookup) || reentered_ || !cn || cn->native_language_tag!=0 || !cn->raw_name_state)
@@ -143,8 +143,8 @@ std::optional<SharedPublishedChatNameSource::Observed> SharedPublishedChatNameSo
         const auto again=visibility_->taiwan_chat_actor(binding,source.position);
         if(!again || again->connection.lock()!=std::get<std::shared_ptr<Session>>(receiver) ||
            again->native_actor_identity!=actor || again->native_name_bytes!=name ||
-           again->raw_name_state.source_revision!=revision || again->raw_name_state.wire_codepage!=native_page ||
-           !globals || std::pair{again->raw_name_state.actual_global_word_d8,again->raw_name_state.actual_global_word_da}!=*globals)
+           again->raw_name_state.source_revision()!=revision || again->raw_name_state.wire_codepage()!=native_page ||
+           !globals || !again->raw_name_state.same_source(*globals))
             return std::nullopt;
     }else {
         const auto again=visibility_->mainland_chat_actor(binding,source.position);

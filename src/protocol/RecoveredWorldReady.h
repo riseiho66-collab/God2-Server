@@ -46,6 +46,7 @@ public:
                     if(logical_size-at!=5 || decoded[at]!=0x1c ||
                        decoded[at+1]+256u*decoded[at+2]!=local_id_ ||
                        decoded[at+3]>1 || decoded[at+4]!=0) return reject();
+                    std::copy_n(decoded.begin()+at+1,4,context_payload_.begin());
                     config_flag_=decoded[at+3];at+=5;++stage_;
                 } else return reject();
             }
@@ -58,6 +59,7 @@ public:
         return Result::NeedMore;
     }
     std::uint8_t config_flag() const noexcept { return config_flag_; }
+    const std::array<std::uint8_t,4>& context_payload()const noexcept {return context_payload_;}
 private:
     Result reject() noexcept { terminal_=true;return Result::Rejected; }
     std::uint16_t local_id_;
@@ -66,6 +68,7 @@ private:
     std::size_t size_=0,consumed_=0;
     unsigned stage_=0;
     std::uint8_t config_flag_=0;
+    std::array<std::uint8_t,4> context_payload_{}; // Valid only after Complete; exact received C1C.
     bool pre_tail_tick_=false;
     bool terminal_=false;
 };

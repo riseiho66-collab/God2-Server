@@ -39,6 +39,51 @@ public:
         // No guessed globals, language-bit/ACP codepage or default success.
         std::function<bool(Session&,std::uint64_t,std::uint16_t,std::uint16_t,std::uint16_t)> current;
     };
+    // Exact raw-profile authority OR Session-owned accepted C1C occurrence.
+    // Typed reports support NO_ADAPTATION only, not NLS/OS attestation.
+    class TaiwanReceiverTextState {
+    public:
+        TaiwanReceiverTextState(TaiwanRawNameState raw):source_(std::move(raw)){}
+        TaiwanReceiverTextState(Session::NativeTaiwanReceiverSelector selector):source_(std::move(selector)){}
+        std::uint64_t source_revision()const noexcept {
+            if(const auto* raw=std::get_if<TaiwanRawNameState>(&source_))return raw->source_revision;
+            return std::get<Session::NativeTaiwanReceiverSelector>(source_).source_revision();
+        }
+        std::uint16_t wire_codepage()const noexcept {
+            if(const auto* raw=std::get_if<TaiwanRawNameState>(&source_))return raw->wire_codepage;
+            return std::get<Session::NativeTaiwanReceiverSelector>(source_).wire_codepage();
+        }
+        bool simplified()const noexcept {
+            if(const auto* raw=std::get_if<TaiwanRawNameState>(&source_))return raw->actual_global_word_d8==4&&raw->actual_global_word_da==2;
+            return std::get<Session::NativeTaiwanReceiverSelector>(source_).reported_simplified();
+        }
+        bool available()const noexcept {
+            const auto* raw=std::get_if<TaiwanRawNameState>(&source_);
+            return source_revision()&&(!raw||bool(raw->current))&&
+                (wire_codepage()==936||wire_codepage()==950)&&((wire_codepage()==936)==simplified());
+        }
+        bool permits_source_codepage(std::uint16_t page)const noexcept {
+            return std::holds_alternative<TaiwanRawNameState>(source_)||page==wire_codepage();
+        }
+        bool current(Session& receiver)const {
+            if(!available())return false;
+            if(const auto* raw=std::get_if<TaiwanRawNameState>(&source_))
+                return raw->current(receiver,raw->source_revision,raw->wire_codepage,raw->actual_global_word_d8,raw->actual_global_word_da);
+            return receiver.native_taiwan_receiver_selector_current(std::get<Session::NativeTaiwanReceiverSelector>(source_));
+        }
+        bool same_source(const TaiwanReceiverTextState& other)const noexcept {
+            if(source_.index()!=other.source_.index())return false;
+            if(const auto* raw=std::get_if<TaiwanRawNameState>(&source_)){
+                const auto& next=std::get<TaiwanRawNameState>(other.source_);
+                return raw->source_revision==next.source_revision&&raw->wire_codepage==next.wire_codepage&&
+                    raw->actual_global_word_d8==next.actual_global_word_d8&&raw->actual_global_word_da==next.actual_global_word_da;
+            }
+            return std::get<Session::NativeTaiwanReceiverSelector>(source_)==std::get<Session::NativeTaiwanReceiverSelector>(other.source_);
+        }
+        bool operator==(const TaiwanReceiverTextState& other)const noexcept {return same_source(other);}
+    private:
+        std::variant<TaiwanRawNameState,Session::NativeTaiwanReceiverSelector> source_;
+    };
     struct MainlandRawNameState {
         std::uint64_t source_revision;
         std::uint16_t wire_codepage;
@@ -49,7 +94,7 @@ public:
         RecoveredRemoteActor::Record spawn;
         RecoveredRemoteActorRemove::Record removal;
         RecoveredRemoteActorMove::Record movement;
-        std::optional<TaiwanRawNameState> raw_name_state; // New explicit proof; legacy publication unchanged.
+        std::optional<TaiwanReceiverTextState> raw_name_state; // Raw owner or exact accepted C1C; no synthetic globals.
         // Explicit source selection for stored common original -> first6F name.
         // Full appearance/other fields and legitimate visibility remain issuer inputs.
         std::shared_ptr<god2::SharedNativeActorNameSource> common_name_source;
@@ -111,7 +156,7 @@ public:
         std::weak_ptr<Session> connection;
         std::uint32_t native_actor_identity;
         std::string native_name_bytes;
-        TaiwanRawNameState raw_name_state;
+        TaiwanReceiverTextState raw_name_state;
     };
     class ChatActorSnapshot {
     public:
@@ -302,6 +347,9 @@ public:
         std::function<bool()> current;
         // One actual receiving native profile owner, shared across duplicate
         // mutual-edge inputs. Legacy native.raw_name_state is not authority.
+        // Absence selects the concrete same-Session accepted C1C producer:
+        // exact private return preparation for returners, Written current INIT
+        // for survivors. That typed source permits only same-page6F.
         std::shared_ptr<const TaiwanRawNameState> receiver_text;
     };
     // CUSTOM-0133 explicit current remote override after full6F recreation.

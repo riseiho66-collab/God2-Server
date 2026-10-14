@@ -40,7 +40,15 @@ std::optional<SharedNativeActorNameSource::Native> SharedNativeActorNameSource::
         const auto receiver=native.connection.lock();
         if(!receiver || !native.raw_name_state || native.spawn.identity()!=source.actor_handle)return std::nullopt;
         const auto state=*native.raw_name_state;
-        if(!state.source_revision || !state.current || (state.wire_codepage!=936 && state.wire_codepage!=950))return std::nullopt;
+        const auto page=[&]{
+            if constexpr(std::is_same_v<Output,cn::SharedActorVisibility::Taiwan>)return state.wire_codepage();
+            else return state.wire_codepage;
+        }();
+        const bool available=[&]{
+            if constexpr(std::is_same_v<Output,cn::SharedActorVisibility::Taiwan>)return state.available();
+            else return bool(state.source_revision&&state.current&&(page==936||page==950));
+        }();
+        if(!available)return std::nullopt;
         const auto original=[&] {
             if constexpr(std::is_same_v<Output,cn::SharedActorVisibility::Taiwan>)return RecoveredRemoteActor::encode_logical(native.spawn);
             else return god2cn::CnRemoteActor::encode_logical(native.spawn);
@@ -48,7 +56,7 @@ std::optional<SharedNativeActorNameSource::Native> SharedNativeActorNameSource::
         if constexpr(std::is_same_v<Output,cn::SharedActorVisibility::Taiwan>) {
             const auto word=std::uint32_t(original[1])|(std::uint32_t(original[2])<<8)|
                 (std::uint32_t(original[3])<<16)|(std::uint32_t(original[4])<<24);
-            if(bool((word>>25)&1)!=(state.actual_global_word_d8==4 && state.actual_global_word_da==2))
+            if(bool((word>>25)&1)!=state.simplified())
                 return std::nullopt; // Different-selector postadapted name source remains OPEN.
         }else if(native.spawn.native_language_tag()!=0)return std::nullopt;
         const auto receiver_tuple=[&] {
@@ -68,7 +76,7 @@ std::optional<SharedNativeActorNameSource::Native> SharedNativeActorNameSource::
             if(!receiver_tuple())return false;
             const bool actual=[&] {
                 if constexpr(std::is_same_v<Output,cn::SharedActorVisibility::Taiwan>)
-                    return state.current(*receiver,state.source_revision,state.wire_codepage,state.actual_global_word_d8,state.actual_global_word_da);
+                    return state.current(*receiver);
                 else return state.current(*receiver,state.source_revision,state.wire_codepage);
             }();
             return actual && receiver_tuple();
@@ -95,7 +103,7 @@ std::optional<SharedNativeActorNameSource::Native> SharedNativeActorNameSource::
         const auto stored=OwnedCharacterNameText::from_encoded(std::string_view(
             reinterpret_cast<const char*>(profile.data()),static_cast<std::size_t>(end-profile.begin())),before->character.name_codepage);
         if(!stored)return std::nullopt;
-        const auto encoded=OwnedCharacterNameText::from_utf8(stored->original_utf8(),state.wire_codepage);
+        const auto encoded=OwnedCharacterNameText::from_utf8(stored->original_utf8(),page);
         if(!encoded || encoded->original_utf8()!=stored->original_utf8())return std::nullopt;
         auto projected=original;
         // Only the proven first logical16-byte field; every other byte remains
