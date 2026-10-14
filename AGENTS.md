@@ -756,3 +756,22 @@ activation/fullroute. ActualproductionReturnprovider/nativeopaqueorder/full
 skills/zero-deitysuffix/issuedlineage/recovery/Extended64wire/client OPEN.
 Parser77=50/11/16,pending12/frontier26 21/105,whole%null; TW100firstACTIVE,
 commonCNweb/saves/fonts/text/qualifiednumericdomains/PHASE1sourceonly retained.
+
+Round398 connects original zero-deity PKpublication with PRIVATE CPP-only
+issuer, actual one-shot Attempt/source/player22/24/nonemptyWrittenWWR/privateINIT/
+fullLease and SAMEoriginal cachedPlayer graph. Separatezero-only playerleaf
+removes dependencycycle; original publicsupplier/nonempty/legacy remainexact.
+ActualsameDB separatezero observer fence ->fullCurrent empty savedroster/
+selection/activations/learning source ->zero suffix onlyrealend boundary;
+no dummyframe/receipt/ACK/remint. ExacttokenPlayer==PreparedPlayer; closedSQL
+uses onlystoredgraphs/no livecallbacks. OriginalWWR notrenewed afterreturn/learn.
+V35pins91/existingCPP/sourceonly; no newPY/Lua/native/defaultactivation/routes.
+FullReturnprovider/currentfull6F/issuedsuccessor/opaqueorder/Extended64/native
+acceptance OPEN. Parser77=50/11/16,pending12/frontier26 21/105,whole%null;
+TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 preserved.
+
+Round398 final lifecycle correction before first accounting: actual Reserved
+Room authority already checks SAME PreparedPlayer stored graph. Zero companion
+closed readers retain full roster/learning/INIT/Lease identity; Active/Finished
+use immutable admitted player plus actual terminal saved-after resource ledger,
+not retired admission HP/revision. Two old LF bytes restored exactly.

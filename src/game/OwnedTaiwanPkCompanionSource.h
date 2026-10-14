@@ -3,6 +3,9 @@
 #include "db/SqliteSupport.h"
 #include "net/Session.h"
 #include "protocol/RecoveredWorldFrame.h"
+#include "game/OwnedTaiwanPkPlayerEntrySource.h"
+#include "protocol/RecoveredRoleVitals.h"
+#include <functional>
 #include <algorithm>
 #include <memory>
 #include <optional>
@@ -11,6 +14,7 @@
 #include <utility>
 
 namespace god2 {
+class TaiwanInitialPlayerPublicationIssuer; // Sole mint bridge is defined only in Application.cpp.
 // CUSTOM-0129 opt-in retained companion publication source for PK admission.
 // Exact local writes + saved rows + expected normal-reset DATA prefix, NOT
 // remote consumption, selected deity HP/maxHP, skill permission or settlement.
@@ -20,6 +24,81 @@ namespace god2 {
 class OwnedTaiwanPkCompanionSource final {
     struct State;
 public:
+    // Minted ONLY by the actual Application.cpp one-shot publisher bridge.
+    // Original Written22/24 and its complete response remain owning inputs;
+    // absence of deity records is not an empty frame, receipt or native ACK.
+    class ZeroPublication {
+    public:
+        using OriginCurrent=std::function<bool()>;
+        ZeroPublication(const ZeroPublication&)=default;
+        ZeroPublication& operator=(const ZeroPublication&)=default;
+        ZeroPublication(ZeroPublication&& other)noexcept:data_(other.data_){}
+        ZeroPublication& operator=(ZeroPublication&& other)noexcept{data_=other.data_;return *this;}
+        const OwnedTaiwanPkPlayerEntrySource::Observation& player()const noexcept{return data_->player;}
+        const Session::WorldResponseWrite& receipt()const noexcept{return data_->receipt;}
+        const std::vector<std::uint8_t>& wire()const noexcept{return data_->wire;}
+        const std::vector<std::uint8_t>& player_frame()const noexcept{return data_->frame;}
+        std::size_t player_offset()const noexcept{return data_->offset;}
+        bool operator==(const ZeroPublication&)const=default;
+        bool current()const {
+            const auto data=data_;
+            if(data->thread!=std::this_thread::get_id())
+                throw std::logic_error("Zero deity publication game owner mismatch");
+            if(data->reading){data->reentered=true;return false;}
+            data->reading=true;data->reentered=false;
+            struct End{bool& busy;~End(){busy=false;}}end{data->reading};
+            return data->receipt.status()==Session::WorldResponseWriteStatus::Written&&
+                data->origin_current()&&!data->reentered&&data->player.current()&&!data->reentered&&
+                data->origin_current()&&!data->reentered&&
+                data->receipt.status()==Session::WorldResponseWriteStatus::Written;
+        }
+    private:
+        friend class TaiwanInitialPlayerPublicationIssuer; // Definition/mint only in Application.cpp.
+        struct Data {
+            const OwnedTaiwanPkPlayerEntrySource::Observation player;
+            const Session::WorldResponseWrite receipt;
+            const std::vector<std::uint8_t> wire,frame;
+            const std::size_t offset;
+            const OriginCurrent origin_current;
+            const std::thread::id thread=std::this_thread::get_id();
+            bool reading=false,reentered=false;
+            Data(OwnedTaiwanPkPlayerEntrySource::Observation p,Session::WorldResponseWrite w,
+                    std::vector<std::uint8_t> whole,std::vector<std::uint8_t> actual_frame,
+                    std::size_t actual_offset,OriginCurrent current)
+                :player(std::move(p)),receipt(std::move(w)),wire(std::move(whole)),frame(std::move(actual_frame)),
+                 offset(actual_offset),origin_current(std::move(current)){}
+        };
+        ZeroPublication(OwnedTaiwanPkPlayerEntrySource::Observation player,Session::WorldResponseWrite whole,
+                std::vector<std::uint8_t> wire,std::vector<std::uint8_t> frame,
+                std::size_t offset,OriginCurrent current)
+            :data_(std::make_shared<Data>(std::move(player),std::move(whole),std::move(wire),
+                std::move(frame),offset,std::move(current))) {
+            const auto& d=*data_;
+            if(!d.origin_current||d.wire.empty()||d.frame.empty()||d.receipt.wire()!=d.wire||
+               d.receipt.status()!=Session::WorldResponseWriteStatus::Written||
+               d.offset>d.wire.size()||d.frame.size()!=d.wire.size()-d.offset||
+               !std::equal(d.frame.begin(),d.frame.end(),d.wire.begin()+d.offset))
+                throw std::invalid_argument("Zero deity publication requires actual original Written player response");
+            bool boundary=false;
+            for(std::size_t at=0;at<d.wire.size();) {
+                if(d.wire.size()-at<2)throw std::invalid_argument("Zero deity response frame truncated");
+                const auto length=static_cast<std::size_t>(d.wire[at])+256u*d.wire[at+1];
+                if(length<4||length>d.wire.size()-at)
+                    throw std::invalid_argument("Zero deity response frame envelope invalid");
+                if(at==d.offset)boundary=length==d.frame.size();
+                at+=length;
+            }
+            const auto logical=RecoveredWorldFrame::decode(d.frame);
+            const auto& saved=d.player.combat().material();
+            std::vector<std::uint8_t> expected(saved.role.logical.begin(),saved.role.logical.end());
+            const auto vitals=RecoveredRoleVitals::encode(saved.resources.hp,saved.resources.mp,
+                saved.resources.max_hp,saved.resources.max_mp);
+            expected.insert(expected.end(),vitals.begin(),vitals.end());
+            if(!boundary||!logical||*logical!=expected)
+                throw std::invalid_argument("Zero deity publication player22/24 differs from original saved graph");
+        }
+        std::shared_ptr<Data> data_;
+    };
     // Actual callback response coverage only. No per-batch write is invented.
     class WholeResponseCoverage {
     public:
@@ -56,6 +135,7 @@ public:
         std::uint64_t session,account,character,battle_generation;
         SessionState phase;
         std::optional<WholeResponseCoverage> whole_response{}; // Absent on the exact legacy path.
+        std::optional<ZeroPublication> zero_publication{}; // Original one-shot zero mode only.
     };
     class Observation {
     public:
@@ -83,7 +163,30 @@ public:
         RecoveredOwnedCompanions&,const NativeSkillCatalog&,std::shared_ptr<Session>,
         Session::NormalWorldInitialization,RecoveredOwnedCompanions::Restoration,
         Session::WorldResponseWrite,std::vector<std::uint8_t> original_whole_wire);
+    static std::optional<Observation> observe_zero(sqlite3*,SqliteCompanionRepository&,
+        RecoveredOwnedCompanions&,const NativeSkillCatalog&,std::shared_ptr<Session>,
+        Session::NormalWorldInitialization,RecoveredOwnedCompanions::Restoration,ZeroPublication);
 private:
+    static bool zero_shape(const Material& m) {
+        if(!m.zero_publication||!m.whole_response||!m.writes.empty()||
+           !m.restoration.learning_source()||!m.restoration.learning_source()->activations().empty()||
+           !m.restoration.deity_roster().rows().empty()||m.restoration.deity_roster().selection()||
+           !m.restoration.batches().empty()||!m.prefix.actual_batches().empty()||
+           m.prefix.roster_count()!=0||m.prefix.selected_row()!=-1||!m.prefix.catalog_records().empty())return false;
+        const auto& publication=*m.zero_publication;const auto& coverage=*m.whole_response;
+        const auto& player=publication.player();const auto& appearance=player.combat().appearance();
+        const auto& shape=appearance.material();
+        // observe_zero alone constructs this immutable coverage from THAT token's private receipt.
+        return !coverage.wire().empty()&&coverage.wire()==publication.wire()&&
+            coverage.receipt().wire()==publication.receipt().wire()&&
+            coverage.receipt().status()==Session::WorldResponseWriteStatus::Written&&
+            coverage.suffix().empty()&&coverage.suffix_offset()==coverage.wire().size()&&coverage.batch_count()==0&&
+            appearance.owns_initialization(m.initialization)&&shape.lease.session==m.session&&
+            shape.lease.account==m.account&&shape.lease.character==m.character&&shape.battle_generation==m.battle_generation&&
+            NativeEquipmentSnapshot::same_root(shape.equipment.root,m.restoration.learning_source()->equipment().root)&&
+            shape.equipment==m.restoration.learning_source()->equipment()&&
+            shape.inventory==m.restoration.learning_source()->inventory();
+    }
     static bool whole_current(const WholeResponseCoverage& coverage,const Session& session,
             std::size_t batches){
         const auto& wire=coverage.wire();const auto& suffix=coverage.suffix();
@@ -156,6 +259,16 @@ private:
                peer->battle_generation()!=m.battle_generation ||
                m.restoration.deity_roster().account()!=m.account ||
                m.restoration.deity_roster().character()!=m.character)return false;
+            if(m.zero_publication) {
+                if(!zero_shape(m)||!m.zero_publication->player().uses_connection(db)||
+                   !m.zero_publication->current()||reentered||
+                   !peer->world_response_write_current_on_game(m.zero_publication->receipt())||
+                   m.zero_publication->receipt().status()!=Session::WorldResponseWriteStatus::Written)return false;
+                return !reentered&&peer->normal_world_initialization_current_on_game(m.initialization)&&
+                    m.initialization.entry_written()&&!peer->closing()&&peer->state()==m.phase&&
+                    peer->id()==m.session&&peer->account_id==m.account&&peer->character_id==m.character&&
+                    peer->battle_generation()==m.battle_generation;
+            }
             const auto& batches=m.restoration.batches();
             if(m.whole_response){
                 if(!m.writes.empty()||m.prefix.actual_batches()!=batches||
@@ -190,6 +303,9 @@ private:
             // This delegates ONLY a closed read on this existing actual scope.
             if(m.restoration.learning_source()&&
                !helper.restoration_learning_current_in_transaction(m.restoration,actual))return false;
+            // The actual Reserved room path separately checks this SAME Prepared player.
+            // Generic companion custody retains admitted identity after terminal HP/MP save.
+            if(m.zero_publication&&(!zero_shape(m)||!m.zero_publication->player().uses_connection(actual)))return false;
             if(reentered||sqlite3_get_autocommit(db)||sqlite3_total_changes64(db)!=changes)return false;
             for(const auto* name:{"native_data_sources","native_skill_catalog"}){
                 sqlite_detail::Statement shadow(db,"SELECT 1 FROM temp.sqlite_master WHERE name=? COLLATE NOCASE OR tbl_name=? COLLATE NOCASE LIMIT 1");
@@ -282,6 +398,48 @@ inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCom
         std::move(*prefix),{},id,account,character,generation,phase,std::move(coverage)});
     Observation result(std::move(state),std::move(material));
     if(!result.current())return {};
+    return result;
+}
+inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCompanionSource::observe_zero(
+        sqlite3* db,SqliteCompanionRepository& repository,RecoveredOwnedCompanions& helper,
+        const NativeSkillCatalog& catalog,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,RecoveredOwnedCompanions::Restoration restoration,
+        ZeroPublication publication) {
+    if(!db||!repository.uses_connection(db)||!helper.owns_repository(repository)||!catalog.uses_connection(db)||
+       !session||!session->normal_world_initialization_current_on_game(initialization)||!initialization.entry_written()||
+       !publication.player().uses_connection(db)||!sqlite3_get_autocommit(db)||
+       !restoration.learning_source()||!restoration.deity_roster().rows().empty()||restoration.deity_roster().selection()||
+       !restoration.batches().empty()||!restoration.learning_source()->activations().empty())return {};
+    const auto phase=session->state();const auto id=session->id(),account=session->account_id,character=session->character_id;
+    const auto generation=session->battle_generation();
+    if((phase!=SessionState::CharacterSelected&&phase!=SessionState::InWorld)||!account||!character||session->closing()||
+       restoration.deity_roster().account()!=account||restoration.deity_roster().character()!=character||
+       !publication.player().combat().appearance().owns_initialization(initialization))return {};
+    auto state=std::make_shared<State>(State{db,repository,helper,catalog,session});
+    std::optional<TaiwanNativeDeityRosterPrefix> prefix;
+    {
+        State::Read read(*state);if(!read.entered)return {};
+        const auto changes=sqlite3_total_changes64(db);
+        const auto local=[&] {
+            return !state->reentered&&session->normal_world_initialization_current_on_game(initialization)&&
+                initialization.entry_written()&&!session->closing()&&session->state()==phase&&session->id()==id&&
+                session->account_id==account&&session->character_id==character&&session->battle_generation()==generation&&
+                session->world_response_write_current_on_game(publication.receipt())&&
+                publication.receipt().status()==Session::WorldResponseWriteStatus::Written;
+        };
+        if(!local()||!publication.current()||!local())return {};
+        prefix=helper.normal_entry_prefix(restoration,catalog);
+        if(!prefix||!local()||!publication.current()||!local()||state->reentered||
+           !sqlite3_get_autocommit(db)||sqlite3_total_changes64(db)!=changes)return {};
+    }
+    // The REAL nonempty complete Written response exists. Zero bytes mean
+    // no deity suffix at its terminal boundary, never an encoded empty frame.
+    WholeResponseCoverage coverage(std::make_shared<const WholeResponseCoverage::Data>(
+        publication.receipt(),publication.wire(),std::vector<std::uint8_t>{},0));
+    auto material=std::make_shared<const Material>(Material{std::move(initialization),std::move(restoration),
+        std::move(*prefix),{},id,account,character,generation,phase,std::move(coverage),std::move(publication)});
+    Observation result(std::move(state),std::move(material));
+    if(!zero_shape(result.material())||!result.current())return {};
     return result;
 }
 }

@@ -130,6 +130,8 @@ public:
                 player.identity_profile()==profile&&
                 (!peers[i].native_identity||peers[i].native_identity->retained_matches_appearance(appearance));
         };
+        if(companions_)for(const auto& source:companions)
+            if(source&&source->material().zero_publication&&!players_)return {}; // Never remint the original zero player.
         if(players_){
             for(std::size_t i=0;i<2;++i){
                 if(!exact())return {};
@@ -171,7 +173,18 @@ public:
         const auto project=[&]{return RecoveredPkEntryProjection::prepare_waiting_notification_owned_initial_contexts(
             {*players[0],*players[1]},{*vitals[0],*vitals[1]},catalog_);};
         auto entry=players_?callback(project):project();
+        const auto zero_players_joined=[&] {
+            if(companions_)for(std::size_t i=0;i<2;++i)if(companions[i]->material().zero_publication) {
+                const auto& zero=*companions[i]->material().zero_publication;
+                if(!players_||!entry.owned_players()||zero.player()!=(*entry.owned_players())[i]||
+                   !zero.player().combat().appearance().owns_initialization(*initializations[i])||
+                   zero.player().combat().appearance().material().lease!=*leases[i])return false;
+            }
+            return true;
+        };
+        if(!zero_players_joined())return {};
         const auto sources_current=[&]{
+            if(!zero_players_joined())return false;
             if(!companions_current()||!supplied_players_current())return false;
             for(const auto& player:*entry.owned_players())if(!player_current(player)||!local())return false;
             // Full private player Current includes combat/appearance/resources,

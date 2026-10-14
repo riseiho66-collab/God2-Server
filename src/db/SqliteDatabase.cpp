@@ -102,6 +102,34 @@ struct SqliteDatabase::Impl {
                 throw DatabaseError("TW PK player Database source changed or reentered");
         }
     };
+    // Separate whole-observer latch: the genuine zero issuer may invoke the
+    // existing guarded Player Current; nesting that same player latch is invalid.
+    const std::thread::id pk_zero_companion_thread=std::this_thread::get_id();
+    bool pk_zero_companion_reading=false,pk_zero_companion_reentered=false;
+    struct PkZeroCompanionReadScope {
+        Impl& owner;
+        sqlite3* const connection;
+        sqlite3_int64 changes=0;
+        explicit PkZeroCompanionReadScope(Impl& value):owner(value),connection(value.connection.get()) {
+            if(owner.pk_zero_companion_thread!=std::this_thread::get_id())
+                throw DatabaseError("TW PK zero companion Database game owner mismatch");
+            if(owner.pk_zero_companion_reading) {
+                owner.pk_zero_companion_reentered=true;
+                throw DatabaseError("TW PK zero companion Database source reentered");
+            }
+            if(!connection||!sqlite3_get_autocommit(connection))
+                throw DatabaseError("TW PK zero companion Database source requires closed outer transaction");
+            changes=sqlite3_total_changes64(connection); // Before any source observer.
+            owner.pk_zero_companion_reading=true;owner.pk_zero_companion_reentered=false;
+        }
+        ~PkZeroCompanionReadScope(){owner.pk_zero_companion_reading=false;}
+        void fence()const {
+            if(owner.pk_zero_companion_thread!=std::this_thread::get_id()||!owner.pk_zero_companion_reading||
+               owner.pk_zero_companion_reentered||owner.connection.get()!=connection||
+               !sqlite3_get_autocommit(connection)||sqlite3_total_changes64(connection)!=changes)
+                throw DatabaseError("TW PK zero companion Database source changed or reentered");
+        }
+    };
 };
 SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration> migrations)
     : path_(std::move(path)), migrations_(std::move(migrations)) {}
@@ -662,6 +690,35 @@ std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe
     return OwnedTaiwanPkCompanionSource::observe(impl_->connection.get(),*impl_->companions,helper,
         *impl_->native_skill_catalog,std::move(session),std::move(initialization),
         std::move(restoration),std::move(whole_response),std::move(original_whole_wire));
+}
+std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe_owned_taiwan_pk_zero_companions(
+        RecoveredOwnedCompanions& helper,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,RecoveredOwnedCompanions::Restoration restoration,
+        OwnedTaiwanPkCompanionSource::ZeroPublication publication){
+    if(!migrated_||!impl_)throw DatabaseError("TW PK zero companion source requires actual Database");
+    auto* const owner=impl_.get();Impl::PkZeroCompanionReadScope read(*owner);
+    auto* const companions=owner->companions.get();auto* const catalog=owner->native_skill_catalog.get();
+    auto* const characters=owner->recovered_characters.get();
+    const auto local=[&] {
+        read.fence();
+        return migrated_&&impl_.get()==owner&&companions&&catalog&&characters&&
+            owner->companions.get()==companions&&owner->native_skill_catalog.get()==catalog&&
+            owner->recovered_characters.get()==characters&&companions->uses_connection(read.connection)&&
+            catalog->uses_connection(read.connection)&&characters->uses_connection(read.connection)&&
+            helper.owns_repository(*companions)&&publication.player().uses_connection(read.connection)&&
+            publication.player().combat().appearance().owns_characters(*characters);
+    };
+    if(!local())return {};
+    // The original player's live source is observed outside SQL. The issuer's
+    // Current can separately use PlayerReadScope, while zero reentry poisons us.
+    const bool player_current=publication.player().current();read.fence();
+    if(!player_current||!local())return {};
+    auto result=OwnedTaiwanPkCompanionSource::observe_zero(read.connection,*companions,helper,*catalog,
+        std::move(session),std::move(initialization),std::move(restoration),publication);
+    read.fence();
+    if(!result||!local())return {};
+    const bool current=result->current();read.fence();
+    return current&&result->uses_connection(read.connection)&&local()?std::move(result):std::nullopt;
 }
 std::unique_ptr<SqliteBeastBankRepository> SqliteDatabase::make_beast_bank_repository(){
     if(!migrated_)throw DatabaseError("Migrate before PET bank access");

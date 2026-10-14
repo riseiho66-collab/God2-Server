@@ -152,6 +152,22 @@ Json companion_material(const OwnedTaiwanPkCompanionSource::Material& m){
             {"batch_count",coverage.batch_count()},
             {"scope","full-original-response-coverage;not-per-frame-receipts-native-ACK-or-companion-HP"}};
     }
+    if(m.zero_publication){
+        if(!m.whole_response||!m.restoration.batches().empty()||!m.writes.empty()||
+           !m.restoration.deity_roster().rows().empty()||m.restoration.deity_roster().selection()||
+           m.prefix.roster_count()!=0||m.prefix.selected_row()!=-1||
+           m.whole_response->batch_count()!=0||!m.whole_response->suffix().empty()||
+           m.whole_response->suffix_offset()!=m.whole_response->wire().size())
+            throw DatabaseError("PK zero deity readset requires its original empty saved publication");
+        const auto& zero=*m.zero_publication;
+        const auto& lease=zero.player().combat().appearance().material().lease;
+        result["whole_response_transport"]["observation"]="actual-original-written-initial-player-response-with-zero-owned-deity-records";
+        result["zero_deity_publication"]=Json{{"design_id","CUSTOM-0129"},
+            {"player_frame",zero.player_frame()},{"player_frame_offset",zero.player_offset()},
+            {"original_lease",Json::array({lease.session,lease.account,lease.character,lease.generation,lease.actor_handle,
+                lease.position.area,lease.position.scene,lease.position.x,lease.position.y,lease.position.revision})},
+            {"scope","same-private-initial-player-graph-and-original-response;no-new-frame-receipt-reset-ACK-or-return-renewal"}};
+    }
     return result;
 }
 bool owned_appearance_current(const SqliteOwnedPkRoomRepository::Input& input,sqlite3* db){
@@ -464,6 +480,10 @@ void SqliteOwnedPkRoomRepository::validate(const Input& in){
                m.initialization.accepted_tail()!=original.accepted_tail||
                m.initialization.config_flag()!=original.config_flag)
                 throw DatabaseError("PK companion lineage differs from original admitted initialization");
+            if(m.zero_publication&&(m.zero_publication->player()!=(*in.entry.owned_players())[i]||
+               !m.zero_publication->player().combat().appearance().owns_initialization(m.initialization)||
+               m.zero_publication->player().combat().appearance().material().lease!=original.lease))
+                throw DatabaseError("PK zero deity publication requires the same original prepared player graph");
         }
     }
     if(in.combat_sources){

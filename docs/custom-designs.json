@@ -4949,6 +4949,25 @@
         "whole_route_complete": false,
         "default_activated": false,
         "product_execution": false
+      },
+      "actual_original_zero_deity_PK_publication_source": {
+        "round": 398,
+        "document": "docs/research/tw-pk-zero-deity-source-20261014.md",
+        "implementation": [
+          "src/core/Application.cpp",
+          "src/db/SqliteDatabase.cpp",
+          "src/db/SqliteDatabase.h",
+          "src/db/SqliteOwnedPkRoomRepository.cpp",
+          "src/game/OwnedTaiwanPkCompanionSource.h",
+          "src/handlers/OwnedTaiwanPkEntryPreparation.h"
+        ],
+        "source_connected": true,
+        "issuer": "Private ZeroPublication constructor; sole narrow issuer in Application.cpp, original one-shot publisher plus actual player22/24 WWR/frame/privateINIT/fullLease and same Player graph",
+        "coverage": "Actual NONEMPTY original Written response; count0/size0 suffix at real terminal wire boundary only with full Current empty saved roster/selection/activations/learning graph, no empty frame or invented receipt",
+        "readiness": "Separate zero-only cached original Player leaf, original public combined supplier exact; guarded sameDB separatezeroObserver latch; closed Room roster/learning readers never invoke live callbacks; actual Reserved authority checks SAME PreparedPlayer full stored graph, Active/Finished uses immutable admitted player and actual terminal saved-after ledger; exact token.player == preparedPlayer",
+        "default_or_runtime_activated": false,
+        "whole_gameplay_or_native_provider_complete": false,
+        "product_execution": false
       }
 },
 {

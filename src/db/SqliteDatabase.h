@@ -173,6 +173,12 @@ public:
     std::optional<OwnedTaiwanPkCompanionSource::Observation> observe_owned_taiwan_pk_companions(
         RecoveredOwnedCompanions&,std::shared_ptr<Session>,Session::NormalWorldInitialization,
         RecoveredOwnedCompanions::Restoration,Session::WorldResponseWrite,std::vector<std::uint8_t>);
+    // CUSTOM-0129 genuine Application-issued no-deity publication. The private
+    // zero token owns its original player/INIT/full Lease and issued response;
+    // a generic Written receipt or caller empty roster cannot mint this path.
+    std::optional<OwnedTaiwanPkCompanionSource::Observation> observe_owned_taiwan_pk_zero_companions(
+        RecoveredOwnedCompanions&,std::shared_ptr<Session>,Session::NormalWorldInitialization,
+        RecoveredOwnedCompanions::Restoration,OwnedTaiwanPkCompanionSource::ZeroPublication);
     SqliteWorldDisplayRepository& world_displays();
     SqliteQuestJournalRepository& quest_journals();
     // Borrowed reader; valid only for this database's lifetime, after migration.
