@@ -5684,7 +5684,28 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "document": "docs/research/tw-initial-player-publication-source-20261014.md",
   "reason": "Connect the real missing initial saved22/24 publisher instead of promoting a legacy call-return flag or deity write into complete player authority.",
-  "replacement": "Recover native full initial/opaque side-effect ordering, qualify fullplayer auxiliary/text/actual mixed PK backend/fullreturn/issued learning lineage and Extended64 wire/client profile, then centralized builds/tests/native acceptance."
+  "replacement": "Recover native full initial/opaque side-effect ordering, qualify fullplayer auxiliary/text/actual mixed PK backend/fullreturn/issued learning lineage and Extended64 wire/client profile, then centralized builds/tests/native acceptance.",
+      "scoped_PK_original_player_source": {
+        "round": 396,
+        "document": "docs/research/tw-pk-original-player-source-20261014.md",
+        "implementation": [
+          "src/core/Application.cpp",
+          "src/db/SqliteDatabase.cpp",
+          "src/db/SqliteDatabase.h",
+          "src/handlers/OwnedTaiwanPkEntryPreparation.h",
+          "src/handlers/OwnedTaiwanPkRoomBackend.h"
+        ],
+        "source_connected": true,
+        "proof": "Original actual Written initial22/24 snapshot/frameoffset/fullwire/privateINIT/fullLease -> one sameDatabase private joint/Appearance/Combat/PlayerEntry -> full original published role/resources equality -> exact retained cache/current/readiness/optionalpreparer SAMEobservation",
+        "read_scope": "Narrow actualImpl game/reentry/autocommit/totalchanges across all subsource observers and full Current; no added outerSQLtx around live observers",
+        "default_old_broad_player_flag_and_all_other_consumers_preserved": true,
+        "new_Peer_fields_or_existing_JSON_readset_changes": false,
+        "actual_Main_backend_hosted": false,
+        "native_149c_auxiliary_or_formula_authority_established": false,
+        "whole_gameplay_complete": false,
+        "default_activated": false,
+        "product_execution": false
+      }
 }
 ]
 }

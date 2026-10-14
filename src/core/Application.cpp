@@ -968,6 +968,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 std::shared_ptr<const RecoveredPlayerSnapshot> initial_player;
                 std::shared_ptr<const std::vector<std::uint8_t>> initial_player_frame;
                 std::size_t initial_player_wire_offset=0;
+                // CUSTOM-0149/0129: ONE original scoped player graph, never a
+                // replacement observation after stale saved state or INIT.
+                std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> pk_player;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -2336,6 +2339,85 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 return local() && saved && saved->resources==player->resources && saved->role==player->role &&
                     saved->logical_before_companion_binding==player->logical_before_companion_binding && local();
             };
+            bool pk_player_reading=false,pk_player_reentered=false;
+            const OwnedTaiwanPkEntryPreparation::Players pk_players=[&](
+                    const std::shared_ptr<Session>& peer,const Session::NormalWorldInitialization& initialization)
+                    ->std::optional<OwnedTaiwanPkPlayerEntrySource::Observation>{
+                if(!config.owned_initial_player_enabled)return {};
+                if(pk_player_reading){pk_player_reentered=true;return {};}
+                if(!peer || !peer->normal_world_initialization_current_on_game(initialization) ||
+                   !initialization.entry_written())return {};
+                const auto host=common_initial_deities;const auto world=common_world;
+                if(!host || !world)return {};
+                host->preflight();
+                pk_player_reading=true;pk_player_reentered=false;
+                struct End {bool& value;~End(){value=false;}} end{pk_player_reading};
+                const auto id=peer->id(),account=peer->account_id,character=peer->character_id;
+                const auto at=host->attempts.find(id);
+                if(at==host->attempts.end())return {};
+                const auto attempt=at->second;const auto source=attempt->source;
+                const auto snapshot=source->initial_player;const auto material=source->material;
+                const auto frame=source->initial_player_frame;const auto offset=source->initial_player_wire_offset;
+                const auto whole=source->whole_response;const auto wire=source->whole_response_wire;
+                const auto batch_count=source->whole_response_batch_count;
+                const auto companion=source->pk_publication;
+                auto player=source->pk_player;
+                const auto presence=world->presence();
+                const auto local=[&] {
+                    const auto now=host->attempts.find(id);
+                    const auto issued=owned_companion_restoration_sources.find(id);
+                    return !pk_player_reentered && common_world==world && common_initial_deities==host &&
+                        host->live && !host->busy && !host->reentered && now!=host->attempts.end() && now->second==attempt &&
+                        issued!=owned_companion_restoration_sources.end() && issued->second==source &&
+                        source->session.lock()==peer && source->account==account && source->character==character &&
+                        source->phase_at_restore==SessionState::InWorld && !source->battle_generation_at_restore &&
+                        source->all_submission_calls_returned && source->initial_player==snapshot &&
+                        source->initial_player_frame==frame && source->initial_player_wire_offset==offset &&
+                        source->whole_response==whole && source->whole_response_wire==wire &&
+                        source->whole_response_batch_count==batch_count &&
+                        source->material==material && source->pk_publication==companion && source->pk_player==player &&
+                        snapshot && snapshot->role && frame && whole && wire && material && companion &&
+                        source->normal_initialization &&
+                        source->normal_initialization->same_initialization(initialization) &&
+                        peer->normal_world_initialization_current_on_game(initialization) && initialization.entry_written() &&
+                        !peer->closing() && peer->id()==id && peer->account_id==account && peer->character_id==character &&
+                        peer->state()==SessionState::InWorld && !peer->battle_generation() && peer->recovered_world_ready() &&
+                        attempt->lease.session==id && attempt->lease.account==account && attempt->lease.character==character &&
+                        presence->retained_ready_current(attempt->lease) &&
+                        peer->common_world_delivery_current(account,character,attempt->lease.generation) &&
+                        !peer->common_world_entry_current(account,character,attempt->lease.generation);
+                };
+                const auto published=[&] {
+                    return local() && initial_player_current(peer,initialization) && local() &&
+                        companion->current() && local();
+                };
+                const auto joined=[&](const OwnedTaiwanPkPlayerEntrySource::Observation& value) {
+                    const auto& combat=value.combat();const auto& appearance=combat.appearance();
+                    const auto& saved=combat.material();const auto& shape=appearance.material();
+                    return local() && value.identity_profile()==taiwan_entry_identity &&
+                        appearance.owns_characters(supply_repository) && appearance.owns_presence(presence) &&
+                        appearance.owns_initialization(initialization) && shape.lease==attempt->lease &&
+                        !shape.battle_generation && saved.role==*snapshot->role && saved.resources==snapshot->resources;
+                };
+                if(!published())return {};
+                if(player) {
+                    // Retain this exact private graph. A stale graph is terminal
+                    // for this source; equality of values cannot remint its issuer.
+                    if(!joined(*player) || !database.owned_taiwan_pk_player_current(*player) || !local() ||
+                       !published() || !joined(*player))return {};
+                    return player;
+                }
+                auto observed=database.observe_owned_taiwan_pk_player(presence,peer,initialization,
+                    attempt->lease,taiwan_entry_identity);
+                if(!observed || !published() || !joined(*observed) ||
+                   !database.owned_taiwan_pk_player_current(*observed) || !local() ||
+                   !published() || !joined(*observed))return {};
+                // No callback or allocation after the last joined cut. Every
+                // returned copy and the future preparer retain THIS same graph.
+                source->pk_player=observed;player=std::move(observed);
+                if(!local() || !joined(*player))return {};
+                return player;
+            };
             const OwnedTaiwanPkEntryPreparation::Companions pk_companions=[&](
                     const std::shared_ptr<Session>& peer,const Session::NormalWorldInitialization& initialization)
                     ->std::optional<OwnedTaiwanPkCompanionSource::Observation>{
@@ -2430,6 +2512,8 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     const auto whole_batches=source?source->whole_response_batch_count:std::size_t{};
                     auto pk_publication=source?source->pk_publication:
                         std::optional<OwnedTaiwanPkCompanionSource::Observation>{};
+                    auto pk_player=source?source->pk_player:
+                        std::optional<OwnedTaiwanPkPlayerEntrySource::Observation>{};
                     const auto submitted=source?source->submission_calls_completed:std::size_t{};
                     const bool all_submitted=source && source->all_submission_calls_returned;
                     if(initialization && !peer->normal_world_initialization_current_on_game(*initialization))return {};
@@ -2459,7 +2543,8 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                            source->submission_calls_completed!=submitted || !source->normal_initialization ||
                            source->expected_receiving_prefix.has_value()!=prefix.has_value() || source->write_observations.size()!=receipts.size() ||
                            source->whole_response!=whole || source->whole_response_wire!=whole_wire ||
-                           source->whole_response_batch_count!=whole_batches||source->pk_publication!=pk_publication)return false;
+                           source->whole_response_batch_count!=whole_batches||source->pk_publication!=pk_publication||
+                           (config.owned_initial_player_enabled && source->pk_player!=pk_player))return false;
                         if(prefix){
                             const auto& now=*source->expected_receiving_prefix;
                             if(now.rows()!=prefix->rows()||now.roster_count()!=prefix->roster_count()||
@@ -2523,7 +2608,23 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         diagnostic_island_return_pending.contains(id)||
                         supply_repository.owned_pending_battle(account,character);
                     if(!local())return {};
-                    bool ready=owned_player_and_companions_projected.contains(id) && saved_prefix_current();
+                    // CUSTOM-0149: the scoped PK player proof replaces ONLY
+                    // this new mode's dead legacy call-return flag dependency.
+                    // Other world/flag consumers and the old mode stay unchanged.
+                    if(config.owned_initial_player_enabled && initialization && saved_prefix_current()) {
+                        const auto observed=pk_players(peer,*initialization);
+                        if(!local() || !source || source->pk_player!=observed)return {};
+                        pk_player=observed;
+                        if(!source_local() || !saved_prefix_current())return {};
+                    }
+                    const auto scoped_player_ready=[&] {
+                        if(!config.owned_initial_player_enabled)return owned_player_and_companions_projected.contains(id);
+                        if(!pk_player || !source_local())return false;
+                        const auto actual=pk_players(peer,*initialization);
+                        return actual==pk_player && source_local() &&
+                            pk_player->combat().appearance().material().equipment.position==*position;
+                    };
+                    bool ready=scoped_player_ready() && saved_prefix_current();
                     if(ready){
                         // Capture actual own publication, never restore or
                         // convert a whole physical write into per-batch writes.
@@ -2540,16 +2641,18 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             source->pk_publication=observed;pk_publication=std::move(observed);
                         }
                         ready=pk_companions(peer,*initialization)==pk_publication&&
-                            saved_prefix_current()&&source_local();
+                            saved_prefix_current()&&source_local()&&
+                            (!config.owned_initial_player_enabled || scoped_player_ready());
                     }
                     // Reobserve real position after all earlier observers, then
                     // requalify the full saved roster/catalog on both sides of
                     // the pure transport checks. This is a current readset, not
                     // atomic future admission CAS or remote consumer attestation.
                     if(!local() || recovered_movement->current_location(id,account,character)!=position || !local())return {};
-                    if(ready)ready=pk_companions(peer,*initialization)==pk_publication&&saved_prefix_current();
+                    if(ready)ready=pk_companions(peer,*initialization)==pk_publication&&saved_prefix_current()&&
+                        (!config.owned_initial_player_enabled || scoped_player_ready());
                     if(!local() || recovered_movement->current_location(id,account,character)!=position || !local())return {};
-                    if(ready)ready=owned_player_and_companions_projected.contains(id)&&
+                    if(ready)ready=scoped_player_ready()&&
                         pk_companions(peer,*initialization)==pk_publication&&transport_current();
                     if(!local())return {};
                     std::optional<OwnedPkInvitationService::NativeIdentity> native_identity;
@@ -2563,7 +2666,12 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                            presence->saved_position(*lease)!=position||!local()||
                            recovered_movement->current_location(id,account,character)!=position||!local()||
                            !native_identity->current()||!transport_current()||!local())return {};
+                        if(config.owned_initial_player_enabled && ready &&
+                           (!pk_player || !native_identity->retained_matches_appearance(pk_player->combat().appearance()) ||
+                            !scoped_player_ready() || !source_local() || !transport_current() || !local()))return {};
                     }
+                    if(config.owned_initial_player_enabled && ready &&
+                       (!scoped_player_ready() || !source_local() || !local()))return {};
                     return OwnedPkInvitationService::Peer{id,account,character,generation,battle,*position,ready,blocked,
                         std::move(native_identity)};
                 } catch(...) {

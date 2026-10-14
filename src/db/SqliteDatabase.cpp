@@ -76,6 +76,32 @@ struct SqliteDatabase::Impl {
     std::unique_ptr<SqliteTeleportGemRepository> teleport_gems;
     // Borrowed sources above outlive this concrete shared learning coordinator.
     std::unique_ptr<SqliteSkillBookLearningRepository> skill_book_learning;
+    const std::thread::id pk_player_thread=std::this_thread::get_id();
+    bool pk_player_reading=false,pk_player_reentered=false;
+    struct PkPlayerReadScope {
+        Impl& owner;
+        sqlite3* const connection;
+        sqlite3_int64 changes=0;
+        explicit PkPlayerReadScope(Impl& value):owner(value),connection(value.connection.get()) {
+            if(owner.pk_player_thread!=std::this_thread::get_id())
+                throw DatabaseError("TW PK player Database game owner mismatch");
+            if(owner.pk_player_reading) {
+                owner.pk_player_reentered=true;
+                throw DatabaseError("TW PK player Database source reentered");
+            }
+            if(!connection||!sqlite3_get_autocommit(connection))
+                throw DatabaseError("TW PK player Database source requires closed outer transaction");
+            changes=sqlite3_total_changes64(connection); // Before any source observer.
+            owner.pk_player_reading=true;owner.pk_player_reentered=false;
+        }
+        ~PkPlayerReadScope(){owner.pk_player_reading=false;}
+        void fence()const {
+            if(owner.pk_player_thread!=std::this_thread::get_id()||!owner.pk_player_reading||
+               owner.pk_player_reentered||owner.connection.get()!=connection||
+               !sqlite3_get_autocommit(connection)||sqlite3_total_changes64(connection)!=changes)
+                throw DatabaseError("TW PK player Database source changed or reentered");
+        }
+    };
 };
 SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration> migrations)
     : path_(std::move(path)), migrations_(std::move(migrations)) {}
@@ -398,7 +424,7 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
     TaiwanNativeFightCatalog catalog,OwnedTaiwanPkEntryPreparation::Sessions sessions,
     OwnedTaiwanPkEntryPreparation::Initializations initializations,
     OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed,
-    OwnedTaiwanPkEntryPreparation::Companions companions){
+    OwnedTaiwanPkEntryPreparation::Companions companions,OwnedTaiwanPkEntryPreparation::Players players){
     if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
        !rooms.uses_connection(impl_->connection.get()))
         throw DatabaseError("TW PK preparation requires actual common Database/presence/room sources");
@@ -411,14 +437,14 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
     return std::make_shared<OwnedTaiwanPkEntryPreparation>(impl_->connection.get(),
         *impl_->accounts,*impl_->recovered_characters,worlds,*impl_->role_auxiliary,
         *impl_->role_text,std::move(catalog),std::move(presence),std::move(joint),rooms,
-        std::move(sessions),std::move(initializations),std::move(peers),std::move(seed),std::move(companions));
+        std::move(sessions),std::move(initializations),std::move(peers),std::move(seed),std::move(companions),std::move(players));
 }
 std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan_pk_entry_preparation_from_archive(
     SqliteOwnedPkRoomRepository& rooms,std::shared_ptr<SharedWorldPresence> presence,
     const std::filesystem::path& archive_path,OwnedTaiwanPkEntryPreparation::Sessions sessions,
     OwnedTaiwanPkEntryPreparation::Initializations initializations,
     OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed,
-    OwnedTaiwanPkEntryPreparation::Companions companions){
+    OwnedTaiwanPkEntryPreparation::Companions companions,OwnedTaiwanPkEntryPreparation::Players players){
     // CUSTOM-0120 fail invalid owner composition before file I/O or reader
     // assembly. These checks are identities, never SQL/schema qualification.
     if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
@@ -428,7 +454,7 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
     // Full immutable catalog owns its bytes. Only the established same-DB
     // factory assembles borrowed writers; loading never reserves a room.
     return make_owned_taiwan_pk_entry_preparation(rooms,std::move(presence),std::move(catalog),
-        std::move(sessions),std::move(initializations),std::move(peers),std::move(seed),std::move(companions));
+        std::move(sessions),std::move(initializations),std::move(peers),std::move(seed),std::move(companions),std::move(players));
 }
 std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_room_backend(
     asio::any_io_executor game,LuaEngine& lua,std::shared_ptr<SharedWorldPresence> presence,
@@ -438,7 +464,7 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed,
     OwnedTaiwanPkRoomBackend::Parameters parameters,std::array<std::uint8_t,2> order,
     std::chrono::milliseconds retry,OwnedTaiwanPkEntryPreparation::Companions companions,
-    OwnedTaiwanPkRoomBackend::ReturnSceneSource return_scene){
+    OwnedTaiwanPkRoomBackend::ReturnSceneSource return_scene,OwnedTaiwanPkEntryPreparation::Players players){
     // Identity/policy checks precede all file I/O and reader assembly. This
     // factory has no supplied repository/preparer that could split issuers.
     if(!migrated_||!impl_||!presence||!presence->owns_repository(*impl_->recovered_characters)||
@@ -455,7 +481,7 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     const auto path=archive_path; // Stable explicit path, no default/current-directory substitution.
     auto resolvers=std::make_shared<OwnedTaiwanPkRoomBackend::Resolvers>(
         OwnedTaiwanPkRoomBackend::Resolvers{std::move(sessions),std::move(initializations),
-                                          std::move(peers),std::move(seed),std::move(companions),std::move(return_scene)});
+                                          std::move(peers),std::move(seed),std::move(companions),std::move(return_scene),std::move(players)});
     auto catalog=TaiwanNativeFightCatalog::from_archive_file(path);
     auto repository=make_owned_pk_room_repository(); // Requires existing schema; never installs it.
     auto rooms=std::make_unique<OwnedPkRoomState>(*repository);
@@ -475,6 +501,14 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         auto value=resolvers->companions(session,initialization);
         return resolvers->stopped?std::nullopt:std::move(value);
     };
+    OwnedTaiwanPkEntryPreparation::Players player_source;
+    if(resolvers->players)player_source=[resolvers](const std::shared_ptr<Session>& session,
+            const Session::NormalWorldInitialization& initialization)
+            ->std::optional<OwnedTaiwanPkPlayerEntrySource::Observation>{
+        if(resolvers->stopped)return {};
+        auto value=resolvers->players(session,initialization);
+        return resolvers->stopped?std::nullopt:std::move(value);
+    };
     auto preparation=make_owned_taiwan_pk_entry_preparation(*repository,presence,std::move(catalog),
         session_source,[resolvers](const std::shared_ptr<Session>& session)
                 ->std::optional<Session::NormalWorldInitialization>{
@@ -484,7 +518,7 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         [resolvers](const OwnedPkInvitationService::Pair& pair)->std::optional<std::uint32_t>{
             if(resolvers->stopped)return {};
             auto value=resolvers->seed(pair);return resolvers->stopped?std::nullopt:std::move(value);},
-        std::move(companion_source));
+        std::move(companion_source),std::move(player_source));
     // CUSTOM-0133 one actual callable in the shared resolver bundle. A
     // configured source is mandatory at return; stop never produces empties.
     OwnedTaiwanPkRoomBackend::ReturnSceneSource return_source;
@@ -532,6 +566,84 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
     return std::unique_ptr<OwnedTaiwanPkRoomBackend>(new OwnedTaiwanPkRoomBackend(std::move(resolvers),
         std::move(return_lifecycle),std::move(repository),std::move(rooms),std::move(preparation),
         std::move(driver),std::move(admission)));
+}
+std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> SqliteDatabase::observe_owned_taiwan_pk_player(
+        std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,SharedWorldPresence::Lease lease,
+        TaiwanWorldEntryIdentity identity){
+    if(!migrated_||!impl_)throw DatabaseError("TW PK player source requires actual Database");
+    auto* const owner=impl_.get();Impl::PkPlayerReadScope read(*owner);
+    if(!owner->accounts||!owner->recovered_characters||!owner->role_auxiliary||!owner->role_text||
+       !presence||!session||!valid_taiwan_world_entry_identity(identity))return {};
+    auto* const accounts=owner->accounts.get();auto* const characters=owner->recovered_characters.get();
+    auto* const auxiliary=owner->role_auxiliary.get();auto* const texts=owner->role_text.get();
+    const auto fence=[&] {
+        read.fence();
+        if(!migrated_||impl_.get()!=owner||owner->accounts.get()!=accounts||
+           owner->recovered_characters.get()!=characters||owner->role_auxiliary.get()!=auxiliary||
+           owner->role_text.get()!=texts||!accounts->uses_connection(read.connection)||
+           !characters->uses_connection(read.connection)||!auxiliary->uses_connection(read.connection)||
+           !texts->uses_connection(read.connection))
+            throw DatabaseError("TW PK player source lost actual Database owners");
+    };
+    fence();
+    if(!presence->owns_repository(*characters)||
+       !session->normal_world_initialization_current_on_game(initialization)||!initialization.entry_written())return {};
+    const auto phase=session->state();const auto battle=session->battle_generation();
+    const auto local=[&] {
+        fence();
+        return (phase==SessionState::CharacterSelected||phase==SessionState::InWorld)&&
+            session->normal_world_initialization_current_on_game(initialization)&&initialization.entry_written()&&
+            !session->closing()&&session->state()==phase&&session->id()==lease.session&&
+            session->account_id==lease.account&&session->character_id==lease.character&&
+            session->battle_generation()==battle&&presence->owns_repository(*characters)&&
+            presence->retained_ready_current(lease);
+    };
+    if(!local())return {};
+    auto& inventory=owned_inventory_writer();fence();
+    auto& equipment=native_equipment_snapshot_writer();fence();
+    auto& worlds=native_world_entry_writer();fence();
+    auto joint=std::make_shared<SqliteOwnedEquipmentTransaction>(inventory,equipment);fence();
+    const auto sources=[&] {
+        fence();
+        return owner->owned_inventory.get()==&inventory&&owner->native_equipment_snapshots.get()==&equipment&&
+            owner->native_world_entries.get()==&worlds&&inventory.owns_sources(*accounts,*characters)&&
+            equipment.owns_sources(*accounts,*characters)&&worlds.owns_sources(*accounts,*characters)&&
+            joint->owns_sources(*accounts,*characters);
+    };
+    if(!sources()||!local())return {};
+    auto committed=joint->observe_committed(lease.account,lease.character);fence();
+    if(!committed||!sources()||!local())return {};
+    auto appearance=OwnedTaiwanPkAppearanceSource::observe(joint,*accounts,*characters,worlds,presence,
+        session,initialization,lease,std::move(*committed));fence();
+    if(!appearance||!sources()||!local())return {};
+    auto combat=OwnedTaiwanPkCombatSource::observe(read.connection,*characters,*auxiliary,std::move(*appearance));fence();
+    if(!combat||!sources()||!local())return {};
+    auto result=OwnedTaiwanPkPlayerEntrySource::observe(read.connection,*texts,std::move(*combat),identity);fence();
+    if(!result||!sources()||!local())return {};
+    const bool current=result->current();fence();
+    // Last saved observer is complete Player Current. Only private/pure cuts
+    // follow it; this method never wraps live Current in an outer SQL scope.
+    return current&&result->uses_connection(read.connection)&&result->identity_profile()==identity&&
+        result->combat().appearance().owns_characters(*characters)&&
+        result->combat().appearance().owns_presence(presence)&&
+        result->combat().appearance().owns_initialization(initialization)&&
+        result->combat().appearance().material().lease==lease&&sources()&&local()?
+        std::move(result):std::nullopt;
+}
+bool SqliteDatabase::owned_taiwan_pk_player_current(const OwnedTaiwanPkPlayerEntrySource::Observation& source){
+    if(!migrated_||!impl_)throw DatabaseError("TW PK player Current requires actual Database");
+    auto* const owner=impl_.get();Impl::PkPlayerReadScope read(*owner);
+    const auto owned=source;auto* const characters=owner->recovered_characters.get();
+    const auto local=[&] {
+        read.fence();
+        return migrated_&&impl_.get()==owner&&characters&&owner->recovered_characters.get()==characters&&
+            characters->uses_connection(read.connection)&&owned.uses_connection(read.connection)&&
+            owned.combat().appearance().owns_characters(*characters);
+    };
+    if(!local())return false;
+    const bool current=owned.current();read.fence();
+    return current&&local();
 }
 std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe_owned_taiwan_pk_companions(
         RecoveredOwnedCompanions& helper,std::shared_ptr<Session> session,

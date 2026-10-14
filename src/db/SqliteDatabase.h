@@ -49,6 +49,7 @@
 #include "db/SqliteOwnedGuildAnnouncementRepository.h"
 #include "db/SqliteTeleportGemRepository.h"
 #include "handlers/OwnedTaiwanPkEntryPreparation.h"
+#include "game/OwnedTaiwanPkPlayerEntrySource.h"
 #include "handlers/OwnedTaiwanPkRoomBackend.h"
 #include <filesystem>
 #include <memory>
@@ -128,7 +129,7 @@ public:
         SqliteOwnedPkRoomRepository&,std::shared_ptr<SharedWorldPresence>,TaiwanNativeFightCatalog,
         OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed,
-        OwnedTaiwanPkEntryPreparation::Companions={});
+        OwnedTaiwanPkEntryPreparation::Companions={},OwnedTaiwanPkEntryPreparation::Players={});
     // CUSTOM-0120 explicit bounded/hash-pinned archive file -> the same
     // concrete preparation factory. No default path, schema installation,
     // reservation, Session transition, invitation enable or Application host.
@@ -136,7 +137,7 @@ public:
         SqliteOwnedPkRoomRepository&,std::shared_ptr<SharedWorldPresence>,const std::filesystem::path&,
         OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed,
-        OwnedTaiwanPkEntryPreparation::Companions={});
+        OwnedTaiwanPkEntryPreparation::Companions={},OwnedTaiwanPkEntryPreparation::Players={});
     // CUSTOM-0125 complete source composition of preparation/admission/basic
     // transport on this connection, including exact Driver/Admission retirement
     // for a configured return supplier. Its existing finished-return schema must
@@ -151,7 +152,15 @@ public:
         OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed,
         OwnedTaiwanPkRoomBackend::Parameters,std::array<std::uint8_t,2>,std::chrono::milliseconds,
-        OwnedTaiwanPkEntryPreparation::Companions={},OwnedTaiwanPkRoomBackend::ReturnSceneSource={});
+        OwnedTaiwanPkEntryPreparation::Companions={},OwnedTaiwanPkRoomBackend::ReturnSceneSource={},
+        OwnedTaiwanPkEntryPreparation::Players={});
+    // CUSTOM-0105/0106/0107 actual original INIT/full Lease and same-Database
+    // saved source graph. Read-only observations; no values, grants or schemas
+    // are created. Database and genuine game/presence owners outlive receipts.
+    std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> observe_owned_taiwan_pk_player(
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<Session>,Session::NormalWorldInitialization,
+        SharedWorldPresence::Lease,TaiwanWorldEntryIdentity=TaiwanWorldEntryIdentity::SelectedCharacter);
+    bool owned_taiwan_pk_player_current(const OwnedTaiwanPkPlayerEntrySource::Observation&);
     // CUSTOM-0129 same concrete DB/helper/catalog and genuine private Session
     // normal-entry/fullwrite observations. No connection escapes or new sends.
     // Helper, Database and original game owner must outlive every observation.

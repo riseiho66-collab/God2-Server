@@ -33,16 +33,19 @@ public:
     // supplied roster, selected-key scalar or empty-on-failure fallback.
     using Companions=std::function<std::optional<OwnedTaiwanPkCompanionSource::Observation>(
         const std::shared_ptr<Session>&,const Session::NormalWorldInitialization&)>;
+    // Original cached owning player component, never a reminted equal tuple.
+    using Players=std::function<std::optional<OwnedTaiwanPkPlayerEntrySource::Observation>(
+        const std::shared_ptr<Session>&,const Session::NormalWorldInitialization&)>;
     OwnedTaiwanPkEntryPreparation(sqlite3* db,SqliteAccountRepository& accounts,
         SqliteRecoveredCharacterRepository& characters,SqliteNativeWorldEntrySnapshotRepository& worlds,
         SqliteRoleAuxiliaryRepository& auxiliary,SqliteRoleTextRepository& texts,
         TaiwanNativeFightCatalog catalog,std::shared_ptr<SharedWorldPresence> presence,
         std::shared_ptr<SqliteOwnedEquipmentTransaction> joint,SqliteOwnedPkRoomRepository& rooms,
-        Sessions sessions,Initializations initializations,Resolve peers,Seed seed,Companions companions={})
+        Sessions sessions,Initializations initializations,Resolve peers,Seed seed,Companions companions={},Players players={})
         :db_(db),accounts_(accounts),characters_(characters),worlds_(worlds),auxiliary_(auxiliary),texts_(texts),
          catalog_(std::move(catalog)),presence_(std::move(presence)),joint_(std::move(joint)),rooms_(rooms),
          sessions_(std::move(sessions)),initializations_(std::move(initializations)),peers_(std::move(peers)),
-         seed_(std::move(seed)),companions_(std::move(companions)){
+         seed_(std::move(seed)),companions_(std::move(companions)),players_(std::move(players)){
         if(!db_||!accounts_.uses_connection(db_)||!characters_.uses_connection(db_)||
            !worlds_.owns_sources(accounts_,characters_)||!auxiliary_.uses_connection(db_)||
            !texts_.uses_connection(db_)||!rooms_.uses_connection(db_)||!presence_||!joint_||
@@ -114,6 +117,30 @@ public:
         std::array<std::optional<OwnedTaiwanPkCombatSource::Observation>,2> combat;
         std::array<std::optional<OwnedTaiwanPkPlayerEntrySource::Observation>,2> players;
         std::array<std::optional<OwnedTaiwanPkVitalSource::Observation>,2> vitals;
+        const auto player_current=[&](const OwnedTaiwanPkPlayerEntrySource::Observation& player){
+            return players_?callback([&]{return player.current();}):player.current();
+        };
+        const auto player_matches=[&](std::size_t i,const OwnedTaiwanPkPlayerEntrySource::Observation& player){
+            const auto& appearance=player.combat().appearance();const auto& m=appearance.material();
+            const auto profile=peers[i].native_identity?TaiwanWorldEntryIdentity::QualifiedSceneHandle:
+                TaiwanWorldEntryIdentity::SelectedCharacter;
+            return player.uses_connection(db_)&&appearance.owns_characters(characters_)&&
+                appearance.owns_presence(presence_)&&appearance.owns_initialization(*initializations[i])&&
+                m.lease==*leases[i]&&m.battle_generation==peers[i].battle_generation&&
+                player.identity_profile()==profile&&
+                (!peers[i].native_identity||peers[i].native_identity->retained_matches_appearance(appearance));
+        };
+        if(players_){
+            for(std::size_t i=0;i<2;++i){
+                if(!exact())return {};
+                players[i]=callback([&]{return players_(sessions[i],*initializations[i]);});
+                if(!players[i]||!exact()||!player_matches(i,*players[i])||
+                   !player_current(*players[i])||!exact())return {};
+                combat[i]=players[i]->combat(); // The SAME immutable original source.
+                vitals[i]=callback([&]{return OwnedTaiwanPkVitalSource::observe(*combat[i]);});
+                if(!vitals[i]||!exact())return {};
+            }
+        }else{
         for(std::size_t i=0;i<2;++i){
             if(!local())return {};
             auto committed=joint_->observe_committed(peers[i].account,peers[i].character);
@@ -129,14 +156,27 @@ public:
             vitals[i]=OwnedTaiwanPkVitalSource::observe(*combat[i]);
             if(!vitals[i]||!local())return {};
         }
-        auto entry=RecoveredPkEntryProjection::prepare_waiting_notification_owned_initial_contexts(
-            {*players[0],*players[1]},{*vitals[0],*vitals[1]},catalog_);
+        }
+        const auto supplied_players_current=[&]{
+            if(!players_)return true; // No new legacy observer or qualification.
+            if(!local())return false;
+            for(std::size_t i=0;i<2;++i){
+                const auto actual=callback([&]{return players_(sessions[i],*initializations[i]);});
+                if(!local()||!actual||!players[i]||*actual!=*players[i]||
+                   !player_matches(i,*actual)||!player_current(*actual)||!local())return false;
+            }
+            return local();
+        };
+        if(players_&&(!supplied_players_current()||!exact()))return {};
+        const auto project=[&]{return RecoveredPkEntryProjection::prepare_waiting_notification_owned_initial_contexts(
+            {*players[0],*players[1]},{*vitals[0],*vitals[1]},catalog_);};
+        auto entry=players_?callback(project):project();
         const auto sources_current=[&]{
-            if(!companions_current())return false;
-            for(const auto& player:*entry.owned_players())if(!player.current()||!local())return false;
+            if(!companions_current()||!supplied_players_current())return false;
+            for(const auto& player:*entry.owned_players())if(!player_current(player)||!local())return false;
             // Full private player Current includes combat/appearance/resources,
             // text/root and the exact joint receipt, not a digest-only check.
-            return companions_current();
+            return companions_current()&&supplied_players_current();
         };
         if(!exact()||!sources_current())return {};
         const auto seed=callback([&]{return seed_(pair);});
@@ -157,11 +197,11 @@ public:
                                            std::move(retained_companions)));
         // The reservation changed only durable room state. No holds, Session
         // state transition, delivery, visibility grant or active room here.
-        if(!exact()||!companions_current())return {};
-        for(const auto& player:*ticket->input().entry.owned_players())if(!player.current()||!local())return {};
-        if(!rooms_.current(*ticket)||!exact()||!companions_current())return {};
-        for(const auto& player:*ticket->input().entry.owned_players())if(!player.current()||!local())return {};
-        if(!companions_current())return {};
+        if(!exact()||!companions_current()||!supplied_players_current())return {};
+        for(const auto& player:*ticket->input().entry.owned_players())if(!player_current(player)||!local())return {};
+        if(!rooms_.current(*ticket)||!exact()||!companions_current()||!supplied_players_current())return {};
+        for(const auto& player:*ticket->input().entry.owned_players())if(!player_current(player)||!local())return {};
+        if(!companions_current()||!supplied_players_current())return {};
         reservation.returned=true;
         return ticket;
     }
@@ -219,5 +259,6 @@ private:
     Companions companions_;
     const std::thread::id thread_=std::this_thread::get_id();
     bool preparing_=false,reentered_=false;
+    Players players_; // Optional LAST source; absent retains the original loop.
 };
 }

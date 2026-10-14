@@ -81,6 +81,7 @@ private:
         Preparation::Seed seed;
         Preparation::Companions companions;
         ReturnSceneSource return_scene;
+        Preparation::Players players;
         bool stopped=false;
     };
     // Exactly one instance of every potentially mutable callable. Preparation

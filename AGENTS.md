@@ -729,3 +729,16 @@ NineexistingCPP/V32pins derivedfrom90/no newprojectPY/Lua/nativebytes/opcode.
 Fullplayer/auxtext/nullMainbackend/mixedC69/fullreturn/issuedlearninglineage/
 extendedwire/nativeacceptance/wholeinventory OPEN. Parser77=50/11/16,pending12,
 frontier26 21/105,whole%null; TW100firstACTIVE/sharedCNweb/saves/PHASE1only.
+
+Round396 connects original scopedPK player graph toactual395 Written22/24.
+SameactualDB guardedjoint/Appearance/Combat/PlayerEntry observer andwholeCurrent
+->original publishedrole/resources/privateINIT/fullLease/framewire exactjoin
+->ONEcachedprivategraph/no stale rebase ->actualoptin PKready +optionalPrep
+SAMEPlayer/Combat/Vitals/Roomgraph; LASTfactory forwards one actualcallback.
+Legacyfalse/broadflag/allotherconsumers/Peer andJSONreadsets unchanged; no
+world61/23/pets/sends/formula/149nativeauthority/Extended64clip/defaultactivation.
+FiveexistingCPP/V33pins derive90/no newprojectPY/Lua/nativebytes/opcode/fullroute.
+Mainnullbackend/mixedC69/fullreturn/issuedlineage/zero-deitysuffix/publisher
+combinedtopology/nativeopaqueorder/wire64/fullskills/wholeinventory OPEN.
+Parser77=50/11/16,pending12,frontier26 21/105,whole%null; fullTW100firstACTIVE,
+commonCNweb/saves/fonts/text/qualifiednumericdomains/PHASE1sourceonly retained.
