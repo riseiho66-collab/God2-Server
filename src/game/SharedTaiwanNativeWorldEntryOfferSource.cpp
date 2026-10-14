@@ -85,6 +85,7 @@ struct SceneState {
     std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs;
     std::shared_ptr<const TaiwanNativeTransformCards> cards;
     std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll;
+    std::shared_ptr<const TaiwanNativeActorResourceBank> actor_resources;
     OfferSource::SceneSupply supply;
     SharedTaiwanStoredWorldEntrySource::Qualify qualify;
     const std::thread::id thread=std::this_thread::get_id();
@@ -108,7 +109,8 @@ struct SceneState {
         const auto actual=enemies.read_scene(content.enemies().area,content.enemies().scene);
         check();
         if(!actual || *actual!=content.enemies() || &content.npc_source()!=npcs.get() ||
-           content.transform_cards()!=cards.get() || content.drv_doll()!=drv_doll.get())return false;
+           content.transform_cards()!=cards.get() || content.drv_doll()!=drv_doll.get() ||
+           content.actor_resources().get()!=actor_resources.get())return false;
         if(!target)return true;
         const auto actual_target=enemies.read_scene(target->area,target->scene);
         check();return actual_target && *actual_target==*target;
@@ -174,13 +176,25 @@ SharedTaiwanNativeWorldEntryOfferSource::with_scene_content_and_qualification(
         throw std::invalid_argument("TW resource-aware paired entry requires complete pinned sources and qualifier");
     return bind_scene_content(enemies,std::move(npcs),std::move(cards),std::move(supply),std::move(qualify),std::move(drv_doll));
 }
+SharedTaiwanNativeWorldEntryOfferSource::SceneBinding
+SharedTaiwanNativeWorldEntryOfferSource::with_scene_content_and_qualification(
+        const NativeEnemyDisplayCatalog& enemies,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
+        std::shared_ptr<const TaiwanNativeTransformCards> cards,std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll,
+        std::shared_ptr<const TaiwanNativeActorResourceBank> actor_resources,
+        SceneSupply supply,SharedTaiwanStoredWorldEntrySource::Qualify qualify) {
+    if(!cards || !drv_doll || !actor_resources || !qualify)
+        throw std::invalid_argument("TW ordinary bank entry requires complete pinned sources and qualifier");
+    return bind_scene_content(enemies,std::move(npcs),std::move(cards),std::move(supply),std::move(qualify),
+        std::move(drv_doll),std::move(actor_resources));
+}
 SharedTaiwanNativeWorldEntryOfferSource::SceneBinding SharedTaiwanNativeWorldEntryOfferSource::bind_scene_content(
         const NativeEnemyDisplayCatalog& enemies,std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,
         std::shared_ptr<const TaiwanNativeTransformCards> cards,SceneSupply supply,
-        SharedTaiwanStoredWorldEntrySource::Qualify qualify,std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll) {
+        SharedTaiwanStoredWorldEntrySource::Qualify qualify,std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll,
+        std::shared_ptr<const TaiwanNativeActorResourceBank> actor_resources) {
     if(!npcs || !supply)throw std::invalid_argument("TW entry scene content requires actual full sources and producer");
     auto state=std::make_shared<SceneState>(SceneState{enemies,std::move(npcs),std::move(cards),std::move(drv_doll),
-        std::move(supply),std::move(qualify)});
+        std::move(actor_resources),std::move(supply),std::move(qualify)});
     const auto observe=[state](const Source::Scope& scope)->SceneContentPtr {
         const auto owner=state;owner->check();
         if(!valid_taiwan_world_entry_identity(scope.identity) ||
@@ -192,7 +206,8 @@ SharedTaiwanNativeWorldEntryOfferSource::SceneBinding SharedTaiwanNativeWorldEnt
         if(enemies->source.native_image_sha256!=TaiwanNativeNpcSceneGroups::native_image_sha256 ||
            enemies->source.decoded_sha256!=TaiwanNativeNpcSceneGroups::decoded_sha256 ||
            enemies->source.source_sha256!=TaiwanNativeNpcSceneGroups::historical_encoded_sha256)return {};
-        return SceneContentPtr(new SceneContent(owner->npcs,std::move(*enemies),owner->cards,owner->drv_doll));
+        return SceneContentPtr(new SceneContent(owner->npcs,std::move(*enemies),owner->cards,owner->drv_doll,
+            owner->actor_resources));
     };
     Supply offer=[state,observe](const Source::Scope& input,const std::optional<Snapshot>& before)->std::optional<Offer> {
         const auto owner=state;SceneState::Guard guard(*owner);

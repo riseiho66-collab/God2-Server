@@ -6,6 +6,7 @@
 #include "game/TaiwanNativeNpcSceneGroups.h"
 #include "game/TaiwanNativeTransformCards.h"
 #include "game/TaiwanNativeDrvDoll.h"
+#include "game/TaiwanNativeActorResourceBank.h"
 #include <memory>
 #include <utility>
 
@@ -51,6 +52,8 @@ public:
         // Explicit source-aware binding only. Source rows are not ROM handles,
         // selector ownership, full2A construction or scene-admission rights.
         const TaiwanNativeDrvDoll* drv_doll() const noexcept {return drv_doll_.get();}
+        // Ordinary world banks retained independently of DrvDoll and Fight.
+        const std::shared_ptr<const TaiwanNativeActorResourceBank>& actor_resources() const noexcept {return actor_resources_;}
         // A missing/empty group is an observed resource fact, not admission.
         // Full WORD scene comparison; no BYTE alias for scene256..1023.
         const TaiwanNativeNpcSceneGroups::Group* npc_group() const {
@@ -60,12 +63,15 @@ public:
         friend class SharedTaiwanNativeWorldEntryOfferSource;
         SceneContent(std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs,NativeEnemyDisplayCatalog::Scene enemies,
                 std::shared_ptr<const TaiwanNativeTransformCards> cards,
-                std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll)
-            :npcs_(std::move(npcs)),enemies_(std::move(enemies)),cards_(std::move(cards)),drv_doll_(std::move(drv_doll)) {}
+                std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll,
+                std::shared_ptr<const TaiwanNativeActorResourceBank> actor_resources)
+            :npcs_(std::move(npcs)),enemies_(std::move(enemies)),cards_(std::move(cards)),drv_doll_(std::move(drv_doll)),
+             actor_resources_(std::move(actor_resources)) {}
         const std::shared_ptr<const TaiwanNativeNpcSceneGroups> npcs_;
         const NativeEnemyDisplayCatalog::Scene enemies_;
         const std::shared_ptr<const TaiwanNativeTransformCards> cards_;
         const std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll_;
+        const std::shared_ptr<const TaiwanNativeActorResourceBank> actor_resources_;
     };
     using SceneContentPtr=std::shared_ptr<const SceneContent>;
     // Complete actual2A producer remains mandatory. It receives actual resource
@@ -105,6 +111,13 @@ public:
         std::shared_ptr<const TaiwanNativeTransformCards>,
         std::shared_ptr<const TaiwanNativeDrvDoll>,SceneSupply,
         SharedTaiwanStoredWorldEntrySource::Qualify);
+    // Strong ordinary bank owner is shared by issuer and stored Current.
+    // Full2A source/qualification and actual ROM lifecycle remain mandatory.
+    static SceneBinding with_scene_content_and_qualification(const NativeEnemyDisplayCatalog&,
+        std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
+        std::shared_ptr<const TaiwanNativeTransformCards>,std::shared_ptr<const TaiwanNativeDrvDoll>,
+        std::shared_ptr<const TaiwanNativeActorResourceBank>,SceneSupply,
+        SharedTaiwanStoredWorldEntrySource::Qualify);
     // Only the explicit Entry Prepare invokes the writer. Native/Current reads
     // never prepare. Repositories outlive the actual game-owner facade drain.
     static Source::Prepare create(SqliteNativeWorldEntrySnapshotRepository&,
@@ -116,6 +129,7 @@ private:
         std::shared_ptr<const TaiwanNativeNpcSceneGroups>,
         std::shared_ptr<const TaiwanNativeTransformCards>,SceneSupply,
         SharedTaiwanStoredWorldEntrySource::Qualify={},
-        std::shared_ptr<const TaiwanNativeDrvDoll> = {});
+        std::shared_ptr<const TaiwanNativeDrvDoll> = {},
+        std::shared_ptr<const TaiwanNativeActorResourceBank> = {});
 };
 }

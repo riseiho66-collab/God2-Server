@@ -873,3 +873,15 @@ clientbinary. TW156/252/parser77=50/11/16/pending12/format22/unclassified104/V27
 fullroutesadded0/percentnull. Fullactorbank/currentresource/audience/opaque9/17/
 return/gameplay/numerics/nativeacceptanceOPEN. TW100firstACTIVE; commonCNweb,
 453繁體/clientformulas/maxHPpoison10分1/saves/fonts/text/numerics/PHASE1preserved.
+
+Round407 implements completepinnedordinaryDrv92/HeroDoll918bank inC++.
+Physicalrow/CRLF/rawCP950/wholeSHA/ordinal/exactkey identitiesretained;
+emptyfilenamesfailbinding, no fakecache/actionzero. Strongbank+selected
+originalpath/wholeROMbytes+actualfullactionjoin reachesprivateSceneContent
+pairedIssuer/storedQualify/actualContext; fullproducer/resourceCurrent/open
+9_17/completepopulation/savedall-survivorreadset/nativeacceptance stillOPEN.
+SixCPPfiles(4existing+2new), no newprojectPY/Lua/CMake/clientbinary.
+TW100firstACTIVE; no build/tests/runtime/native/codec/SQL/migrate/activate/
+deploy. TW156/252/parser77=50/11/16/pending12/format22/unclassified104/V27,
+fullroutesadded0/percentnull;453繁體/clientformulas/maxHPpoison10分1/common
+CNfourWS/saves/fonts/text/shared64numerics and907pinsbyteexact preserved.
