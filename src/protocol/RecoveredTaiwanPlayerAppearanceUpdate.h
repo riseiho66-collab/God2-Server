@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -13,11 +14,24 @@ class RecoveredTaiwanPlayerAppearanceUpdate {
 public:
     static constexpr std::uint8_t opcode=0xda;
     static constexpr std::size_t logical_size=15;
+    // Same149c DA consumer: logical3/4 transformation WORD,5/6 raw
+    // scalars,7..14 packed components. These are independent of6F offsets.
+    static constexpr std::size_t transform_offset=3,raw_scalar5_offset=5,
+        raw_scalar6_offset=6,components_offset=7,component_bytes=8;
     using Bytes=std::array<std::uint8_t,logical_size>;
     class Record {
     public:
         std::uint16_t actor_identity() const noexcept {
             return std::uint16_t(bytes_[1])|(std::uint16_t(bytes_[2])<<8);
+        }
+        std::uint16_t transform_key() const noexcept {
+            return std::uint16_t(bytes_[transform_offset])|
+                (std::uint16_t(bytes_[transform_offset+1])<<8);
+        }
+        std::uint8_t raw_scalar5() const noexcept {return bytes_[raw_scalar5_offset];}
+        std::uint8_t raw_scalar6() const noexcept {return bytes_[raw_scalar6_offset];}
+        std::span<const std::uint8_t,component_bytes> components() const noexcept {
+            return std::span<const std::uint8_t,component_bytes>{bytes_.data()+components_offset,component_bytes};
         }
         bool operator==(const Record&) const = default;
     private:

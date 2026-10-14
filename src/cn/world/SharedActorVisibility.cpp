@@ -157,11 +157,12 @@ bool SharedActorVisibility::taiwan_pk_return_population_fence(const std::shared_
             if(raw.size()!=NativeEquipmentSnapshot::record_bytes)return false;
             const auto spawn=RecoveredRemoteActor::encode_logical(actor.native.spawn);
             for(std::size_t component=0;component<8;++component)
-                if(spawn[21+component]!=raw[NativeEquipmentSnapshot::inventory_bytes+3+component])return false;
-            if(spawn[77]!=raw[NativeEquipmentSnapshot::inventory_bytes+11]||
-               spawn[78]!=raw[NativeEquipmentSnapshot::inventory_bytes+12]||
-               spawn[79]!=raw[NativeEquipmentSnapshot::inventory_bytes+13]||
-               spawn[80]!=raw[NativeEquipmentSnapshot::inventory_bytes+14])return false;
+                if(spawn[21+component]!=raw[NativeEquipmentSnapshot::inventory_bytes+
+                    RecoveredTaiwanPlayerAppearanceUpdate::components_offset+component])return false;
+            if(spawn[77]!=raw[NativeEquipmentSnapshot::inventory_bytes+RecoveredTaiwanPlayerAppearanceUpdate::transform_offset]||
+               spawn[78]!=raw[NativeEquipmentSnapshot::inventory_bytes+RecoveredTaiwanPlayerAppearanceUpdate::transform_offset+1]||
+               spawn[79]!=raw[NativeEquipmentSnapshot::inventory_bytes+RecoveredTaiwanPlayerAppearanceUpdate::raw_scalar5_offset]||
+               spawn[80]!=raw[NativeEquipmentSnapshot::inventory_bytes+RecoveredTaiwanPlayerAppearanceUpdate::raw_scalar6_offset])return false;
         }
         if(matches!=1)return false;
     }

@@ -5363,6 +5363,36 @@
           "src/core/SharedTaiwanNativeWorldHostPlan.cpp"
         ],
         "evidence": "docs/research/tw-full-actor-profile-source-20261015.md"
+      },
+      "actor_native_arguments412": {
+        "classification": "NATIVE149C_VERIFIED_ACTOR_ARGUMENT_ALGORITHM_AND_CUSTOM0133_FRESH_DA_PROJECTION_CORRECTION_PARTIAL_ROUTE",
+        "round": 412,
+        "prior410_411_DA_to6F_native_mapping_PASS_withdrawn": true,
+        "historical_capsules_and_commits_preserved": true,
+        "actual_DA_transform3_4_scalars5_6_components7_14_corrected": true,
+        "private_native_actor_argument_observation_same_Input_row_EQ_banks": true,
+        "native_first_header_tail_second_header_fullDrv_alias_proved": true,
+        "all_four_lookup_arguments_and_head_modifier_foot_sixth_native_derived": true,
+        "Profile_requires_exact_private_argument_token_and_all_lookup_fields": true,
+        "actual_fresh_custom_projection_not_remote_incremental_afterDA_cache": true,
+        "native_asset_window_resource_Current_or_status_issuer_complete": false,
+        "selected_native_original_spans": 4,
+        "selected_native_bytes": 828,
+        "selected_instruction_sites": 261,
+        "historical_ranges_rechecked": 10,
+        "historical_bytes_rechecked": 3890,
+        "globally_unique_new_native_byte_credit": 0,
+        "full_configured_Application_native_route_and_acceptance_complete": false,
+        "default_enabled": false,
+        "source_paths": [
+          "src/protocol/RecoveredTaiwanPlayerAppearanceUpdate.h",
+          "src/cn/world/SharedActorVisibility.cpp",
+          "src/game/TaiwanCustomFullActorProfile.h",
+          "src/game/TaiwanCustomFullActorProfile.cpp",
+          "src/game/TaiwanNativeActorArgumentSource.h",
+          "src/game/TaiwanNativeActorArgumentSource.cpp"
+        ],
+        "evidence": "docs/research/tw-actor-native-argument-source-20261015.md"
       }
     },
     {

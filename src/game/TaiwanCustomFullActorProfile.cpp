@@ -106,12 +106,20 @@ bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
     const auto& resource=data.resources;
     if(resource.bank!=bank_||resource.drv_doll_bank!=drv_doll_bank_||!resource.epoch||!resource.dependency_owner||!resource.current||
        resource.first_selector>127||resource.second_selector>127)return false;
+    const auto arguments=resource.arguments_source;
+    if(!arguments||!resource.arguments||!arguments->owns_presence(presence_)||
+       !arguments->owns_resource_bank(bank_)||!arguments->owns_drv_doll_bank(drv_doll_bank_)||
+       !arguments->matches_inputs(*resource.arguments,data.saved,data.row,data.equipment))return false;
+    const auto& derived=*resource.arguments;
+    if(derived.first_selector()!=resource.first_selector||derived.second_selector()!=resource.second_selector||
+       derived.full_drv_ordinal()!=resource.full_drv_ordinal)return false;
     // The tail is a DISTINCT136-byte native bank even for selector0. Support
     // only its actual pinned empty-filename/not-requested row with real epoch
     // Current. Nonempty tail ROM/cache/window qualification remains OPEN.
     const auto* tail=drv_doll_bank_->find(resource.first_selector);
     if(!tail||!tail->filename.empty())return false;
     if(resource.origin==ResourceInput::Origin::SavedWorldSelectors){
+        if(derived.origin()!=TaiwanNativeActorArgumentSource::Origin::CurrentSavedWorldWitness)return false;
         const auto& material=data.saved->readset().materials()[data.row];
         if(!material.world||!NativeWorldEntrySnapshot::same_root(material.world->root,material.actor.character)||
            material.world->position!=material.actor.position||material.world->record.size()!=40)return false;
@@ -121,7 +129,8 @@ bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
            world->y!=material.actor.position.y)return false;
         const auto selectors=world->entry_resource_selectors();
         if(selectors.drv_doll_selector!=resource.first_selector||selectors.drv_selector!=resource.second_selector)return false;
-    }else if(resource.origin!=ResourceInput::Origin::Custom0133Explicit)return false;
+    }else if(resource.origin!=ResourceInput::Origin::Custom0133Explicit||
+             derived.origin()!=TaiwanNativeActorArgumentSource::Origin::Custom0133Selectors)return false;
     const auto* drv=bank_->find_drv(resource.full_drv_ordinal);if(!drv)return false;
     // Drv0 classification alone NEVER removes the four native component
     // requests. DrvOnly is an explicit unsupported V1 mode, not a fallback.
@@ -130,14 +139,17 @@ bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
     for(const auto& component:resource.components){
         const auto slot=static_cast<std::uint8_t>(component.lookup.component);
         if(slot>=4||found[slot]||component.lookup.act_type!=drv->act_type)return false;found[slot]=true;
+        const auto& expected=derived.lookups()[slot];
+        if(component.lookup.family!=expected.family||component.lookup.component!=expected.component||
+           component.lookup.component_index!=expected.component_index||component.lookup.variant!=expected.variant||
+           component.lookup.act_type!=expected.act_type)return false;
         const auto* hero=bank_->find_hero(component.lookup);if(!hero)return false;
         if(hero->filename.empty()){if(component.rom)return false;}
         else if(!rom_row(bank_,component.rom,TaiwanNativeActorResourceBank::ResolvedRom::Family::Hero,hero->ordinal))return false;
     }
-    // Lookups are explicit owner choices. DA8->family/index/variant native
-    // argument lineage and second-selector/full-Drv relationship remain OPEN;
-    // actual owner Current must qualify the entire branch, not infer aliases.
-    // This comparison never grants equipment.
+    // The private source owns the proven native DA/header-to-argument join.
+    // Asset/action/window lifecycle Current and equipment authority remain
+    // separate; this derivation never grants either or client cache ownership.
     return true;
 }
 bool TaiwanCustomFullActorProfile::observers_current(const Data& data,Check check) const {
@@ -178,8 +190,7 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
            !resources.dependency_owner||!resources.current||!status.dependency_owner||!status.current||
            !status.actor_override||!status.epoch||status.unsupported_domains||material.actor.character.streamer_privilege)return {};
         const auto da=equipment.equipment().appearance();if(!da)return {};
-        const auto& appearance=RecoveredTaiwanPlayerAppearanceUpdate::encode_logical(*da);
-        if(appearance[11]||appearance[12]||material.actor.position.x>0x7ff||material.actor.position.y>0x7ff)return {};
+        if(da->transform_key()!=0||material.actor.position.x>0x7ff||material.actor.position.y>0x7ff)return {};
         const auto& replay=status.actor_override->replay();
         if(status.domain==StatusInput::Domain::OrdinaryKnownAbsence){if(replay)return {};}
         else if(status.domain==StatusInput::Domain::OrdinaryExplicitClear){
@@ -216,10 +227,10 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
         word(bytes,5,(std::uint32_t{resources.second_selector}<<8)|policy_.word5_unknown);
         word(bytes,9,policy_.opaque9);
         word(bytes,13,(std::uint32_t{material.actor.position.x}<<2)|(std::uint32_t{material.actor.position.y}<<17)|policy_.position_low2);
-        word(bytes,17,policy_.opaque17);std::copy_n(appearance.begin()+3,8,bytes.begin()+21);
+        word(bytes,17,policy_.opaque17);std::copy(da->components().begin(),da->components().end(),bytes.begin()+21);
         const std::array<std::string_view,3> text{name->encoded_bytes(),second,guild};
         for(std::size_t i=0;i<text.size();++i)std::copy(text[i].begin(),text[i].end(),bytes.begin()+29+16*i);
-        bytes[77]=appearance[11];bytes[78]=appearance[12];bytes[79]=appearance[13];bytes[80]=appearance[14];
+        bytes[77]=0;bytes[78]=0;bytes[79]=da->raw_scalar5();bytes[80]=da->raw_scalar6();
         RecoveredRemoteActorMove::LogicalRecord move{};move[0]=0x5e;
         word(move,1,source.actor_handle|(std::uint32_t{policy_.move_identity_upper}<<16));
         const auto state=std::uint16_t(bytes[7])|(std::uint16_t(bytes[8])<<8);

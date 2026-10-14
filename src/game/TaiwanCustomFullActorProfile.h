@@ -1,6 +1,7 @@
 #pragma once
 #include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include "game/TaiwanNativeActorResourceBank.h"
+#include "game/TaiwanNativeActorArgumentSource.h"
 #include "game/TaiwanNativeDrvDoll.h"
 #include "cn/world/SharedActorVisibility.h"
 #include <functional>
@@ -68,6 +69,10 @@ public:
         std::uint32_t full_drv_ordinal;
         std::shared_ptr<const TaiwanNativeActorResourceBank::ResolvedRom> drv;
         std::vector<ComponentRom> components;
+        // Exact private derivation from the same backend input/equipment.
+        // Public header values or lookup vectors cannot replace this witness.
+        std::shared_ptr<TaiwanNativeActorArgumentSource> arguments_source;
+        std::optional<TaiwanNativeActorArgumentSource::Observation> arguments;
         std::shared_ptr<const void> dependency_owner;
         // Real resource/selection/window/action epoch over this entire material.
         // Files/bank membership or an always-true callback are not Current.

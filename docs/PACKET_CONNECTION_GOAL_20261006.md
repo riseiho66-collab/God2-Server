@@ -6115,3 +6115,24 @@ text/907pins preserved. PHASE1 no build/test/runtime/native/VM/gamecodec/
 gameDBSQL/migrate/schema/activate/deploy.
 
 Details: docs/research/tw-full-actor-profile-source-20261015.md
+
+## Round412 - Native actor arguments and DA mapping correction (2026-10-15)
+
+Round412 corrects actual DA15 mapping error in410purecomparison/411Profile.
+Prior native mappingPASS withdrawn; sealedhistory/otherprivategraph conclusions
+retained. NativeDA transform3/4,scalars5/6,packed8at7..14; typed getters andpure
+constants now project freshCUSTOM6F21..28/ordinaryzero77..78/raw79..80.
+Newprivate actorArgumentSource joins actual Input,row,EQ andsamebanks to
+verifiedfirstHeader→DrvDolltail/secondHeader→fullDrv, four native lookup
+fields including actualHEADmodifier/Footsixth. Profile requires exactprivate
+argumenttoken/allfields. Native selected4ranges828B/261sites+10reused3890B,
+no globalnovelty/opcode/runtimecredit. SixCPP fourexisting+twonew, V49pins127
+=121same3updated1existingProtocol+2newArg;canonical608/Git12/8wholeinverse/
+4newabsence. No newPY/Lua/CMake/EXE. Actualresourceasset/windowCurrent/status
+issuer andfullnativeworld/movement/PK/skills/formulas/numerics/CNfourWS routes
+OPEN; wholepercentnull/routes0/TW100firstACTIVE. Shared453繁體/clientformulas/
+currentmaxHPpoison10分1/907pins/64domains/coin99999999999/stack99/nativelevels/
+saves/fonts/IME/auth/portraits/text preserved. PHASE1 no build/test/product
+runtime/native/VM/gamecodec/gameDBSQL/schema/migrate/activate/deploy.
+
+Details: docs/research/tw-actor-native-argument-source-20261015.md
