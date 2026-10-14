@@ -523,3 +523,18 @@ Parser77/50partial/11control/16unconnected,pending12/frontier26 21/105 unchanged
 wholedenominator/%null. Fullbattle-return/otherwriterlineage/C26/actions/CN/web/
 64bit/commoncore/saves/frozen scope remains; PHASE1 no builds/tests/runtime/
 native/VM/codec/gameDBSQL/migration/activation/deployment.
+
+Round383 extends CUSTOM0148 actualMain typedC26 shortcutself booklearning.
+Whole4AE520 kind0/4963C0 liveU8688C WORD joins actual481833 pointerinstaller
+and conditional2A468629/468633 actorwriter; sameMain/R/U/no intervening
+replacement remain premises. OwnC25/C26 variant beforeobservers, compareFULL
+incomingC26 target to privateWrittenINIT actor/genuinewitness/fullLease, no
+mask/DBID/fakeC25/tailquantity/nonce. ONEguarded Repo/Lua/CAS/event/prebuilt
+34->35->41 pipeline and actualwholeWWR/inputhold. Wholeframe atmostoneuse;
+nonbookC26 supply/teleport unchanged. Selectedowneddeity custompolicy unchanged.
+CPP3modified/no newCPP/Lua/PY; source21 pins73/canonical tracked in roundledger.
+Parser77/50partial/11control/16unconnected,pending12/frontier26 21/105 unchanged.
+Fullroute0/whole%null; nonselfbook/nativeeligibility/adoption/battle-return/
+otherwriter/fullactions/CN adapters/wholegame OPEN. ActiveTW100first/fullgoal/
+commoncore/web/64bit/saves/frozen retained. PHASE1 sourceonly no builds/tests/
+runtime/native/codec/gameDBSQL/migration/schema/activation/deployment.

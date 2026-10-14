@@ -8079,7 +8079,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     };
                     spdlog::warn("OWNED_WHOLE_BAG_MOVES_SOURCE CUSTOM-0094 full25 only existing_owner no_grants stale_pose_rejected");
                 }
-                // CUSTOM-0148: actual C25 source, installed after native/legacy
+                // CUSTOM-0148: actual C25/C26 source, installed after native/legacy
                 // dispatch selection and WholeBag, before C67's final capture.
                 // Learning and reconnect use the same formal shared stores.
                 if(config.owned_skillbook_learning_enabled) {
@@ -8138,8 +8138,11 @@ if(guild_officer_runtime && player_guild(session) &&
                         learning->preflight(session);
                         if(records.empty())return original(session,records);
                         const bool claimed=std::any_of(records.begin(),records.end(),[&](const auto& record) {
-                            const auto* use=std::get_if<RecoveredInventoryItemRequest::Request>(&record);
-                            return use && learning->claims(use->client_item_id);
+                            if(const auto* use=std::get_if<RecoveredInventoryItemRequest::Request>(&record))
+                                return learning->claims(use->client_item_id);
+                            if(const auto* use=std::get_if<RecoveredTargetItemRequest::Request>(&record))
+                                return learning->claims(use->client_item_id);
+                            return false;
                         });
                         if(claimed) {
                             if(const auto host=bag.lock()) {
@@ -8152,10 +8155,13 @@ if(guild_officer_runtime && player_guild(session) &&
                             }
                             // Preflight the complete frame before any mutation.
                             // A raw tail is never a quantity or replay nonce.
-                            std::optional<RecoveredInventoryItemRequest::Request> use;
+                            std::optional<OwnedSkillBookLearningService::UseRequest> use;
                             for(std::size_t index=0;index<records.size();++index) {
                                 const auto& record=records[index];
                                 if(const auto* request=std::get_if<RecoveredInventoryItemRequest::Request>(&record)) {
+                                    if(use || !learning->claims(request->client_item_id))return std::nullopt;
+                                    use=*request;
+                                }else if(const auto* request=std::get_if<RecoveredTargetItemRequest::Request>(&record)) {
                                     if(use || !learning->claims(request->client_item_id))return std::nullopt;
                                     use=*request;
                                 }else if(std::holds_alternative<RecoveredWorldRecords::Tick>(record))continue;
@@ -8164,7 +8170,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                     return std::nullopt;
                             }
                             if(!use)return std::nullopt;
-                            auto response=learning->use(session,*use,presence);
+                            // Dispatch the owning native type, never fabricate
+                            // a C25 from C26 or bypass its complete target proof.
+                            auto response=std::visit([&](const auto& request) {
+                                return learning->use(session,request,presence);
+                            },*use);
                             if(response && !response->empty()) {
                                 // The legitimate learning commit advanced both
                                 // full banks. Retire only this Session's passive

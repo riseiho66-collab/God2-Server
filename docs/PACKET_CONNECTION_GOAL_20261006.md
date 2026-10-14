@@ -5546,3 +5546,27 @@ commoncore/web/64bit/numeric/save/frozen requirements preserved. PHASE1 source/
 accounting only; no builds/tests/runtime/native/VM/codec/gameDBSQL/migration/
 schema installation/activation/deployment. Details:
 docs/research/tw-common-world-skill-restoration-source-20261014.md.
+
+## Round383 - Typed shortcut book use shares learning (2026-10-14)
+
+CUSTOM-0148 actual Main now classifies original typed C26 books alongside C25.
+One owning variant enters one guarded operation and the existing common
+Repo/Lua inventory/deity/event CAS with prebuilt S34->S35->S41 and one actual
+whole response/inputhold. Full incoming target equals retained original private
+Written INIT actor joined native witness/full Lease; incoming targets are never
+masked or mapped from database IDs. The tail stays opaque. A whole frame has
+at most one C25 OR C26 use, ticks and an optional terminal1F. Original non-book
+medicine/teleport delegates are preserved. Selected-deity recipient remains the
+explicit existing custom policy, not native actor authority.
+
+Full original shortcut4AE520/4963C0, actual481833 UI pointer installer and
+conditional normal2A actor writer468629/468633 are reused and verified without
+new native cuts or execution. SameMain/R/U/no intervening replacement remain
+explicit premises. Three existing C++ files change; source21 pins73. No new
+project Python/Lua, formula/opcode/schema/default activation or full route.
+Parser77=50partial+11control+16unconnected/pending12/frontier26 21formats105gaps
+remain. Whole denominator/percentage unknown. Non-self books, native adoption/
+eligibility, battle return, other writer lineage, complete skills/CN adapters
+and full game integration remain OPEN. Active full TW100-first/CN/web/common
+core/saves/frozen and PHASE1 restrictions retained. Details:
+docs/research/tw-skillbook-shortcut-source-20261014.md.

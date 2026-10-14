@@ -224,28 +224,44 @@ void OwnedSkillBookLearningService::bind_bootstrap_response(Session& session,con
 }
 std::optional<std::vector<std::uint8_t>> OwnedSkillBookLearningService::use(Session& session,
         const RecoveredInventoryItemRequest::Request& request,const std::shared_ptr<SharedWorldPresence>& presence) {
-    const auto owned_request=request;const auto common=presence;
+    return use_request(session,UseRequest{request},presence);
+}
+std::optional<std::vector<std::uint8_t>> OwnedSkillBookLearningService::use(Session& session,
+        const RecoveredTargetItemRequest::Request& request,const std::shared_ptr<SharedWorldPresence>& presence) {
+    return use_request(session,UseRequest{request},presence);
+}
+std::optional<std::vector<std::uint8_t>> OwnedSkillBookLearningService::use_request(Session& session,
+        UseRequest owned_request,const std::shared_ptr<SharedWorldPresence>& presence) {
+    const auto common=presence; // Own both native variants before any observer.
     Operation operation(*this);
     const auto found=entries_.find(session.id());
     const auto entry=found==entries_.end()?std::shared_ptr<Entry>{}:found->second;
-    if(owned_request.raw_slot>=30 || !ready(session,entry,true) ||
-       entry->presence!=common)return std::nullopt;
+    const auto slot=std::visit([](const auto& request){return request.raw_slot;},owned_request);
+    const auto item_id=std::visit([](const auto& request){return request.client_item_id;},owned_request);
+    const auto request_current=[&] {
+        if(!ready(session,entry,true) || entry->presence!=common)return false;
+        const auto* targeted=std::get_if<RecoveredTargetItemRequest::Request>(&owned_request);
+        // Original shortcut copies actor WORD unchanged. Never mask incoming
+        // targets, truncate DB identity, or use raw_tail as quantity/nonce.
+        return !targeted || targeted->raw_target==entry->actor;
+    };
+    if(slot>=30 || !request_current())return std::nullopt;
     try {
-        const auto observed=repository_.observe(entry->account,entry->character,owned_request.raw_slot,owned_request.client_item_id);
-        if(!observed||!ready(session,entry,true)||!qualify_presence(session,entry,observed->equipment()) ||
-           !repository_.current(*observed)||!ready(session,entry,true))return std::nullopt;
-        const auto* item=item_at(observed->inventory(),owned_request.raw_slot);
+        const auto observed=repository_.observe(entry->account,entry->character,slot,item_id);
+        if(!observed||!request_current()||!qualify_presence(session,entry,observed->equipment()) ||
+           !repository_.current(*observed)||!request_current())return std::nullopt;
+        const auto* item=item_at(observed->inventory(),slot);
         if(!item || item->quantity>99)return std::nullopt;
         const auto policy=lua_.skill_book_learning({static_cast<std::uint32_t>(item->quantity),
             static_cast<std::uint32_t>(observed->deity().snapshot.skills.size()),observed->already_learned(),
             RecoveredDeityState::has_current_skill_icon(observed->book().kind,observed->book().definition_id)});
-        if(!ready(session,entry,true)||!repository_.current(*observed)||!ready(session,entry,true))return std::nullopt;
+        if(!request_current()||!repository_.current(*observed)||!request_current())return std::nullopt;
         if(!policy.allowed)return std::nullopt;
         if(policy.duplicate)return std::vector<std::uint8_t>{}; // Explicit idempotent no debit/no new activation.
         if(policy.consume!=1)return std::nullopt;
         const auto plan=repository_.plan(*observed);
-        if(!plan||!ready(session,entry,true)||!qualify_presence(session,entry,observed->equipment()) ||
-           !repository_.current(*observed)||!ready(session,entry,true))return std::nullopt;
+        if(!plan||!request_current()||!qualify_presence(session,entry,observed->equipment()) ||
+           !repository_.current(*observed)||!request_current())return std::nullopt;
         std::vector<std::uint8_t> logical;
         const auto& skill=plan->skill().encode();logical.insert(logical.end(),skill.begin(),skill.end());
         const auto& issued=plan->activation();
@@ -255,10 +271,10 @@ std::optional<std::vector<std::uint8_t>> OwnedSkillBookLearningService::use(Sess
         if(!inventory)return std::nullopt;
         logical.insert(logical.end(),inventory->begin(),inventory->end());
         auto wire=RecoveredWorldFrame::encode(logical); // Entire native-format response PRECOMMIT.
-        const auto committed=repository_.commit(*plan,[&]{return ready(session,entry,true);});
+        const auto committed=repository_.commit(*plan,request_current);
         if(!committed)return std::nullopt;
         entry->latest_commit.emplace(*committed); // Own actual after tuple; shared preallocated data only.
-        if(!ready(session,entry,true))throw std::logic_error("Skill book durable prefix committed after source retirement");
+        if(!request_current())throw std::logic_error("Skill book durable prefix committed after source retirement");
         // No postCOMMIT query/allocation/retry/rollback/const-vector copy.
         return std::optional<std::vector<std::uint8_t>>(std::move(wire));
     } catch(...) {retire(session,entry);throw;}
