@@ -15,6 +15,7 @@
 #include "game/SharedTaiwanOwnedBagMoveSource.h"
 #include "game/SharedTaiwanNativeSkillCommandSource.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
+#include "game/OwnedTaiwanPkReturnSceneSource.h"
 #include <utility>
 #include <optional>
 #include <string>
@@ -195,6 +196,33 @@ public:
             std::shared_ptr<const TaiwanNativeTransformCards>,std::shared_ptr<const TaiwanNativeDrvDoll>,
             std::shared_ptr<const TaiwanNativeActorResourceBank>,
             SharedTaiwanNativeWorldEntryOfferSource::SceneSupply,StoredSources);
+        // CUSTOM-0133: same game Context and the exact bank already installed
+        // by the full scene-entry overload. Replaces the recipe's mandatory
+        // return supplier with freshly authored complete ordinary actors.
+        // Actual live resource/status owners and explicit policy are required;
+        // unsupported domains fail. Main/default activation remains absent.
+        static StoredSources with_owned_pk_return_profiles(const SharedWorldHostPlan::Context&,
+            std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
+            OwnedTaiwanPkReturnSceneSource::Selection,OwnedTaiwanPkReturnSceneSource::MaterialSources,StoredSources);
+        struct OwnedPkProfileRecipe {
+            std::shared_ptr<const void> dependency_owner;
+            std::filesystem::path fight_archive;
+            OwnedTaiwanPkRoomBackend::Parameters parameters;
+            std::array<std::uint8_t,2> order;
+            std::chrono::milliseconds retry;
+            OwnedTaiwanPkEntryPreparation::Seed seed;
+            OwnedPkProfileRecipe(std::shared_ptr<const void> dependency,std::filesystem::path archive,
+                OwnedTaiwanPkRoomBackend::Parameters actual_parameters,std::array<std::uint8_t,2> actual_order,
+                std::chrono::milliseconds actual_retry,OwnedTaiwanPkEntryPreparation::Seed actual_seed)
+                :dependency_owner(std::move(dependency)),fight_archive(std::move(archive)),parameters(actual_parameters),
+                 order(actual_order),retry(actual_retry),seed(std::move(actual_seed)) {}
+        };
+        // First-time recipe assembly: no earlier external ReturnScene supplier
+        // or dummy callback is needed. Only the actual SceneOwner supplies it.
+        static StoredSources with_owned_pk_return_profiles(const SharedWorldHostPlan::Context&,
+            std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
+            OwnedTaiwanPkReturnSceneSource::Selection,OwnedTaiwanPkReturnSceneSource::MaterialSources,
+            OwnedPkProfileRecipe,StoredSources);
         // Construct on startup's game owner without writes. The returned
         // game-only closure accepts a future real post-COMMIT token; retain it
         // in the later request owner, never retain this borrowed Context.
@@ -246,6 +274,14 @@ public:
              actual_session_capacity(capacity),records(std::move(native_records)),characters(std::move(native_characters)),
              entry_offer(std::move(actual_entry_offer)),movement_custody(std::move(actual_movement_custody)),
              owned_pk(std::move(actual_owned_pk)) {}
+    private:
+        friend class SharedTaiwanNativeWorldHostPlan;
+        // Issued only by the full scene-content assembly, not caller scalars.
+        std::shared_ptr<const TaiwanNativeActorResourceBank> scene_actor_bank_;
+        std::shared_ptr<const TaiwanNativeDrvDoll> scene_drv_doll_bank_;
+        std::shared_ptr<const void> scene_entry_binding_;
+        bool return_profiles_installed_=false;
+        void require_profile_entry_binding() const;
     };
     using StoredSourceFactory=std::function<StoredSources(const SharedWorldHostPlan::Context&)>;
     // Explicit Application Context -> exact shared raw reader -> NativeSource

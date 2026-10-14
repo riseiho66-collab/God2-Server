@@ -5337,6 +5337,32 @@
           "src/db/SqliteDatabase.cpp"
         ],
         "evidence": "docs/research/tw-return-profile-input-source-20261015.md"
+      },
+      "full_actor_profile_source411": {
+        "classification": "CUSTOM0133_FRESH_FULL_ACTOR_PROFILE_ORDERED_SCENE_EXISTING_HOST_RECIPE_PARTIAL_DOMAIN_V1",
+        "round": 411,
+        "fresh_complete_81_13_5_from_actual_private_input": true,
+        "actual_strict_primary_secondary_guild_text_and_same_writers_equipment": true,
+        "whole_population_ordered_mutual_edges_share_private_profile_and_EA": true,
+        "actual_current_resource_status_source_owners_required": true,
+        "all_four_ordinary_components_and_selected_DrvDoll_empty_tail_required": true,
+        "first_selector_zero_not_assumed_skip": true,
+        "current_private_entry_offer_qualifier_and_both_bank_incarnations": true,
+        "actual_StoredSourceFactory_existing_owned_PK_return_recipe_connected": true,
+        "Consumed_uses_private_selector_transport_incarnation_under_actual_Visibility_successor": true,
+        "nonempty_DrvDoll_tail_transform_streamer_status_CN_domains_complete": false,
+        "native_DA_to_Hero_arguments_and_ordinary_branch_linkage_proved": false,
+        "full_configured_Application_native_route_and_acceptance_complete": false,
+        "default_enabled": false,
+        "source_paths": [
+          "src/game/TaiwanCustomFullActorProfile.h",
+          "src/game/TaiwanCustomFullActorProfile.cpp",
+          "src/game/OwnedTaiwanPkReturnSceneSource.h",
+          "src/game/OwnedTaiwanPkReturnSceneSource.cpp",
+          "src/core/SharedTaiwanNativeWorldHostPlan.h",
+          "src/core/SharedTaiwanNativeWorldHostPlan.cpp"
+        ],
+        "evidence": "docs/research/tw-full-actor-profile-source-20261015.md"
       }
     },
     {

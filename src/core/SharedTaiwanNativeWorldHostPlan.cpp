@@ -14,6 +14,31 @@ namespace {
 using Plan=SharedTaiwanNativeWorldHostPlan;
 using Context=SharedWorldHostPlan::Context;
 using OwnedPkSources=SharedWorldHostPlan::OwnedPkSources;
+// Private callable target types let the final stored-host assembly verify the
+// currently selected offer AND qualifier, rather than an earlier bank marker.
+struct SceneActorEntryBinding {
+    std::shared_ptr<const TaiwanNativeActorResourceBank> bank;
+    std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll;
+    SharedTaiwanNativeWorldEntryOfferSource::Supply offer;
+    SharedTaiwanStoredWorldEntrySource::Qualify qualify;
+};
+struct SceneActorEntryOffer {
+    std::shared_ptr<const SceneActorEntryBinding> binding;
+    std::optional<SharedTaiwanNativeWorldEntryOfferSource::Offer> operator()(
+            const SharedTaiwanStoredWorldEntrySource::Scope& scope,
+            const std::optional<NativeWorldEntrySnapshot>& snapshot) const {
+        return binding->offer(scope,snapshot);
+    }
+};
+struct SceneActorEntryQualify {
+    std::shared_ptr<const SceneActorEntryBinding> binding;
+    bool operator()(const NativeWorldEntrySnapshot& snapshot,
+            const SharedTaiwanStoredWorldEntrySource::Scope& scope,
+            const SharedTaiwanStoredWorldEntrySource::Frame& frame,
+            SharedTaiwanStoredWorldEntrySource::Check check) const {
+        return binding->qualify(snapshot,scope,frame,check);
+    }
+};
 void require_owned_pk_context(const Context& context,Plan::Dispatch dispatch) {
     if(context.app_owned_pk&&(dispatch!=Plan::Dispatch::MixedRecords||
        !context.app_owned_initial_player||!context.app_owned_initial_deities))
@@ -447,10 +472,71 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_scene_entry_content(
        static_cast<NativeWorldEntrySnapshotRepository*>(context.native_world_entry_writer)!=context.native_world_entries ||
        !context.native_world_entry_writer->owns_sources(*context.accounts,context.characters))
         throw std::invalid_argument("TW actor bank entry requires actual Context and unbound complete qualifier");
+    const auto same_actor_bank=actor_resources;
+    const auto same_drv_doll_bank=drv_doll;
     auto binding=SharedTaiwanNativeWorldEntryOfferSource::with_scene_content_and_qualification(
         *context.native_enemy_displays,std::move(npcs),std::move(cards),std::move(drv_doll),std::move(actor_resources),
         std::move(supply),std::move(sources.entry_qualify));
-    sources.entry_offer=std::move(binding.offer);sources.entry_qualify=std::move(binding.qualify);
+    auto actual_binding=std::make_shared<const SceneActorEntryBinding>(SceneActorEntryBinding{
+        same_actor_bank,same_drv_doll_bank,std::move(binding.offer),std::move(binding.qualify)});
+    sources.entry_offer=SceneActorEntryOffer{actual_binding};
+    sources.entry_qualify=SceneActorEntryQualify{actual_binding};
+    sources.scene_actor_bank_=same_actor_bank;sources.scene_entry_binding_=std::move(actual_binding);
+    sources.scene_drv_doll_bank_=same_drv_doll_bank;
+    return sources;
+}
+void SharedTaiwanNativeWorldHostPlan::StoredSources::require_profile_entry_binding() const {
+    const auto* offer=entry_offer.target<SceneActorEntryOffer>();
+    const auto* qualify=entry_qualify.target<SceneActorEntryQualify>();
+    if(!scene_actor_bank_||!scene_drv_doll_bank_||!scene_entry_binding_||!offer||!qualify||
+       offer->binding!=scene_entry_binding_||qualify->binding!=scene_entry_binding_||
+       offer->binding->bank!=scene_actor_bank_||qualify->binding->bank!=scene_actor_bank_||
+       offer->binding->drv_doll!=scene_drv_doll_bank_||qualify->binding->drv_doll!=scene_drv_doll_bank_)
+        throw std::invalid_argument("TW return profile entry callable incarnation changed");
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_profiles(
+        const Context& context,std::shared_ptr<const TaiwanNativeActorResourceBank> bank,
+        TaiwanCustomFullActorProfile::Policy policy,OwnedTaiwanPkReturnSceneSource::Selection selection,
+        OwnedTaiwanPkReturnSceneSource::MaterialSources material,StoredSources sources) {
+    if(!sources.owned_pk)throw std::invalid_argument("TW return profile replacement lacks an existing recipe");
+    sources.owned_pk->require_complete();
+    auto prior=std::move(*sources.owned_pk);sources.owned_pk.reset();
+    OwnedPkProfileRecipe recipe{std::move(prior.dependency_owner),std::move(prior.fight_archive),
+        prior.parameters,prior.order,prior.retry,std::move(prior.seed)};
+    return with_owned_pk_return_profiles(context,std::move(bank),std::move(policy),selection,
+        std::move(material),std::move(recipe),std::move(sources));
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_profiles(
+        const Context& context,std::shared_ptr<const TaiwanNativeActorResourceBank> bank,
+        TaiwanCustomFullActorProfile::Policy policy,OwnedTaiwanPkReturnSceneSource::Selection selection,
+        OwnedTaiwanPkReturnSceneSource::MaterialSources material,OwnedPkProfileRecipe recipe,StoredSources sources) {
+    if(!context.app_owned_pk||!context.app_owned_initial_player||!context.app_owned_initial_deities||
+       !context.common_world||!context.common_world->owns_repository(context.characters)||
+       !context.native_equipment_snapshots||!context.native_equipment_snapshot_writer||
+       !context.owned_inventory||!context.owned_inventory_writer||sources.owned_pk||
+       !sources.entry_offer||!sources.entry_qualify||!bank||sources.scene_actor_bank_!=bank||
+       sources.return_profiles_installed_||
+       static_cast<NativeEquipmentSnapshotRepository*>(context.native_equipment_snapshot_writer)!=context.native_equipment_snapshots||
+       static_cast<OwnedInventoryRepository*>(context.owned_inventory_writer)!=context.owned_inventory)
+        throw std::invalid_argument("TW full return profiles require actual owned PK and the same installed scene bank");
+    if(!recipe.dependency_owner||recipe.fight_archive.empty()||!recipe.seed)
+        throw std::invalid_argument("TW first profile recipe requires actual archive seed and dependencies");
+    sources.require_profile_entry_binding();
+    auto profiles=TaiwanCustomFullActorProfile::create(context.common_world->presence(),bank,
+        sources.scene_drv_doll_bank_,std::move(policy));
+    auto scene=OwnedTaiwanPkReturnSceneSource::create(context.common_world->presence(),
+        context.common_world->transports(),context.common_world->visibility(),std::move(profiles),selection,std::move(material));
+    struct Dependencies {
+        std::shared_ptr<const void> original;
+        std::shared_ptr<OwnedTaiwanPkReturnSceneSource> scene;
+    };
+    auto retained=std::make_shared<const Dependencies>(Dependencies{std::move(recipe.dependency_owner),scene});
+    auto actual_return=scene->return_source();
+    sources.owned_pk.emplace(std::move(recipe.fight_archive),recipe.parameters,recipe.order,recipe.retry,
+        std::move(recipe.seed),std::move(actual_return),std::move(retained));
+    sources.return_profiles_installed_=true;
     return sources;
 }
 SharedTaiwanNativeWorldHostPlan::StoredSources::EquipmentPublicationFactory
@@ -649,6 +735,7 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
             throw std::invalid_argument("TW stored host requires its actual Application character delivery reader");
         const auto* reader=context.native_world_entries;
         auto actual=supply(context);
+        if(actual.return_profiles_installed_)actual.require_profile_entry_binding();
         // Before constructing list/entry owners from the stored wrapper.
         require_owned_pk_sources(context,actual.owned_pk,dispatch);
         if(native_characters!=bool(actual.characters))

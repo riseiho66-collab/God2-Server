@@ -930,3 +930,20 @@ EXE. Routesadded0, wholepercentnull, fullTW100firstACTIVE/commonCNfourWS/
 saves/453繁體/clientformulas/maxHPpoison10分1/shared64/coin99999999999/
 stack99/nativelevels/fonts/text/907pins preserved. PHASE1 no build/test/
 runtime/native/VM/gamecodec/gameDBSQL/migrate/schema/activate/deploy.
+
+Round411 implements fresh full81B6F/13B5E/5B73 private ActorProfile from actual
+backend PopulationInput, current same-writers EQ and strict actual three texts.
+Ordered nonself CUSTOM same-area/scene ReturnScene retains whole population,
+exact endpoint phases, shared mutual-edge Profile/qualification/EA and resource/
+status Current. Actual StoredSourceFactory helper installs existing ownedPK
+return_scene, retains dependencies and checks current private entry offer/
+qualifier plus both bank nodes before and after factory. No default activation.
+Firstselector0 is not assumedskip; four ordinary components remainrequired;
+onlyactual selected emptyfilename DrvDoll tail is V1 supported. Nonemptytail/
+transform/streamer/status/CN adapter/native argument linkage/fullconfigured
+route/nativeacceptance OPEN. FournewCPP+twoexistingHostCPP, V48pins124
+=118same2updated4new, canonical603, no newPY/Lua/CMake/EXE. Routesadded0,
+wholepercentnull, TW100firstACTIVE/commonCNfourWS/saves/453繁體/clientformulas/
+currentmaxHPpoison10分1/shared64/coin99999999999/stack99/nativelevels/fonts/
+text/907pins preserved. PHASE1 no build/test/runtime/native/VM/gamecodec/
+gameDBSQL/migrate/schema/activate/deploy.
