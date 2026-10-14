@@ -82,3 +82,11 @@ owner poison CURRENT MAXIMUM HP/10 and CN custom126/150 requirements remain.
 Goal active. PHASE1 static only; no builds/tests/runtime/native/API/VM/product
 codec/gameDBSQL/import/migration/activation/deployment or new Python files.
 Preserve accounts/saves/resources/fonts/conversion/frozen features and C++/Lua.
+
+
+Round378 corrects this report's next49A330->49B5E0 candidate: that edge is the
+already qualified equippable branch/deity equipment guard followed by C28,
+not skill-book learning. Genuine normal/master book use proceeds through C25
+and a separate local3B confirmation. Original377 window/role evidence remains
+unchanged. See tw-skillbook-use-source-20261014.md for the qualified native
+chain, opaque tail and actual TW operation supplier gaps; no learning credit.

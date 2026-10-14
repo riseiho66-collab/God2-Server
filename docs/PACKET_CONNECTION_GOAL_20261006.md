@@ -5396,3 +5396,27 @@ Frontier26 exact21/105;parser77=50partial+11control+16unconnected/pending11,
 wholedenominator/%null,goalactive. PHASE1 no build/tests/runtime/native/API/VM/
 productcodec/gameDBSQL/migration/activation/deploy. Preserve all453/TWTraditional/
 clientprimary/maxHPdiv10poison/CNcustom126/150/common64/frozen/account/save.
+
+
+## Round378 - genuine TW skill-book C25 confirmation (2026-10-14)
+
+Owner asks TW100% FIRST; preserve CN/web/sharedcore. Actual complete routes,
+not parser64.9%, are the target. Prior377 next49B5E0 candidate corrected:existing
+deityequipguard/C28,not skillbook. Genuine normaluse flags/masterfourranges/
+saveditemslot/local3Bconfirmation->483C80->496350C25 qualified. Two whole213B/
+59sites+fivepartial191/56=raw404/115,+4tableB;oldconfirmcaller31/9referenceonly
+givesselected435/124,notnewcapture. Otheroldrefs overlap;no false globalcredit.
+C25logical5 itemWORD/slotBYTE/opaqueformal1byte3;thirdarg1unread;actor/qtyunqualified.
+ConfirmationonlyDX/CL loadsleaveupperbits/tailunqualified;do notforcezero.
+Separate1F00attempt/closeafterpossiblysuppressed25 isnot ACK/atomicity.
+ActualTW consumers remainmapCUSTOM0044/diagnostic0023/24;WholeBagrefusal/private
+C28/currentOthers preserved. Booksource/Luagetter isnotlearning;aliasinversion/
+sequentialstore_deity+inventorywrites isnotauthority/atomictransaction.
+Actualtarget/eligibility/skillidentity/onebook+learn+event/replay/TWresult still
+OPEN. Source17all45pins exact/canonical475/newPY0/no C++/Lua/newrule. Frontier26
+exact21/105;parser77=50partial+11control+16unconnected/pending11;TW156/252/3/40/36,
+CN156/280phase/253/35/93/71 unchanged. Newopcode/formula/phase/ownerchain/format/
+fullroute0;whole denominator/%null;goalactive. PHASE1 no build/tests/runtime/
+native/API/VM/codec/gameDBSQL/migration/activation/deploy;allcommon/frozen/save
+requirements retained. NextactualSKB material/binding/savedselectedskill readset
+andgenuine learning/event transaction/TWpublication;no unusedtypedframework.

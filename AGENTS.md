@@ -444,3 +444,14 @@ postcommit operation boundary reviewed;no confirmed TWdurable-prefix bug.
 Actualissuer/apply/save/replay/TWreply stillOPEN;no unusedtypedframework.
 Next actualmaterial49A330->49B5E0 cause/SKB/savedowner andWORLD35 eventpublisher.
 Canonical467/frontier26 exact21/105/newroute0;PHASE1/no newPY/fullgoal retained.
+
+
+Owner reaffirmation378 (2026-10-14): prioritize actual TW complete routes to
+100% first; preserve CN/web/common core. 64.9% parser coverage is NOT TW
+completion. Correct377 next49B5E0 lead:existing deityequipguard/C28,not SKB.
+Actual masterconfirmation/ordinaryC25 qualified404B115rawsites+4tableB;old
+confirmcaller31/9referenceonly. C25 tailfirstformalbyte3 opaque,thirdargignored,
+no qualifiedactor/qty/ACK;TW savedWORD doesnot provezerotail. Sevenread-onlycontexts,
+canonical475/source17all45exact;no C++/Lua/PY/newrule change. Actualbooktarget/
+identity/one atomicbook+learn+event/native result stillOPEN. Do notreuseprivate
+C28/aliasinversion/mapdiagnostic aslearning. PHASE1/fullscope remain.
