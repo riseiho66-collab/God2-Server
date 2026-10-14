@@ -402,7 +402,7 @@ private:
     };
     // CUSTOM-0133 paired real-strand reservation continuation. A reservation
     // is a held transport cut, not a world write, reset, durable release or ACK.
-    struct ReturnFlight final:Session::NativePkReturnOwner {
+    struct ReturnFlight final:Session::NativePkReturnOwner,Session::NativePkReturnOutputOwner {
         std::weak_ptr<Lifetime> lifetime;
         std::weak_ptr<Binding> binding;
         const std::array<Session::NativePkReturnPreparation,2> preparations;
@@ -414,6 +414,9 @@ private:
         // Owning exact private plan/pair and ordered full6F records for the
         // actual later sender. This subset alone cannot publish a return.
         std::optional<cn::SharedActorVisibility::TaiwanPkReturnRecords> records;
+        std::optional<Session::NativePkReturnOutputPlan> output_plan;
+        std::optional<Session::NativePkReturnOutputHold> output_hold;
+        bool output_held_seen=false,output_failed_seen=false;
         bool reserved_seen=false,failed_seen=false;
         ReturnFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
                 std::array<Session::NativePkReturnPreparation,2> prepared,
@@ -430,6 +433,14 @@ private:
         void native_pk_return_failed(const Session::NativePkReturnReservation& value)override{
             const auto life=lifetime.lock();
             if(life&&life->owner)life->owner->return_failed(*this,value);
+        }
+        bool native_pk_return_output_held(const Session::NativePkReturnOutputHold& value)override{
+            const auto life=lifetime.lock();
+            return life&&life->owner&&life->owner->return_output_held(*this,value);
+        }
+        void native_pk_return_output_failed(const Session::NativePkReturnOutputHold& value)override{
+            const auto life=lifetime.lock();
+            if(life&&life->owner)life->owner->return_output_failed(*this,value);
         }
     };
     struct Flight final:Session::NativeBattleSkillPublicationOwner {
@@ -717,6 +728,9 @@ private:
            !Session::native_pk_return_reservation_matches(value,binding.sessions,flight.preparations))return false;
         if(flight.records && !binding.departure->visibility->taiwan_pk_return_records_matches(
                 *flight.records,flight.visibility,value))return false;
+        if(flight.output_plan && (!flight.records ||
+           !binding.departure->visibility->taiwan_pk_return_output_plan_matches(
+                *flight.records,*flight.output_plan,flight.visibility,value)))return false;
         for(std::uint8_t i=0;i<2;++i){
             const auto& own=binding.terminal_inputs[i];
             if(!own || !own->barrier || !own->ready_seen || !own->accepted_seen || own->failed_seen ||
@@ -744,9 +758,13 @@ private:
             // Preallocate every owned record/endpoint before any final saved
             // observers. Mint only from THIS plan and THIS actual Reserved pair.
             auto records=visibility.prepare_taiwan_pk_return_records(flight.visibility,value);
+            if(!records || !return_exact(*binding,flight,value))
+                throw DatabaseError("PK reserved return complete owning records changed");
+            auto output=visibility.prepare_taiwan_pk_return_output(*records,flight.visibility,value);
             const auto current=[&]{return return_exact(*binding,flight,value) && records &&
-                visibility.taiwan_pk_return_records_matches(*records,flight.visibility,value);};
-            if(!current())throw DatabaseError("PK reserved return complete owning records changed");
+                visibility.taiwan_pk_return_records_matches(*records,flight.visibility,value) && output &&
+                visibility.taiwan_pk_return_output_plan_matches(*records,*output,flight.visibility,value);};
+            if(!current())throw DatabaseError("PK reserved return lacks its actual recipient output plan");
             if(rooms_.require_terminal_resources_saved(binding->ticket.id(),
                     {flight.final_writes[0]->logical,flight.final_writes[1]->logical})!=flight.revisions[0] || !current())
                 throw DatabaseError("PK reserved return lost its actual saved resource ledger");
@@ -760,11 +778,60 @@ private:
                !visibility.taiwan_pk_return_records_retained_current(*records) || !current())
                 throw DatabaseError("PK reserved return stored or retained source changed");
             flight.records.emplace(std::move(*records)); // Shared owning token; no borrowed vector or dummy write.
+            flight.output_plan.emplace(std::move(*output));
             if(!return_exact(*binding,flight,value))
                 throw DatabaseError("PK reserved return lost its retained owning records");
             flight.reserved_seen=true;
-            return true; // Held prerequisite only; deadlines/input/output/world states stay unchanged.
+            // Post only the distinct private cohort. Both actual empty returners
+            // participate, while each nonempty receiver owns its complete frames.
+            // No inline Held callback; retain the real returned token before it.
+            auto held=Session::hold_native_pk_return_output(*flight.output_plan,binding->return_flight);
+            flight.output_hold.emplace(std::move(held));
+            return true; // Frames stay held; no IO release or WORLD/input grant.
         }catch(...){flight.failed_seen=true;fail(*binding);return false;}
+    }
+    bool return_output_exact(const Binding& binding,const ReturnFlight& flight,
+            const Session::NativePkReturnOutputHold& value)const{
+        return !flight.output_failed_seen && flight.reserved_seen && flight.records &&
+            flight.output_plan && flight.output_hold && *flight.output_hold==value && flight.reservation &&
+            return_exact(binding,flight,*flight.reservation) &&
+            Session::native_pk_return_output_matches(value,*flight.output_plan,*flight.reservation);
+    }
+    bool return_output_held(ReturnFlight& flight,const Session::NativePkReturnOutputHold& value){
+        if(!on_thread())return false;
+        const auto binding=flight.binding.lock();if(!binding)return false;
+        try{
+            if(binding->return_preparing){binding->return_reentered=true;
+                throw DatabaseError("PK actual held return output reentered its owner");}
+            if(flight.output_held_seen || !return_output_exact(*binding,flight,value))
+                throw DatabaseError("PK return output lacks all actual recipient held cuts");
+            binding->return_preparing=true;binding->return_reentered=false;
+            struct End{bool& busy;~End(){busy=false;}}end{binding->return_preparing};
+            const auto current=[&]{return return_output_exact(*binding,flight,value);};
+            const auto& visibility=*binding->departure->visibility;
+            // Survivor input is unchanged: requalify ALL actual scene/pose/name/
+            // resource inputs after all strand cuts and before the saved tail.
+            if(!visibility.taiwan_pk_return_records_current(*flight.records)||!current())
+                throw DatabaseError("PK held return output changed its complete current scene");
+            if(rooms_.require_terminal_resources_saved(binding->ticket.id(),
+                    {flight.final_writes[0]->logical,flight.final_writes[1]->logical})!=flight.revisions[0]||!current())
+                throw DatabaseError("PK held return output lost the original saved resource ledger");
+            for(std::uint8_t i=0;i<2;++i)
+                if(rooms_.require_terminal_context(binding->ticket.id(),i,flight.payloads[i],
+                        flight.final_writes[i]->logical)!=flight.revisions[i]||!current())
+                    throw DatabaseError("PK held return output lost its saved terminal context");
+            if(!visibility.taiwan_pk_return_records_stored_current(*flight.records)||!current()||
+               !visibility.taiwan_pk_return_records_retained_current(*flight.records)||!current())
+                throw DatabaseError("PK held return output stored or retained source changed");
+            flight.output_held_seen=true;
+            return true; // Actual held queues only; no Written/consume/merge/unlock/input resume.
+        }catch(...){flight.output_failed_seen=true;fail(*binding);return false;}
+    }
+    void return_output_failed(ReturnFlight& flight,const Session::NativePkReturnOutputHold& value){
+        if(!on_thread())return;
+        const auto binding=flight.binding.lock();if(!binding || flight.output_failed_seen ||
+           binding->return_flight.get()!=&flight || !flight.output_hold || *flight.output_hold!=value)return;
+        flight.output_failed_seen=true;fail(*binding);
     }
     void return_failed(ReturnFlight& flight,const Session::NativePkReturnReservation& value){
         if(!on_thread())return;

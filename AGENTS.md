@@ -593,3 +593,22 @@ Five existingCPP/no newPY/Lua/formula/opcode/defaultactivation/fullroute; V23pin
 unlock/inputresume/adoption; original5sdeadline holds. Mainbackend/issuedlineage/
 fullreturn/skills/CN/web/wholegame OPEN. Parser77=50/11/16,pending12,frontier26
 21/105,whole%null; fullTW100 goalACTIVE and PHASE1 sourceonly retained.
+
+Round387 actualReserved Outbox now prepares exact private recipient OutputPlan
+thenrealallstrand heldqueues/emptycuts ->oneGameweakowner/actualHeldcallback.
+Visibilityfriend groups actualSessions/fullLeases/immutable81B records, retains
+incoming/custom0then1order,<=31whole records underexisting0xA00 transportframe
+bound. SurvivorprivateINIT/recordedgame/weakSession/Written->existingnormalcaps;
+no peerTLS/rawfactory/stronggameStateonnetwork. Originalsurvivorinput/olderFIFO
+preserved; returnerssameacceptedReady/privatepair/drain. Allactualframe budgets/
+markers beforeposts, one-use/exactslots/finalinstall cuts; weakqueuecohort/Frame
+markers, Attempt ONLY actualtasks preventsabandonedPendingcycle. SharedFailed
+closesownreturnpair+actualacquiredobserver slots BEFOREclear, repeatslateCAS
+cleanup/closeonce; unownednormal nominees retainoldcohort/epoch/queue, including
+preinstallbudget failures. No close underSync/Budget; prelogger/old5sdeadline
+retained. ActualHeldcallback fullscene/ledger/contexts/finaljointstored thenpure
+caps underoldreentryguard. FiveCPP/V24pins76=71exact5updated/no newPY/Lua/opcode/
+formula/defaultactivation/fullroute. No release/Written/liveidentity/visibility
+consume/Finishedunlock/inputresume/ACK, no invented24/39/HP/bag/reset/S30. Actual
+Main/resources/issuedlineage/fullskills/CN/web/wholegame OPEN. Parser77=50/11/16,
+pending12/frontier26 21/105,whole%null; fullTW100goalACTIVE/PHASE1 sourceonly.

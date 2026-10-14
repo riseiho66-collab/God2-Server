@@ -22,6 +22,8 @@
 #include <vector>
 #include <utility>
 
+namespace god2::cn {class SharedActorVisibility;}
+
 namespace god2 {
 
 enum class SessionState {
@@ -306,6 +308,36 @@ public:
         virtual bool native_pk_return_reserved(const NativePkReturnReservation&)=0;
         virtual void native_pk_return_failed(const NativePkReturnReservation&)=0;
     };
+    // CUSTOM-0133 exact source-derived grouped return output only. Held means
+    // all real recipient strands own the unchanged frames; no release/ACK.
+    class NativePkReturnOutputPlan {
+    public:
+        NativePkReturnOutputPlan(const NativePkReturnOutputPlan&)=default;
+        NativePkReturnOutputPlan& operator=(const NativePkReturnOutputPlan&)=default;
+    private:
+        friend class Session;
+        struct Data;
+        explicit NativePkReturnOutputPlan(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class NativePkReturnOutputHold {
+    public:
+        NativePkReturnOutputHold(const NativePkReturnOutputHold&)=default;
+        NativePkReturnOutputHold& operator=(const NativePkReturnOutputHold&)=default;
+        bool operator==(const NativePkReturnOutputHold&)const=default;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit NativePkReturnOutputHold(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class NativePkReturnOutputOwner {
+    public:
+        virtual ~NativePkReturnOutputOwner()=default;
+        virtual bool native_pk_return_output_held(const NativePkReturnOutputHold&)=0;
+        virtual void native_pk_return_output_failed(const NativePkReturnOutputHold&)=0;
+    };
     struct NativeCharacterSelectionInput {
         std::uint64_t session,account;
         RecoveredPostCreateSelect::Selection input;
@@ -550,6 +582,11 @@ public:
     static bool native_pk_return_reservation_matches(const NativePkReturnReservation&,
         const std::array<std::shared_ptr<Session>,2>&,
         const std::array<NativePkReturnPreparation,2>&) noexcept;
+    static NativePkReturnOutputHold hold_native_pk_return_output(
+        const NativePkReturnOutputPlan&,std::weak_ptr<NativePkReturnOutputOwner>);
+    static bool native_pk_return_output_current(const NativePkReturnOutputHold&) noexcept;
+    static bool native_pk_return_output_matches(const NativePkReturnOutputHold&,
+        const NativePkReturnOutputPlan&,const NativePkReturnReservation&) noexcept;
     // Separate retained-entry PK output only; old skill sender grammar stays
     // unchanged. Exact durable grant/result authority belongs to weak owner.
     void send_native_pk_output(const NativePkEntryHold&,NativeBattleSkill,
@@ -604,6 +641,20 @@ public:
     std::uint64_t character_id = 0;
 
 private:
+    friend class cn::SharedActorVisibility;
+    struct NativePkReturnOutputGroup {
+        std::shared_ptr<Session> recipient;
+        std::vector<std::uint8_t> logical;
+    };
+    // Only the genuine Visibility Records builder may supply these groups.
+    static NativePkReturnOutputPlan prepare_native_pk_return_output(const NativePkReturnReservation&,
+        const std::array<std::shared_ptr<Session>,2>&,
+        const std::array<NativePkReturnPreparation,2>&,
+        std::weak_ptr<const void> records_identity,std::vector<NativePkReturnOutputGroup>);
+    static bool native_pk_return_output_plan_matches(const NativePkReturnOutputPlan&,
+        const NativePkReturnReservation&,const std::weak_ptr<const void>&) noexcept;
+    static bool native_pk_return_output_plan_current(const std::shared_ptr<NativePkReturnOutputPlan::Data>&) noexcept;
+    static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;
     static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
     void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);
     std::unique_ptr<Impl> impl_;

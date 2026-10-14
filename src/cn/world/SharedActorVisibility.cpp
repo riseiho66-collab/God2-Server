@@ -7,6 +7,7 @@
 #include "text/LegacyChineseCodec.h"
 #include "text/NativePeerRoleTextCodec.h"
 #include <limits>
+#include <iterator>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -495,6 +496,51 @@ bool SharedActorVisibility::taiwan_pk_return_records_matches(const TaiwanPkRetur
     const auto state=records.state_;const auto source=plan.state_;const auto reserved=reservation;
     return taiwan_pk_return_records_fence(state)&&state->plan==source&&state->reservation==reserved&&
         taiwan_pk_return_records_fence(state);
+}
+std::optional<Session::NativePkReturnOutputPlan> SharedActorVisibility::prepare_taiwan_pk_return_output(
+        const TaiwanPkReturnRecords& records,const TaiwanPkReturnPlan& plan,
+        const Session::NativePkReturnReservation& reservation){
+    owner();
+    if(!taiwan_pk_return_records_matches(records,plan,reservation))return {};
+    const auto state=records.state_;const auto source=plan.state_;
+    // Include BOTH actual returning endpoints even when either has no6F. A
+    // real empty strand cut must not be represented by a fabricated frame.
+    std::vector<Session::NativePkReturnOutputGroup> groups;
+    groups.reserve(state->records.size()+2);
+    groups.push_back({source->sessions[0],{}});
+    groups.push_back({source->sessions[1],{}});
+    for(const auto& record:state->records){
+        const auto receiver=record.recipient_session();
+        if(!receiver||record.logical().size()!=RecoveredRemoteActor::logical_size)return {};
+        const auto endpoint=source->endpoints.find(record.recipient().session);
+        if(endpoint==source->endpoints.end()||endpoint->second.lease!=record.recipient()||
+           endpoint->second.session!=receiver)return {};
+        auto group=std::find_if(groups.begin(),groups.end(),[&](const auto& candidate){
+            return candidate.recipient==receiver;
+        });
+        if(group==groups.end()){
+            groups.push_back({receiver,{}});group=std::prev(groups.end());
+        }
+        // Filter the canonical ordered records into their actual recipient;
+        // never treat an outgoing SOURCE list as a returning receiver batch.
+        group->logical.insert(group->logical.end(),record.logical().begin(),record.logical().end());
+    }
+    const std::weak_ptr<const void> identity(state);
+    auto output=Session::prepare_native_pk_return_output(reservation,source->sessions,
+        source->preparations,identity,std::move(groups));
+    // Session's private factory captures actual survivor INIT/output epochs
+    // and allocates complete boundary-preserving frames before these observers.
+    if(!taiwan_pk_return_records_current(records)||
+       !taiwan_pk_return_output_plan_matches(records,output,plan,reservation))return {};
+    return output;
+}
+bool SharedActorVisibility::taiwan_pk_return_output_plan_matches(const TaiwanPkReturnRecords& records,
+        const Session::NativePkReturnOutputPlan& output,const TaiwanPkReturnPlan& plan,
+        const Session::NativePkReturnReservation& reservation)const {
+    owner();const std::weak_ptr<const void> identity(records.state_);
+    return taiwan_pk_return_records_matches(records,plan,reservation)&&
+        Session::native_pk_return_output_plan_matches(output,reservation,identity)&&
+        taiwan_pk_return_records_matches(records,plan,reservation);
 }
 bool SharedActorVisibility::taiwan_pk_departed(const Lease& lease)const noexcept {
     // The in-progress pair stays blocked even if an exact lifecycle release

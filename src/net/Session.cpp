@@ -25,6 +25,7 @@
 #include "protocol/RecoveredBattleVitals.h"
 #include "protocol/RecoveredBattleVitalsBatch.h"
 #include "protocol/RecoveredTaiwanPkTerminalNotification.h"
+#include "protocol/RecoveredRemoteActor.h"
 #include <asio/bind_cancellation_slot.hpp>
 #include <asio/cancellation_signal.hpp>
 #include <spdlog/spdlog.h>
@@ -316,6 +317,54 @@ struct Session::NativePkReturnReservation::Data {
          game(std::move(executor)),source(std::move(owner)) {}
 };
 
+// Network-owned return data contains only capabilities/bytes/weak source identity.
+// Never lock Records identity on a strand: its actual owning State is game-only.
+struct Session::NativePkReturnOutputPlan::Data {
+    struct Group {
+        std::shared_ptr<Session> recipient;
+        std::optional<NormalWorldOutputHandle> normal;
+        std::vector<std::shared_ptr<std::vector<std::uint8_t>>> frames;
+    };
+    const NativePkReturnReservation reservation;
+    const std::array<std::shared_ptr<Session>,2> sessions;
+    const std::array<NativePkReturnPreparation,2> preparations;
+    const std::weak_ptr<const void> records;
+    const std::thread::id thread=std::this_thread::get_id();
+    const asio::any_io_executor game;
+    const std::vector<Group> groups;
+    std::atomic<bool> claimed{false};
+    Data(NativePkReturnReservation pair,std::array<std::shared_ptr<Session>,2> actual,
+        std::array<NativePkReturnPreparation,2> prepared,std::weak_ptr<const void> source,
+        asio::any_io_executor executor,std::vector<Group> ordered)
+        :reservation(std::move(pair)),sessions(std::move(actual)),preparations(std::move(prepared)),
+         records(std::move(source)),game(std::move(executor)),groups(std::move(ordered)){}
+};
+struct Session::NativePkReturnOutputHold::Data {
+    enum class Phase {Pending,Held,Failed};
+    struct Frame {
+        const std::shared_ptr<std::vector<std::uint8_t>> bytes;
+        std::atomic<std::shared_ptr<Reservation>> budget;
+        explicit Frame(std::shared_ptr<std::vector<std::uint8_t>> value):bytes(std::move(value)){}
+    };
+    struct Recipient {
+        const std::shared_ptr<Session> session;
+        const std::optional<NormalWorldOutputHandle> normal;
+        const std::vector<std::shared_ptr<Frame>> frames;
+        std::atomic<bool> held{false},slot_owned{false},failure_closed{false},close_posted{false};
+        Recipient(std::shared_ptr<Session> actual,std::optional<NormalWorldOutputHandle> proof,
+            std::vector<std::shared_ptr<Frame>> bytes)
+            :session(std::move(actual)),normal(std::move(proof)),frames(std::move(bytes)){}
+    };
+    const std::shared_ptr<NativePkReturnOutputPlan::Data> plan;
+    const std::weak_ptr<NativePkReturnOutputOwner> source;
+    const std::vector<std::shared_ptr<Recipient>> recipients;
+    std::atomic<Phase> phase{Phase::Pending};
+    std::atomic<std::size_t> cuts{0};
+    std::atomic<bool> installed{false},game_posted{false},failed_notified{false};
+    Data(std::shared_ptr<NativePkReturnOutputPlan::Data> value,std::weak_ptr<NativePkReturnOutputOwner> owner,
+        std::vector<std::shared_ptr<Recipient>> actual)
+        :plan(std::move(value)),source(std::move(owner)),recipients(std::move(actual)){}
+};
 struct Session::NativeWorldSelectionInput::Data {
     const std::weak_ptr<Session> session;
     const std::shared_ptr<const void> world_identity;
@@ -501,6 +550,25 @@ struct Session::Impl {
     std::atomic<std::shared_ptr<NativePkEntryHold::Data>> native_pk_pending;
     std::atomic<std::shared_ptr<NativePkTerminalBarrier::Data>> native_pk_terminal;
     std::atomic<std::shared_ptr<NativePkReturnReservation::Data>> native_pk_return;
+    std::atomic<std::shared_ptr<NativePkReturnOutputHold::Data>> native_pk_return_output;
+    struct NativePkReturnOutputAttempt {
+        const std::shared_ptr<NativePkReturnOutputHold::Data> data;
+        explicit NativePkReturnOutputAttempt(std::shared_ptr<NativePkReturnOutputHold::Data> value):data(std::move(value)){}
+        ~NativePkReturnOutputAttempt(){
+            if(data->phase.load()==NativePkReturnOutputHold::Data::Phase::Pending)
+                Session::fail_native_pk_return_output(data);
+        }
+    };
+    struct NativePkReturnOutputWrite {
+        // Queued nodes must NOT retain the pending task Attempt. Otherwise a
+        // dropped last game post cannot poison Data and a queue cycle survives.
+        const std::weak_ptr<NativePkReturnOutputHold::Data> cohort;
+        const std::shared_ptr<NativePkReturnOutputHold::Data::Frame> frame;
+        const std::size_t recipient,ordinal;
+        NativePkReturnOutputWrite(std::weak_ptr<NativePkReturnOutputHold::Data> owner,
+            std::shared_ptr<NativePkReturnOutputHold::Data::Frame> bytes,std::size_t at,std::size_t index)
+            :cohort(std::move(owner)),frame(std::move(bytes)),recipient(at),ordinal(index){}
+    };
     // Separate from the pair Data kept by the game owner. Last abandoned post
     // marks Pending failed even when that owning capability is still retained.
     struct NativePkReturnAttempt {
@@ -564,9 +632,13 @@ struct Session::Impl {
     const std::shared_ptr<NormalWorldOutputHandle::Sync> normal_output_sync=
         std::make_shared<NormalWorldOutputHandle::Sync>();
     void retire_normal_output() noexcept {
-        std::lock_guard lock(normal_output_sync->mutex);
-        const auto old=normal_output_sync->epoch.load();
-        if(old!=std::numeric_limits<std::uint64_t>::max())normal_output_sync->epoch.store(old+1);
+        {
+            std::lock_guard lock(normal_output_sync->mutex);
+            const auto old=normal_output_sync->epoch.load();
+            if(old!=std::numeric_limits<std::uint64_t>::max())normal_output_sync->epoch.store(old+1);
+        }
+        // No failure/close under Sync: own fresh cohort handles may lock it.
+        if(const auto output=native_pk_return_output.load())Session::fail_native_pk_return_output(output);
     }
     // Strand checks only immutable Entry/Data and synchronized/atomic fields.
     // Caller holds Sync::mutex through final validation and FIFO insertion.
@@ -629,7 +701,8 @@ struct Session::Impl {
         std::shared_ptr<NormalWorldInitialization::Entry> normal_entry{};
         std::shared_ptr<NativePkEntryHold::Data> native_pk{};
         std::shared_ptr<WorldResponseAttempt> observed_response{}; // Preserve old aggregate initializers.
-        std::shared_ptr<OwnedInputLease> owned_input_lease{}; // LAST: opt-in only.
+        std::shared_ptr<OwnedInputLease> owned_input_lease{}; // Old aggregate positions preserved.
+        std::shared_ptr<NativePkReturnOutputWrite> return_output{}; // LAST: private held cohort only.
     };
     std::deque<Write> writes;
     // Network strand only; set by the exact marked Write's success completion,
@@ -1025,6 +1098,89 @@ struct Session::Impl {
             if(!accepted || !Session::native_pk_return_reservation_current(reservation))
                 Session::fail_native_pk_return_reservation(data);
         });}catch(...) {Session::fail_native_pk_return_reservation(data);}
+    }
+    bool native_pk_return_output_transport_current(
+            const std::shared_ptr<NativePkReturnOutputHold::Data>& data,std::size_t index) const {
+        if(!data||index>=data->recipients.size()||!data->installed.load()||
+           data->phase.load()==NativePkReturnOutputHold::Data::Phase::Failed||data->source.expired()||
+           data->plan->records.expired()||data->plan->game!=game||close_requested.load()||
+           native_pk_return_output.load()!=data||data->recipients[index]->session.get()!=&owner)return false;
+        if(index<2)return native_pk_return_transport_current(data->plan->reservation.data_,index);
+        const auto& proof=data->recipients[index]->normal;
+        if(!proof)return false;
+        std::lock_guard lock(proof->data_->sync->mutex);
+        return normal_output_transport_current_locked(proof->data_);
+    }
+    void stage_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>& data,
+            std::size_t index,std::vector<std::shared_ptr<NativePkReturnOutputWrite>> markers,
+            const std::shared_ptr<NativePkReturnOutputAttempt>& attempt){
+        if(!native_pk_return_output_transport_current(data,index)||closing||
+           mode!=ProtocolMode::God2CharacterConnection||c2s0002_state!=C2S0002State::WorldTailAccepted){
+            Session::fail_native_pk_return_output(data);return;
+        }
+        const auto& recipient=data->recipients[index];
+        // Returning barriers keep the exact full original drain. Survivors keep
+        // normal input and older FIFO writes; held frames append without reorder.
+        if(index<2&&(game_busy||read_inflight||!writes.empty()||write_bytes||input.size()||
+           !world_input.empty()||!world_pending_records.empty()||skill_deadline||native_skill_generation||
+           native_pk_terminal_cancel_read||native_pk_cancel_read||native_pk_output_staged||
+           native_pk_output_reservation||native_pk_reservation||common_ready_waiting.load()||common_entry_identity.load())){
+            Session::fail_native_pk_return_output(data);return;
+        }
+        const bool was_empty=writes.empty();
+        try{
+            const auto insert=[&]{
+                if(markers.size()!=recipient->frames.size())throw std::logic_error("Return held marker count");
+                std::size_t bytes=0;
+                for(const auto& frame:recipient->frames){
+                    if(frame->bytes->size()>max_buffer-bytes)throw std::length_error("Return held frame bytes");
+                    bytes+=frame->bytes->size();
+                }
+                if(write_bytes>max_buffer||writes.size()>max_writes||bytes>max_buffer-write_bytes||
+                   recipient->frames.size()>max_writes-writes.size())
+                    throw std::length_error("Return held queue budget");
+                for(std::size_t ordinal=0;ordinal<recipient->frames.size();++ordinal){
+                    if(data->phase.load()!=NativePkReturnOutputHold::Data::Phase::Pending||
+                       native_pk_return_output.load()!=data)throw std::logic_error("Return cohort retired during insertion");
+                    const auto& frame=recipient->frames[ordinal];
+                    auto budget=frame->budget.exchange({});
+                    if(!budget||!markers[ordinal]||markers[ordinal]->cohort.owner_before(data)||
+                       data.owner_before(markers[ordinal]->cohort)||markers[ordinal]->frame!=frame||
+                       markers[ordinal]->recipient!=index||markers[ordinal]->ordinal!=ordinal)
+                        throw std::logic_error("Return held frame marker identity");
+                    Write value{frame->bytes,std::move(budget),false,true};
+                    value.return_output=markers[ordinal];writes.push_back(std::move(value));write_bytes+=frame->bytes->size();
+                }
+            };
+            if(index<2){insert();}
+            else{
+                // Only immutable capability/atomic identity on network; no bare IDs.
+                const auto proof=recipient->normal->data_;
+                std::lock_guard lock(proof->sync->mutex);
+                if(!normal_output_transport_current_locked(proof))throw std::logic_error("Return survivor epoch retired");
+                insert();
+            }
+            if(!native_pk_return_output_transport_current(data,index)||
+               recipient->held.exchange(true))throw std::logic_error("Return held cut retired or repeated");
+            // Prior survivor writes may proceed; a held front cannot start.
+            if(was_empty&&!writes.empty())write();
+            if(data->cuts.fetch_add(1)+1!=data->recipients.size()||data->game_posted.exchange(true))return;
+            asio::post(data->plan->game,[data,attempt]{
+                if(data->plan->thread!=std::this_thread::get_id()){
+                    Session::fail_native_pk_return_output(data);return;
+                }
+                auto pending=NativePkReturnOutputHold::Data::Phase::Pending;
+                if(!data->phase.compare_exchange_strong(pending,NativePkReturnOutputHold::Data::Phase::Held))return;
+                const NativePkReturnOutputHold token(data);bool accepted=false;
+                {
+                    const auto source=data->source.lock(); // weak owner locked/destroyed ONLY on game.
+                    if(source&&Session::native_pk_return_output_current(token))try{
+                        accepted=source->native_pk_return_output_held(token)&&Session::native_pk_return_output_current(token);
+                    }catch(...){}
+                }
+                if(!accepted)Session::fail_native_pk_return_output(data);
+            });
+        }catch(...){Session::fail_native_pk_return_output(data);}
     }
     void retire_native_pk_terminal() {
         if(const auto pair=native_pk_return.exchange({}))Session::fail_native_pk_return_reservation(pair);
@@ -2570,6 +2726,11 @@ struct Session::Impl {
     }
     void write() {
         if(writes.empty() || writes.front().held)return;
+        if(const auto marked=writes.front().return_output){
+            if(const auto data=marked->cohort.lock())Session::fail_native_pk_return_output(data);
+            else fail("Return held frame lost its exact cohort");
+            return; // No release consumer exists here.
+        }
         auto bytes = writes.front().bytes;
         // The completion owns the active buffer even when fail() clears the queue.
         const bool owned_initiation=bool(owned_response_input_hold.load()) || owned_input_retired.load();
@@ -2727,6 +2888,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        if(const auto output=native_pk_return_output.load())Session::fail_native_pk_return_output(output);
         if(const auto pair=native_pk_return.load())Session::fail_native_pk_return_reservation(pair);
         retire_owned_input(); // Opt-in socket/atomic retirement precedes potentially throwing logging.
         if (finished) return;
@@ -3707,6 +3869,9 @@ void Session::fail_native_pk_return_reservation(
     if(!data)return;
     const bool first=data->phase.exchange(NativePkReturnReservation::Data::Phase::Failed)!=
         NativePkReturnReservation::Data::Phase::Failed;
+    for(const auto& weak:data->sessions)if(const auto session=weak.lock())
+        if(const auto output=session->impl_->native_pk_return_output.load())
+            if(output->plan->reservation.data_==data)fail_native_pk_return_output(output);
     // Always remove exact slots: a concurrent installation may finish AFTER
     // the first failure swept them. Only the first transition closes/notifies.
     for(std::size_t index=0;index<2;++index)if(const auto session=data->sessions[index].lock()) {
@@ -3807,6 +3972,204 @@ bool Session::native_pk_return_reservation_matches(const NativePkReturnReservati
     if(data->sessions[0].lock()!=sessions[0] || data->sessions[1].lock()!=sessions[1] ||
        data->preparations!=preparations)return false;
     return native_pk_return_reservation_current(reservation);
+}
+Session::NativePkReturnOutputPlan Session::prepare_native_pk_return_output(
+        const NativePkReturnReservation& reservation,const std::array<std::shared_ptr<Session>,2>& sessions,
+        const std::array<NativePkReturnPreparation,2>& preparations,std::weak_ptr<const void> identity,
+        std::vector<NativePkReturnOutputGroup> groups){
+    if(!native_pk_return_reservation_matches(reservation,sessions,preparations)||identity.expired()||
+       groups.size()<2||groups[0].recipient!=sessions[0]||groups[1].recipient!=sessions[1])
+        throw std::invalid_argument("Return output requires exact private paired Records source");
+    std::vector<NativePkReturnOutputPlan::Data::Group> owned;owned.reserve(groups.size());
+    constexpr auto record_size=RecoveredRemoteActor::logical_size;
+    constexpr auto records_per_frame=RecoveredWorldFrame::max_logical_size/record_size;
+    static_assert(records_per_frame>0);
+    for(std::size_t index=0;index<groups.size();++index){
+        auto& supplied=groups[index];const auto session=supplied.recipient;
+        if(!session||!session->same_native_pk_game_executor(*sessions[0])||
+           supplied.logical.size()%record_size||(!supplied.logical.size()&&index>=2))
+            throw std::invalid_argument("Return output recipient or record boundaries");
+        for(const auto& prior:owned)if(prior.recipient==session)throw std::invalid_argument("Duplicate return output recipient");
+        std::optional<NormalWorldOutputHandle> normal;
+        if(index>=2){
+            // Exact private recorded game owner BEFORE reading public owner IDs.
+            const auto init=session->impl_->normal_initialization.load();
+            if(!init||!init->entry||init->entry->game_thread!=std::this_thread::get_id()||
+               init->entry->session.lock()!=session||!init->entry->written.load())
+                throw std::invalid_argument("Return survivor lacks private Written INIT");
+            normal=session->capture_normal_world_output_on_game(NormalWorldInitialization(init));
+            if(!normal)throw std::invalid_argument("Return survivor private output epoch");
+        }
+        NativePkReturnOutputPlan::Data::Group recipient{session,std::move(normal),{}};
+        recipient.frames.reserve((supplied.logical.size()/record_size+records_per_frame-1)/records_per_frame);
+        for(std::size_t at=0;at<supplied.logical.size();at+=record_size*records_per_frame){
+            const auto length=std::min(record_size*records_per_frame,supplied.logical.size()-at);
+            const auto logical=std::span<const std::uint8_t>(supplied.logical).subspan(at,length);
+            for(std::size_t offset=0;offset<logical.size();offset+=record_size)
+                if(logical[offset]!=0x6f)throw std::invalid_argument("Return output full6F source only");
+            recipient.frames.push_back(std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(logical)));
+        }
+        owned.push_back(std::move(recipient));
+    }
+    const auto data=std::make_shared<NativePkReturnOutputPlan::Data>(reservation,sessions,preparations,
+        std::move(identity),sessions[0]->impl_->game,std::move(owned));
+    if(!native_pk_return_output_plan_current(data))throw std::invalid_argument("Return output source changed during preparation");
+    return NativePkReturnOutputPlan(data);
+}
+bool Session::native_pk_return_output_plan_current(const std::shared_ptr<NativePkReturnOutputPlan::Data>& data) noexcept{
+    try{
+    if(!data||data->thread!=std::this_thread::get_id()||data->records.expired()||
+       !native_pk_return_reservation_matches(data->reservation,data->sessions,data->preparations))return false;
+    for(std::size_t index=2;index<data->groups.size();++index){
+        const auto& group=data->groups[index];
+        if(!group.normal||!group.recipient->normal_world_output_current_on_game(*group.normal))return false;
+    }
+    return native_pk_return_reservation_matches(data->reservation,data->sessions,data->preparations)&&!data->records.expired();
+    }catch(...){return false;}
+}
+bool Session::native_pk_return_output_plan_matches(const NativePkReturnOutputPlan& plan,
+        const NativePkReturnReservation& reservation,const std::weak_ptr<const void>& identity) noexcept{
+    const auto data=plan.data_;
+    if(!native_pk_return_output_plan_current(data)||data->reservation!=reservation||
+       data->records.owner_before(identity)||identity.owner_before(data->records))return false;
+    // Lock only on the recorded game owner; never retain this State on network.
+    const auto actual=data->records.lock(),requested=identity.lock();
+    return actual&&actual==requested&&native_pk_return_output_plan_current(data);
+}
+void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>& data) noexcept{
+    if(!data)return;
+    const bool first=data->phase.exchange(NativePkReturnOutputHold::Data::Phase::Failed)!=
+        NativePkReturnOutputHold::Data::Phase::Failed;
+    // The genuine returning pair fails even before installation. Observers
+    // belong to this failure ONLY once this exact Data acquired their slot.
+    const auto owned=[&](std::size_t index){
+        const auto& recipient=data->recipients[index];
+        return index<2||recipient->slot_owned.load()||
+            recipient->session->impl_->native_pk_return_output.load()==data;
+    };
+    for(std::size_t index=0;index<data->recipients.size();++index)if(owned(index)){
+        const auto& recipient=data->recipients[index];recipient->slot_owned.store(true);
+        recipient->session->impl_->close_requested.store(true); // BEFORE any exact slot removal.
+    }
+    // Repeated failure also discovers late successful CAS before ownership stamp.
+    // Unowned nominated observers keep their prior slot/epoch/queue unchanged.
+    for(std::size_t index=0;index<data->recipients.size();++index){
+        const auto& recipient=data->recipients[index];
+        if(owned(index)){
+            recipient->slot_owned.store(true);recipient->session->impl_->close_requested.store(true);
+            auto expected=data;recipient->session->impl_->native_pk_return_output.compare_exchange_strong(expected,{});
+        }
+        for(const auto& frame:recipient->frames)frame->budget.exchange({}); // Always refund this Data only.
+    }
+    if(first)fail_native_pk_return_reservation(data->plan->reservation.data_);
+    for(std::size_t index=0;index<data->recipients.size();++index)if(owned(index)){
+        const auto& recipient=data->recipients[index];
+        if(!recipient->failure_closed.exchange(true)){
+            if(recipient->normal)recipient->normal->revoke(); // Own acquired observer's fresh handle only.
+            recipient->session->impl_->retire_normal_output(); // Outside all Sync/Budget locks.
+        }
+        // This flag records one scheduling attempt, not successful execution.
+        // Repeated failure must still close each newly-owned late receiver once.
+        if(!recipient->close_posted.exchange(true))try{
+            asio::post(recipient->session->impl_->strand,[session=recipient->session]{session->impl_->close();});
+        }catch(...){recipient->session->impl_->close_requested.store(true);}
+    }
+    if(!first)return;
+    try{asio::post(data->plan->game,[data]{
+        if(data->failed_notified.exchange(true)||data->plan->thread!=std::this_thread::get_id())return;
+        if(const auto source=data->source.lock())try{source->native_pk_return_output_failed(NativePkReturnOutputHold(data));}catch(...){}
+    });}catch(...){} // No retry, synthetic notification, rollback or deadline renewal.
+}
+Session::NativePkReturnOutputHold Session::hold_native_pk_return_output(
+        const NativePkReturnOutputPlan& plan,std::weak_ptr<NativePkReturnOutputOwner> source){
+    const auto prepared=plan.data_;
+    if(!native_pk_return_output_plan_current(prepared)||source.expired())
+        throw std::invalid_argument("Return output lacks current own private plan/owner");
+    // Pure fast admission: an existing healthy observer cohort is not ours.
+    // No Data/budget/slot is owned yet, so reject only this genuine returning pair.
+    for(const auto& group:prepared->groups)if(group.recipient->impl_->native_pk_return_output.load()){
+        fail_native_pk_return_reservation(prepared->reservation.data_);
+        throw std::logic_error("Return recipient already belongs to another held cohort");
+    }
+    bool unused=false;
+    if(!prepared->claimed.compare_exchange_strong(unused,true))throw std::logic_error("Return output plan already used");
+    std::shared_ptr<NativePkReturnOutputHold::Data> data;
+    try{
+        std::vector<std::shared_ptr<NativePkReturnOutputHold::Data::Recipient>> recipients;
+        recipients.reserve(prepared->groups.size());
+        for(const auto& group:prepared->groups){
+            std::vector<std::shared_ptr<NativePkReturnOutputHold::Data::Frame>> frames;frames.reserve(group.frames.size());
+            for(const auto& bytes:group.frames)frames.push_back(std::make_shared<NativePkReturnOutputHold::Data::Frame>(bytes));
+            recipients.push_back(std::make_shared<NativePkReturnOutputHold::Data::Recipient>(group.recipient,group.normal,std::move(frames)));
+        }
+        data=std::make_shared<NativePkReturnOutputHold::Data>(prepared,std::move(source),std::move(recipients));
+        const auto attempt=std::make_shared<Impl::NativePkReturnOutputAttempt>(data);
+        std::vector<std::vector<std::shared_ptr<Impl::NativePkReturnOutputWrite>>> markers;markers.reserve(data->recipients.size());
+        // Every frame/budget/marker is owned before the FIRST strand post.
+        for(std::size_t index=0;index<data->recipients.size();++index){
+            const auto& recipient=data->recipients[index];std::vector<std::shared_ptr<Impl::NativePkReturnOutputWrite>> group;
+            group.reserve(recipient->frames.size());
+            for(std::size_t ordinal=0;ordinal<recipient->frames.size();++ordinal){
+                const auto& frame=recipient->frames[ordinal];const auto charge=frame->bytes->size();
+                const auto budget=recipient->session->impl_->budget;std::shared_ptr<Reservation> reserved;
+                {
+                    std::lock_guard lock(budget->mutex);
+                    if(charge<=max_buffer-budget->bytes&&budget->count<max_writes){
+                        reserved=std::make_shared<Reservation>(budget,charge);budget->bytes+=charge;++budget->count;
+                    }
+                }
+                if(!reserved)throw std::length_error("Return output budget exhausted");
+                frame->budget.store(std::move(reserved));
+                group.push_back(std::make_shared<Impl::NativePkReturnOutputWrite>(data,frame,index,ordinal));
+            }
+            markers.push_back(std::move(group));
+        }
+        if(!native_pk_return_output_plan_current(prepared))throw std::logic_error("Return output source retired before install");
+        for(const auto& recipient:data->recipients){
+            if(data->phase.load()!=NativePkReturnOutputHold::Data::Phase::Pending)
+                throw std::logic_error("Return cohort retired before recipient install");
+            std::shared_ptr<NativePkReturnOutputHold::Data> absent;
+            if(!recipient->session->impl_->native_pk_return_output.compare_exchange_strong(absent,data))
+                throw std::logic_error("Recipient already owns a held return cohort");
+            recipient->slot_owned.store(true);
+            if(data->phase.load()!=NativePkReturnOutputHold::Data::Phase::Pending){
+                fail_native_pk_return_output(data); // Idempotent late-owned cleanup, not first-only.
+                throw std::logic_error("Return cohort retired during recipient install");
+            }
+        }
+        data->installed.store(true);
+        if(data->phase.load()!=NativePkReturnOutputHold::Data::Phase::Pending||!native_pk_return_output_plan_current(prepared))
+            throw std::logic_error("Return output retired during installation");
+        for(const auto& recipient:data->recipients)
+            if(recipient->session->impl_->native_pk_return_output.load()!=data)throw std::logic_error("Return output halfslot lost");
+        for(std::size_t index=0;index<data->recipients.size();++index){
+            const auto session=data->recipients[index]->session;
+            asio::post(session->impl_->strand,[session,data,index,owned=std::move(markers[index]),attempt]()mutable{
+                session->impl_->stage_native_pk_return_output(data,index,std::move(owned),attempt);
+            });
+        }
+        return NativePkReturnOutputHold(data);
+    }catch(...){
+        if(data)fail_native_pk_return_output(data);
+        else fail_native_pk_return_reservation(prepared->reservation.data_);
+        throw;
+    }
+}
+bool Session::native_pk_return_output_current(const NativePkReturnOutputHold& hold) noexcept{
+    const auto data=hold.data_;
+    if(!data||data->plan->thread!=std::this_thread::get_id()||
+       data->phase.load()!=NativePkReturnOutputHold::Data::Phase::Held||!data->installed.load()||
+       data->source.expired()||data->cuts.load()!=data->recipients.size()||
+       !native_pk_return_output_plan_current(data->plan))return false;
+    for(const auto& recipient:data->recipients)
+        if(!recipient->held.load()||recipient->session->impl_->native_pk_return_output.load()!=data)return false;
+    return data->phase.load()==NativePkReturnOutputHold::Data::Phase::Held&&native_pk_return_output_plan_current(data->plan);
+}
+bool Session::native_pk_return_output_matches(const NativePkReturnOutputHold& hold,
+        const NativePkReturnOutputPlan& plan,const NativePkReturnReservation& reservation) noexcept{
+    const auto data=hold.data_;
+    return native_pk_return_output_current(hold)&&data->plan==plan.data_&&
+        data->plan->reservation==reservation&&native_pk_return_output_current(hold);
 }
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){

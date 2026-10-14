@@ -5650,3 +5650,33 @@ pending12/frontier26 21formats105gaps and whole%null remain unchanged. Full
 TW100-first/CN/fourWS/commoncore/numeric/saves/frozen scope and PHASE1 source
 only/no build/tests/runtime/native/codec/gameDBSQL/activate/deploy continue.
 Details: docs/research/tw-return-record-publication-source-20261014.md.
+
+## Round387 - Actual recipient held return output (2026-10-14)
+
+ActualReserved Outbox derives private OutputPlan through Visibility from the
+exact owning Records/Plan/pair and actual endpoint Sessions/full leases. Both
+returners participate evenempty; normals group actualreceiver ordered full6F.
+Existing0xA00 transport bound yields31whole81B records perframe, preserving
+fullrecords/order without inventingnativeactorcaps. Survivor privateINIT/thread/
+weakSession/Written proof captures genuine normaloutput epochs, no peerTLS or
+rawsourcefactory; network ownsweakRecords identity andpurecapabilities/bytes.
+
+Actualstrands install exactheld multiframe queues/emptycuts, retainingoriginal
+survivorinput/olderFIFO andoriginal returner acceptedReady/drain. One-use/allframe
+budgetsmarkersbeforeposts/exactslots/finalinstall, oneGameweakowner callback.
+ActualReturnFlight Held callback repeatsfullscene/ledger/twocontexts/finaljoint
+storedcut thenpurecaps underreentryguard. Weakmarkers keepAttempt only inactual
+pendingtasks; droppedPendinggamework cannot bekeptalivebyqueuedFrame. Failure
+poisonsownpair+actuallyacquiredobservers beforeclear; unownednominees preserve
+oldcohort/epoch/queue evenpreinstallbudgetfailures. LateCAScleanup/closeonce,
+no closeunderSync/Budget/prelogger poison/original5sdeadline preserved.
+
+FiveexistingCPP change; Source24 all76pins(71exact5updated), no newprojectPY/Lua/
+newnative/opcode/formula/defaultactivation/complete route. Frames stayheld;
+actualrelease/fullwrite/liveidentity/visibilityconsume/Finishedunlock/inputresume/
+Mainbackend/companionresources/issuedlineage/nativeadoption remain OPEN, no
+invented24/39/HP/bag/reset/fullS30/fresh2A. Parser77=50partial/11control/16open,
+pending12/frontier26 21formats105gaps/whole%null unchanged. FullTW100-first/CN/
+fourWS/commoncore/64bit/saves/frozen andPHASE1 sourceonly/no builds/tests/runtime/
+native/codec/gameDBSQL/activate/deploy continue. Details:
+docs/research/tw-return-output-hold-source-20261014.md.

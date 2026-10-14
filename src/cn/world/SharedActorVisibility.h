@@ -388,6 +388,13 @@ public:
     bool taiwan_pk_return_records_retained_current(const TaiwanPkReturnRecords&)const;
     bool taiwan_pk_return_records_matches(const TaiwanPkReturnRecords&,const TaiwanPkReturnPlan&,
         const Session::NativePkReturnReservation&)const;
+    // Only the actual private records/plan/pair may nominate recipients for
+    // the distinct held transport. This prepares no WORLD/visibility release.
+    std::optional<Session::NativePkReturnOutputPlan> prepare_taiwan_pk_return_output(
+        const TaiwanPkReturnRecords&,const TaiwanPkReturnPlan&,const Session::NativePkReturnReservation&);
+    bool taiwan_pk_return_output_plan_matches(const TaiwanPkReturnRecords&,
+        const Session::NativePkReturnOutputPlan&,const TaiwanPkReturnPlan&,
+        const Session::NativePkReturnReservation&)const;
     void reset_recipient(const Lease&); // Actual native pool reset: invalidate incoming bindings, no invented packets.
     // Generation-qualified source/recipient disconnect or failed-entry cleanup.
     // Departing recipients receive nothing; surviving peers get stored73 when

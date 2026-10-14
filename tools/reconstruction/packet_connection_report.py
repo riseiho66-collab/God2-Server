@@ -226,6 +226,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_battle_return_source384', {}).get('source_paths', [])) |
                    set(ledger.get('tw_paired_return_reservation_source385', {}).get('source_paths', [])) |
                    set(ledger.get('tw_return_record_publication_source386', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_return_output_hold_source387', {}).get('source_paths', [])) |
                    {'src/core/Application.cpp', 'src/protocol/RecoveredWorldRecords.h'})
     # A missing file is a report error, never silent qualification/completion.
     digests = {p: hashlib.sha256((SERVER / p).read_bytes()).hexdigest() for p in paths}
@@ -428,6 +429,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_battle_return_source384': ledger.get('tw_battle_return_source384'),
         'tw_paired_return_reservation_source385': ledger.get('tw_paired_return_reservation_source385'),
         'tw_return_record_publication_source386': ledger.get('tw_return_record_publication_source386'),
+        'tw_return_output_hold_source387': ledger.get('tw_return_output_hold_source387'),
         'current_catalog_supplied':current_catalog is not None,
         'tw_supplemental_producer_evidence': ledger.get('tw_supplemental_producer_evidence'),
         'cn_unresolved_receiver_evidence': ledger.get('cn_unresolved_receiver_evidence'),
