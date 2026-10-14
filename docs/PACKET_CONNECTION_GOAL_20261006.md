@@ -5570,3 +5570,30 @@ eligibility, battle return, other writer lineage, complete skills/CN adapters
 and full game integration remain OPEN. Active full TW100-first/CN/web/common
 core/saves/frozen and PHASE1 restrictions retained. Details:
 docs/research/tw-skillbook-shortcut-source-20261014.md.
+
+## Round384 - Actual retained return and missing sender (2026-10-14)
+
+The native return passes the retained Main role aggregate through465BC0/481C20
+mode0 into the state3/467860 resume path. It is not a fresh successful2A reset;
+opaque child preservation remains conditional. The real468120 reset also clears
+all50 inventory rows through497FE0. Neither an inventedCF nor fullS30 replay
+can serve as a deity-only refresh. SpecialS30 flag1 is a partial count reset
+with retained tails, not a whole roster reset.
+
+Actual Main has no PK room backend; the same-DB factory forwards an optional
+return supplier through driver/Lua/outbox, and the terminal path stops at paired
+futureData/visibility preparations. TerminalReady forbids new output while its
+deadline remains armed. There is no actual sender, live generation switch,
+visibility consume, Finished durable release or input resume. Original learning
+changes the saved tuple without replacing the global issued restoration lineage.
+Do not rebase old sources or set player/pet completion flags.
+
+Next actual implementation needs paired strand reservation/consume, complete
+current return material, samelease visibility/liveidentity transition and
+durable release/input resumption, preserving issued roster incarnation and
+legitimate learning/selection writes. This bounded evidence changes the next
+action; it adds no C++/Lua/Python project file, native cut/formula/opcode/default
+activation or complete route. Source21 pins73 unchanged; parser77=50partial+
+11control+16unconnected,pending12/frontier26 21formats105gaps,whole%null. Full
+TW100-first/CN/web/sharedcore/numeric/saves/frozen/PHASE1 retained. Details:
+docs/research/tw-battle-return-source-20261014.md.

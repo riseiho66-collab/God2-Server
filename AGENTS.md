@@ -538,3 +538,16 @@ Fullroute0/whole%null; nonselfbook/nativeeligibility/adoption/battle-return/
 otherwriter/fullactions/CN adapters/wholegame OPEN. ActiveTW100first/fullgoal/
 commoncore/web/64bit/saves/frozen retained. PHASE1 sourceonly no builds/tests/
 runtime/native/codec/gameDBSQL/migration/schema/activation/deployment.
+
+Round384 native/actualhost evidence changes nextreturn implementation target.
+True515770->465931/465BC0->state3->467860 passes retainedsameaggregate481C20mode0,
+NOT fresh2A; opaquechildren preservation stillOPEN.468120 reset also497FE0clears
+all50 inventory1200B; do notinventCF/reset/S30replay for deity-onlyrefresh.
+ActualMain pk_rooms absent; Outbox stops at pairedfutureData/visibilityplan;
+SessionTerminalReady forbidsoutput/deadlinearmed; no liveidentity/unlock/resume.
+Postlearningoldrestorationtuple isstale, latest_commit notissuedrosterlineage;
+neverrebaseequalkeys orsetplayer/pet readiness. Nextactualpairedstrandreservation/
+returnresources/text/visibility/Finishedrelease/inputresume and owninglegitimate
+issuedlineage required. Source21 all73unchanged/noCPP/Lua/PY/nativecuts/formula/
+fullroute; parser77=50partial/11control/16unconnected,pending12,frontier26 21/105,
+whole%null. ActiveTW100first/fullgoal/PHASE1 sourceonly preserved.
