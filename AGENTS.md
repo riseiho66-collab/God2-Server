@@ -411,3 +411,14 @@ clear/limits and A2 actual staged pointer supplier plus actual offer/click path
 are conditional source evidence, not learned rights or proof83 consumes books.
 Source/15 pins37; frontier25 formats19/unclassified107. PHASE1/no newPY/full
 goal retained; operation/rules/persistence/reply/Main remain OPEN.
+
+
+Round375 actual CN preborn splitter/receive now shares the existing TW/common
+C81/C83 structural size qualifier. Complete input checked before unchanged
+CN raw81/WORD-vector projection; original S2C helpers/types and common TW
+parser bodies byte-exact. One vector per read_request, no extra raw-vector.
+Source/16 pins40; common staged saved authority not supplied. Native A1 low4
+ordinal stage/A3 body-unused A780 setter/removal compaction are conditional
+source only, no ACK or book consume. Frontier26 formats21/unclassified105.
+CN current observer retirement/cancellation coupling and actual operation/save
+remain OPEN; PHASE1/no newPY/full goal preserved.

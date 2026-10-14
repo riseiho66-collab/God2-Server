@@ -1,5 +1,6 @@
 #pragma once
 #include "cn/protocol/CnWorldExitLifecycleControl.h"
+#include "protocol/RecoveredPrebornChoiceRequest.h"
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -30,12 +31,7 @@ struct CnPrebornChoices {
         return Limits{record[1],record[2]};
     }
     static std::optional<std::size_t> request_size(std::span<const std::uint8_t> rest) {
-        if(rest.empty())return std::nullopt;
-        if(rest[0]==0x81)return rest.size()>=2?std::optional<std::size_t>{2}:std::nullopt;
-        if(rest[0]!=0x83 || rest.size()<3)return std::nullopt;
-        const auto length=std::size_t(rest[1])+256u*rest[2];
-        if(length<3 || (length-3)%2 || length>rest.size())return std::nullopt;
-        return length;
+        return ::god2::RecoveredPrebornChoiceRequest::request_size(rest);
     }
     static std::optional<Mask> read_mask(std::span<const std::uint8_t> record,std::uint8_t opcode) {
         if((opcode!=0x81 && opcode!=0xA1) || record.size()!=2 || record[0]!=opcode)return std::nullopt;
@@ -51,10 +47,14 @@ struct CnPrebornChoices {
         return result;
     }
     static std::optional<Request> read_request(std::span<const std::uint8_t> record) {
-        if(record.empty())return std::nullopt;
-        if(record[0]==0x81) {auto mask=read_mask(record,0x81);if(mask)return Request{*mask};}
-        if(record[0]==0x83) {auto words=read_words(record,0x83);if(words)return Request{std::move(*words)};}
-        return std::nullopt;
+        // Share complete C2S shape qualification with actual TW ingress.
+        // Keep the existing CN value projection and its one owning vector.
+        const auto size=request_size(record);
+        if(!size || *size!=record.size())return std::nullopt;
+        if(record[0]==0x81)return Request{Mask{record[1]}};
+        auto words=read_words(record,0x83);
+        if(!words)return std::nullopt;
+        return Request{std::move(*words)};
     }
     //Qualified family shapes only. Actual reply selection/order/all fields,
     //client capacity, rule/save/replay and revision belong to the real issuer.

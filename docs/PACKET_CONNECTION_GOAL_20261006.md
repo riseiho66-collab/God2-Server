@@ -5324,3 +5324,27 @@ replay/save/fullreplies/defaultMain/adoption OPEN. Whole denominator/%null,
 goalactive; PHASE1 static/no build/tests/runtime/native/API/VM/codec/gameDBSQL/
 migration/activation/deploy. Shared453/TWTraditional/client-primary/maxHPdiv10/
 CNcustom126/150/common64/all frozen/save/account requirements retained.
+
+
+## Round375 - actual TW/CN shared choice grammar (2026-10-14)
+
+CN CnPrebornChoices request_size delegates existing common parser;read_request
+requires common exactwhole then raw81/old read_words83. Actual CN installed
+split/receive/dispatch and TW Session use shared structural qualifier. Preserve
+CN value/S2C helpers/types and common TW parser bodies;one vector per CNcall,
+old separate split/receive calls. Two existing headers/four literals/two whole
+inverses==oldrefs/Git4f426cb;independent analytical actualroute reviewPASS.
+Source/16 keeps37paths/updatescommentpin/adds3CNroutepins=40,old36exact;
+canonical457,newC++/PYfiles0/newCUSTOM0. Native571codeB193sites=5whole508/175+
+3partial63/18,+20tableB. Genuine WORLD A1logical2/body1 low4ordinal append;
+A3logical3/body2ignored,onlyA780=1;actualstage removal255B has no lower/index
+guard,compacts pointers/count/pages,AAAC/lastptr untouched. Capacity/role/bank/
+lifetime/opaqueUI/IDIVpremises;no echo/ACK/grant/learning/bookconsume inferred.
+Frontier26 independentformats21/unclassified105;parser77=50partial+11control+
+16unconnected/pending11,64.9% parseronly;TW156/252/3/40/36 andCN156/280phase/
+253/35/93/71 unchanged. Newnativeopcode/formula/phase/ownerchain/fullroute0.
+Actual sharedoperation/window/subject/rules/rights/replay/save/fullreply/Main/
+adoption and CNcurrent observer retirement/cancellation coupling stillOPEN.
+Whole denominator/%null;goalactive. PHASE1 static/no build/tests/runtime/native/
+API/VM/codec/gameDBSQL/migration/activation/deploy. All common453/TWTraditional/
+clientprimary/maxHPdiv10/CNcustom126/150/numeric/frozen/account/save preserved.

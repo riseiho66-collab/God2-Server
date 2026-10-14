@@ -66,3 +66,11 @@ owner poison CURRENT MAXIMUM HP/10 and CN custom126/150 requirements retained.
 PHASE1 static only: no build/tests/runtime/native/API/VM/product codec/gameDBSQL/
 import/migration/activation/deployment. Saves/accounts/resources/fonts/text
 conversion/frozen features and common C++/Lua ownership remain protected.
+
+
+Round375 connects actual TW/CN81/83 common structural qualifier while keeping
+regional value/output/authority adapters. Native A1 supplies lowfour ordinal
+stage conditionally; A3 body is unused and only sets A780. Pointer removal
+compacts/counts but leaves AAAC/lastpointer, with bounds/IDIV premises. These
+facts do not grant learning or save success. See tw-cn-preborn-grammar-source-
+20261014.md / source16 / frontier26. Actual operation/save still OPEN.
