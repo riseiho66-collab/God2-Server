@@ -641,3 +641,20 @@ issuedlineage/unlock/recovery/fullreturn OPEN. FiveCPP/V26all76=71exact5updated/
 canonical528/no newprojectPY/Lua/native/formula/opcode/defaultactivation/fullroute.
 Parser77=50/11/16,pending12/frontier26 21/105/whole%null unchanged. FullTW100
 ACTIVE/commonCN/web64/saves/frozen/PHASE1 sourceonly preserved.
+
+Round390 actualWritten -> privateFinalisation+originalRuntimeRoomReleasePlan
+beforecompleteConsumed/savedtail/finalstored thenactualtwoquietstrandReady.
+ExactsameDB existingTx finalstored/pure fences, canonicalCUSTOM0133returned
+history/exact2lockdeletes, stickyCOMMIT prefix/typedreceipt; postcommit uses
+releasedhistory rather than oldFinishedlockguards. Exactsuccessfulmodeladoption/
+weakguardretirement +privateSessionoldcaps/slotsdetach ->realownstrandresume/
+historicalpairedreadstart callback; original5s preserved/no renewal/no nativeACK.
+Successdrops harmless/formerobserverepochs/newcohortsuntouched; postdetachfail
+exactreturningpair only/no rollback/relock/resend/regrant. PureoldruntimeRoom/
+inputindexretire beforequeuedgameaction; exactoldbindingretire afterresumecuts.
+Released recovery canonicalhistory/zero oldlocks/no futureowner equality or
+mutable restore/claim. Explicitopt-in schemaextension/no install-on-read.
+NineexistingCPP/V27all80=old76(71exact5updated)+4concretesources/canonical534;
+no newprojectPY/Lua/native/formula/opcode/defaultactivation/fullroute. Parser77=
+50/11/16,pending12/frontier26 21/105/whole%null. Main/resources/issuedlineage/
+fullactions/nativeadoption/wholeinventoryOPEN, fullTW100first ACTIVE/PHASE1only.

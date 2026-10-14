@@ -56,6 +56,8 @@ public:
         if(rooms_.contains(ticket.id()))throw DatabaseError("PK room already active in this executor");
         auto claim=repository_.claim_runtime(ticket);
         const auto retained=repository_.recover_retained(ticket);
+        if(retained.released_finished())
+            throw DatabaseError("PK released Finished history cannot restore a mutable room");
         auto battle=Battle::restore(retained.checkpoint());
         Rooms staged;
         staged.emplace(ticket.id(),Room{retained.ticket(),std::move(battle),std::move(claim)});
@@ -280,7 +282,40 @@ private:
         repository_.require_terminal_context(current.ticket,actual,viewer,payload,actually_written);
         return actual.snapshot.revision;
     }
-    struct Room {Ticket ticket;Battle battle;Repository::RuntimeClaim claim;};
+    // CUSTOM-0133 only the actual Publication whole-written/finalisation path
+    // may use these private seams. RoomState supplies its own live claim and
+    // Battle; source observers never construct them from native/scalar input.
+    Repository::FinishedReturnReleasePlan prepare_finished_return_release(std::uint64_t room,
+            const Replies& actually_written,const std::array<std::array<std::uint8_t,4>,2>& payloads){
+        const auto& current=find(room);
+        return repository_.prepare_finished_return_release(current.ticket,current.claim,
+            current.battle.checkpoint(),actually_written,payloads);
+    }
+    Repository::FinishedReturnReleaseReceipt commit_finished_return_release(std::uint64_t room,
+            const Repository::FinishedReturnReleasePlan& plan,
+            const std::function<void(sqlite3*)>& final_stored_fence){
+        auto& current=find(room);
+        auto receipt=repository_.commit_finished_return_release(current.ticket,current.claim,
+            current.battle.checkpoint(),plan,final_stored_fence);
+        current.finished_return.emplace(receipt); // Exact existing Room stamp; shared pointer copy only.
+        return receipt;
+    }
+    void require_finished_return_release(std::uint64_t room,const Repository::FinishedReturnReleaseReceipt& receipt){
+        const auto& current=find(room);
+        repository_.require_finished_return_release(current.ticket,current.claim,current.battle.checkpoint(),receipt);
+    }
+    bool retire_finished_return_release(std::uint64_t room,const Repository::FinishedReturnReleaseReceipt& receipt)noexcept{
+        const auto at=rooms_.find(room);
+        if(at==rooms_.end()||!at->second.finished_return||*at->second.finished_return!=receipt||
+           !repository_.finished_return_release_runtime_current(at->second.ticket,at->second.claim,
+                at->second.battle.inspect(),receipt))return false;
+        // This exact Room's Finished Battle has no later legal mutation: every
+        // old active/Finished permit rejects the release ledger. Its complete
+        // checkpoint/RNG was bound before COMMIT; do not re-encode or run SQL.
+        rooms_.erase(at);return true;
+    }
+    struct Room {Ticket ticket;Battle battle;Repository::RuntimeClaim claim;
+        std::optional<Repository::FinishedReturnReleaseReceipt> finished_return{};};
     using Rooms=std::map<std::uint64_t,Room>;
     Repository& repository_;
     Rooms rooms_;

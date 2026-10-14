@@ -213,6 +213,15 @@ CREATE TABLE IF NOT EXISTS owned_pk_room_rounds (
  room INTEGER PRIMARY KEY REFERENCES owned_pk_rooms(id),
  revision INTEGER NOT NULL CHECK(revision>0), document TEXT NOT NULL);
 )SQL";
+constexpr const char* finished_return_schema=R"SQL(
+CREATE TABLE IF NOT EXISTS owned_pk_finished_return_feature (
+ singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+ version INTEGER NOT NULL CHECK(version=1), design_id TEXT NOT NULL CHECK(design_id='CUSTOM-0133'));
+CREATE TABLE IF NOT EXISTS owned_pk_finished_returns (
+ room INTEGER PRIMARY KEY REFERENCES owned_pk_rooms(id),
+ document TEXT NOT NULL CHECK(length(document)>0),
+ design_id TEXT NOT NULL CHECK(design_id='CUSTOM-0133'));
+)SQL";
 constexpr const char* terminal_resource_schema=R"SQL(
 CREATE TABLE IF NOT EXISTS owned_pk_terminal_resource_feature (
  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
@@ -334,6 +343,22 @@ void SqliteOwnedPkRoomRepository::install_terminal_resource_schema(sqlite3* db){
     sqlite_detail::execute(db,terminal_resource_schema);
     sqlite_detail::execute(db,"INSERT OR IGNORE INTO main.owned_pk_terminal_resource_feature(singleton,version,design_id) VALUES(1,1,'CUSTOM-0127')");
     require_terminal_resource_schema(db);tx.commit();
+}
+void SqliteOwnedPkRoomRepository::require_finished_return_schema(sqlite3* db){
+    require_terminal_resource_schema(db);
+    Statement shadows(db,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('owned_pk_finished_return_feature','owned_pk_finished_returns') OR tbl_name COLLATE NOCASE IN ('owned_pk_finished_return_feature','owned_pk_finished_returns')");
+    if(shadows.row())throw DatabaseError("PK finished return TEMP namespace rejected");
+    for(const auto* name:{"owned_pk_finished_return_feature","owned_pk_finished_returns"})
+        require_ddl(db,finished_return_schema,name);
+    Statement q(db,"SELECT version,design_id FROM main.owned_pk_finished_return_feature WHERE singleton=1");
+    if(!q.row()||q.integer(0)!=1||q.text(1)!="CUSTOM-0133"||q.row())
+        throw DatabaseError("PK finished return feature version mismatch");
+}
+void SqliteOwnedPkRoomRepository::install_finished_return_schema(sqlite3* db){
+    Transaction tx(db);require_terminal_resource_schema(db);
+    sqlite_detail::execute(db,finished_return_schema);
+    sqlite_detail::execute(db,"INSERT OR IGNORE INTO main.owned_pk_finished_return_feature(singleton,version,design_id) VALUES(1,1,'CUSTOM-0133')");
+    require_finished_return_schema(db);tx.commit();
 }
 void SqliteOwnedPkRoomRepository::validate(const Input& in){
     const auto& a=in.pair.challenger;const auto& b=in.pair.recipient;
@@ -653,7 +678,7 @@ std::optional<std::string> SqliteOwnedPkRoomRepository::terminal_resource_ledger
     return document;
 }
 SqliteOwnedPkRoomRepository::TerminalResources
-SqliteOwnedPkRoomRepository::terminal_resources_in_scope(const Ticket& ticket,const BattleCheckpoint* actual){
+SqliteOwnedPkRoomRepository::terminal_resources_in_scope(const Ticket& ticket,const BattleCheckpoint* actual,bool released_history){
     // No require_ticket/read_round here: the Finished owner guard calls this
     // before deciding whether current rows must equal original or saved ones.
     if(sqlite3_get_autocommit(db_))throw DatabaseError("PK terminal resources require an existing snapshot");
@@ -691,17 +716,22 @@ SqliteOwnedPkRoomRepository::terminal_resources_in_scope(const Ticket& ticket,co
         throw DatabaseError("PK terminal resource round/private input mismatch");
     const auto terminal=OwnedTaiwanPkTerminalSource::prepare(ticket,checkpoint.snapshot,phase);
     Statement count(db_,"SELECT count(*) FROM main.owned_pk_room_members WHERE room=?");count.bind_id(1,ticket.id());
-    if(!count.row()||count.integer(0)!=2||count.row())throw DatabaseError("PK terminal resources require both member locks");
+    if(!count.row()||count.integer(0)!=(released_history?0:2)||count.row())
+        throw DatabaseError("PK terminal resources have inconsistent retained/released member locks");
+    if(released_history&&!finished_return_ledger(ticket))
+        throw DatabaseError("PK released terminal history lacks its separate release ledger");
     Json members=Json::array(),before=Json::array(),after=Json::array();
     TerminalResources result{input.resources,{},{},true};
     for(std::size_t i=0;i<2;++i){
         const auto& p=i==0?input.pair.challenger:input.pair.recipient;
-        Statement member(db_,"SELECT account,character,session,world_generation,battle_generation FROM main.owned_pk_room_members WHERE room=? AND viewer=?");
-        member.bind_id(1,ticket.id());member.bind_id(2,i);
-        if(!member.row()||member.number<std::uint64_t>(0)!=p.account||member.number<std::uint64_t>(1)!=p.character||
-           member.number<std::uint64_t>(2)!=p.session||member.number<std::uint64_t>(3)!=p.world_generation||
-           member.number<std::uint64_t>(4)!=p.battle_generation||member.row())
-            throw DatabaseError("PK terminal resource member lock changed");
+        if(!released_history){
+            Statement member(db_,"SELECT account,character,session,world_generation,battle_generation FROM main.owned_pk_room_members WHERE room=? AND viewer=?");
+            member.bind_id(1,ticket.id());member.bind_id(2,i);
+            if(!member.row()||member.number<std::uint64_t>(0)!=p.account||member.number<std::uint64_t>(1)!=p.character||
+               member.number<std::uint64_t>(2)!=p.session||member.number<std::uint64_t>(3)!=p.world_generation||
+               member.number<std::uint64_t>(4)!=p.battle_generation||member.row())
+                throw DatabaseError("PK terminal resource member lock changed");
+        }
         members.push_back(Json::array({i,p.account,p.character,p.session,p.world_generation,p.battle_generation}));
         const auto& actor=*checkpoint.snapshot.actors[14*i];const auto& original=input.resources[i];
         if(!original.revision||original.revision>=static_cast<std::uint64_t>(INT64_MAX)||
@@ -806,16 +836,196 @@ void SqliteOwnedPkRoomRepository::require_terminal_context(const Ticket& ticket,
     own.bind_id(1,ticket.id());own.bind_id(2,actual.snapshot.revision);own.bind_id(3,viewer);
     if(!own.row()||own.integer(0)!=1||own.row())
         throw DatabaseError("PK terminal context requires its own submitted final row");
+    require_terminal_identity(ticket,viewer,payload);
+    // Native4157F0/531C10: locale describes GetSystemDefaultLangID, not
+    // win/loss, wire profile, CP936/950 or the retained display config_flag.
+    // No both_submitted requirement, new ledger/schema or SQL mutation.
+    scope.commit();
+}
+struct SqliteOwnedPkRoomRepository::FinishedReturnReleasePlan::Data {
+    Data(Ticket retained,std::weak_ptr<const RuntimeOwner> runtime,sqlite3* db,BattleCheckpoint checkpoint,
+            Replies outputs,TerminalInputs inputs,std::string ledger)
+        :ticket(std::move(retained)),claim(std::move(runtime)),connection(db),actual(std::move(checkpoint)),
+         final_writes(std::move(outputs)),payloads(inputs),document(std::move(ledger)),thread(std::this_thread::get_id()){}
+    const Ticket ticket;
+    const std::weak_ptr<const RuntimeOwner> claim;
+    sqlite3* const connection;
+    const BattleCheckpoint actual;
+    const Replies final_writes;
+    const TerminalInputs payloads;
+    const std::string document;
+    const std::thread::id thread;
+    bool claimed=false,committed=false; // Recorded game thread only; sticky commit survives later failure.
+};
+bool SqliteOwnedPkRoomRepository::FinishedReturnReleasePlan::durably_committed()const noexcept{
+    return data_&&data_->thread==std::this_thread::get_id()&&data_->committed;
+}
+void SqliteOwnedPkRoomRepository::require_runtime_claim(const Ticket& ticket,const RuntimeClaim& claim)const{
+    if(!issuer_||ticket.issuer_!=issuer_||!claim.owner_)
+        throw DatabaseError("PK finished return lacks its original runtime owner");
+    const std::lock_guard lock(issuer_->mutex);
+    const auto at=issuer_->claims.find(ticket.id());
+    if(at==issuer_->claims.end()||at->second.lock()!=claim.owner_)
+        throw DatabaseError("PK finished return runtime claim retired");
+}
+bool SqliteOwnedPkRoomRepository::finished_return_release_runtime_current(const Ticket& ticket,
+        const RuntimeClaim& claim,const BattleSnapshot& snapshot,const FinishedReturnReleaseReceipt& receipt)const noexcept{
+    try{
+        const auto& data=receipt.data_;
+        if(!data||data->thread!=std::this_thread::get_id()||!data->committed||data->connection!=db_||
+           !issuer_||ticket.issuer_!=issuer_||!data->ticket.same_incarnation(ticket)||
+           !claim.owner_||data->claim.lock()!=claim.owner_||data->actual.snapshot!=snapshot||
+           snapshot.state!=BattleState::Finished)return false;
+        const std::lock_guard lock(issuer_->mutex);
+        const auto at=issuer_->claims.find(ticket.id());
+        return at!=issuer_->claims.end()&&at->second.lock()==claim.owner_;
+    }catch(...){return false;}
+}
+void SqliteOwnedPkRoomRepository::require_finished_return_plan(const Ticket& ticket,const RuntimeClaim& claim,
+        const BattleCheckpoint& actual,const FinishedReturnReleasePlan& plan)const{
+    const auto& data=plan.data_;
+    if(!data||data->thread!=std::this_thread::get_id()||data->connection!=db_||
+       !data->ticket.same_incarnation(ticket)||data->actual!=actual||
+       data->claim.lock()!=claim.owner_||actual.snapshot.state!=BattleState::Finished)
+        throw DatabaseError("PK finished return plan differs from its actual runtime Room");
+    require_runtime_claim(ticket,claim);
+}
+void SqliteOwnedPkRoomRepository::require_terminal_identity(const Ticket& ticket,std::uint8_t viewer,
+        const std::array<std::uint8_t,4>& payload){
+    if(viewer>1||!ticket.input().entry.owned_appearances())
+        throw DatabaseError("PK terminal identity lacks original viewer source");
     const auto& original=(*ticket.input().entry.owned_appearances())[viewer].material();
     const auto entry=RecoveredWorldEntryView::read(original.entry_frame);
     const auto identity=std::uint16_t{payload[0]}|(std::uint16_t{payload[1]}<<8);
     const auto locale=std::uint16_t{payload[2]}|(std::uint16_t{payload[3]}<<8);
     if(!entry||entry->actor_handle!=original.lease.actor_handle||identity!=entry->actor_handle||locale>1)
         throw DatabaseError("PK terminal context native identity/locale mismatch");
-    // Native4157F0/531C10: locale describes GetSystemDefaultLangID, not
-    // win/loss, wire profile, CP936/950 or the retained display config_flag.
-    // No both_submitted requirement, new ledger/schema or SQL mutation.
-    scope.commit();
+}
+std::optional<std::string> SqliteOwnedPkRoomRepository::finished_return_ledger(const Ticket& ticket){
+    // Optional extension absence preserves historical repositories. Partial,
+    // redirected or trigger-altered namespaces never grant a release bypass.
+    Statement shadows(db_,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('owned_pk_finished_return_feature','owned_pk_finished_returns') OR tbl_name COLLATE NOCASE IN ('owned_pk_finished_return_feature','owned_pk_finished_returns')");
+    if(shadows.row())throw DatabaseError("PK finished return TEMP namespace rejected");
+    Statement tables(db_,"SELECT count(*) FROM main.sqlite_master WHERE name COLLATE NOCASE IN ('owned_pk_finished_return_feature','owned_pk_finished_returns')");
+    if(!tables.row())throw DatabaseError("PK finished return namespace unreadable");
+    if(tables.integer(0)==0)return {};
+    require_finished_return_schema(db_);
+    Statement row(db_,"SELECT document,design_id FROM main.owned_pk_finished_returns WHERE room=?");
+    row.bind_id(1,ticket.id());if(!row.row())return {};
+    if(row.text(1)!="CUSTOM-0133")throw DatabaseError("PK finished return provenance changed");
+    auto document=row.text(0);if(row.row())throw DatabaseError("PK finished return ledger duplicate");
+    return document;
+}
+std::string SqliteOwnedPkRoomRepository::finished_return_document(const Ticket& ticket,
+        const TerminalResources& material,const TerminalInputs& payloads){
+    if(sqlite3_get_autocommit(db_)||!material.both_submitted)
+        throw DatabaseError("PK finished return document requires exact submitted history snapshot");
+    for(std::uint8_t i=0;i<2;++i)require_terminal_identity(ticket,i,payloads[i]);
+    Json history=Json::array();
+    Statement rows(db_,"SELECT revision,viewer,logical,submitted FROM main.owned_pk_room_outbox WHERE room=? ORDER BY revision,viewer");
+    rows.bind_id(1,ticket.id());std::uint64_t prior=0,current=0;std::uint8_t expected_viewer=0;
+    const auto terminal=Json::parse(material.document);
+    const auto checkpoint=BattleCheckpointCodec::decode(terminal.at("checkpoint").get<std::string>());
+    while(rows.row()){
+        const auto revision=rows.number<std::uint64_t>(0);const auto viewer=rows.number<std::uint8_t>(1);
+        const auto bytes=rows.blob(2,1,RecoveredWorldFrame::max_logical_size);
+        const auto submitted=rows.integer(3);
+        if(!revision||revision>checkpoint.snapshot.revision||viewer!=expected_viewer||submitted!=1)
+            throw DatabaseError("PK finished return history has pending or mispaired outboxes");
+        if(viewer==0){
+            if((!prior&&revision!=1)||(prior&&(revision<=prior||revision-prior>2)))
+                throw DatabaseError("PK finished return outbox revision history changed");
+            current=revision;
+        }else if(revision!=current)throw DatabaseError("PK finished return outbox pair revision changed");
+        std::vector<std::uint8_t> logical(bytes.begin(),bytes.end());
+        if(revision==1&&logical!=ticket.input().entry.records()[viewer])
+            throw DatabaseError("PK finished return initial outbox differs from original entry");
+        history.push_back(Json::array({revision,viewer,logical,submitted}));
+        expected_viewer=static_cast<std::uint8_t>(1-viewer);if(viewer==1)prior=revision;
+    }
+    if(history.empty()||expected_viewer||prior!=checkpoint.snapshot.revision)
+        throw DatabaseError("PK finished return history lacks exact final pair");
+    return Json{{"version",1},{"design_id","CUSTOM-0133"},{"room",ticket.id()},
+        {"terminal_resources",material.document},{"terminal_inputs",payloads},{"outbox_history",history},
+        {"scope","exact-two-owner-lock-release;history-retained;local-SocketWritten;not-native-ACK-or-input-grant"}}.dump();
+}
+std::optional<std::string> SqliteOwnedPkRoomRepository::released_finished_in_scope(const Ticket& ticket){
+    if(sqlite3_get_autocommit(db_))throw DatabaseError("PK released history requires an existing snapshot");
+    const auto ledger=finished_return_ledger(ticket);if(!ledger)return {};
+    const auto document=Json::parse(*ledger);
+    const auto payloads=document.at("terminal_inputs").get<TerminalInputs>();
+    const auto material=terminal_resources_in_scope(ticket,nullptr,true);
+    const auto saved=terminal_resource_ledger(ticket);
+    if(!saved||*saved!=material.document||!material.both_submitted||
+       *ledger!=finished_return_document(ticket,material,payloads))
+        throw DatabaseError("PK released Finished history differs from its exact canonical ledger");
+    // Saved player rows may legitimately advance in WORLD after release.
+    // Historical identity/source/checkpoint/outboxes stay exact; no live grant.
+    return ledger;
+}
+SqliteOwnedPkRoomRepository::FinishedReturnReleasePlan SqliteOwnedPkRoomRepository::prepare_finished_return_release(
+        const Ticket& ticket,const RuntimeClaim& claim,const BattleCheckpoint& actual,
+        const Replies& actually_written,const TerminalInputs& payloads){
+    require_runtime_claim(ticket,claim);
+    if(actual.snapshot.state!=BattleState::Finished)
+        throw DatabaseError("PK finished return preparation lacks actual Finished Battle");
+    RecoveryRead scope(db_);require_finished_return_schema(db_);require_ticket(ticket,"finished");
+    const auto material=terminal_resources_in_scope(ticket,&actual);
+    const auto saved=terminal_resource_ledger(ticket);
+    if(!saved||*saved!=material.document||material.outputs!=actually_written||!material.both_submitted)
+        throw DatabaseError("PK finished return preparation lacks original saved final fullwrite pair");
+    auto plan=FinishedReturnReleasePlan(std::make_shared<FinishedReturnReleasePlan::Data>(
+        ticket,claim.owner_,db_,actual,actually_written,payloads,finished_return_document(ticket,material,payloads)));
+    require_finished_return_plan(ticket,claim,actual,plan);scope.commit();
+    require_finished_return_plan(ticket,claim,actual,plan);
+    return plan; // All release-document/receipt ownership allocated before outer scene observers.
+}
+SqliteOwnedPkRoomRepository::FinishedReturnReleaseReceipt SqliteOwnedPkRoomRepository::commit_finished_return_release(
+        const Ticket& ticket,const RuntimeClaim& claim,const BattleCheckpoint& actual,
+        const FinishedReturnReleasePlan& plan,const std::function<void(sqlite3*)>& final_stored_fence){
+    require_finished_return_plan(ticket,claim,actual,plan);
+    const auto data=plan.data_;
+    if(data->claimed||data->committed||!final_stored_fence)
+        throw DatabaseError("PK finished return release already consumed or lacks stored observer");
+    data->claimed=true; // One-use attempt; a failed transaction never renews this plan.
+    Transaction tx(db_);require_finished_return_schema(db_);require_ticket(ticket,"finished");
+    const auto material=terminal_resources_in_scope(ticket,&actual);
+    const auto saved=terminal_resource_ledger(ticket);
+    if(!saved||*saved!=material.document||material.outputs!=data->final_writes||!material.both_submitted||
+       finished_return_document(ticket,material,data->payloads)!=data->document)
+        throw DatabaseError("PK finished return durable readset changed before release");
+    require_finished_return_plan(ticket,claim,actual,plan);final_stored_fence(db_);
+    require_finished_return_plan(ticket,claim,actual,plan);
+    {
+        Statement insert(db_,"INSERT INTO main.owned_pk_finished_returns(room,document,design_id) VALUES(?,?,'CUSTOM-0133')");
+        insert.bind_id(1,ticket.id());insert.bind(2,data->document);insert.done();changed(db_);
+    }
+    for(std::uint8_t i=0;i<2;++i){
+        const auto& p=i==0?ticket.input().pair.challenger:ticket.input().pair.recipient;
+        Statement release(db_,"DELETE FROM main.owned_pk_room_members WHERE room=? AND viewer=? AND account=? AND character=? AND session=? AND world_generation=? AND battle_generation=?");
+        release.bind_id(1,ticket.id());release.bind_id(2,i);release.bind_id(3,p.account);release.bind_id(4,p.character);
+        release.bind_id(5,p.session);release.bind_id(6,p.world_generation);release.bind_id(7,p.battle_generation);
+        release.done();changed(db_); // Exactly this original two-owner lock pair only.
+    }
+    if(released_finished_in_scope(ticket)!=std::optional{data->document})
+        throw DatabaseError("PK finished return staged release/history changed");
+    require_finished_return_plan(ticket,claim,actual,plan);final_stored_fence(db_);
+    require_finished_return_plan(ticket,claim,actual,plan);
+    tx.commit();
+    data->committed=true; // MUST precede any postCOMMIT observer/claim failure.
+    require_finished_return_plan(ticket,claim,actual,plan);
+    return FinishedReturnReleaseReceipt(data); // Shared pointer copy only; no fallible publication allocation.
+}
+void SqliteOwnedPkRoomRepository::require_finished_return_release(const Ticket& ticket,const RuntimeClaim& claim,
+        const BattleCheckpoint& actual,const FinishedReturnReleaseReceipt& receipt){
+    const auto plan=FinishedReturnReleasePlan(receipt.data_);
+    require_finished_return_plan(ticket,claim,actual,plan);
+    if(!receipt.data_->committed)throw DatabaseError("PK finished return lacks actual COMMIT receipt");
+    RecoveryRead scope(db_);
+    if(released_finished_in_scope(ticket)!=std::optional{receipt.data_->document})
+        throw DatabaseError("PK finished return postCOMMIT retained history changed");
+    require_finished_return_plan(ticket,claim,actual,plan);scope.commit();
+    require_finished_return_plan(ticket,claim,actual,plan);
 }
 bool SqliteOwnedPkRoomRepository::occupied(std::uint64_t account,std::uint64_t character){
     // Owner lookup applies even if the independent feature has no row.
@@ -865,6 +1075,8 @@ SqliteOwnedPkRoomRepository::Ticket SqliteOwnedPkRoomRepository::prepare(Input i
     tx.commit();return ticket;
 }
 void SqliteOwnedPkRoomRepository::require_ticket(const Ticket& ticket,const char* state){
+    // Released history is never an old active/Finished lock or outbox permit.
+    if(finished_return_ledger(ticket))throw DatabaseError("PK Finished room was durably returned");
     // RESERVED alone rechecks all admitted source SQL tuples. Active Battle
     // retains immutable selected stats; no old world/aux current is required.
     if(std::string_view(state)=="reserved"&&!owned_combat_stored_current(ticket.input(),db_))
@@ -949,6 +1161,12 @@ std::string SqliteOwnedPkRoomRepository::require_active_owned_profile_in_scope(
 }
 SqliteOwnedPkRoomRepository::RuntimeClaim SqliteOwnedPkRoomRepository::claim_runtime(const Ticket& ticket){
     if(!issuer_||ticket.issuer_!=issuer_)throw DatabaseError("PK runtime claim requires its original repository issuer");
+    {
+        RecoveryRead scope(db_);
+        if(released_finished_in_scope(ticket))
+            throw DatabaseError("PK released Finished history cannot claim a mutable runtime owner");
+        scope.commit();
+    }
     // Registry exclusion alone does not make this repository/SQLite/RoomState
     // thread-safe: their actual single-game-executor contract still applies.
     // Remove only expired entries; a live claim is never displaced or shared.
@@ -971,9 +1189,11 @@ SqliteOwnedPkRoomRepository::RetainedRecovery SqliteOwnedPkRoomRepository::recov
     const auto state=room.text(0),checkpoint_text=room.text(1);
     const auto revision=room.number<std::uint64_t>(2);
     if(state!="active"&&state!="finished")throw DatabaseError("PK retained recovery requires active or finished state");
-    require_ticket(ticket,state.c_str());
+    auto finished_return=state=="finished"?released_finished_in_scope(ticket):std::nullopt;
+    if(!finished_return)require_ticket(ticket,state.c_str());
     Statement count(db_,"SELECT COUNT(*) FROM owned_pk_room_members WHERE room=?");count.bind_id(1,ticket.id());
-    if(!count.row()||count.integer(0)!=2)throw DatabaseError("PK recovery requires both exact owner locks");
+    if(!count.row()||count.integer(0)!=(finished_return?0:2)||count.row())
+        throw DatabaseError("PK recovery has inconsistent retained/released owner locks");
     auto checkpoint=BattleCheckpointCodec::decode(checkpoint_text);
     if(checkpoint.snapshot.id!=ticket.id()||checkpoint.snapshot.revision!=revision)
         throw DatabaseError("PK retained checkpoint identity/revision mismatch");
@@ -982,7 +1202,7 @@ SqliteOwnedPkRoomRepository::RetainedRecovery SqliteOwnedPkRoomRepository::recov
     checkpoint_owned_pair(ticket.input(),initial_checkpoint,checkpoint);
     if(revision==1&&checkpoint!=initial_checkpoint)
         throw DatabaseError("PK retained revision1 differs from original checkpoint/RNG");
-    auto phase=read_round(ticket); // Same read snapshot; headers, bounds and durable state.
+    auto phase=read_round(ticket,finished_return.has_value()); // Same history snapshot; never a released live grant.
     const auto phase_document=Json::parse(phase.document());
     std::vector<RetainedOutbox> outboxes;
     std::array<bool,2> latest_submitted{};
@@ -1026,14 +1246,15 @@ SqliteOwnedPkRoomRepository::RetainedRecovery SqliteOwnedPkRoomRepository::recov
             throw DatabaseError("PK retained round control precedes own outbox submission");
     }
     auto terminal_resources=state=="finished"?terminal_resource_ledger(ticket):std::nullopt;
-    RetainedRecovery result(ticket,std::move(checkpoint),std::move(phase),std::move(outboxes),std::move(terminal_resources));
+    RetainedRecovery result(ticket,std::move(checkpoint),std::move(phase),std::move(outboxes),std::move(terminal_resources),std::move(finished_return));
     scope.commit();return result;
 }
 bool SqliteOwnedPkRoomRepository::retained_recovery_current(const RetainedRecovery& snapshot){
     try{
         const auto now=recover_retained(snapshot.ticket_);
         if(now.checkpoint_!=snapshot.checkpoint_||now.round_.document()!=snapshot.round_.document()||
-           now.outboxes_.size()!=snapshot.outboxes_.size()||now.terminal_resources_!=snapshot.terminal_resources_)return false;
+           now.outboxes_.size()!=snapshot.outboxes_.size()||now.terminal_resources_!=snapshot.terminal_resources_||
+           now.finished_return_!=snapshot.finished_return_)return false;
         for(std::size_t i=0;i<now.outboxes_.size();++i){
             const auto& a=now.outboxes_[i];const auto& b=snapshot.outboxes_[i];
             if(a.submitted!=b.submitted||a.delivery.room!=b.delivery.room||a.delivery.revision!=b.delivery.revision||
@@ -1179,12 +1400,15 @@ NativeSkillRecord SqliteOwnedPkRoomRepository::scalar_definition(std::uint16_t k
 std::string SqliteOwnedPkRoomRepository::scalar_definition_document(std::uint16_t key){
     return definition_document(scalar_definition(key));
 }
-OwnedPkRound SqliteOwnedPkRoomRepository::read_round(const Ticket& ticket){
+OwnedPkRound SqliteOwnedPkRoomRepository::read_round(const Ticket& ticket,bool released_history){
     Statement q(db_,"SELECT r.revision,r.document,b.revision,b.checkpoint,b.state FROM owned_pk_room_rounds r JOIN owned_pk_rooms b ON b.id=r.room WHERE r.room=?");
     q.bind_id(1,ticket.id());if(!q.row())throw DatabaseError("PK persistent round missing");
     const auto room_state=q.text(4);
     if(room_state!="active"&&room_state!="finished")throw DatabaseError("PK round room is not active or retained-terminal");
-    require_ticket(ticket,room_state.c_str());
+    if(released_history){
+        if(room_state!="finished"||!released_finished_in_scope(ticket))
+            throw DatabaseError("PK released round has no exact retained history");
+    }else require_ticket(ticket,room_state.c_str());
     const auto result=OwnedPkRound::from_document(q.text(1));
     const auto checkpoint=BattleCheckpointCodec::decode(q.text(3));
     if(result.revision()!=q.number<std::uint64_t>(0)||result.battle_revision()!=q.number<std::uint64_t>(2)||

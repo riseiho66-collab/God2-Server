@@ -98,6 +98,8 @@ struct SharedActorVisibility::TaiwanPkReturnConsumption::State {
     const Session::NativePkReturnOutputHold output_hold;
     const Session::NativePkReturnConsumption transport;
     std::optional<Session::NativePkReturnPublication> publication; // Game-owned Custody only.
+    std::optional<Session::NativePkReturnFinalisation> finalisation;
+    bool finished=false; // Exact successful model adoption, never a guessed ACK.
     const std::map<Key,Entry> expected; // Survives node transfer; allocated BEFORE final observers.
     std::map<std::uint64_t,std::weak_ptr<State>> registrations;
     std::weak_ptr<State> identity;
@@ -179,7 +181,7 @@ bool SharedActorVisibility::taiwan_pk_return_models_match(const std::map<Key,Ent
 }
 bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>& state,
         TaiwanReturnCheck check,bool stored_only,
-        const std::shared_ptr<TaiwanPkReturnConsumption::State>& successor)const {
+        const std::shared_ptr<TaiwanPkReturnConsumption::State>& successor,sqlite3* in_scope)const {
     owner();
     if(taiwan_return_reading_){taiwan_return_reentered_=true;if(state)state->poisoned=true;return false;}
     taiwan_return_reading_=true;taiwan_return_reentered_=false;
@@ -188,7 +190,7 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         const std::shared_ptr<TaiwanPkReturnPlan::State>& state;
         ~End(){if(reentered&&state)state->poisoned=true;busy=false;}
     }end{taiwan_return_reading_,taiwan_return_reentered_,state};
-    if((check==TaiwanReturnCheck::Consumed)!=bool(successor)||
+    if((in_scope&&!stored_only)||(check==TaiwanReturnCheck::Consumed)!=bool(successor)||
        (successor&&successor->records.state_->plan!=state))return false;
     const auto valid=[&]{return successor?taiwan_pk_return_consumption_fence(successor,true):taiwan_pk_return_fence(state);};
     try{
@@ -198,10 +200,11 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         if(stored_only){
             if(!valid())return false;
             const auto source=state->scene.role_text_source;
-            if(!source)return valid();
+            if(!source)return !in_scope&&valid();
             return source->owns_presence(presence_)&&state->role_rows.size()==state->actors.size()&&
                 state->endpoint_rows.size()==state->endpoints.size()&&
-                source->stored_current(state->role_rows,state->endpoint_rows)&&valid();
+                (in_scope?source->stored_current_in_scope(in_scope,state->role_rows,state->endpoint_rows):
+                    source->stored_current(state->role_rows,state->endpoint_rows))&&valid();
         }
         if(!valid()||!state->scene.current||!state->scene.current(check)||!valid())return false;
         // Empty scenes still qualify BOTH exact saved participant poses.
@@ -630,7 +633,7 @@ bool SharedActorVisibility::taiwan_pk_return_consumption_current(const TaiwanPkR
 bool SharedActorVisibility::taiwan_pk_return_consumption_fence(
         const std::shared_ptr<TaiwanPkReturnConsumption::State>& state,bool guarded_read)const{
     owner();
-    if(!state||state->poisoned||!state->claimed||!state->published||
+    if(!state||state->finished||state->poisoned||!state->claimed||!state->published||
        state->records.state_->creator.get()!=this||
        (taiwan_return_reading_&&!guarded_read)||taiwan_return_reentered_)return false;
     const auto records=state->records.state_;const auto source=records->plan;
@@ -670,6 +673,60 @@ bool SharedActorVisibility::taiwan_pk_return_consumption_stored_current(const Ta
         taiwan_pk_return_read(state->records.state_->plan,TaiwanReturnCheck::Consumed,true,state)&&
         taiwan_pk_return_consumption_fence(state);
 }
+bool SharedActorVisibility::taiwan_pk_return_consumption_stored_in_scope(
+        const TaiwanPkReturnConsumption& token,sqlite3* connection)const{
+    const auto state=token.state_;
+    return connection&&taiwan_pk_return_consumption_fence(state)&&
+        taiwan_pk_return_read(state->records.state_->plan,TaiwanReturnCheck::Consumed,true,state,connection)&&
+        taiwan_pk_return_consumption_fence(state);
+}
+std::optional<Session::NativePkReturnFinalisation> SharedActorVisibility::prepare_taiwan_pk_return_finalisation(
+        const TaiwanPkReturnConsumption& token,const Session::NativePkReturnPublication& publication,
+        std::weak_ptr<Session::NativePkReturnFinalisationOwner> owner_source){
+    owner();const auto state=token.state_;
+    if(!taiwan_pk_return_publication_matches(token,publication)||state->finalisation||
+       publication.status()!=Session::NativePkReturnPublicationStatus::Written)return {};
+    auto finalisation=Session::prepare_native_pk_return_finalisation(publication,std::move(owner_source));
+    state->finalisation.emplace(finalisation);
+    if(!taiwan_pk_return_finalisation_matches(token,finalisation))return {};
+    return finalisation;
+}
+bool SharedActorVisibility::taiwan_pk_return_finalisation_identity_matches(
+        const TaiwanPkReturnConsumption& token,const Session::NativePkReturnFinalisation& value)const noexcept{
+    const auto state=token.state_;
+    return thread_==std::this_thread::get_id()&&state&&state->records.state_->creator.get()==this&&
+        state->finalisation&&*state->finalisation==value;
+}
+bool SharedActorVisibility::taiwan_pk_return_finalisation_matches(
+        const TaiwanPkReturnConsumption& token,const Session::NativePkReturnFinalisation& value)const{
+    owner();const auto state=token.state_;const std::weak_ptr<const void> identity(state?state->records.state_:nullptr);
+    return taiwan_pk_return_finalisation_identity_matches(token,value)&&
+        taiwan_pk_return_consumption_fence(state)&&state->publication&&
+        Session::native_pk_return_finalisation_matches(value,*state->publication)&&
+        Session::native_pk_return_finalisation_records_matches(value,identity)&&
+        Session::native_pk_return_finalisation_current(value);
+}
+bool SharedActorVisibility::acquire_taiwan_pk_return_finalisation(
+        const TaiwanPkReturnConsumption& token,const Session::NativePkReturnFinalisation& value){
+    owner();return taiwan_pk_return_finalisation_matches(token,value)&&
+        value.status()==Session::NativePkReturnFinalisationStatus::Prepared&&
+        Session::acquire_native_pk_return_finalisation(value);
+}
+bool SharedActorVisibility::finish_taiwan_pk_return_visibility(
+        const TaiwanPkReturnConsumption& token,const Session::NativePkReturnFinalisation& value){
+    owner();const auto state=token.state_;
+    if(value.status()!=Session::NativePkReturnFinalisationStatus::Ready||
+       !taiwan_pk_return_finalisation_matches(token,value))return false;
+    // No observer, allocation, model erase, generation rewind or transport send.
+    // These exact successful models become ordinary owned world visibility.
+    state->finished=true;
+    for(const auto& [id,endpoint]:state->records.state_->plan->endpoints){
+        const auto at=taiwan_pk_return_consumptions_.find(id);
+        if(at!=taiwan_pk_return_consumptions_.end()&&!at->second.owner_before(state->identity)&&
+           !state->identity.owner_before(at->second))taiwan_pk_return_consumptions_.erase(at);
+    }
+    return true;
+}
 std::optional<Session::NativePkReturnPublication> SharedActorVisibility::prepare_taiwan_pk_return_publication(
         const TaiwanPkReturnConsumption& token,std::weak_ptr<Session::NativePkReturnPublicationOwner> source){
     owner();const auto state=token.state_;
@@ -706,7 +763,7 @@ bool SharedActorVisibility::taiwan_pk_return_consumption_matches_transport(const
 }
 void SharedActorVisibility::cancel_taiwan_pk_return_consumption_state(TaiwanPkReturnConsumption::State& state)noexcept{
     // Token custody is game-only; weak registry values never retain it on IO.
-    if(thread_!=std::this_thread::get_id()||state.records.state_->creator.get()!=this)return;
+    if(thread_!=std::this_thread::get_id()||state.records.state_->creator.get()!=this||state.finished)return;
     state.poisoned=true;
     if(!state.claimed)return; // An unused preallocation leaves the original source untouched.
     state.records.state_->plan->poisoned=true;

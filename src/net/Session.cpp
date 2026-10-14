@@ -276,13 +276,15 @@ const Session::NativePkEntryRequest& Session::NativePkEntryHold::request()const 
 std::uint64_t Session::NativePkEntryHold::session_id()const noexcept{return data_->session_id;}
 std::uint64_t Session::NativePkEntryHold::committed_battle_generation()const noexcept{return data_->request.prebattle_generation+1;}
 struct Session::NativePkTerminalBarrier::Data {
-    enum class Phase {Draining,Ready,Consumed,Failed};
+    enum class Phase {Draining,Ready,Consumed,Returned,Failed};
     const std::weak_ptr<Session> session;
     const std::thread::id thread=std::this_thread::get_id();
     const asio::any_io_executor game;
     const NativePkEntryHold entry;
     const NativeBattleSkill final;
     const std::weak_ptr<NativePkTerminalOwner> source;
+    std::mutex finalisation_mutex;
+    std::weak_ptr<NativePkReturnFinalisation::Data> finalisation; // No Term→Final→Term strong cycle.
     std::atomic<Phase> phase{Phase::Draining};
     std::atomic<bool> accepted{false},ready_notified{false},failed_notified{false},armed{false},acknowledged{false},ack_handoff_failed{false};
     Data(std::weak_ptr<Session> s,asio::any_io_executor executor,NativePkEntryHold hold,
@@ -301,7 +303,7 @@ struct Session::NativePkReturnPreparation::Data {
 };
 
 struct Session::NativePkReturnReservation::Data {
-    enum class Phase {Pending,Reserved,Consuming,Consumed,Failed};
+    enum class Phase {Pending,Reserved,Consuming,Consumed,Returned,Failed};
     const std::array<std::weak_ptr<Session>,2> sessions;
     const std::array<NativePkReturnPreparation,2> preparations;
     const asio::any_io_executor game;
@@ -340,7 +342,7 @@ struct Session::NativePkReturnOutputPlan::Data {
          records(std::move(source)),game(std::move(executor)),groups(std::move(ordered)){}
 };
 struct Session::NativePkReturnOutputHold::Data {
-    enum class Phase {Pending,Held,Consuming,Consumed,Failed};
+    enum class Phase {Pending,Held,Consuming,Consumed,Returned,Failed};
     struct Frame {
         const std::shared_ptr<std::vector<std::uint8_t>> bytes;
         std::atomic<std::shared_ptr<Reservation>> budget;
@@ -361,6 +363,7 @@ struct Session::NativePkReturnOutputHold::Data {
     std::mutex transition; // Failure vs one-use consume; never source/close under lock.
     std::atomic<std::shared_ptr<NativePkReturnConsumption::Data>> consumption;
     std::atomic<std::shared_ptr<NativePkReturnPublication::Data>> publication;
+    std::atomic<std::shared_ptr<NativePkReturnFinalisation::Data>> finalisation;
     std::atomic<Phase> phase{Phase::Pending};
     std::atomic<std::size_t> cuts{0};
     std::atomic<bool> installed{false},game_posted{false},failed_notified{false};
@@ -369,7 +372,7 @@ struct Session::NativePkReturnOutputHold::Data {
         :plan(std::move(value)),source(std::move(owner)),recipients(std::move(actual)){}
 };
 struct Session::NativePkReturnConsumption::Data {
-    enum class Phase {Prepared,Consuming,Consumed,Failed};
+    enum class Phase {Prepared,Consuming,Consumed,Returned,Failed};
     const std::weak_ptr<NativePkReturnOutputHold::Data> output;
     const std::shared_ptr<NativePkReturnOutputPlan::Data> plan;
     const std::weak_ptr<NativePkReturnConsumptionOwner> source;
@@ -384,7 +387,7 @@ struct Session::NativePkReturnConsumption::Custody {
     const std::shared_ptr<Data> data;
     explicit Custody(std::shared_ptr<Data> source):data(std::move(source)){}
     ~Custody(){
-        if(data->phase.load()!=Data::Phase::Failed)
+        if(data->phase.load()!=Data::Phase::Failed&&data->phase.load()!=Data::Phase::Returned)
             if(const auto output=data->output.lock())Session::fail_native_pk_return_output(output);
     }
 };
@@ -399,7 +402,7 @@ struct Session::NativePkReturnPublication::Data {
     const std::weak_ptr<NativePkReturnPublicationOwner> source;
     const std::vector<std::shared_ptr<Progress>> progress;
     std::atomic<NativePkReturnPublicationStatus> phase{NativePkReturnPublicationStatus::Prepared};
-    std::atomic<bool> exposed{false},game_posted{false},failed_notified{false};
+    std::atomic<bool> exposed{false},game_posted{false},failed_notified{false},successfully_returned{false};
     std::atomic<std::size_t> cuts{0};
     Data(std::shared_ptr<NativePkReturnOutputHold::Data> held,
         std::shared_ptr<NativePkReturnConsumption::Data> consumed,std::weak_ptr<NativePkReturnPublicationOwner> owner,
@@ -418,8 +421,46 @@ struct Session::NativePkReturnPublication::Custody {
     const std::shared_ptr<Data> data;
     std::shared_ptr<Work> prepared_work; // Transferred to REAL posts/async handlers on release.
     Custody(std::shared_ptr<Data> value,std::shared_ptr<Work> work):data(std::move(value)),prepared_work(std::move(work)){}
-    ~Custody(){if(data->phase.load()!=NativePkReturnPublicationStatus::Failed)
+    ~Custody(){if(data->phase.load()!=NativePkReturnPublicationStatus::Failed&&!data->successfully_returned.load())
         if(const auto output=data->output.lock())Session::fail_native_pk_return_output(output);}
+};
+struct Session::NativePkReturnFinalisation::Data {
+    const std::weak_ptr<NativePkReturnPublication::Data> publication;
+    const std::weak_ptr<NativePkReturnOutputHold::Data> output;
+    const std::array<std::weak_ptr<Session>,2> sessions;
+    const std::array<NativePkReturnPreparation,2> preparations;
+    const std::array<std::shared_ptr<const void>,2> common;
+    const std::array<std::uint64_t,2> epochs;
+    const std::weak_ptr<const void> records;
+    const asio::any_io_executor game;
+    const std::thread::id thread=std::this_thread::get_id();
+    const std::weak_ptr<NativePkReturnFinalisationOwner> source;
+    std::mutex transition;
+    std::weak_ptr<Work> work; // Actual tasks only; never retained by network slots.
+    std::atomic<NativePkReturnFinalisationStatus> phase{NativePkReturnFinalisationStatus::Prepared};
+    std::array<std::atomic<bool>,2> ready{},resume_started{};
+    std::atomic<unsigned> ready_cuts{0},resume_cuts{0};
+    std::atomic<bool> detached{false},returned_notified{false},failed_notified{false};
+    Data(std::shared_ptr<NativePkReturnPublication::Data> pub,std::shared_ptr<NativePkReturnOutputHold::Data> held,
+        std::weak_ptr<NativePkReturnFinalisationOwner> owner,std::array<std::shared_ptr<const void>,2> roots,
+        std::array<std::uint64_t,2> values)
+        :publication(pub),output(held),sessions{held->plan->sessions[0],held->plan->sessions[1]},
+         preparations(held->plan->preparations),common(std::move(roots)),epochs(values),records(held->plan->records),
+         game(held->plan->game),source(std::move(owner)){}
+};
+struct Session::NativePkReturnFinalisation::Work {
+    const std::shared_ptr<Data> data;
+    explicit Work(std::shared_ptr<Data> value):data(std::move(value)){}
+    ~Work(){const auto phase=data->phase.load();
+        if(phase!=NativePkReturnFinalisationStatus::Prepared&&phase!=NativePkReturnFinalisationStatus::Failed&&
+           !data->returned_notified.load())Session::fail_native_pk_return_finalisation(data);}
+};
+struct Session::NativePkReturnFinalisation::Custody {
+    const std::shared_ptr<Data> data;
+    std::shared_ptr<Work> prepared_work;
+    Custody(std::shared_ptr<Data> value,std::shared_ptr<Work> work):data(std::move(value)),prepared_work(std::move(work)){}
+    ~Custody(){if(data->phase.load()!=NativePkReturnFinalisationStatus::Returned&&
+        data->phase.load()!=NativePkReturnFinalisationStatus::Failed)Session::fail_native_pk_return_finalisation(data);}
 };
 struct Session::NativeWorldSelectionInput::Data {
     const std::weak_ptr<Session> session;
@@ -608,6 +649,8 @@ struct Session::Impl {
     std::atomic<std::shared_ptr<NativePkReturnReservation::Data>> native_pk_return;
     std::atomic<std::shared_ptr<NativePkReturnOutputHold::Data>> native_pk_return_output;
     std::atomic<std::shared_ptr<NativePkReturnConsumption::Data>> native_pk_return_consumption;
+    std::atomic<std::shared_ptr<NativePkReturnFinalisation::Data>> native_pk_return_finalisation;
+    std::atomic<std::shared_ptr<NativePkReturnFinalisation::Data>> native_pk_return_finalisation_history; // Exact pending handoff, not Current/Work.
     struct NativePkReturnOutputAttempt {
         const std::shared_ptr<NativePkReturnOutputHold::Data> data;
         explicit NativePkReturnOutputAttempt(std::shared_ptr<NativePkReturnOutputHold::Data> value):data(std::move(value)){}
@@ -703,6 +746,12 @@ struct Session::Impl {
             if(old!=std::numeric_limits<std::uint64_t>::max())normal_output_sync->epoch.store(old+1);
         }
         // No failure/close under Sync: own fresh cohort handles may lock it.
+        if(const auto final=native_pk_return_finalisation.load()){
+            const auto index=final->sessions[0].lock().get()==&owner?0u:1u;
+            if(final->phase.load()==NativePkReturnFinalisationStatus::Returned&&final->resume_started[index].load()){
+                auto expected=final;native_pk_return_finalisation.compare_exchange_strong(expected,{});
+            }else Session::fail_native_pk_return_finalisation(final);
+        }
         if(const auto output=native_pk_return_output.load())Session::fail_native_pk_return_output(output);
     }
     // Strand checks only immutable Entry/Data and synchronized/atomic fields.
@@ -1361,6 +1410,89 @@ struct Session::Impl {
             }
         }catch(...){if(output)Session::fail_native_pk_return_output(output);}
     }
+    bool native_pk_return_finalisation_transport_current(
+            const std::shared_ptr<NativePkReturnFinalisation::Data>& data,std::size_t index)const{
+        if(!data||index>=2||data->sessions[index].lock().get()!=&owner||data->game!=game||
+           native_pk_return_finalisation.load()!=data||close_requested.load()||
+           data->phase.load()==NativePkReturnFinalisationStatus::Failed||mode!=ProtocolMode::God2CharacterConnection||
+           !owner.recovered_world_ready()||owner.state()!=SessionState::InWorld||common_entry_identity.load()||
+           native_battle_pending.load()||native_pk_pending.load())return false;
+        const auto prep=data->preparations[index].data_;const auto normal=prep->initialization.data_;
+        return normal_initialization.load()==normal&&normal_entry.load()==normal->entry&&
+            normal->entry->session.lock().get()==&owner&&normal->entry->written.load()&&!normal->entry->retired.load()&&
+            world_delivery_identity.load()==prep->world_identity&&common_world_identity.load()==data->common[index]&&
+            owner.battle_generation()==normal->effective_battle&&normal_output_sync->epoch.load()==data->epochs[index];
+    }
+    bool native_pk_return_finalisation_quiet()const{
+        return !closing&&!game_busy&&!read_inflight&&writes.empty()&&!write_bytes&&input.size()==0&&
+            world_input.empty()&&world_pending_records.empty()&&!skill_deadline&&!native_skill_generation&&
+            !native_pk_terminal_cancel_read&&!native_pk_cancel_read&&!native_pk_output_staged&&
+            !native_pk_output_reservation&&!native_pk_reservation&&!common_ready_waiting.load()&&
+            !owned_response_input_hold.load()&&!owned_input_retired.load();
+    }
+    void stage_native_pk_return_finalisation(const std::shared_ptr<NativePkReturnFinalisation::Work>& work,std::size_t index){
+        const auto data=work->data;
+        if(data->phase.load()!=NativePkReturnFinalisationStatus::Checking||
+           !native_pk_return_finalisation_transport_current(data,index)||!native_pk_return_finalisation_quiet()){
+            Session::fail_native_pk_return_finalisation(data);return;
+        }
+        const auto pub=data->publication.lock();
+        if(!pub||pub->phase.load()!=NativePkReturnPublicationStatus::Written||
+           !native_pk_return_publication_transport_current(pub,index)||data->ready[index].exchange(true)){
+            Session::fail_native_pk_return_finalisation(data);return;
+        }
+        if(data->ready_cuts.fetch_add(1)+1!=2)return;
+        try{asio::post(data->game,[data,work]{
+            if(data->thread!=std::this_thread::get_id()) {Session::fail_native_pk_return_finalisation(data);return;}
+            auto checking=NativePkReturnFinalisationStatus::Checking;
+            if(!data->phase.compare_exchange_strong(checking,NativePkReturnFinalisationStatus::Ready))return;
+            bool accepted=false;const NativePkReturnFinalisation token(data);
+            {const auto source=data->source.lock();if(source&&Session::native_pk_return_finalisation_current(token))
+                try{accepted=source->native_pk_return_finalisation_ready(token);}catch(...){}}
+            // Actual owner may have durably released/adopted/completed inline.
+            // Old Publication/Consumption Current deliberately no longer exists.
+            if(!accepted||data->phase.load()!=NativePkReturnFinalisationStatus::Returned||!data->detached.load())
+                Session::fail_native_pk_return_finalisation(data);
+        });}catch(...){Session::fail_native_pk_return_finalisation(data);}
+    }
+    void resume_native_pk_return_finalisation(const std::shared_ptr<NativePkReturnFinalisation::Work>& work,std::size_t index){
+        const auto data=work->data;
+        try{
+            // The OTHER peer may already receive legitimate new input. Own exact
+            // successor only, never whole historical peer Current after resume.
+            if(data->phase.load()!=NativePkReturnFinalisationStatus::Returned||!data->detached.load()||
+               !data->ready[0].load()||!data->ready[1].load()||
+               !native_pk_return_finalisation_transport_current(data,index)||!native_pk_return_finalisation_quiet()||
+               native_pk_terminal.load()||native_pk_return.load()||native_pk_return_output.load()||
+               native_pk_return_consumption.load()||data->resume_started[index].exchange(true))
+                throw std::logic_error("Return resume lost exact own adopted source");
+            native_pk_read_paused=false;native_battle_read_paused=false;
+            resume_world_input(); // Existing idle timer + ONE real async read, no fake cut.
+            if(!read_inflight||closing||close_requested.load())throw std::logic_error("Return resume did not initiate read");
+            if(data->resume_cuts.fetch_add(1)+1!=2)return;
+            asio::post(data->game,[data,work]{
+                if(data->thread!=std::this_thread::get_id()||data->phase.load()!=NativePkReturnFinalisationStatus::Returned||
+                   data->resume_cuts.load()!=2||!data->resume_started[0].load()||!data->resume_started[1].load()){
+                    Session::fail_native_pk_return_finalisation(data);return;
+                }
+                // Historical REAL resume cuts. Gameplay may already change the
+                // future tuple; never close it using obsolete whole Current.
+                bool notified=false;{const auto source=data->source.lock();if(source)try{
+                    source->native_pk_return_finalisation_returned(NativePkReturnFinalisation(data));notified=true;
+                }catch(...){}}
+                if(!notified){Session::fail_native_pk_return_finalisation(data);return;}
+                data->returned_notified.store(true);
+                for(std::size_t index=0;index<2;++index)if(const auto session=data->sessions[index].lock())try{
+                    asio::post(session->impl_->strand,[session,data,index]{
+                        auto history=data;session->impl_->native_pk_return_finalisation_history.compare_exchange_strong(history,{});
+                        const auto terminal=session->impl_->native_pk_terminal.load();
+                        if(!terminal||terminal==data->preparations[index].data_->terminal.data_)
+                            session->impl_->native_pk_terminal_timer.cancel(); // Never cancel a successor terminal.
+                    });
+                }catch(...){} // Completion already real; obsolete timer checks exact pending identity.
+            });
+        }catch(...){Session::fail_native_pk_return_finalisation(data);}
+    }
     void retire_native_pk_terminal() {
         if(const auto pair=native_pk_return.exchange({}))Session::fail_native_pk_return_reservation(pair);
         const auto data=native_pk_terminal.exchange({});if(!data)return;
@@ -1385,6 +1517,13 @@ struct Session::Impl {
     }
     void stage_native_pk_terminal() {
         const auto data=native_pk_terminal.load();if(!data)return;
+        if(const auto final=native_pk_return_finalisation.load();final&&
+           final->phase.load()==NativePkReturnFinalisationStatus::Returned){
+            const auto index=final->sessions[0].lock().get()==&owner?0u:1u;
+            if(final->preparations[index].data_->terminal.data_==data&&
+               native_pk_return_finalisation_transport_current(final,index))return; // ONLY input hold during retirement.
+            Session::fail_native_pk_return_finalisation(final);return;
+        }
         // The coupled stores intentionally retire old predicates before both
         // tuples are complete. This exact private window ONLY keeps input held.
         if(const auto switching=native_pk_return_consumption.load();
@@ -1525,6 +1664,11 @@ struct Session::Impl {
     }
     void read() {
         if(owned_input_paused())return;
+        if(const auto final=native_pk_return_finalisation.load();final&&
+           final->phase.load()==NativePkReturnFinalisationStatus::Returned){
+            const auto index=final->sessions[0].lock().get()==&owner?0u:1u;
+            if(!final->resume_started[index].load())return;
+        }
         if(native_pk_terminal.load()) {stage_native_pk_terminal();return;}
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
         if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
@@ -2456,6 +2600,11 @@ struct Session::Impl {
     }
     void resume_world_input(bool awaiting_skill=false) {
         if(owned_input_paused())return;
+        if(const auto final=native_pk_return_finalisation.load();final&&
+           final->phase.load()==NativePkReturnFinalisationStatus::Returned){
+            const auto index=final->sessions[0].lock().get()==&owner?0u:1u;
+            if(!final->resume_started[index].load())return;
+        }
         if(native_pk_terminal.load()) {stage_native_pk_terminal();return;}
         if(native_pk_pending.load()) {native_pk_read_paused=true;stage_native_pk();return;}
         if(native_battle_pending.load()) {native_battle_read_paused=true;stage_native_pk_output();return;}
@@ -3138,6 +3287,8 @@ struct Session::Impl {
         }
     }
     void close() {
+        if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
+            Session::fail_native_pk_return_finalisation(final);
         const bool was_closing=closing;
         retire_owned_input();
         if (was_closing) return; // First opted close still executes ALL original cleanup.
@@ -3157,6 +3308,8 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
+            Session::fail_native_pk_return_finalisation(final);
         if(const auto output=native_pk_return_output.load())Session::fail_native_pk_return_output(output);
         if(const auto pair=native_pk_return.load())Session::fail_native_pk_return_reservation(pair);
         retire_owned_input(); // Opt-in socket/atomic retirement precedes potentially throwing logging.
@@ -3902,6 +4055,11 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     if(!common || !data || impl_->common_ready_thread!=std::this_thread::get_id() ||
        impl_->common_ready_thread==std::thread::id{})
         throw std::logic_error("Native PK entry requires the actual async common game owner");
+    if(const auto pending=impl_->native_pk_return_finalisation_history.load()){
+        if(!pending->returned_notified.load())
+            throw std::logic_error("Native PK entry cannot replace an unfinished original return deadline");
+        auto completed=pending;impl_->native_pk_return_finalisation_history.compare_exchange_strong(completed,{});
+    }
     const NormalWorldInitialization initialization(data);
     if(!normal_world_initialization_current_on_game(initialization) || !initialization.entry_written())
         throw std::invalid_argument("Native PK entry lacks actual Written private initialization");
@@ -4069,9 +4227,18 @@ Session::NativePkTerminalBarrier Session::prepare_native_pk_terminal_barrier(
         try {
             s.native_pk_terminal_timer.expires_after(close_timeout);
             s.native_pk_terminal_timer.async_wait([self,data](const asio::error_code& ec) {
-                if(!ec && self->impl_->native_pk_terminal.load()==data) {
-                    if(data->ack_handoff_failed.load())self->impl_->game_busy=false;
-                    self->impl_->fail("Native PK terminal barrier deadline expired; retained recovery required");
+                if(!ec){
+                    std::shared_ptr<NativePkReturnFinalisation::Data> final;
+                    {std::lock_guard lock(data->finalisation_mutex);final=data->finalisation.lock();}
+                    const auto index=final&&final->sessions[0].lock()==self?0u:1u;
+                    if(final&&final->preparations[index].data_->terminal.data_==data&&
+                       final->phase.load()==NativePkReturnFinalisationStatus::Returned&&!final->returned_notified.load()){
+                        Session::fail_native_pk_return_finalisation(final);return; // SAME original 5s deadline, not renewed.
+                    }
+                    if(self->impl_->native_pk_terminal.load()==data){
+                        if(data->ack_handoff_failed.load())self->impl_->game_busy=false;
+                        self->impl_->fail("Native PK terminal barrier deadline expired; retained recovery required");
+                    }
                 }
             });
             data->armed.store(true);s.stage_native_pk_terminal();
@@ -4139,7 +4306,14 @@ bool Session::native_pk_return_preparation_current(const NativePkReturnPreparati
 }
 void Session::fail_native_pk_return_reservation(
         const std::shared_ptr<NativePkReturnReservation::Data>& data) noexcept {
-    if(!data)return;
+    if(!data||data->phase.load()==NativePkReturnReservation::Data::Phase::Returned)return;
+    // Actual output transition serializes pair failure against successful detach.
+    for(const auto& weak:data->sessions)if(const auto session=weak.lock())
+        if(const auto output=session->impl_->native_pk_return_output.load();output&&
+           output->plan->reservation.data_==data&&output->phase.load()!=NativePkReturnOutputHold::Data::Phase::Failed){
+            fail_native_pk_return_output(output);return;
+        }
+    if(data->phase.load()==NativePkReturnReservation::Data::Phase::Returned)return;
     const bool first=data->phase.exchange(NativePkReturnReservation::Data::Phase::Failed)!=
         NativePkReturnReservation::Data::Phase::Failed;
     for(const auto& weak:data->sessions)if(const auto session=weak.lock())
@@ -4314,8 +4488,12 @@ void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnO
     bool first;
     std::shared_ptr<NativePkReturnConsumption::Data> successor;
     std::shared_ptr<NativePkReturnPublication::Data> publication;
+    std::shared_ptr<NativePkReturnFinalisation::Data> finalisation;
     {
         std::lock_guard lock(data->transition);
+        if(data->phase.load()==NativePkReturnOutputHold::Data::Phase::Returned)return; // Old sticky observers no longer owned.
+        finalisation=data->finalisation.load();
+        if(finalisation)finalisation->phase.store(NativePkReturnFinalisationStatus::Failed);
         publication=data->publication.load();
         if(publication)publication->phase.store(NativePkReturnPublicationStatus::Failed);
         successor=data->consumption.load(); // Same guard as prepare/consume association.
@@ -4359,6 +4537,18 @@ void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnO
         if(!recipient->close_posted.exchange(true))try{
             asio::post(recipient->session->impl_->strand,[session=recipient->session]{session->impl_->close();});
         }catch(...){recipient->session->impl_->close_requested.store(true);}
+    }
+    if(finalisation){
+        for(const auto& weak:finalisation->sessions)if(const auto session=weak.lock()){
+            auto expected=finalisation;session->impl_->native_pk_return_finalisation.compare_exchange_strong(expected,{});
+            auto history=finalisation;session->impl_->native_pk_return_finalisation_history.compare_exchange_strong(history,{});
+        }
+        try{asio::post(finalisation->game,[finalisation]{
+            if(finalisation->failed_notified.exchange(true)||finalisation->thread!=std::this_thread::get_id())return;
+            if(const auto source=finalisation->source.lock())try{
+                source->native_pk_return_finalisation_failed(NativePkReturnFinalisation(finalisation));
+            }catch(...){}
+        });}catch(...){}
     }
     if(publication)try{asio::post(data->plan->game,[publication]{
         if(publication->failed_notified.exchange(true)||publication->plan->thread!=std::this_thread::get_id())return;
@@ -4676,6 +4866,164 @@ bool Session::release_native_pk_return_publication(const NativePkReturnPublicati
         }
         return true;
     }catch(...){fail_native_pk_return_output(output);return false;}
+}
+Session::NativePkReturnFinalisationStatus Session::NativePkReturnFinalisation::status()const noexcept{
+    return data_?data_->phase.load():NativePkReturnFinalisationStatus::Failed;
+}
+Session::NativePkReturnFinalisation Session::prepare_native_pk_return_finalisation(
+        const NativePkReturnPublication& value,std::weak_ptr<NativePkReturnFinalisationOwner> owner){
+    if(value.status()!=NativePkReturnPublicationStatus::Written||!native_pk_return_publication_current(value)||owner.expired())
+        throw std::invalid_argument("Return finalisation requires actual whole Written source");
+    const auto output=value.data_->output.lock();const auto consumed=value.data_->consumption.lock();
+    std::array<std::shared_ptr<const void>,2> common{
+        output->plan->sessions[0]->impl_->common_world_identity.load(),output->plan->sessions[1]->impl_->common_world_identity.load()};
+    const auto data=std::make_shared<NativePkReturnFinalisation::Data>(value.data_,output,std::move(owner),common,consumed->new_epochs);
+    const auto work=std::make_shared<NativePkReturnFinalisation::Work>(data);data->work=work;
+    const auto custody=std::make_shared<NativePkReturnFinalisation::Custody>(data,work);
+    {
+        std::lock_guard lock(output->transition);
+        if(!native_pk_return_publication_current(value)||output->finalisation.load())
+            throw std::logic_error("Return finalisation already prepared or retired");
+        for(const auto& session:output->plan->sessions){
+            if(session->impl_->native_pk_return_finalisation.load())
+                throw std::logic_error("Returning Session already has a finalisation");
+            if(const auto old=session->impl_->native_pk_return_finalisation_history.load()){
+                if(!old->returned_notified.load())throw std::logic_error("Returning Session has unfinished return history");
+                auto completed=old;session->impl_->native_pk_return_finalisation_history.compare_exchange_strong(completed,{});
+            }
+        }
+        for(std::size_t index=0;index<2;++index){
+            const auto terminal=data->preparations[index].data_->terminal.data_;
+            std::lock_guard terminal_lock(terminal->finalisation_mutex);
+            if(!terminal->finalisation.expired())throw std::logic_error("Original terminal already has a finalisation");
+            terminal->finalisation=data;
+        }
+        output->finalisation.store(data);
+        for(const auto& session:output->plan->sessions){
+            session->impl_->native_pk_return_finalisation_history.store(data);
+            session->impl_->native_pk_return_finalisation.store(data);
+        }
+    }
+    return NativePkReturnFinalisation(data,custody);
+}
+bool Session::native_pk_return_finalisation_current(const NativePkReturnFinalisation& value) noexcept{
+    try{
+    const auto data=value.data_;if(!data||data->thread!=std::this_thread::get_id()||
+        data->phase.load()==NativePkReturnFinalisationStatus::Failed)return false;
+    for(std::size_t index=0;index<2;++index){
+        const auto session=data->sessions[index].lock();
+        if(!session||!session->impl_->native_pk_return_finalisation_transport_current(data,index)||
+           session->account_id!=data->preparations[index].data_->world_identity->account||
+           session->character_id!=data->preparations[index].data_->world_identity->character)return false;
+    }
+    if(data->phase.load()!=NativePkReturnFinalisationStatus::Returned){
+        const auto pub=data->publication.lock();const auto output=data->output.lock();
+        if(data->source.expired()||!pub||!output||output->finalisation.load()!=data||
+           pub->phase.load()!=NativePkReturnPublicationStatus::Written||
+           !native_pk_return_publication_current(NativePkReturnPublication(pub)))return false;
+        if(data->phase.load()==NativePkReturnFinalisationStatus::Ready&&
+           (data->ready_cuts.load()!=2||!data->ready[0].load()||!data->ready[1].load()))return false;
+    }
+    return data->phase.load()!=NativePkReturnFinalisationStatus::Failed;
+    }catch(...){return false;}
+}
+bool Session::native_pk_return_finalisation_matches(const NativePkReturnFinalisation& value,
+        const NativePkReturnPublication& pub) noexcept{
+    return native_pk_return_finalisation_current(value)&&value.data_->publication.lock()==pub.data_&&
+        native_pk_return_finalisation_current(value);
+}
+bool Session::native_pk_return_finalisation_records_matches(const NativePkReturnFinalisation& value,
+        const std::weak_ptr<const void>& records) noexcept{
+    if(!native_pk_return_finalisation_current(value)||value.data_->records.owner_before(records)||
+       records.owner_before(value.data_->records))return false;
+    const auto actual=value.data_->records.lock(),requested=records.lock();
+    return actual&&actual==requested&&native_pk_return_finalisation_current(value);
+}
+void Session::fail_native_pk_return_finalisation(const std::shared_ptr<NativePkReturnFinalisation::Data>& data) noexcept{
+    if(!data)return;
+    {std::lock_guard lock(data->transition);
+     if(data->phase.load()==NativePkReturnFinalisationStatus::Returned&&data->returned_notified.load())return;
+     data->phase.store(NativePkReturnFinalisationStatus::Failed);}
+    if(!data->detached.load())if(const auto output=data->output.lock())fail_native_pk_return_output(output);
+    // After accepted detach ONLY returning Sessions remain owned; sticky old
+    // observer history must not close their new unrelated cohorts or epochs.
+    for(const auto& weak:data->sessions)if(const auto session=weak.lock()){
+        session->impl_->close_requested.store(true);
+        auto expected=data;session->impl_->native_pk_return_finalisation.compare_exchange_strong(expected,{});
+        auto history=data;session->impl_->native_pk_return_finalisation_history.compare_exchange_strong(history,{});
+    }
+    for(const auto& weak:data->sessions)if(const auto session=weak.lock())try{
+        asio::post(session->impl_->strand,[session]{session->impl_->close();});
+    }catch(...){}
+    try{asio::post(data->game,[data]{
+        if(data->failed_notified.exchange(true)||data->thread!=std::this_thread::get_id())return;
+        if(const auto source=data->source.lock())try{source->native_pk_return_finalisation_failed(NativePkReturnFinalisation(data));}catch(...){}
+    });}catch(...){}
+}
+void Session::abandon_native_pk_return_finalisation(const NativePkReturnFinalisation& value) noexcept{
+    if(value.data_&&value.status()!=NativePkReturnFinalisationStatus::Returned)fail_native_pk_return_finalisation(value.data_);
+}
+bool Session::acquire_native_pk_return_finalisation(const NativePkReturnFinalisation& value) noexcept{
+    const auto data=value.data_;const auto custody=value.custody_;
+    if(!data||data->thread!=std::this_thread::get_id())return false;
+    try{
+        if(!custody||!custody->prepared_work||!native_pk_return_finalisation_current(value))throw std::logic_error("Finalisation stale");
+        auto prepared=NativePkReturnFinalisationStatus::Prepared;
+        if(!data->phase.compare_exchange_strong(prepared,NativePkReturnFinalisationStatus::Checking))throw std::logic_error("Finalisation reused");
+        const auto work=std::move(custody->prepared_work);
+        for(std::size_t index=0;index<2;++index){
+            const auto session=data->sessions[index].lock();if(!session)throw std::logic_error("Finalisation Session lost");
+            asio::post(session->impl_->strand,[session,work,index]{session->impl_->stage_native_pk_return_finalisation(work,index);});
+        }
+        return true;
+    }catch(...){fail_native_pk_return_finalisation(data);return false;}
+}
+bool Session::complete_native_pk_return_finalisation(const NativePkReturnFinalisation& value) noexcept{
+    const auto data=value.data_;if(!data||data->thread!=std::this_thread::get_id()||
+        data->phase.load()==NativePkReturnFinalisationStatus::Returned)return false;
+    const auto output=data->output.lock();const auto work=data->work.lock();
+    bool applied=false;
+    try{
+        if(!output||!work)throw std::logic_error("Finalisation lacks actual pending task");
+        {
+            std::scoped_lock transition(output->transition,data->transition);
+            const auto detach=[&]()->bool{
+            if(data->phase.load()!=NativePkReturnFinalisationStatus::Ready||!native_pk_return_finalisation_current(value))
+                return false;
+            const auto consumed=output->consumption.load();const auto pub=output->publication.load();
+            if(!consumed||!pub)return false;
+            // No source/provider/query/allocation under the transition. The
+            // actual owner already durably released and adopted the registry.
+            for(std::size_t index=0;index<2;++index){
+                const auto session=data->sessions[index].lock();
+                if(!session||session->impl_->native_pk_terminal.load()!=data->preparations[index].data_->terminal.data_)
+                    return false;
+            }
+            data->detached.store(true);data->phase.store(NativePkReturnFinalisationStatus::Returned);
+            output->phase.store(NativePkReturnOutputHold::Data::Phase::Returned);
+            output->plan->reservation.data_->phase.store(NativePkReturnReservation::Data::Phase::Returned);
+            consumed->phase.store(NativePkReturnConsumption::Data::Phase::Returned);pub->successfully_returned.store(true);
+            for(std::size_t index=0;index<2;++index){
+                const auto session=data->sessions[index].lock();auto& impl=*session->impl_;
+                auto term=data->preparations[index].data_->terminal.data_;
+                term->accepted.store(false);term->phase.store(NativePkTerminalBarrier::Data::Phase::Returned);
+                impl.native_pk_terminal.compare_exchange_strong(term,{});
+                auto pair=output->plan->reservation.data_;impl.native_pk_return.compare_exchange_strong(pair,{});
+                auto current=consumed;impl.native_pk_return_consumption.compare_exchange_strong(current,{});
+            }
+            for(const auto& recipient:output->recipients){
+                auto old=output;recipient->session->impl_->native_pk_return_output.compare_exchange_strong(old,{});
+            } // Observer caps/epochs/queues preserved, no revocation or close.
+            return true;
+            };applied=detach();
+        }
+        if(!applied){fail_native_pk_return_finalisation(data);return false;}
+        for(std::size_t index=0;index<2;++index){
+            const auto session=data->sessions[index].lock();if(!session)throw std::logic_error("Returned Session lost");
+            asio::post(session->impl_->strand,[session,work,index]{session->impl_->resume_native_pk_return_finalisation(work,index);});
+        }
+        return true;
+    }catch(...){fail_native_pk_return_finalisation(data);return false;} // Durable prefix never rolled back.
 }
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){

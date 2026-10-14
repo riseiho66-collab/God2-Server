@@ -11,6 +11,8 @@
 #include <memory>
 #include <map>
 #include <mutex>
+#include <functional>
+#include <thread>
 #include <utility>
 #include <string>
 struct sqlite3;
@@ -98,6 +100,35 @@ public:
         explicit RuntimeClaim(std::shared_ptr<const RuntimeOwner> owner):owner_(std::move(owner)){}
         std::shared_ptr<const RuntimeOwner> owner_;
     };
+    // CUSTOM-0133 opaque one-use finished-return release. Private RoomState
+    // captures the actual runtime claim/checkpoint; no scalar/JSON constructor.
+    class FinishedReturnReleaseReceipt;
+    class FinishedReturnReleasePlan {
+    public:
+        FinishedReturnReleasePlan(const FinishedReturnReleasePlan&)=default;
+        FinishedReturnReleasePlan& operator=(const FinishedReturnReleasePlan&)=default;
+        bool operator==(const FinishedReturnReleasePlan&)const=default;
+        // Sticky durable outcome only, never live WORLD/input authority.
+        bool durably_committed()const noexcept;
+    private:
+        friend class SqliteOwnedPkRoomRepository;
+        friend class FinishedReturnReleaseReceipt;
+        struct Data;
+        explicit FinishedReturnReleasePlan(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class FinishedReturnReleaseReceipt {
+    public:
+        FinishedReturnReleaseReceipt(const FinishedReturnReleaseReceipt&)=default;
+        FinishedReturnReleaseReceipt& operator=(const FinishedReturnReleaseReceipt&)=default;
+        bool operator==(const FinishedReturnReleaseReceipt&)const=default;
+        bool matches(const FinishedReturnReleasePlan& plan)const noexcept{return data_==plan.data_;}
+    private:
+        friend class SqliteOwnedPkRoomRepository;
+        explicit FinishedReturnReleaseReceipt(std::shared_ptr<FinishedReturnReleasePlan::Data> data)
+            :data_(std::move(data)){}
+        std::shared_ptr<FinishedReturnReleasePlan::Data> data_;
+    };
     struct RetainedOutbox {
         Delivery delivery;
         bool submitted;
@@ -108,17 +139,23 @@ public:
         const BattleCheckpoint& checkpoint()const noexcept{return checkpoint_;}
         const OwnedPkRound& round()const noexcept{return round_;}
         const std::vector<RetainedOutbox>& outboxes()const noexcept{return outboxes_;}
+        // History only. Released Finished snapshots cannot restore a Battle,
+        // claim a mutable Room, recreate locks, resend or issue old grants.
+        bool released_finished()const noexcept{return finished_return_.has_value();}
     private:
         friend class SqliteOwnedPkRoomRepository;
         RetainedRecovery(Ticket ticket,BattleCheckpoint checkpoint,OwnedPkRound round,
-                         std::vector<RetainedOutbox> outboxes,std::optional<std::string> terminal_resources)
+                         std::vector<RetainedOutbox> outboxes,std::optional<std::string> terminal_resources,
+                         std::optional<std::string> finished_return)
             :ticket_(std::move(ticket)),checkpoint_(std::move(checkpoint)),round_(std::move(round)),
-             outboxes_(std::move(outboxes)),terminal_resources_(std::move(terminal_resources)){}
+             outboxes_(std::move(outboxes)),terminal_resources_(std::move(terminal_resources)),
+             finished_return_(std::move(finished_return)){}
         Ticket ticket_;
         BattleCheckpoint checkpoint_;
         OwnedPkRound round_;
         std::vector<RetainedOutbox> outboxes_;
         std::optional<std::string> terminal_resources_;
+        std::optional<std::string> finished_return_;
     };
     explicit SqliteOwnedPkRoomRepository(sqlite3* db):db_(db),owners_(db){require_schema(db_);require_round_schema(db_);}
     // Identity only; no read, schema installation or admission permission.
@@ -130,6 +167,10 @@ public:
     // CUSTOM-0127 explicit extension, never installed by a read or factory.
     static void install_terminal_resource_schema(sqlite3*);
     static void require_terminal_resource_schema(sqlite3*);
+    // CUSTOM-0133 separate explicit opt-in extension; never installed on read,
+    // by constructor/factory/Main or automatically during return/recovery.
+    static void install_finished_return_schema(sqlite3*);
+    static void require_finished_return_schema(sqlite3*);
     Ticket prepare(Input);
     // Explicit custom stored-total adoption. Actor/resources/role values and
     // complete retained-source digest are produced internally, not caller stats.
@@ -195,7 +236,24 @@ private:
     static std::string readset(const Input&);
     bool owners_current(const Input&);
     std::optional<std::string> terminal_resource_ledger(const Ticket&);
-    TerminalResources terminal_resources_in_scope(const Ticket&,const BattleCheckpoint* actual=nullptr);
+    TerminalResources terminal_resources_in_scope(const Ticket&,const BattleCheckpoint* actual=nullptr,
+        bool released_history=false);
+    using TerminalInputs=std::array<std::array<std::uint8_t,4>,2>;
+    std::optional<std::string> finished_return_ledger(const Ticket&);
+    std::optional<std::string> released_finished_in_scope(const Ticket&);
+    std::string finished_return_document(const Ticket&,const TerminalResources&,const TerminalInputs&);
+    static void require_terminal_identity(const Ticket&,std::uint8_t,const std::array<std::uint8_t,4>&);
+    void require_runtime_claim(const Ticket&,const RuntimeClaim&)const;
+    bool finished_return_release_runtime_current(const Ticket&,const RuntimeClaim&,const BattleSnapshot&,
+        const FinishedReturnReleaseReceipt&)const noexcept;
+    void require_finished_return_plan(const Ticket&,const RuntimeClaim&,const BattleCheckpoint&,
+        const FinishedReturnReleasePlan&)const;
+    FinishedReturnReleasePlan prepare_finished_return_release(const Ticket&,const RuntimeClaim&,
+        const BattleCheckpoint&,const Replies&,const TerminalInputs&);
+    FinishedReturnReleaseReceipt commit_finished_return_release(const Ticket&,const RuntimeClaim&,
+        const BattleCheckpoint&,const FinishedReturnReleasePlan&,const std::function<void(sqlite3*)>& final_stored_fence);
+    void require_finished_return_release(const Ticket&,const RuntimeClaim&,const BattleCheckpoint&,
+        const FinishedReturnReleaseReceipt&);
     bool finished_owners_current(const Ticket&);
     // Called ONLY by the private RoomState seam consumed by Publication's
     // actual two fullwrite callbacks in one original binding; DB flags alone
@@ -210,7 +268,7 @@ private:
         const std::array<std::uint8_t,4>& payload,const std::vector<std::uint8_t>& actually_written);
     void require_ticket(const Ticket&,const char* state);
     void enqueue(const Ticket&,std::uint64_t revision,const Replies&);
-    OwnedPkRound read_round(const Ticket&); // inside existing read/write transaction
+    OwnedPkRound read_round(const Ticket&,bool released_history=false); // inside existing read/write transaction
     std::string require_active_owned_profile_in_scope(const Ticket&,const BattleCheckpoint&);
     std::vector<GrantDelivery> pending_grants_in_scope(const Ticket&,const BattleCheckpoint*);
     void store_round(const Ticket&,const OwnedPkRound& expected,const OwnedPkRound& next);

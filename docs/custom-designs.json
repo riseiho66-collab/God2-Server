@@ -5086,6 +5086,18 @@
     "default_activated": false,
     "whole_route_complete": false,
     "build_tests_runtime_SQL_activation_deployment": false
+  },
+  "return_finished_finalisation_source": {
+    "classification": "ROUND390_EXACT_DURABLE_FINISHED_RELEASE_AND_ACTUAL_PAIRED_INPUT_RESUME_SOURCE",
+    "source": "Actual local wholeWritten -> privateFinalisation+originalRuntimeRoomReleasePlan preallocated -> completeConsumed scene/savedtail/finalstored -> actualtwoquietstrandReady -> originalsavedsource -> exactsameDBtransaction stored/pure fences -> canonicalCUSTOM0133release/exact2memberlockdeletes -> COMMIT stickyplanoutcome -> typedreleasedreceipt/history +completeConsumed/finalstored -> exactmodeladoption/privateSessionretirement -> actualownstrandinputresume cuts/historical pairedcallback.",
+    "custody": "Old success disposition disarms old drops and sticky acquired observers; actual pending resume has separate weakSession/newidentity custody and originaldeadline without renewal. Postdetach failures affect exactreturningpair only; legitimate newphase/epoch never invalidates genuine historical actualresume receipt. No nativeACK.",
+    "storage": "Explicit opt-in2table extension only; preservebasefinished room/checkpoint/round/resourceledger/outbox history, zero oldlocks. Released recovery canonicalhistory not futureowner equality, cannot mutable restore/claim/resend/regrant. No execution/install-on-read/defaulthosting.",
+    "visibility": "Exact successfulmodeladoption keepspublishedownedmodels, erasesonlyown weakreturn guards/no73/rewind/rollback. RetireexactoldruntimeRoom/inputindexes before subsequently queued gameplay; keepoldbindinguntilactualtwo resume notification thenexacterase.",
+    "limits": "Conditional/defaultoff, actualscene/Mainbackend/companionresources/issuedlineage/fullactions/nativeadoption/wholeinventoryOPEN. Fullreturn/gameplay/nativeacceptance not claimed. PHASE1 source/static only.",
+    "source_connected": true,
+    "default_activated": false,
+    "whole_route_complete": false,
+    "build_tests_runtime_SQL_activation_deployment": false
   }
 },
 {

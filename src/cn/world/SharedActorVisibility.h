@@ -15,6 +15,7 @@
 #include <variant>
 #include <vector>
 
+struct sqlite3; // Actual connection identity only; no SQL dependency in this interface.
 namespace god2 {class SharedNativeActorNameSource;class OwnedTaiwanPkReturnRoleTextSource;}
 namespace god2::cn {
 class SharedInitialScene;
@@ -418,6 +419,18 @@ public:
     bool taiwan_pk_return_consumption_current(const TaiwanPkReturnConsumption&)const;
     bool taiwan_pk_return_consumption_source_current(const TaiwanPkReturnConsumption&)const;
     bool taiwan_pk_return_consumption_stored_current(const TaiwanPkReturnConsumption&)const;
+    bool taiwan_pk_return_consumption_stored_in_scope(const TaiwanPkReturnConsumption&,sqlite3*)const;
+    std::optional<Session::NativePkReturnFinalisation> prepare_taiwan_pk_return_finalisation(
+        const TaiwanPkReturnConsumption&,const Session::NativePkReturnPublication&,
+        std::weak_ptr<Session::NativePkReturnFinalisationOwner>);
+    bool taiwan_pk_return_finalisation_matches(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnFinalisation&)const;
+    bool taiwan_pk_return_finalisation_identity_matches(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnFinalisation&)const noexcept;
+    bool acquire_taiwan_pk_return_finalisation(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnFinalisation&);
+    bool finish_taiwan_pk_return_visibility(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnFinalisation&);
     std::optional<Session::NativePkReturnPublication> prepare_taiwan_pk_return_publication(
         const TaiwanPkReturnConsumption&,std::weak_ptr<Session::NativePkReturnPublicationOwner>);
     bool taiwan_pk_return_publication_matches(const TaiwanPkReturnConsumption&,
@@ -440,7 +453,8 @@ private:
     bool taiwan_pk_return_records_fence(const std::shared_ptr<const TaiwanPkReturnRecords::State>&)const;
     bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck,
-        bool stored_only=false,const std::shared_ptr<TaiwanPkReturnConsumption::State>& successor={})const;
+        bool stored_only=false,const std::shared_ptr<TaiwanPkReturnConsumption::State>& successor={},
+        sqlite3* in_scope=nullptr)const;
     bool taiwan_pk_return_consumption_fence(const std::shared_ptr<TaiwanPkReturnConsumption::State>&,
         bool guarded_read=false)const;
     void reject_taiwan_return_reentry()const;

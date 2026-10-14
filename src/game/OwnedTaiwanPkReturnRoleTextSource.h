@@ -184,6 +184,32 @@ public:
             return unchanged(changes)&&sqlite3_get_autocommit(db_);
         }catch(const std::exception&){return false;}
     }
+    // CUSTOM-0133 final stored fence inside the exact room-release transaction.
+    // No nested scope, Presence observer or external native/provider callback.
+    // The actual repository connection is supplied by its private RoomState seam.
+    bool stored_current_in_scope(sqlite3* connection,std::span<const Observation> observations,
+            std::span<const EndpointObservation> endpoints)const{
+        owner();
+        try{
+            Operation operation(*this);
+            if(connection!=db_||!owns_database()||sqlite3_get_autocommit(db_))return false;
+            const auto changes=sqlite3_total_changes64(db_);
+            namespaces();
+            const auto epoch=guild_epoch();
+            for(const auto& observation:observations){
+                if(observation.owner_!=this||observation.identity_!=identity_||
+                   !valid_lease(observation.source_)||epoch!=observation.guild_epoch_)return false;
+                const auto row=texts_.load(observation.source_.account,observation.source_.character);
+                if(!row||*row!=observation.row_||!unchanged(changes))return false;
+                const auto guild=guilds_.load(observation.source_.account,observation.source_.character);
+                if(guild!=observation.guild_||!unchanged(changes))return false;
+            }
+            for(const auto& endpoint:endpoints)
+                if(!endpoint_current(endpoint)||!unchanged(changes))return false;
+            namespaces();
+            return !sqlite3_get_autocommit(db_)&&unchanged(changes);
+        }catch(const std::exception&){return false;}
+    }
 private:
     sqlite3* const db_;
     SqliteRoleTextRepository& texts_;
