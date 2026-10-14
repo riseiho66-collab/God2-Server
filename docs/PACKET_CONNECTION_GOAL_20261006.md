@@ -5969,3 +5969,18 @@ acceptance/wholeinventoryOPEN. TW156/252 parser77=50/11/16,pending12/frontier26
 21/105,whole%null;TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1.
 
 Details: docs/research/tw-learning-pk-successor-source-20261014.md
+
+## Round404 - Native return actor ownership and EA override format (2026-10-14)
+
+Round404 recovers exactnativeEA5/fullWORDidentity/remoteindex0..8(notBool)/self
+retainedscalar asymmetry and addsONLYreadonlyrawCppformat. Field9rawincoming
+origin/noactoroffset; field17actor+0x220/fullProducerOPEN. C19raw3006B/1004sites,
+16new2405B+601oldduplicatecredit0; B59oldrefs/0newbytes. ActualReturnmaker still
+requiresfull81/currentresources/markers/audience/receiverRawNameProfile; old
+Diagnosticfixturezeros notnative. NewCpp1/V41pins109; noPY/Lua/nativeopcode/
+defaultactivation/fullroute. EA independentformat21->22/unclassified105->104,
+TW156/252 parser77=50/11/16 pending12/frontier27/full%null. Complete movement/
+return/skills/numerics/nativeacceptance OPEN;TW100firstACTIVE/commonCNweb/saves/
+fonts/text/numerics/PHASE1 retained.
+
+Details: docs/research/tw-native-return-actor-field-source-20261014.md

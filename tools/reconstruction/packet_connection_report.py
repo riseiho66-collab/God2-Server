@@ -100,7 +100,7 @@ def report(round_name, catalog_name=None, round_directory=None):
     wrapper = json.loads(wrapper_path.read_text(encoding='utf-8'))
     wrapper_frontier_path = ROOT / 'c2s-wrapper-frontier-v1.json'
     wrapper_frontier = json.loads(wrapper_frontier_path.read_text(encoding='utf-8'))
-    s2c_frontier_path = ROOT / 's2c-world-consumer-frontier-v26.json'
+    s2c_frontier_path = ROOT / 's2c-world-consumer-frontier-v27.json'
     s2c_frontier = json.loads(s2c_frontier_path.read_text(encoding='utf-8'))
     battle_frontier_path = ROOT / 's2c-battle-dispatch-frontier-v1.json'
     battle_frontier = json.loads(battle_frontier_path.read_text(encoding='utf-8'))
@@ -240,6 +240,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_pk_zero_deity398', {}).get('source_paths', [])) |
                    set(ledger.get('tw_learning_publication399', {}).get('source_paths', [])) |
                    set(ledger.get('tw_learning_pk_successor403', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_native_return_actor_field404', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_operator402', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_import401', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_profile400', {}).get('source_paths', [])) |
@@ -459,6 +460,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_pk_zero_deity398': ledger.get('tw_pk_zero_deity398'),
         'tw_learning_publication399': ledger.get('tw_learning_publication399'),
         'tw_learning_pk_successor403': ledger.get('tw_learning_pk_successor403'),
+        'tw_native_return_actor_field404': ledger.get('tw_native_return_actor_field404'),
         'tw_installed453_operator402': ledger.get('tw_installed453_operator402'),
         'tw_installed453_import401': ledger.get('tw_installed453_import401'),
         'tw_installed453_profile400': ledger.get('tw_installed453_profile400'),
