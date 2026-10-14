@@ -625,3 +625,19 @@ unlock/Main/fullcompanionresources/issuedlineage/nativeACK/fullroute. FiveCPP,
 V25all76=71exact5updated/canonical526/no newprojectPY/Lua/opcode/formula/default
 activation. Parser77=50/11/16,pending12/frontier26 21/105/whole%null unchanged;
 fullTW100goalACTIVE/PHASE1/sourceonly/commonCN/web64bit/saves/frozen preserved.
+
+Round389 actualConsumed Outbox prepares typedPublication beforefullConsumed
+scene/qualification/name/pose/resources/savedledger/twocontexts/finaljointstored
+thenpurecuts; one-use actualstrand release. WholeFIFO/frame/ordinal/fullbytecount
+plusrealemptycuts ->actualGameweakOwner Written fullsource/savedtail Current.
+ProviderConsumedmandatory/freshfence, oldPKcapsretired; postPreparebytesimmutable.
+GameCustody/actualposts+async+oldheldapproval Work only; weakImpl/LASTqueue
+holders preservevalidolderactive/multipleheldFIFO anddetachunrelatedsuffix.
+V2initcatch/V3suffix/V4actualearlierheld corrections retainedfullinverses.
+Stickyexposurebeforefirstpost/unhold, abandonownedcohort beforeexactmodelerase;
+no73/rollback/oldmarkerrestore/genrewind/unrelatedsuccessorerase/nativeACK.
+Original5sterminal/input/genericoutput/Finishedlocks remain; Main/resources/
+issuedlineage/unlock/recovery/fullreturn OPEN. FiveCPP/V26all76=71exact5updated/
+canonical528/no newprojectPY/Lua/native/formula/opcode/defaultactivation/fullroute.
+Parser77=50/11/16,pending12/frontier26 21/105/whole%null unchanged. FullTW100
+ACTIVE/commonCN/web64/saves/frozen/PHASE1 sourceonly preserved.

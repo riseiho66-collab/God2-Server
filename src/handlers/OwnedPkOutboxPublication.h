@@ -402,7 +402,7 @@ private:
     };
     // CUSTOM-0133 paired real-strand reservation continuation. A reservation
     // is a held transport cut, not a world write, reset, durable release or ACK.
-    struct ReturnFlight final:Session::NativePkReturnOwner,Session::NativePkReturnOutputOwner,Session::NativePkReturnConsumptionOwner {
+    struct ReturnFlight final:Session::NativePkReturnOwner,Session::NativePkReturnOutputOwner,Session::NativePkReturnConsumptionOwner,Session::NativePkReturnPublicationOwner {
         std::weak_ptr<Lifetime> lifetime;
         std::weak_ptr<Binding> binding;
         const std::array<Session::NativePkReturnPreparation,2> preparations;
@@ -410,6 +410,7 @@ private:
         const std::array<Session::NativeBattleSkill,2> final_writes;
         const std::array<std::uint64_t,2> revisions;
         const std::array<std::array<std::uint8_t,4>,2> payloads;
+        const std::array<Session::NativePkTerminalBarrier,2> terminal_barriers;
         std::optional<Session::NativePkReturnReservation> reservation;
         // Owning exact private plan/pair and ordered full6F records for the
         // actual later sender. This subset alone cannot publish a return.
@@ -418,6 +419,8 @@ private:
         std::optional<Session::NativePkReturnOutputHold> output_hold;
         std::optional<cn::SharedActorVisibility::TaiwanPkReturnConsumption> consumption;
         bool consumption_failed_seen=false;
+        std::optional<Session::NativePkReturnPublication> publication;
+        bool publication_written_seen=false,publication_failed_seen=false;
         bool output_held_seen=false,output_failed_seen=false;
         bool reserved_seen=false,failed_seen=false;
         ReturnFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
@@ -425,9 +428,11 @@ private:
                 cn::SharedActorVisibility::TaiwanPkReturnPlan plan,
                 std::array<Session::NativeBattleSkill,2> outputs,
                 std::array<std::uint64_t,2> versions,
-                std::array<std::array<std::uint8_t,4>,2> contexts)
+                std::array<std::array<std::uint8_t,4>,2> contexts,
+                std::array<Session::NativePkTerminalBarrier,2> terminals)
             :lifetime(std::move(life)),binding(std::move(owner)),preparations(std::move(prepared)),
-             visibility(std::move(plan)),final_writes(std::move(outputs)),revisions(versions),payloads(contexts){}
+             visibility(std::move(plan)),final_writes(std::move(outputs)),revisions(versions),payloads(contexts),
+             terminal_barriers(std::move(terminals)){}
         bool native_pk_return_reserved(const Session::NativePkReturnReservation& value)override{
             const auto life=lifetime.lock();
             return life&&life->owner&&life->owner->return_reserved(*this,value);
@@ -447,6 +452,14 @@ private:
         void native_pk_return_consumption_failed(const Session::NativePkReturnConsumption& value)override{
             const auto life=lifetime.lock();
             if(life&&life->owner)life->owner->return_consumption_failed(*this,value);
+        }
+        bool native_pk_return_publication_written(const Session::NativePkReturnPublication& value)override{
+            const auto life=lifetime.lock();
+            return life&&life->owner&&life->owner->return_publication_written(*this,value);
+        }
+        void native_pk_return_publication_failed(const Session::NativePkReturnPublication& value)override{
+            const auto life=lifetime.lock();
+            if(life&&life->owner)life->owner->return_publication_failed(*this,value);
         }
     };
     struct Flight final:Session::NativeBattleSkillPublicationOwner {
@@ -711,7 +724,9 @@ private:
                     *binding->return_preparations,*binding->return_visibility,binding->terminal_written,
                     binding->terminal_written_revision,
                     std::array<std::array<std::uint8_t,4>,2>{binding->terminal_inputs[0]->payload,
-                                                          binding->terminal_inputs[1]->payload});
+                                                          binding->terminal_inputs[1]->payload},
+                    std::array<Session::NativePkTerminalBarrier,2>{*binding->terminal_inputs[0]->barrier,
+                                                                  *binding->terminal_inputs[1]->barrier});
                 if(!pair_current() || binding->return_flight)
                     throw DatabaseError("PK return reservation lost its exact prepared pair");
                 binding->return_flight=continuation; // Strong game owner before either real strand post.
@@ -840,10 +855,85 @@ private:
                !visibility.taiwan_pk_return_consumption_current(*flight.consumption))
                 throw DatabaseError("PK return successor identity/model commit failed");
             flight.output_held_seen=true;
-            // Old battle/preparation/pair/held predicates are now retired. Only
-            // this actual successor qualifies further work; frames/input stay held.
-            return true;
+            // Old battle/preparation/pair/held predicates are now retired. This
+            // exact successor qualifies the actual publication preparation/release.
+            return return_publish(*binding,flight);
         }catch(...){flight.output_failed_seen=true;fail(*binding);return false;}
+    }
+    bool return_consumption_exact(const Binding& binding,const ReturnFlight& flight)const{
+        if(!on_thread()||binding.failed||binding.return_reentered||flight.failed_seen||
+           flight.consumption_failed_seen||flight.publication_failed_seen||
+           binding.return_flight.get()!=&flight||!flight.output_held_seen||!flight.consumption||
+           !binding.return_preparations||*binding.return_preparations!=flight.preparations||
+           !binding.departure||!binding.departure->visibility)return false;
+        const auto at=bindings_.find(binding.ticket.id());
+        if(at==bindings_.end()||at->second.get()!=&binding||
+           !binding.departure->visibility->taiwan_pk_return_consumption_current(*flight.consumption))return false;
+        // Exact retained saved lineage, never old battle Current after consume.
+        for(std::uint8_t i=0;i<2;++i){
+            const auto& own=binding.terminal_inputs[i];
+            if(!own||!own->barrier||*own->barrier!=flight.terminal_barriers[i]||
+               !own->ready_seen||!own->accepted_seen||own->failed_seen||binding.flights[i]||
+               binding.terminal_written[i]!=flight.final_writes[i]||binding.terminal_written_revision[i]!=flight.revisions[i]||
+               own->payload!=flight.payloads[i]||own->revision!=flight.revisions[i]||
+               binding.sessions[i]->native_battle_skill_publication_pending()||
+               binding.sessions[i]->native_battle_skill_written()!=flight.final_writes[i])return false;
+        }
+        return flight.revisions[0]==flight.revisions[1];
+    }
+    bool return_publication_exact(const Binding& binding,const ReturnFlight& flight,
+            const Session::NativePkReturnPublication& value)const{
+        return flight.publication&&*flight.publication==value&&return_consumption_exact(binding,flight)&&
+            binding.departure->visibility->taiwan_pk_return_publication_matches(*flight.consumption,value);
+    }
+    bool return_publication_source_current(Binding& binding,ReturnFlight& flight,
+            const Session::NativePkReturnPublication& value){
+        const auto current=[&]{return return_publication_exact(binding,flight,value);};
+        auto& visibility=*binding.departure->visibility;
+        if(!current()||!visibility.taiwan_pk_return_consumption_source_current(*flight.consumption)||!current())return false;
+        if(rooms_.require_terminal_resources_saved(binding.ticket.id(),
+                {flight.final_writes[0]->logical,flight.final_writes[1]->logical})!=flight.revisions[0]||!current())return false;
+        for(std::uint8_t i=0;i<2;++i)
+            if(rooms_.require_terminal_context(binding.ticket.id(),i,flight.payloads[i],
+                    flight.final_writes[i]->logical)!=flight.revisions[i]||!current())return false;
+        // The last joint stored cut follows every saved resource/context observer.
+        // Only exact private successor/publication/registry fences follow it.
+        return visibility.taiwan_pk_return_consumption_stored_current(*flight.consumption)&&current()&&
+            visibility.taiwan_pk_return_consumption_current(*flight.consumption)&&current();
+    }
+    bool return_publish(Binding& binding,ReturnFlight& flight){
+        if(!return_consumption_exact(binding,flight)||flight.publication)return false;
+        auto& visibility=*binding.departure->visibility;
+        auto publication=visibility.prepare_taiwan_pk_return_publication(*flight.consumption,binding.return_flight);
+        if(!publication||!return_consumption_exact(binding,flight))throw DatabaseError("Return lacks exact prepared publication");
+        flight.publication.emplace(std::move(*publication));
+        if(!return_publication_source_current(binding,flight,*flight.publication)||
+           !visibility.release_taiwan_pk_return_publication(*flight.consumption,*flight.publication))
+            throw DatabaseError("Return publication source changed before actual strand release");
+        return true; // One-use release requested; no complete write, native ACK or input grant.
+    }
+    bool return_publication_written(ReturnFlight& flight,const Session::NativePkReturnPublication& value){
+        if(!on_thread())return false;
+        const auto binding=flight.binding.lock();if(!binding)return false;
+        try{
+            if(binding->return_preparing){binding->return_reentered=true;
+                throw DatabaseError("Return whole-write source reentered its owner");}
+            if(flight.publication_written_seen||value.status()!=Session::NativePkReturnPublicationStatus::Written||
+               !return_publication_exact(*binding,flight,value))throw DatabaseError("Return lacks actual whole written cohort");
+            binding->return_preparing=true;binding->return_reentered=false;
+            struct End{bool& busy;~End(){busy=false;}}end{binding->return_preparing};
+            if(!return_publication_source_current(*binding,flight,value))throw DatabaseError("Return whole-written source retired");
+            flight.publication_written_seen=true;
+            return true; // Local complete SocketWritten only; Finished locks/input/deadline remain retained.
+        }catch(...){flight.publication_failed_seen=true;fail(*binding);return false;}
+    }
+    void return_publication_failed(ReturnFlight& flight,const Session::NativePkReturnPublication& value){
+        if(!on_thread())return;
+        const auto binding=flight.binding.lock();
+        if(!binding||binding->return_flight.get()!=&flight||!flight.publication||*flight.publication!=value||
+           !flight.consumption||!binding->departure||!binding->departure->visibility||
+           !binding->departure->visibility->taiwan_pk_return_publication_identity_matches(*flight.consumption,value))return;
+        flight.publication_failed_seen=true;fail(*binding);
     }
     void return_consumption_failed(ReturnFlight& flight,const Session::NativePkReturnConsumption& value){
         if(!on_thread())return;

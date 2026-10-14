@@ -360,6 +360,27 @@ public:
         virtual ~NativePkReturnConsumptionOwner()=default;
         virtual void native_pk_return_consumption_failed(const NativePkReturnConsumption&)=0;
     };
+    // CUSTOM-0133 whole local return write; never ACK/unlock/input permission.
+    enum class NativePkReturnPublicationStatus {Prepared,Released,Written,Failed};
+    class NativePkReturnPublication {
+    public:
+        NativePkReturnPublication(const NativePkReturnPublication&)=default;
+        NativePkReturnPublication& operator=(const NativePkReturnPublication&)=default;
+        bool operator==(const NativePkReturnPublication& other)const noexcept{return data_==other.data_;}
+        NativePkReturnPublicationStatus status()const noexcept;
+    private:
+        friend class Session;friend struct Impl;
+        struct Data;struct Work;struct Custody;
+        explicit NativePkReturnPublication(std::shared_ptr<Data> data,std::shared_ptr<Custody> custody={})
+            :data_(std::move(data)),custody_(std::move(custody)){}
+        std::shared_ptr<Data> data_;std::shared_ptr<Custody> custody_;
+    };
+    class NativePkReturnPublicationOwner {
+    public:
+        virtual ~NativePkReturnPublicationOwner()=default;
+        virtual bool native_pk_return_publication_written(const NativePkReturnPublication&)=0;
+        virtual void native_pk_return_publication_failed(const NativePkReturnPublication&)=0;
+    };
     struct NativeCharacterSelectionInput {
         std::uint64_t session,account;
         RecoveredPostCreateSelect::Selection input;
@@ -615,6 +636,14 @@ public:
     static bool native_pk_return_consumption_current(const NativePkReturnConsumption&) noexcept;
     static bool native_pk_return_consumption_matches(const NativePkReturnConsumption&,
         const NativePkReturnOutputHold&,const NativePkReturnOutputPlan&,const NativePkReturnReservation&) noexcept;
+    static NativePkReturnPublication prepare_native_pk_return_publication(
+        const NativePkReturnConsumption&,std::weak_ptr<NativePkReturnPublicationOwner>);
+    static bool release_native_pk_return_publication(const NativePkReturnPublication&) noexcept;
+    static bool native_pk_return_publication_current(const NativePkReturnPublication&) noexcept;
+    static bool native_pk_return_publication_matches(const NativePkReturnPublication&,
+        const NativePkReturnConsumption&) noexcept;
+    static bool native_pk_return_publication_exposure_possible(const NativePkReturnPublication&) noexcept;
+    static void abandon_native_pk_return_publication(const NativePkReturnPublication&) noexcept;
     // Separate retained-entry PK output only; old skill sender grammar stays
     // unchanged. Exact durable grant/result authority belongs to weak owner.
     void send_native_pk_output(const NativePkEntryHold&,NativeBattleSkill,
@@ -682,6 +711,8 @@ private:
     static bool native_pk_return_output_plan_matches(const NativePkReturnOutputPlan&,
         const NativePkReturnReservation&,const std::weak_ptr<const void>&) noexcept;
     static bool native_pk_return_consumption_records_matches(const NativePkReturnConsumption&,
+        const std::weak_ptr<const void>&) noexcept;
+    static bool native_pk_return_publication_records_matches(const NativePkReturnPublication&,
         const std::weak_ptr<const void>&) noexcept;
     static bool native_pk_return_output_plan_current(const std::shared_ptr<NativePkReturnOutputPlan::Data>&) noexcept;
     static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;

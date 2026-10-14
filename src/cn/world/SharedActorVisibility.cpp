@@ -97,6 +97,7 @@ struct SharedActorVisibility::TaiwanPkReturnConsumption::State {
     const Session::NativePkReturnOutputPlan output_plan;
     const Session::NativePkReturnOutputHold output_hold;
     const Session::NativePkReturnConsumption transport;
+    std::optional<Session::NativePkReturnPublication> publication; // Game-owned Custody only.
     const std::map<Key,Entry> expected; // Survives node transfer; allocated BEFORE final observers.
     std::map<std::uint64_t,std::weak_ptr<State>> registrations;
     std::weak_ptr<State> identity;
@@ -177,7 +178,8 @@ bool SharedActorVisibility::taiwan_pk_return_models_match(const std::map<Key,Ent
     return true;
 }
 bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>& state,
-        TaiwanReturnCheck check,bool stored_only)const {
+        TaiwanReturnCheck check,bool stored_only,
+        const std::shared_ptr<TaiwanPkReturnConsumption::State>& successor)const {
     owner();
     if(taiwan_return_reading_){taiwan_return_reentered_=true;if(state)state->poisoned=true;return false;}
     taiwan_return_reading_=true;taiwan_return_reentered_=false;
@@ -186,7 +188,9 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         const std::shared_ptr<TaiwanPkReturnPlan::State>& state;
         ~End(){if(reentered&&state)state->poisoned=true;busy=false;}
     }end{taiwan_return_reading_,taiwan_return_reentered_,state};
-    const auto valid=[&]{return taiwan_pk_return_fence(state);};
+    if((check==TaiwanReturnCheck::Consumed)!=bool(successor)||
+       (successor&&successor->records.state_->plan!=state))return false;
+    const auto valid=[&]{return successor?taiwan_pk_return_consumption_fence(successor,true):taiwan_pk_return_fence(state);};
     try{
         // CUSTOM-0136 actual Publication requalifies terminal SQL after full
         // scene observation. Close that tail without replaying scene/name/pose
@@ -289,7 +293,9 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
                 if(!projected)return false;
                 const auto before=RecoveredRemoteActor::encode_logical(actor.native.spawn);
                 const auto after=RecoveredRemoteActor::encode_logical(*projected);
-                if(check==TaiwanReturnCheck::Retained){if(before!=after)return false;}
+                // All post-preparation reads compare the immutable full bytes;
+                // Consumed must never rewrite staged nodes after their transfer.
+                if(check!=TaiwanReturnCheck::Prepare){if(before!=after)return false;}
                 else{
                     for(std::size_t offset=0;offset<before.size();++offset)
                         if((offset<45||offset>=77)&&before[offset]!=after[offset])return false;
@@ -619,9 +625,14 @@ bool SharedActorVisibility::consume_taiwan_pk_return(const TaiwanPkReturnConsump
     }catch(...){cancel_taiwan_pk_return_consumption(token);return false;}
 }
 bool SharedActorVisibility::taiwan_pk_return_consumption_current(const TaiwanPkReturnConsumption& token)const{
-    owner();const auto state=token.state_;
+    owner();return taiwan_pk_return_consumption_fence(token.state_);
+}
+bool SharedActorVisibility::taiwan_pk_return_consumption_fence(
+        const std::shared_ptr<TaiwanPkReturnConsumption::State>& state,bool guarded_read)const{
+    owner();
     if(!state||state->poisoned||!state->claimed||!state->published||
-       state->records.state_->creator.get()!=this||taiwan_return_reading_||taiwan_return_reentered_)return false;
+       state->records.state_->creator.get()!=this||
+       (taiwan_return_reading_&&!guarded_read)||taiwan_return_reentered_)return false;
     const auto records=state->records.state_;const auto source=records->plan;
     const std::weak_ptr<const void> identity(records);
     if(source->poisoned||source->identity!=identity_||
@@ -641,7 +652,52 @@ bool SharedActorVisibility::taiwan_pk_return_consumption_current(const TaiwanPkR
            endpoint.session->battle_generation()!=endpoint.battle||
            !endpoint.session->common_world_delivery_current(endpoint.lease.account,endpoint.lease.character,endpoint.lease.generation)))return false;
     }
+    if(state->publication){
+        if(!Session::native_pk_return_publication_matches(*state->publication,state->transport)||
+           !Session::native_pk_return_publication_records_matches(*state->publication,identity))return false;
+    }
     return Session::native_pk_return_consumption_current(state->transport);
+}
+bool SharedActorVisibility::taiwan_pk_return_consumption_source_current(const TaiwanPkReturnConsumption& token)const{
+    const auto state=token.state_;
+    return taiwan_pk_return_consumption_fence(state)&&
+        taiwan_pk_return_read(state->records.state_->plan,TaiwanReturnCheck::Consumed,false,state)&&
+        taiwan_pk_return_consumption_fence(state);
+}
+bool SharedActorVisibility::taiwan_pk_return_consumption_stored_current(const TaiwanPkReturnConsumption& token)const{
+    const auto state=token.state_;
+    return taiwan_pk_return_consumption_fence(state)&&
+        taiwan_pk_return_read(state->records.state_->plan,TaiwanReturnCheck::Consumed,true,state)&&
+        taiwan_pk_return_consumption_fence(state);
+}
+std::optional<Session::NativePkReturnPublication> SharedActorVisibility::prepare_taiwan_pk_return_publication(
+        const TaiwanPkReturnConsumption& token,std::weak_ptr<Session::NativePkReturnPublicationOwner> source){
+    owner();const auto state=token.state_;
+    if(!taiwan_pk_return_consumption_fence(state)||state->publication)return {};
+    auto publication=Session::prepare_native_pk_return_publication(state->transport,std::move(source));
+    // Retain exact token-only Custody before all actual Outbox source observers.
+    state->publication.emplace(publication);
+    if(!taiwan_pk_return_publication_matches(token,publication))return {};
+    return publication;
+}
+bool SharedActorVisibility::taiwan_pk_return_publication_identity_matches(const TaiwanPkReturnConsumption& token,
+        const Session::NativePkReturnPublication& value)const noexcept{
+    const auto state=token.state_;
+    return thread_==std::this_thread::get_id()&&state&&state->records.state_->creator.get()==this&&
+        state->publication&&*state->publication==value;
+}
+bool SharedActorVisibility::taiwan_pk_return_publication_matches(const TaiwanPkReturnConsumption& token,
+        const Session::NativePkReturnPublication& value)const{
+    owner();return taiwan_pk_return_publication_identity_matches(token,value)&&
+        taiwan_pk_return_consumption_fence(token.state_)&&
+        Session::native_pk_return_publication_matches(value,token.state_->transport);
+}
+bool SharedActorVisibility::release_taiwan_pk_return_publication(const TaiwanPkReturnConsumption& token,
+        const Session::NativePkReturnPublication& value){
+    owner();
+    return taiwan_pk_return_publication_matches(token,value)&&
+        value.status()==Session::NativePkReturnPublicationStatus::Prepared&&
+        Session::release_native_pk_return_publication(value);
 }
 bool SharedActorVisibility::taiwan_pk_return_consumption_matches_transport(const TaiwanPkReturnConsumption& token,
         const Session::NativePkReturnConsumption& value)const noexcept{
@@ -654,6 +710,9 @@ void SharedActorVisibility::cancel_taiwan_pk_return_consumption_state(TaiwanPkRe
     state.poisoned=true;
     if(!state.claimed)return; // An unused preallocation leaves the original source untouched.
     state.records.state_->plan->poisoned=true;
+    // Released bytes cannot be rolled back. Close the exact acquired cohort
+    // BEFORE detaching models, including lifecycle-before-failure-callback.
+    if(state.publication)Session::abandon_native_pk_return_publication(*state.publication);
     for(const auto& [id,endpoint]:state.records.state_->plan->endpoints){
         const auto at=taiwan_pk_return_consumptions_.find(id);
         if(at!=taiwan_pk_return_consumptions_.end()&&!at->second.owner_before(state.identity)&&
@@ -663,8 +722,9 @@ void SharedActorVisibility::cancel_taiwan_pk_return_consumption_state(TaiwanPkRe
         const auto at=entries_.find(key);
         if(at!=entries_.end()&&matches(expected.binding,at->second))entries_.erase(at);
     }
-    // No hide/release/S73 for a6F cohort that is still held and never written;
-    // no restore of old markers, generation rollback or successor deletion.
+    // No hide/S73: before exposure these models were never sent; after possible
+    // exposure all actual acquired receivers are closing and recovery is retained.
+    // No restore of old markers, generation rollback or successor deletion.
 }
 void SharedActorVisibility::cancel_taiwan_pk_return_consumption(const TaiwanPkReturnConsumption& token)noexcept{
     if(token.state_)cancel_taiwan_pk_return_consumption_state(*token.state_);

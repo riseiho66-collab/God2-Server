@@ -360,6 +360,7 @@ struct Session::NativePkReturnOutputHold::Data {
     const std::vector<std::shared_ptr<Recipient>> recipients;
     std::mutex transition; // Failure vs one-use consume; never source/close under lock.
     std::atomic<std::shared_ptr<NativePkReturnConsumption::Data>> consumption;
+    std::atomic<std::shared_ptr<NativePkReturnPublication::Data>> publication;
     std::atomic<Phase> phase{Phase::Pending};
     std::atomic<std::size_t> cuts{0};
     std::atomic<bool> installed{false},game_posted{false},failed_notified{false};
@@ -386,6 +387,39 @@ struct Session::NativePkReturnConsumption::Custody {
         if(data->phase.load()!=Data::Phase::Failed)
             if(const auto output=data->output.lock())Session::fail_native_pk_return_output(output);
     }
+};
+struct Session::NativePkReturnPublication::Data {
+    struct Progress {
+        std::atomic<std::size_t> next{0};
+        std::atomic<bool> released{false},done{false};
+    };
+    const std::weak_ptr<NativePkReturnOutputHold::Data> output;
+    const std::weak_ptr<NativePkReturnConsumption::Data> consumption;
+    const std::shared_ptr<NativePkReturnOutputPlan::Data> plan;
+    const std::weak_ptr<NativePkReturnPublicationOwner> source;
+    const std::vector<std::shared_ptr<Progress>> progress;
+    std::atomic<NativePkReturnPublicationStatus> phase{NativePkReturnPublicationStatus::Prepared};
+    std::atomic<bool> exposed{false},game_posted{false},failed_notified{false};
+    std::atomic<std::size_t> cuts{0};
+    Data(std::shared_ptr<NativePkReturnOutputHold::Data> held,
+        std::shared_ptr<NativePkReturnConsumption::Data> consumed,std::weak_ptr<NativePkReturnPublicationOwner> owner,
+        std::vector<std::shared_ptr<Progress>> values)
+        :output(held),consumption(consumed),plan(held->plan),source(std::move(owner)),progress(std::move(values)){}
+};
+struct Session::NativePkReturnPublication::Work {
+    const std::shared_ptr<Data> data;
+    explicit Work(std::shared_ptr<Data> value):data(std::move(value)){}
+    ~Work(){
+        if(data->phase.load()==NativePkReturnPublicationStatus::Released)
+            if(const auto output=data->output.lock())Session::fail_native_pk_return_output(output);
+    }
+};
+struct Session::NativePkReturnPublication::Custody {
+    const std::shared_ptr<Data> data;
+    std::shared_ptr<Work> prepared_work; // Transferred to REAL posts/async handlers on release.
+    Custody(std::shared_ptr<Data> value,std::shared_ptr<Work> work):data(std::move(value)),prepared_work(std::move(work)){}
+    ~Custody(){if(data->phase.load()!=NativePkReturnPublicationStatus::Failed)
+        if(const auto output=data->output.lock())Session::fail_native_pk_return_output(output);}
 };
 struct Session::NativeWorldSelectionInput::Data {
     const std::weak_ptr<Session> session;
@@ -592,6 +626,14 @@ struct Session::Impl {
             std::shared_ptr<NativePkReturnOutputHold::Data::Frame> bytes,std::size_t at,std::size_t index)
             :cohort(std::move(owner)),frame(std::move(bytes)),recipient(at),ordinal(index){}
     };
+    struct ActiveWriteContinuation {
+        std::shared_ptr<NativePkReturnPublication::Work> work;
+        const std::shared_ptr<std::vector<std::uint8_t>> frame;
+        ActiveWriteContinuation(std::shared_ptr<NativePkReturnPublication::Work> value,
+            std::shared_ptr<std::vector<std::uint8_t>> bytes):work(std::move(value)),frame(std::move(bytes)){}
+    };
+    // Weak bookkeeping only: the REAL async operation owns the continuation.
+    std::weak_ptr<ActiveWriteContinuation> active_write_continuation;
     // Separate from the pair Data kept by the game owner. Last abandoned post
     // marks Pending failed even when that owning capability is still retained.
     struct NativePkReturnAttempt {
@@ -725,7 +767,8 @@ struct Session::Impl {
         std::shared_ptr<NativePkEntryHold::Data> native_pk{};
         std::shared_ptr<WorldResponseAttempt> observed_response{}; // Preserve old aggregate initializers.
         std::shared_ptr<OwnedInputLease> owned_input_lease{}; // Old aggregate positions preserved.
-        std::shared_ptr<NativePkReturnOutputWrite> return_output{}; // LAST: private held cohort only.
+        std::shared_ptr<NativePkReturnOutputWrite> return_output{}; // Existing private cohort position.
+        std::weak_ptr<ActiveWriteContinuation> pending_return_continuation{}; // LAST default: actual held-task holder only.
     };
     std::deque<Write> writes;
     // Network strand only; set by the exact marked Write's success completion,
@@ -1234,6 +1277,89 @@ struct Session::Impl {
                 if(!accepted)Session::fail_native_pk_return_output(data);
             });
         }catch(...){Session::fail_native_pk_return_output(data);}
+    }
+    bool native_pk_return_publication_transport_current(
+            const std::shared_ptr<NativePkReturnPublication::Data>& data,std::size_t index)const{
+        if(!data||index>=data->progress.size()||data->phase.load()==NativePkReturnPublicationStatus::Failed||
+           data->source.expired()||data->plan->records.expired()||data->plan->game!=game||close_requested.load())return false;
+        const auto output=data->output.lock();const auto consumed=data->consumption.lock();
+        if(!output||!consumed||output->publication.load()!=data||output->consumption.load()!=consumed||
+           native_pk_return_output.load()!=output||output->recipients[index]->session.get()!=&owner||
+           output->phase.load()!=NativePkReturnOutputHold::Data::Phase::Consumed||
+           consumed->phase.load()!=NativePkReturnConsumption::Data::Phase::Consumed)return false;
+        if(index<2)return native_pk_return_consumption_transport_current(consumed,index);
+        const auto& proof=output->recipients[index]->normal;if(!proof)return false;
+        std::lock_guard lock(proof->data_->sync->mutex);
+        return normal_output_transport_current_locked(proof->data_);
+    }
+    void complete_native_pk_return_publication_recipient(
+            const std::shared_ptr<NativePkReturnPublication::Work>& work,std::size_t index){
+        const auto data=work->data;const auto output=data->output.lock();
+        if(!output||!native_pk_return_publication_transport_current(data,index)||
+           data->phase.load()!=NativePkReturnPublicationStatus::Released||!data->progress[index]->released.load()||
+           data->progress[index]->next.load()!=output->recipients[index]->frames.size()){
+            if(output)Session::fail_native_pk_return_output(output);return;
+        }
+        if(data->progress[index]->done.exchange(true))return;
+        if(data->cuts.fetch_add(1)+1!=data->progress.size()||data->game_posted.exchange(true))return;
+        try{asio::post(data->plan->game,[data,work]{
+            const NativePkReturnPublication token(data);const auto output=data->output.lock();
+            if(!output||!Session::native_pk_return_publication_current(token)){
+                if(output)Session::fail_native_pk_return_output(output);return;
+            }
+            auto released=NativePkReturnPublicationStatus::Released;
+            if(!data->phase.compare_exchange_strong(released,NativePkReturnPublicationStatus::Written)){
+                Session::fail_native_pk_return_output(output);return;
+            }
+            bool accepted=false;
+            {const auto owner=data->source.lock();if(owner&&Session::native_pk_return_publication_current(token))
+                try{accepted=owner->native_pk_return_publication_written(token)&&
+                    Session::native_pk_return_publication_current(token);}catch(...){}}
+            if(!accepted)Session::fail_native_pk_return_output(output);
+        });}catch(...){Session::fail_native_pk_return_output(output);}
+    }
+    void release_native_pk_return_publication_recipient(
+            const std::shared_ptr<NativePkReturnPublication::Work>& work,std::size_t index){
+        const auto data=work->data;const auto output=data->output.lock();
+        try{
+            if(!output||closing||data->phase.load()!=NativePkReturnPublicationStatus::Released||
+               !data->exposed.load()||!native_pk_return_publication_transport_current(data,index))
+                throw std::logic_error("Return publication lost exact released source");
+            const auto& recipient=output->recipients[index];std::size_t seen=0;bool ended=false;
+            // Actual FIFO order, exact original frames; older survivor output stays ahead.
+            for(const auto& queued:writes){
+                const auto marker=queued.return_output;
+                if(marker&&marker->cohort.lock()==output){
+                    if(ended||seen>=recipient->frames.size()||!queued.held||marker->recipient!=index||
+                       marker->ordinal!=seen||marker->frame!=recipient->frames[seen]||
+                       queued.bytes!=marker->frame->bytes)throw std::logic_error("Return publication FIFO identity");
+                    ++seen;
+                }else if(seen)ended=true;
+            }
+            if(seen!=recipient->frames.size()||data->progress[index]->released.exchange(true))
+                throw std::logic_error("Return publication missing/repeated release");
+            const bool start=!writes.empty()&&writes.front().held&&writes.front().return_output&&
+                writes.front().return_output->cohort.lock()==output;
+            for(auto& queued:writes)if(queued.return_output&&queued.return_output->cohort.lock()==output)queued.held=false;
+            if(recipient->frames.empty()){
+                if(index<2&&(!writes.empty()||write_bytes))throw std::logic_error("Empty returner has output");
+                complete_native_pk_return_publication_recipient(work,index);return;
+            }
+            if(start)write(work);
+            else{
+                const auto active=active_write_continuation.lock();
+                if(active){
+                    if(active->work||writes.empty()||active->frame!=writes.front().bytes)
+                        throw std::logic_error("Return publication older async identity");
+                    active->work=work; // Same strand; actual handler owns this holder, never queue/Impl.
+                }else{
+                    const auto pending=writes.empty()?nullptr:writes.front().pending_return_continuation.lock();
+                    if(!pending||!writes.front().held||pending->frame!=writes.front().bytes||pending->work)
+                        throw std::logic_error("Return publication lacks actual older held-task continuation");
+                    pending->work=work; // Strong ownership remains ONLY in the old game/strand tasks.
+                }
+            }
+        }catch(...){if(output)Session::fail_native_pk_return_output(output);}
     }
     void retire_native_pk_terminal() {
         if(const auto pair=native_pk_return.exchange({}))Session::fail_native_pk_return_reservation(pair);
@@ -2809,24 +2935,65 @@ struct Session::Impl {
         } catch (const std::exception& e) { fail(e.what()); }
         catch (...) { fail("protocol encode failed"); }
     }
-    void write() {
-        if(writes.empty() || writes.front().held)return;
-        if(const auto marked=writes.front().return_output){
-            if(const auto data=marked->cohort.lock())Session::fail_native_pk_return_output(data);
-            else fail("Return held frame lost its exact cohort");
-            return; // No release consumer exists here.
+    void write(std::shared_ptr<NativePkReturnPublication::Work> carried={}) {
+        if(writes.empty())return;
+        if(writes.front().held){
+            if(carried){
+                const auto pending=writes.front().pending_return_continuation.lock();
+                if(!pending||pending->frame!=writes.front().bytes||(pending->work&&pending->work!=carried)){
+                    if(const auto output=carried->data->output.lock())Session::fail_native_pk_return_output(output);return;
+                }
+                pending->work=std::move(carried); // Multiple older held prefixes retain actual task custody.
+            }
+            return;
+        }
+        const auto marked=writes.front().return_output;
+        if(marked){
+            const auto output=marked->cohort.lock();const auto publication=output?output->publication.load():nullptr;
+            if(!output||!publication||!carried||carried->data!=publication||
+               publication->phase.load()!=NativePkReturnPublicationStatus::Released||
+               marked->recipient>=publication->progress.size()||marked->recipient>=output->recipients.size()||
+               marked->ordinal>=output->recipients[marked->recipient]->frames.size()||
+               !publication->progress[marked->recipient]->released.load()||
+               !native_pk_return_publication_transport_current(publication,marked->recipient)||
+               marked->ordinal!=publication->progress[marked->recipient]->next.load()||
+               marked->frame!=output->recipients[marked->recipient]->frames[marked->ordinal]||
+               writes.front().bytes!=marked->frame->bytes){
+                if(output)Session::fail_native_pk_return_output(output);else fail("Return frame lost exact cohort");return;
+            }
         }
         auto bytes = writes.front().bytes;
         // The completion owns the active buffer even when fail() clears the queue.
         const bool owned_initiation=bool(owned_response_input_hold.load()) || owned_input_retired.load();
+        std::shared_ptr<ActiveWriteContinuation> continuation;
         try {
+        continuation=std::make_shared<ActiveWriteContinuation>(carried,bytes);
+        active_write_continuation=continuation;
         asio::async_write(socket, asio::buffer(*bytes), asio::bind_executor(strand,
-            [self = owner.shared_from_this(), bytes](const asio::error_code& ec, std::size_t transferred) {
+            [self = owner.shared_from_this(), bytes,marked,continuation](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
                 const bool owned_completion=bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
                 try {
                 if (s.finished || s.writes.empty()) return;
+                const auto publication=continuation->work?continuation->work->data:nullptr;
+                const auto output=publication?publication->output.lock():nullptr;
+                if(publication&&(!output||s.closing||publication->phase.load()!=NativePkReturnPublicationStatus::Released||
+                   !s.native_pk_return_publication_transport_current(publication,
+                        output->plan->sessions[0].get()==self.get()?0u:
+                        output->plan->sessions[1].get()==self.get()?1u:
+                        std::size_t(std::find_if(output->recipients.begin(),output->recipients.end(),
+                            [&](const auto& recipient){return recipient->session==self;})-output->recipients.begin())))){
+                    if(output)Session::fail_native_pk_return_output(output);return;
+                }
                 if (ec) { s.fail(ec.message()); return; }
+                if(marked&&(!publication||!output||s.writes.front().return_output!=marked||s.writes.front().held||
+                   s.writes.front().bytes!=bytes||bytes!=marked->frame->bytes||transferred!=bytes->size()||
+                   marked->recipient>=output->recipients.size()||marked->ordinal>=output->recipients[marked->recipient]->frames.size()||
+                   output->recipients[marked->recipient]->session!=self||
+                   output->recipients[marked->recipient]->frames[marked->ordinal]!=marked->frame||
+                   publication->progress[marked->recipient]->next.load()!=marked->ordinal)){
+                    if(output)Session::fail_native_pk_return_output(output);else s.fail("Return write lost exact publication");return;
+                }
                 if(const auto entry=s.writes.front().normal_entry) {
                     // Strand-owned exact Write; do not read game-owned IDs or
                     // change legacy write/close policy for passive metadata.
@@ -2933,8 +3100,17 @@ struct Session::Impl {
                 const auto completed_input_lease=s.writes.front().owned_input_lease;
                 s.write_bytes -= s.writes.front().bytes->size();
                 s.writes.pop_front();
+                if(marked){
+                    auto expected=marked->ordinal;
+                    if(!publication->progress[marked->recipient]->next.compare_exchange_strong(expected,marked->ordinal+1)){
+                        Session::fail_native_pk_return_output(output);return;
+                    }
+                }
                 if(s.native_pk_terminal.load())s.stage_native_pk_terminal();
-                if (!s.writes.empty()) s.write();
+                auto next_work=continuation->work;
+                if(marked&&marked->ordinal+1==output->recipients[marked->recipient]->frames.size())
+                    next_work.reset(); // Unrelated suffix handlers must not retain this pending publication.
+                if (!s.writes.empty()) s.write(std::move(next_work));
                 else if (s.closing) s.finish();
                 else if(s.resume_after_login_write) {
                     s.resume_after_login_write=false;
@@ -2943,12 +3119,20 @@ struct Session::Impl {
                 // Every original marker/log/pop/queue operation above completed
                 // before the exact owned response releases a single continuation.
                 if(completed_input_lease)s.release_owned_input(completed_input_lease);
+                if(marked&&publication->progress[marked->recipient]->next.load()==output->recipients[marked->recipient]->frames.size())
+                    s.complete_native_pk_return_publication_recipient(continuation->work,marked->recipient);
                 }catch(...) {
+                    if(continuation->work){if(const auto output=continuation->work->data->output.lock())
+                        Session::fail_native_pk_return_output(output);return;}
                     if(owned_completion || s.owned_response_input_hold.load() || s.owned_input_retired.load()) {s.fail_owned_input("Owned bootstrap FIFO completion failed");return;}
                     throw; // Preserve the original unobserved completion path.
                 }
             }));
         }catch(...) {
+            if(continuation&&continuation->work){if(const auto output=continuation->work->data->output.lock())
+                Session::fail_native_pk_return_output(output);return;}
+            if(marked){if(const auto output=marked->cohort.lock())Session::fail_native_pk_return_output(output);return;}
+            if(carried){if(const auto output=carried->data->output.lock())Session::fail_native_pk_return_output(output);return;}
             if(owned_initiation || owned_response_input_hold.load() || owned_input_retired.load()) {fail_owned_input("Owned bootstrap async write initiation failed");return;}
             throw; // Original unobserved initiation behavior.
         }
@@ -3534,19 +3718,21 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
                 s.fail("Pending common entry queue limit");finish(false);return;
             }
             if(!s.terminal_write_allowed()){finish(false);return;}
+            const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
             s.writes.push_back({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
-            asio::post(s.game,[self,bytes,before,after,account,character,publish=std::move(publish),finish] {
+            s.writes.back().pending_return_continuation=held_continuation;
+            asio::post(s.game,[self,bytes,held_continuation,before,after,account,character,publish=std::move(publish),finish] {
                 bool accepted=false;
                 try {accepted=before() && self->account_id==account && self->character_id==character &&
                     publish() && after() && self->account_id==account && self->character_id==character;}catch(...) {}
-                asio::post(self->impl_->strand,[self,bytes,after,accepted,finish] {
+                asio::post(self->impl_->strand,[self,bytes,held_continuation,after,accepted,finish] {
                     auto& s=*self->impl_;
                     if(!accepted || s.closing || !after() || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
                         s.fail("Pending common entry publication refused");finish(false);return;
                     }
                     const auto held=std::find_if(s.writes.begin(),s.writes.end(),[&](const auto& entry){return entry.bytes==bytes;});
                     if(held==s.writes.end() || !held->held){s.fail("Pending common entry held frame missing");finish(false);return;}
-                    held->held=false;if(held==s.writes.begin())s.write();
+                    held->held=false;if(held==s.writes.begin())s.write(held_continuation->work);
                     finish(true); // Queue released, never a client/native ACK.
                 });
             });
@@ -3596,14 +3782,16 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
             // Prepare the queue entry before accounting; allocation failure may
             // not strand bytes or the reservation. Prior writes may finish.
             if(!s.terminal_write_allowed()){finish(false);return;}
+            const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
             s.writes.push_back({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
-            asio::post(s.game,[self,bytes,account,character,common,publish=std::move(publish),finish]() mutable {
+            s.writes.back().pending_return_continuation=held_continuation;
+            asio::post(s.game,[self,bytes,held_continuation,account,character,common,publish=std::move(publish),finish]() mutable {
                 bool accepted=false;
                 try {
                     accepted=common() && self->account_id==account && self->character_id==character &&
                         publish() && common() && self->account_id==account && self->character_id==character;
                 }catch(...) {}
-                asio::post(self->impl_->strand,[self,bytes,common,accepted,finish] {
+                asio::post(self->impl_->strand,[self,bytes,held_continuation,common,accepted,finish] {
                     auto& s=*self->impl_;
                     if(!accepted || s.closing || !common() || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
                         s.fail("Common world publication refused");finish(false);return;
@@ -3613,7 +3801,7 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
                         s.fail("Common world held frame missing");finish(false);return;
                     }
                     held->held=false;
-                    if(held==s.writes.begin())s.write();
+                    if(held==s.writes.begin())s.write(held_continuation->work);
                     finish(true); // Published before IO release; local queue only.
                 });
             });
@@ -4125,8 +4313,11 @@ void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnO
     if(!data)return;
     bool first;
     std::shared_ptr<NativePkReturnConsumption::Data> successor;
+    std::shared_ptr<NativePkReturnPublication::Data> publication;
     {
         std::lock_guard lock(data->transition);
+        publication=data->publication.load();
+        if(publication)publication->phase.store(NativePkReturnPublicationStatus::Failed);
         successor=data->consumption.load(); // Same guard as prepare/consume association.
         first=data->phase.exchange(NativePkReturnOutputHold::Data::Phase::Failed)!=
             NativePkReturnOutputHold::Data::Phase::Failed;
@@ -4169,6 +4360,12 @@ void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnO
             asio::post(recipient->session->impl_->strand,[session=recipient->session]{session->impl_->close();});
         }catch(...){recipient->session->impl_->close_requested.store(true);}
     }
+    if(publication)try{asio::post(data->plan->game,[publication]{
+        if(publication->failed_notified.exchange(true)||publication->plan->thread!=std::this_thread::get_id())return;
+        if(const auto owner=publication->source.lock())try{
+            owner->native_pk_return_publication_failed(NativePkReturnPublication(publication));
+        }catch(...){}
+    });}catch(...){}
     if(!first)return;
     try{asio::post(data->plan->game,[data]{
         if(data->failed_notified.exchange(true)||data->plan->thread!=std::this_thread::get_id())return;
@@ -4399,6 +4596,86 @@ bool Session::native_pk_return_consumption_records_matches(const NativePkReturnC
        identity.owner_before(data->plan->records))return false;
     const auto actual=data->plan->records.lock(),requested=identity.lock(); // Recorded game thread only.
     return actual&&actual==requested&&native_pk_return_consumption_current(value);
+}
+Session::NativePkReturnPublicationStatus Session::NativePkReturnPublication::status()const noexcept{
+    return data_?data_->phase.load():NativePkReturnPublicationStatus::Failed;
+}
+Session::NativePkReturnPublication Session::prepare_native_pk_return_publication(
+        const NativePkReturnConsumption& consumed,std::weak_ptr<NativePkReturnPublicationOwner> owner){
+    if(!native_pk_return_consumption_current(consumed)||owner.expired())
+        throw std::invalid_argument("Return publication lacks exact consumed source");
+    const auto output=consumed.data_->output.lock();
+    std::vector<std::shared_ptr<NativePkReturnPublication::Data::Progress>> progress;progress.reserve(output->recipients.size());
+    for(const auto& recipient:output->recipients)progress.push_back(std::make_shared<NativePkReturnPublication::Data::Progress>());
+    const auto data=std::make_shared<NativePkReturnPublication::Data>(output,consumed.data_,std::move(owner),std::move(progress));
+    const auto work=std::make_shared<NativePkReturnPublication::Work>(data);
+    const auto custody=std::make_shared<NativePkReturnPublication::Custody>(data,work);
+    {
+        std::lock_guard lock(output->transition);
+        if(!native_pk_return_consumption_current(consumed)||output->publication.load())
+            throw std::logic_error("Return publication already prepared or retired");
+        output->publication.store(data);
+    }
+    return NativePkReturnPublication(data,custody);
+}
+bool Session::native_pk_return_publication_current(const NativePkReturnPublication& value) noexcept{
+    try{
+    const auto data=value.data_;
+    if(!data||data->plan->thread!=std::this_thread::get_id()||data->source.expired()||
+       data->phase.load()==NativePkReturnPublicationStatus::Failed||data->plan->records.expired())return false;
+    const auto output=data->output.lock();const auto consumption=data->consumption.lock();
+    if(!output||!consumption||output->publication.load()!=data||output->consumption.load()!=consumption||
+       !native_pk_return_consumption_current(NativePkReturnConsumption(consumption)))return false;
+    if(data->phase.load()==NativePkReturnPublicationStatus::Written){
+        if(data->cuts.load()!=data->progress.size())return false;
+        for(std::size_t index=0;index<data->progress.size();++index)
+            if(!data->progress[index]->done.load()||!data->progress[index]->released.load()||
+               data->progress[index]->next.load()!=output->recipients[index]->frames.size())return false;
+    }
+    return data->phase.load()!=NativePkReturnPublicationStatus::Failed&&
+        native_pk_return_consumption_current(NativePkReturnConsumption(consumption));
+    }catch(...){return false;}
+}
+bool Session::native_pk_return_publication_matches(const NativePkReturnPublication& value,
+        const NativePkReturnConsumption& consumed) noexcept{
+    return native_pk_return_publication_current(value)&&value.data_->consumption.lock()==consumed.data_&&
+        native_pk_return_publication_current(value);
+}
+bool Session::native_pk_return_publication_records_matches(const NativePkReturnPublication& value,
+        const std::weak_ptr<const void>& identity) noexcept{
+    if(!native_pk_return_publication_current(value)||value.data_->plan->records.owner_before(identity)||
+       identity.owner_before(value.data_->plan->records))return false;
+    const auto actual=value.data_->plan->records.lock(),requested=identity.lock();
+    return actual&&actual==requested&&native_pk_return_publication_current(value);
+}
+bool Session::native_pk_return_publication_exposure_possible(const NativePkReturnPublication& value) noexcept{
+    return value.data_&&value.data_->exposed.load(); // Sticky after Failed, no Current requirement.
+}
+void Session::abandon_native_pk_return_publication(const NativePkReturnPublication& value) noexcept{
+    if(value.data_)if(const auto output=value.data_->output.lock())fail_native_pk_return_output(output);
+}
+bool Session::release_native_pk_return_publication(const NativePkReturnPublication& value) noexcept{
+    const auto data=value.data_;const auto custody=value.custody_;
+    if(!data||data->plan->thread!=std::this_thread::get_id())return false;
+    const auto output=data->output.lock();if(!output)return false;
+    try{
+        std::shared_ptr<NativePkReturnPublication::Work> work;
+        {
+            std::lock_guard lock(output->transition);
+            auto prepared=NativePkReturnPublicationStatus::Prepared;
+            if(!custody||!custody->prepared_work||!native_pk_return_publication_current(value)||
+               !data->phase.compare_exchange_strong(prepared,NativePkReturnPublicationStatus::Released))
+                throw std::logic_error("Return publication release already consumed or stale");
+            data->exposed.store(true); // BEFORE first post/unhold; even a dropped task may have exposed peers.
+            work=std::move(custody->prepared_work);
+        }
+        for(std::size_t index=0;index<output->recipients.size();++index){
+            if(data->phase.load()!=NativePkReturnPublicationStatus::Released)throw std::logic_error("Return release failed midpost");
+            const auto session=output->recipients[index]->session;
+            asio::post(session->impl_->strand,[session,work,index]{session->impl_->release_native_pk_return_publication_recipient(work,index);});
+        }
+        return true;
+    }catch(...){fail_native_pk_return_output(output);return false;}
 }
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){

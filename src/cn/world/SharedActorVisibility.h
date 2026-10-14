@@ -309,7 +309,7 @@ public:
         Taiwan native; // Exact receiving connection plus complete6F/5E/73.
         std::shared_ptr<const TaiwanReturnQualification> qualification;
     };
-    enum class TaiwanReturnCheck {Prepare,Retained};
+    enum class TaiwanReturnCheck {Prepare,Retained,Consumed};
     struct TaiwanReturnScene {
         std::array<std::vector<TaiwanReturnActor>,2> incoming,outgoing;
         // Mandatory pure full readset: exact complete ordered sets (including
@@ -321,6 +321,9 @@ public:
         // Concrete text2/guild rows and CUSTOM-0137 current common endpoint
         // roots/poses are jointly requalified in one final snapshot, including
         // both participants even if this ordered scene has no actor edges.
+        // Consumed must qualify the same complete bytes/readset against the
+        // actual successor identities. A provider retaining old PK predicates
+        // must reject, never silently reuse the preparation as current material.
         // Requalifies ALL supplier-owned inputs together,
         // after per-edge observers. No yield/mutation/send/event pumping.
         std::function<bool(TaiwanReturnCheck)> current;
@@ -413,6 +416,16 @@ public:
         std::weak_ptr<Session::NativePkReturnConsumptionOwner>);
     bool consume_taiwan_pk_return(const TaiwanPkReturnConsumption&);
     bool taiwan_pk_return_consumption_current(const TaiwanPkReturnConsumption&)const;
+    bool taiwan_pk_return_consumption_source_current(const TaiwanPkReturnConsumption&)const;
+    bool taiwan_pk_return_consumption_stored_current(const TaiwanPkReturnConsumption&)const;
+    std::optional<Session::NativePkReturnPublication> prepare_taiwan_pk_return_publication(
+        const TaiwanPkReturnConsumption&,std::weak_ptr<Session::NativePkReturnPublicationOwner>);
+    bool taiwan_pk_return_publication_matches(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnPublication&)const;
+    bool taiwan_pk_return_publication_identity_matches(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnPublication&)const noexcept;
+    bool release_taiwan_pk_return_publication(const TaiwanPkReturnConsumption&,
+        const Session::NativePkReturnPublication&);
     // Failure matching is exact identity even after Current has retired.
     bool taiwan_pk_return_consumption_matches_transport(const TaiwanPkReturnConsumption&,
         const Session::NativePkReturnConsumption&)const noexcept;
@@ -426,7 +439,10 @@ private:
     void cancel_taiwan_pk_return_consumption_state(TaiwanPkReturnConsumption::State&)noexcept;
     bool taiwan_pk_return_records_fence(const std::shared_ptr<const TaiwanPkReturnRecords::State>&)const;
     bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
-    bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck,bool stored_only=false)const;
+    bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck,
+        bool stored_only=false,const std::shared_ptr<TaiwanPkReturnConsumption::State>& successor={})const;
+    bool taiwan_pk_return_consumption_fence(const std::shared_ptr<TaiwanPkReturnConsumption::State>&,
+        bool guarded_read=false)const;
     void reject_taiwan_return_reentry()const;
     bool taiwan_pk_return_pending(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_departed(const Lease&)const noexcept;

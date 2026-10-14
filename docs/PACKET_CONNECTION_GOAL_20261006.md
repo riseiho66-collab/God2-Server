@@ -5700,3 +5700,24 @@ frontier26 21/105, whole%null unchanged. TW100-first/CNnative126150/fourWS/commo
 core64bit/saves/frozen andPHASE1 no build/tests/runtime/native/VM/codec/gameDBSQL/
 migrate/schema/activate/deploy/fullgoalACTIVE continue. Details:
 docs/research/tw-return-consume-source-20261014.md.
+
+## Round389 - Actual exact local return publication source (2026-10-14)
+
+ActualConsumed owner prepares typedPublication beforecompleteConsumedprovider
+readsets/savedpairedledger/twocontexts/finaljointstored thenpurecuts andoneuse
+actualstrand release. ExactrecipientFIFO/frame/ordinal/fullbytecount/realempty
+cuts ->oneGameweakowner Written fullsource/savedtail Current; no nativeACK.
+WeakImpl/weakLASTqueue holders and actualolder async/common heldapprovaltask
+custody preservevalidnormalFIFO/multipleheldprefixes; detachunrelatedsuffix
+Work. Abandonedjobs/activehandlers failReleased evengamecapretained.
+Stickyexposure beforefirstpost/unhold, explicitownedcohort abandon BEFOREmodel
+detach/lifecyclehide, no73/rollback/oldmarkers/genrewind/unrelatederase.
+Consumedprovidersremainmandatory; oldPKCurrent/frozenbytes nevergrantcurrent
+source. Original5sterminal/input/genericoutput/Finishedlocks retained. Durable
+release/recovery/inputresume/Mainbackend/companionresources/issuedlineage/full
+return/nativeadoption OPEN. FiveCPP/V26all76pins71exact5updated/canonical528/no
+newprojectPY/Lua/native/opcode/formula/defaultactivation/fullroute. Parser77=
+50/11/16,pending12/frontier26 21/105,whole%null unchanged. FullTW100-first/CNnative
+126150/fourWS/commoncore64bit/saves/frozen/PHASE1 no builds/tests/runtime/native/
+VM/codec/gameDBSQL/migrate/schema/activate/deploy goalACTIVE continues. Details:
+docs/research/tw-return-write-source-20261014.md.
