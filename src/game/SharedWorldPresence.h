@@ -1,8 +1,12 @@
 #pragma once
 #include "db/RecoveredCharacterRepository.h"
 #include <map>
+#include <memory>
 #include <optional>
+#include <span>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace god2 {
 // Serial game-owner lease over actual common character/storage identity.
@@ -70,6 +74,25 @@ public:
     // Actual repository reads must not yield, pump or mutate. Caught nested
     // snapshots/registry mutations invalidate this observation, not old leases.
     std::optional<std::vector<ReadyCharacter>> ready_characters() const;
+    // CUSTOM-0133 full population witness, privately issued by this registry.
+    // Owns all ready rows and the complete registry (including pending leases).
+    // Retain the value, not a borrowed characters() span, across observers.
+    class ReadyPopulation final {
+    public:
+        ReadyPopulation(const ReadyPopulation&)=default;
+        ReadyPopulation& operator=(const ReadyPopulation&)=default;
+        std::span<const ReadyCharacter> characters() const noexcept;
+    private:
+        friend class SharedWorldPresence;
+        struct Data;
+        explicit ReadyPopulation(std::shared_ptr<const Data> data):data_(std::move(data)) {}
+        std::shared_ptr<const Data> data_;
+    };
+    std::optional<ReadyPopulation> observe_ready_population() const;
+    // Pure final fence: exact private issuer + whole registry + allocation
+    // epoch. Saved root/pose/resource Current is qualified separately.
+    // A new actor that appears and disappears also changes this epoch.
+    bool retained_population_current(const ReadyPopulation&) const;
     // Actual currently stored owner position. Movement authority remains with
     // the gameplay controller; these methods do not grant walkability/timing.
     std::optional<RecoveredPosition> saved_position(const Lease&) const;
@@ -79,6 +102,7 @@ public:
     bool release(const Lease&);
 private:
     struct Entry {Lease lease;bool active=false;bool operator==(const Entry&) const = default;};
+    struct PopulationIdentity {};
     void owner() const;
     bool stored(const Lease&) const;
     bool owned(const Lease&) const;
@@ -86,6 +110,10 @@ private:
     std::thread::id thread_=std::this_thread::get_id();
     std::map<std::uint64_t,Entry> sessions_;
     std::uint64_t generation_=0;
+    // Owning identity prevents address reuse of a destroyed registry from
+    // making an old population token valid in a new instance.
+    const std::shared_ptr<const PopulationIdentity> population_identity_=
+        std::make_shared<const PopulationIdentity>();
     mutable bool snapshot_busy_=false,snapshot_reentered_=false;
 };
 }

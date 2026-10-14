@@ -63,6 +63,7 @@ class SqliteNativeWorldEntrySnapshotRepository;
 class SqliteNativeEquipmentSnapshotRepository;
 class SqliteOwnedInventoryRepository;
 class SqliteOwnedBlacklistRepository;
+class OwnedTaiwanReturnActorSavedSource;
 class SqliteDatabase final : public Database {
 public:
     explicit SqliteDatabase(std::filesystem::path path,
@@ -92,6 +93,10 @@ public:
     SqliteNativeEquipmentSnapshotRepository& native_equipment_snapshot_writer();
     OwnedInventoryRepository& owned_inventory_storage() override;
     SqliteOwnedInventoryRepository& owned_inventory_writer();
+    // Explicit same-DB saved observations; no schema, material or native actor
+    // is installed. ReadyPopulation, visibility and transport remain separate.
+    std::shared_ptr<OwnedTaiwanReturnActorSavedSource> make_owned_taiwan_return_actor_saved_source(
+        std::shared_ptr<SharedWorldPresence>);
     // Explicit fresh shared custody schema only. No import, automatic grants
     // or legacy promotion; ordinary migration/access does not install it.
     void install_owned_inventory_schema();

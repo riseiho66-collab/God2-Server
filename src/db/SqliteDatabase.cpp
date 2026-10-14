@@ -16,6 +16,7 @@
 #include "db/SqliteSupport.h"
 #include "db/NativeDeliverySnapshotSchema.h"
 #include "game/OwnedTaiwanPkReturnRoleTextSource.h"
+#include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include <utility>
 #include <system_error>
 namespace god2 {
@@ -159,6 +160,9 @@ struct SqliteDatabase::Impl {
                 throw DatabaseError("TW PK learned companion Database source changed or reentered");
         }
     };
+    // Last member dies before every borrowed repository and the connection.
+    // Sources retain only a weak reference; no database/source ownership cycle.
+    std::shared_ptr<const void> return_actor_saved_lifetime;
 };
 SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration> migrations,
     NativeTaiwanSkillProfile taiwan_skill_profile)
@@ -365,6 +369,35 @@ OwnedInventoryRepository& SqliteDatabase::owned_inventory_storage() {
 }
 SqliteOwnedInventoryRepository& SqliteDatabase::owned_inventory_writer() {
     (void)owned_inventory_storage();return *impl_->owned_inventory;
+}
+std::shared_ptr<OwnedTaiwanReturnActorSavedSource>
+SqliteDatabase::make_owned_taiwan_return_actor_saved_source(std::shared_ptr<SharedWorldPresence> presence) {
+    if(!migrated_||!impl_||impl_->taiwan_skill_import_only||!impl_->accounts||!impl_->recovered_characters||
+       impl_->pk_player_thread!=std::this_thread::get_id())
+        throw DatabaseError("TW return actor saved source requires migrated private game owners");
+    auto* const owner=impl_.get();auto* const db=owner->connection.get();
+    if(!db||!sqlite3_get_autocommit(db))
+        throw DatabaseError("TW return actor saved factory requires closed transaction");
+    const auto changes=sqlite3_total_changes64(db);
+    const auto fence=[&] {
+        if(impl_.get()!=owner||owner->connection.get()!=db||owner->pk_player_thread!=std::this_thread::get_id()||
+           !sqlite3_get_autocommit(db)||sqlite3_total_changes64(db)!=changes||
+           !owner->accounts->uses_connection(db)||!owner->recovered_characters->uses_connection(db))
+            throw DatabaseError("TW return actor saved factory changed private owners or rows");
+    };
+    fence();
+    if(!presence||!presence->owns_repository(*owner->recovered_characters))
+        throw DatabaseError("TW return actor saved factory requires exact Presence repository");
+    fence();
+    auto& world=native_world_entry_writer();fence();
+    auto& equipment=native_equipment_snapshot_writer();fence();
+    auto& inventory=owned_inventory_writer();fence();
+    if(!owner->return_actor_saved_lifetime)owner->return_actor_saved_lifetime=std::make_shared<const std::uint8_t>(0);
+    fence();
+    auto result=std::shared_ptr<OwnedTaiwanReturnActorSavedSource>(new OwnedTaiwanReturnActorSavedSource(
+        db,*owner->accounts,*owner->recovered_characters,world,equipment,inventory,
+        std::move(presence),owner->return_actor_saved_lifetime));
+    fence();return result;
 }
 SqliteOwnedBlacklistRepository& SqliteDatabase::blacklist() {
     if(!migrated_)throw DatabaseError("Migrate before accessing blacklist storage");
@@ -645,17 +678,40 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         auto role_text_source=std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>(
             new OwnedTaiwanPkReturnRoleTextSource(impl_->connection.get(),*impl_->role_text,*impl_->guilds,
                 *impl_->recovered_characters,presence));
-        return_source=[resolvers,role_text_source](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
+        // The hosted backend issues the full population and saved-row witnesses
+        // from its actual common owners. The mandatory supplier still owns the
+        // complete actor/profile/resource/selection data; these witnesses do
+        // not construct missing actors or turn an empty fallback into a scene.
+        auto actor_saved_source=make_owned_taiwan_return_actor_saved_source(presence);
+        return_source=[resolvers,role_text_source,actor_saved_source,presence](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
             ->std::optional<cn::SharedActorVisibility::TaiwanReturnScene>{
         if(resolvers->stopped)return {};
+        const auto population=presence->observe_ready_population();
+        if(resolvers->stopped||!population||!presence->retained_population_current(*population))return {};
+        const auto saved_rows=actor_saved_source->observe_population(population->characters());
+        if(resolvers->stopped||!saved_rows||!presence->retained_population_current(*population)||
+           !saved_rows->matches_population(population->characters()))return {};
         auto value=resolvers->return_scene(request);
         if(resolvers->stopped||!value||!value->current||
-           (value->role_text_source&&value->role_text_source!=role_text_source))return {};
+           (value->role_text_source&&value->role_text_source!=role_text_source)||
+           value->ready_population||value->actor_saved_source||value->actor_saved_rows||
+           !actor_saved_source->current(*saved_rows)||resolvers->stopped||
+           !presence->retained_population_current(*population))return {};
         value->role_text_source=role_text_source;
+        value->ready_population=*population;
+        value->actor_saved_source=actor_saved_source;
+        value->actor_saved_rows=*saved_rows;
         const auto current=value->current;
-        value->current=[resolvers,current](cn::SharedActorVisibility::TaiwanReturnCheck check){
-            if(resolvers->stopped)return false;
-            const bool accepted=current(check);return accepted&&!resolvers->stopped;
+        value->current=[resolvers,current,presence,actor_saved_source,population=*population,saved_rows=*saved_rows]
+                (cn::SharedActorVisibility::TaiwanReturnCheck check){
+            const auto retained=[&] {
+                return !resolvers->stopped&&actor_saved_source->owns_presence(presence)&&
+                    actor_saved_source->owns_readset(saved_rows)&&
+                    saved_rows.matches_population(population.characters())&&
+                    presence->retained_population_current(population);
+            };
+            if(!retained())return false;
+            const bool accepted=current(check);return accepted&&retained();
         };
         return value;
         };

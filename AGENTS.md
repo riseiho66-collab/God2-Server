@@ -897,3 +897,18 @@ savedworldequipmentreadset/opaque9_17/nativeacceptance OPEN; routesadded0 and
 percentnull. TW100firstACTIVE/commonCNfourWS/saves/453繁體/clientformulas/
 maxHPpoison10分1/fonts/text/shared64/coin99999999999/stack99/levels/907pins
 preserved. PHASE1no build/test/runtime/native/codec/SQL/migrate/activate/deploy.
+
+Round409 connects private complete ReadyPopulation (pending registry + allocation
+epoch) and actual sameDB OwnedTaiwanReturnActorSavedSource: all ready common
+roots/current saved poses, unchanged historical native world/equipment witnesses,
+owned inventory; handles0..3fff at storage, rendering qualification separate.
+Hosted PK backend attaches actual owner population/readset around mandatory
+complete supplier; pure registry/source identity fences at Retained/Consumed.
+Final saved+role text closed readers share one actual read scope and actual
+FinishedRoom transaction, no provider/Session/resource callbacks in SQL cut.
+Eight CPP (six existing/two new), V46,canonical595; no newprojectPY/Lua/
+CMake/EXE. FullfreshActorProfile/resources/selection/completeReturnScene remain
+OPEN, fullroutesadded0/wholepercentnull. TW100first ACTIVE; commonCN/fourWS/
+saves/453繁體/clientformulas/maxHP poison10分1/fonts/text/shared64/
+coin99999999999/stack99/nativelevels/907 originalpins preserved. PHASE1 no
+build/test/runtime/native/VM/gamecodec/DBSQL/migrate/activate/deploy.

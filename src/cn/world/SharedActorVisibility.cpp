@@ -111,10 +111,31 @@ void SharedActorVisibility::reject_taiwan_return_reentry()const {
     if(taiwan_return_reading_){taiwan_return_reentered_=true;
         throw std::logic_error("TW pure return source reentered visibility mutation");}
 }
+bool SharedActorVisibility::taiwan_pk_return_population_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>& state)const {
+    owner();if(!state)return false;
+    const auto& scene=state->scene;
+    const bool population=bool(scene.ready_population),source=bool(scene.actor_saved_source),rows=bool(scene.actor_saved_rows);
+    if(!population && !source && !rows)return true; // Existing full supplier contract.
+    if(!population || !source || !rows || !scene.actor_saved_source->owns_presence(presence_) ||
+       !scene.actor_saved_source->owns_readset(*scene.actor_saved_rows) ||
+       !presence_->retained_population_current(*scene.ready_population) ||
+       !scene.actor_saved_rows->matches_population(scene.ready_population->characters()))return false;
+    // A complete population is not the visible edge list. Every selected
+    // endpoint and both actual returners must belong to this same full readset.
+    const auto ready=scene.ready_population->characters();
+    for(const auto& [session,endpoint]:state->endpoints){
+        std::size_t matches=0;
+        for(const auto& actor:ready)
+            if(actor.lease.session==session && actor.lease==endpoint.lease && actor.position==endpoint.position)++matches;
+        if(matches!=1)return false;
+    }
+    return true;
+}
 bool SharedActorVisibility::taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>& state)const {
     // Pure registry/Session fence: no source/repository/name callbacks.
     if(!state||state->poisoned||taiwan_return_reentered_||state->identity!=identity_||
-       generation_!=state->base_generation||state->baseline.size()!=entries_.size()||taiwan_pk_return_pending(state))return false;
+       generation_!=state->base_generation||state->baseline.size()!=entries_.size()||taiwan_pk_return_pending(state)||
+       !taiwan_pk_return_population_fence(state))return false;
     for(std::uint8_t i=0;i<2;++i)
         if(!state->sessions[i]||!state->sessions[i]->native_pk_return_preparation_current(state->preparations[i])||
            !taiwan_pk_departure_retained_current(state->departure,state->leases,state->positions,
@@ -197,13 +218,32 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         if(stored_only){
             if(!valid())return false;
             const auto source=state->scene.role_text_source;
+            const auto saved=state->scene.actor_saved_source;
+            if(saved){
+                if(in_scope){
+                    // Both known closed readers share the actual room's one
+                    // transaction. No scene/session/resource/provider callbacks.
+                    if(!saved->stored_current_in_scope(in_scope,*state->scene.actor_saved_rows)||!valid())return false;
+                    if(source&&(!source->owns_presence(presence_)||state->role_rows.size()!=state->actors.size()||
+                       state->endpoint_rows.size()!=state->endpoints.size()||
+                       !source->stored_current_in_scope(in_scope,state->role_rows,state->endpoint_rows)||!valid()))return false;
+                    return valid(); // Saved readset is checked even without role text.
+                }
+                if(source&&(!source->owns_presence(presence_)||state->role_rows.size()!=state->actors.size()||
+                   state->endpoint_rows.size()!=state->endpoints.size()))return false;
+                return saved->current_with_role_text(*state->scene.actor_saved_rows,source,
+                    state->role_rows,state->endpoint_rows)&&valid();
+            }
             if(!source)return !in_scope&&valid();
             return source->owns_presence(presence_)&&state->role_rows.size()==state->actors.size()&&
                 state->endpoint_rows.size()==state->endpoints.size()&&
                 (in_scope?source->stored_current_in_scope(in_scope,state->role_rows,state->endpoint_rows):
                     source->stored_current(state->role_rows,state->endpoint_rows))&&valid();
         }
-        if(!valid()||!state->scene.current||!state->scene.current(check)||!valid())return false;
+        if(!valid())return false;
+        const auto saved_source=state->scene.actor_saved_source;
+        if(saved_source&&(!saved_source->current(*state->scene.actor_saved_rows)||!valid()))return false;
+        if(!state->scene.current||!state->scene.current(check)||!valid())return false;
         // Empty scenes still qualify BOTH exact saved participant poses.
         for(std::size_t i=0;i<2;++i)
             if(presence_->saved_position(state->leases[i])!=std::optional{state->positions[i]}||!valid())return false;
@@ -316,7 +356,13 @@ bool SharedActorVisibility::taiwan_pk_return_read(const std::shared_ptr<TaiwanPk
         // All rows in ONE final read snapshot after every external scene,
         // name, profile and presence observer; secondary and guild share the
         // same snapshot. No callbacks after this cut.
-        if(role_source&&(!role_source->stored_current(state->role_rows,state->endpoint_rows)||!valid()))return false;
+        if(saved_source){
+            // One final same-connection read scope closes the complete saved
+            // population together with all optional role/guild/endpoint rows.
+            // No external source callbacks follow this joint cut.
+            if(!saved_source->current_with_role_text(*state->scene.actor_saved_rows,role_source,
+                    state->role_rows,state->endpoint_rows)||!valid())return false;
+        }else if(role_source&&(!role_source->stored_current(state->role_rows,state->endpoint_rows)||!valid()))return false;
         return valid();
     }catch(...){state->poisoned=true;return false;}
 }
@@ -663,7 +709,8 @@ bool SharedActorVisibility::taiwan_pk_return_consumption_fence(
        !Session::native_pk_return_consumption_records_matches(state->transport,identity)||
        generation_!=source->base_generation+state->expected.size()||
        entries_.size()!=source->baseline.size()+state->expected.size()||taiwan_pk_return_pending(source)||
-       !taiwan_pk_return_models_match(source->baseline)||!taiwan_pk_return_models_match(state->expected))return false;
+       !taiwan_pk_return_models_match(source->baseline)||!taiwan_pk_return_models_match(state->expected)||
+       !taiwan_pk_return_population_fence(source))return false;
     for(const auto& lease:source->leases)
         if(taiwan_pk_departures_.contains(lease.session))return false;
     for(const auto& [id,endpoint]:source->endpoints){

@@ -4,6 +4,7 @@
 #include "cn/protocol/CnRemoteActorMove.h"
 #include "cn/text/CnNativeActorText.h"
 #include "game/SharedWorldPresence.h"
+#include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include "net/Session.h"
 #include "protocol/RecoveredRemoteActor.h"
 #include "protocol/RecoveredTaiwanActorOverride.h"
@@ -16,7 +17,7 @@
 #include <variant>
 #include <vector>
 
-struct sqlite3; // Actual connection identity only; no SQL dependency in this interface.
+struct sqlite3; // Actual private transaction connection identity; no SQL is invoked by this interface.
 namespace god2 {class SharedNativeActorNameSource;class OwnedTaiwanPkReturnRoleTextSource;}
 namespace god2::cn {
 class SharedInitialScene;
@@ -399,6 +400,13 @@ public:
         // Complete saved rows and confirmed guild absence stay distinct from
         // read failure; all share the final snapshot and retained guild epoch.
         std::shared_ptr<god2::OwnedTaiwanPkReturnRoleTextSource> role_text_source;
+        // CUSTOM-0133 full stored actor population from the actual same-DB
+        // factory. Either all three values are present or all are absent.
+        // Readset rows must match the private complete ready population, while
+        // directed visible edges remain the complete supplier's scene policy.
+        std::optional<SharedWorldPresence::ReadyPopulation> ready_population;
+        std::shared_ptr<god2::OwnedTaiwanReturnActorSavedSource> actor_saved_source;
+        std::optional<god2::OwnedTaiwanReturnActorSavedSource::Readset> actor_saved_rows;
     };
     class TaiwanPkReturnPlan {
     public:
@@ -525,6 +533,7 @@ private:
     void cancel_taiwan_pk_return_consumption_state(TaiwanPkReturnConsumption::State&)noexcept;
     bool taiwan_pk_return_records_fence(const std::shared_ptr<const TaiwanPkReturnRecords::State>&)const;
     bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
+    bool taiwan_pk_return_population_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_return_read(const std::shared_ptr<TaiwanPkReturnPlan::State>&,TaiwanReturnCheck,
         bool stored_only=false,const std::shared_ptr<TaiwanPkReturnConsumption::State>& successor={},
         sqlite3* in_scope=nullptr)const;

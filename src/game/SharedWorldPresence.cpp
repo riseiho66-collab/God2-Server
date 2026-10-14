@@ -104,7 +104,31 @@ std::optional<SharedWorldPresence::Lease> SharedWorldPresence::ready_lease(
     if(!ready(lease))return std::nullopt;
     return lease;
 }
+struct SharedWorldPresence::ReadyPopulation::Data {
+    const std::shared_ptr<const PopulationIdentity> identity;
+    const std::map<std::uint64_t,Entry> registry;
+    const std::uint64_t generation;
+    const std::vector<ReadyCharacter> characters;
+    Data(std::shared_ptr<const PopulationIdentity> owner,std::map<std::uint64_t,Entry> entries,
+            std::uint64_t epoch,std::vector<ReadyCharacter> rows)
+        :identity(std::move(owner)),registry(std::move(entries)),generation(epoch),characters(std::move(rows)) {}
+};
+std::span<const SharedWorldPresence::ReadyCharacter> SharedWorldPresence::ReadyPopulation::characters() const noexcept {
+    return data_?std::span<const ReadyCharacter>{data_->characters}:std::span<const ReadyCharacter>{};
+}
+bool SharedWorldPresence::retained_population_current(const ReadyPopulation& population) const {
+    owner();
+    if(snapshot_busy_){snapshot_reentered_=true;return false;}
+    const auto data=population.data_;
+    return data && data->identity==population_identity_ && data->generation==generation_ &&
+        data->registry==sessions_;
+}
 std::optional<std::vector<SharedWorldPresence::ReadyCharacter>> SharedWorldPresence::ready_characters() const {
+    const auto observed=observe_ready_population();
+    if(!observed)return std::nullopt;
+    const auto rows=observed->characters();return std::vector<ReadyCharacter>(rows.begin(),rows.end());
+}
+std::optional<SharedWorldPresence::ReadyPopulation> SharedWorldPresence::observe_ready_population() const {
     owner();
     if(snapshot_busy_){snapshot_reentered_=true;return std::nullopt;}
     snapshot_busy_=true;snapshot_reentered_=false;
@@ -112,7 +136,8 @@ std::optional<std::vector<SharedWorldPresence::ReadyCharacter>> SharedWorldPrese
     // Never keep a map iterator/reference across virtual repository observers.
     // Pending entries qualify the registry epoch but are not chat participants.
     const auto registry=sessions_;
-    const auto unchanged=[&] {return !snapshot_reentered_ && sessions_==registry;};
+    const auto generation=generation_;
+    const auto unchanged=[&] {return !snapshot_reentered_ && generation_==generation && sessions_==registry;};
     const auto read_population=[&]() -> std::optional<std::vector<ReadyCharacter>> {
         std::vector<ReadyCharacter> result;result.reserve(registry.size());
         for(const auto& [session,entry]:registry) {
@@ -143,7 +168,8 @@ std::optional<std::vector<SharedWorldPresence::ReadyCharacter>> SharedWorldPrese
         const auto& a=(*first)[i];const auto& b=(*second)[i];
         if(a.lease!=b.lease || a.position!=b.position || !same_character_root(a.character,b.character))return std::nullopt;
     }
-    return first;
+    auto data=std::make_shared<const ReadyPopulation::Data>(population_identity_,registry,generation,std::move(*first));
+    return ReadyPopulation(std::move(data));
 }
 bool SharedWorldPresence::release(const Lease& lease) {
     owner();if(snapshot_busy_)snapshot_reentered_=true;

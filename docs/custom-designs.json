@@ -5280,6 +5280,32 @@
           "src/game/TaiwanNativeActorResourceBank.cpp"
         ],
         "evidence": "docs/research/tw-actor-native-lookup-source-20261015.md"
+      },
+      "return_actor_saved_source409": {
+        "classification": "CUSTOM0133_PRIVATE_COMPLETE_POPULATION_AND_ACTUAL_SAME_DATABASE_SAVED_READSET_SOURCE_PARTIAL_ROUTE",
+        "round": 409,
+        "complete_registry_and_allocation_epoch_private_token": true,
+        "complete_current_root_pose_and_historical_world_equipment_plus_owned_inventory": true,
+        "historical_native_handle_not_rebased_to_current_lease": true,
+        "complete_common_registry_handle_domain_0_to_3fff": true,
+        "actual_hosted_backend_attaches_same_owner_population_and_readset": true,
+        "joint_saved_and_role_text_final_closed_read_scope": true,
+        "actual_finished_room_transaction_closed_reader": true,
+        "pure_retained_consumed_full_population_fence_without_SQL": true,
+        "full_actor_profile_resources_selection_producer": false,
+        "arbitrary_schema_changing_observer_preservation": false,
+        "default_enabled": false,
+        "source_paths": [
+          "src/game/SharedWorldPresence.h",
+          "src/game/SharedWorldPresence.cpp",
+          "src/cn/world/SharedActorVisibility.h",
+          "src/cn/world/SharedActorVisibility.cpp",
+          "src/db/SqliteDatabase.h",
+          "src/db/SqliteDatabase.cpp",
+          "src/game/OwnedTaiwanReturnActorSavedSource.h",
+          "src/game/OwnedTaiwanReturnActorSavedSource.cpp"
+        ],
+        "evidence": "docs/research/tw-return-actor-saved-source-20261015.md"
       }
     },
     {
