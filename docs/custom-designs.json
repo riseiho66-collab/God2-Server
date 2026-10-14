@@ -4890,7 +4890,26 @@
   "tests": [],
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Retain the actual pre-entry published companion lineage needed by later authoritative settlement/return instead of flattening it or treating missing selection as an empty native companion.",
-  "replacement": "Complete original resource producer/persistence, trusted actual Application resolver and whole return/visibility/lock/recovery route; comprehensive final-phase native acceptance before activation."
+  "replacement": "Complete original resource producer/persistence, trusted actual Application resolver and whole return/visibility/lock/recovery route; comprehensive final-phase native acceptance before activation.",
+      "whole_response_publication_source": {
+        "round": 393,
+        "document": "docs/research/tw-pk-whole-response-source-20261014.md",
+        "source_paths": [
+          "src/core/Application.cpp",
+          "src/db/SqliteDatabase.cpp",
+          "src/db/SqliteDatabase.h",
+          "src/db/SqliteOwnedPkRoomRepository.cpp",
+          "src/game/OwnedTaiwanPkCompanionSource.h"
+        ],
+        "source_connected": true,
+        "publication_authority": "actual own original INIT and Written whole response, real frame boundary and exact original restoration suffix",
+        "legacy_per_batch_source_preserved": true,
+        "raw_scalar_factory_bypass": false,
+        "actual_Main_backend_hosted": false,
+        "whole_route_complete": false,
+        "default_activated": false,
+        "product_execution": false
+      }
 },
 {
   "id": "CUSTOM-0130",

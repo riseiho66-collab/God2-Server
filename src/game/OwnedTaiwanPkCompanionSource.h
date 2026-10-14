@@ -2,6 +2,8 @@
 #include "handlers/RecoveredOwnedCompanions.h"
 #include "db/SqliteSupport.h"
 #include "net/Session.h"
+#include "protocol/RecoveredWorldFrame.h"
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -18,6 +20,34 @@ namespace god2 {
 class OwnedTaiwanPkCompanionSource final {
     struct State;
 public:
+    // Actual callback response coverage only. No per-batch write is invented.
+    class WholeResponseCoverage {
+    public:
+        WholeResponseCoverage(const WholeResponseCoverage&)=default;
+        WholeResponseCoverage& operator=(const WholeResponseCoverage&)=default;
+        WholeResponseCoverage(WholeResponseCoverage&& other)noexcept:data_(other.data_){}
+        WholeResponseCoverage& operator=(WholeResponseCoverage&& other)noexcept{data_=other.data_;return *this;}
+        const Session::WorldResponseWrite& receipt()const noexcept{return data_->receipt;}
+        const std::vector<std::uint8_t>& wire()const noexcept{return data_->wire;}
+        const std::vector<std::uint8_t>& suffix()const noexcept{return data_->suffix;}
+        std::size_t suffix_offset()const noexcept{return data_->suffix_offset;}
+        std::size_t suffix_size()const noexcept{return data_->suffix.size();}
+        std::size_t batch_count()const noexcept{return data_->batch_count;}
+        bool operator==(const WholeResponseCoverage&)const=default;
+    private:
+        friend class OwnedTaiwanPkCompanionSource;
+        struct Data {
+            Data(Session::WorldResponseWrite receipt_,std::vector<std::uint8_t> wire_,
+                    std::vector<std::uint8_t> suffix_,std::size_t count)
+                :receipt(std::move(receipt_)),wire(std::move(wire_)),suffix(std::move(suffix_)),
+                 suffix_offset(wire.size()-suffix.size()),batch_count(count){}
+            Session::WorldResponseWrite receipt;
+            std::vector<std::uint8_t> wire,suffix;
+            const std::size_t suffix_offset,batch_count;
+        };
+        explicit WholeResponseCoverage(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
+    };
     struct Material {
         Session::NormalWorldInitialization initialization;
         RecoveredOwnedCompanions::Restoration restoration;
@@ -25,6 +55,7 @@ public:
         std::vector<Session::WorldRecordsWrite> writes;
         std::uint64_t session,account,character,battle_generation;
         SessionState phase;
+        std::optional<WholeResponseCoverage> whole_response{}; // Absent on the exact legacy path.
     };
     class Observation {
     public:
@@ -48,7 +79,49 @@ public:
         RecoveredOwnedCompanions&,const NativeSkillCatalog&,std::shared_ptr<Session>,
         Session::NormalWorldInitialization,RecoveredOwnedCompanions::Restoration,
         std::vector<Session::WorldRecordsWrite>);
+    static std::optional<Observation> observe(sqlite3*,SqliteCompanionRepository&,
+        RecoveredOwnedCompanions&,const NativeSkillCatalog&,std::shared_ptr<Session>,
+        Session::NormalWorldInitialization,RecoveredOwnedCompanions::Restoration,
+        Session::WorldResponseWrite,std::vector<std::uint8_t> original_whole_wire);
 private:
+    static bool whole_current(const WholeResponseCoverage& coverage,const Session& session,
+            std::size_t batches){
+        const auto& wire=coverage.wire();const auto& suffix=coverage.suffix();
+        return batches&&coverage.batch_count()==batches&&!suffix.empty()&&suffix.size()<=wire.size()&&
+            coverage.suffix_offset()==wire.size()-suffix.size()&&
+            std::equal(suffix.begin(),suffix.end(),wire.begin()+coverage.suffix_offset())&&
+            coverage.receipt().wire()==wire&&
+            coverage.receipt().status()==Session::WorldResponseWriteStatus::Written&&
+            session.world_response_write_current_on_game(coverage.receipt());
+    }
+    static std::optional<WholeResponseCoverage> cover_whole(Session& session,
+            Session::WorldResponseWrite receipt,std::vector<std::uint8_t> wire,
+            const std::vector<std::vector<std::uint8_t>>& batches){
+        if(batches.empty()||receipt.wire()!=wire||
+           receipt.status()!=Session::WorldResponseWriteStatus::Written||
+           !session.world_response_write_current_on_game(receipt))return {};
+        std::vector<std::uint8_t> suffix;
+        for(const auto& batch:batches){
+            const auto frame=RecoveredWorldFrame::encode(batch);
+            if(frame.size()>suffix.max_size()-suffix.size())return {};
+            suffix.insert(suffix.end(),frame.begin(),frame.end());
+        }
+        if(suffix.empty()||suffix.size()>wire.size()||
+           !std::equal(suffix.begin(),suffix.end(),wire.end()-suffix.size()))return {};
+        const auto begin=wire.size()-suffix.size();bool boundary=false;
+        // The actual WWR mint already validated complete frames/checksums.
+        // Walk only length envelopes; never decode/reframe its original prefix.
+        for(std::size_t at=0;at<wire.size();){
+            if(at==begin)boundary=true;
+            if(wire.size()-at<2)return {};
+            const auto length=static_cast<std::size_t>(wire[at])+256u*wire[at+1];
+            if(length<4||length>wire.size()-at)return {};
+            at+=length;
+        }
+        if(!boundary)return {};
+        return WholeResponseCoverage(std::make_shared<const WholeResponseCoverage::Data>(
+            std::move(receipt),std::move(wire),std::move(suffix),batches.size()));
+    }
     struct State {
         sqlite3* db;
         SqliteCompanionRepository& repository;
@@ -84,11 +157,16 @@ private:
                m.restoration.deity_roster().account()!=m.account ||
                m.restoration.deity_roster().character()!=m.character)return false;
             const auto& batches=m.restoration.batches();
-            if(m.writes.size()!=batches.size() || m.prefix.actual_batches()!=batches)return false;
-            for(std::size_t i=0;i<m.writes.size();++i)
-                if(m.writes[i].logical()!=batches[i] ||
-                   !peer->world_records_write_current_on_game(m.writes[i]) ||
-                   m.writes[i].status()!=Session::WorldRecordsWriteStatus::Written)return false;
+            if(m.whole_response){
+                if(!m.writes.empty()||m.prefix.actual_batches()!=batches||
+                   !whole_current(*m.whole_response,*peer,batches.size()))return false;
+            }else{
+                if(m.writes.size()!=batches.size() || m.prefix.actual_batches()!=batches)return false;
+                for(std::size_t i=0;i<m.writes.size();++i)
+                    if(m.writes[i].logical()!=batches[i] ||
+                       !peer->world_records_write_current_on_game(m.writes[i]) ||
+                       m.writes[i].status()!=Session::WorldRecordsWriteStatus::Written)return false;
+            }
             return !reentered;
         }
         bool current(const Material& m){
@@ -158,6 +236,43 @@ inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCom
     auto state=std::make_shared<State>(State{db,repository,helper,catalog,session});
     auto material=std::make_shared<const Material>(Material{std::move(initialization),std::move(restoration),
         std::move(*prefix),std::move(writes),id,account,character,generation,phase});
+    Observation result(std::move(state),std::move(material));
+    if(!result.current())return {};
+    return result;
+}
+inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCompanionSource::observe(
+        sqlite3* db,SqliteCompanionRepository& repository,RecoveredOwnedCompanions& helper,
+        const NativeSkillCatalog& catalog,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,RecoveredOwnedCompanions::Restoration restoration,
+        Session::WorldResponseWrite whole,std::vector<std::uint8_t> original_whole_wire){
+    if(!db||!repository.uses_connection(db)||!helper.owns_repository(repository)||
+       !catalog.uses_connection(db)||!session||
+       !session->normal_world_initialization_current_on_game(initialization)||!initialization.entry_written())return {};
+    // Own arguments/receipt before any saved source/catalog observer.
+    const auto phase=session->state();
+    const auto id=session->id(),account=session->account_id,character=session->character_id;
+    const auto generation=session->battle_generation();
+    if((phase!=SessionState::CharacterSelected&&phase!=SessionState::InWorld)||
+       !account||!character||session->closing()||!sqlite3_get_autocommit(db)||
+       restoration.deity_roster().account()!=account||restoration.deity_roster().character()!=character)return {};
+    auto coverage=cover_whole(*session,std::move(whole),std::move(original_whole_wire),restoration.batches());
+    if(!coverage)return {}; // No vacuous suffix/receipt for a genuine NoRecords source.
+    auto state=std::make_shared<State>(State{db,repository,helper,catalog,session});
+    const auto local=[&]{
+        return !state->reentered&&session->normal_world_initialization_current_on_game(initialization)&&
+            initialization.entry_written()&&!session->closing()&&session->id()==id&&
+            session->account_id==account&&session->character_id==character&&session->state()==phase&&
+            session->battle_generation()==generation&&whole_current(*coverage,*session,restoration.batches().size());
+    };
+    std::optional<TaiwanNativeDeityRosterPrefix> prefix;
+    {
+        State::Read read(*state);if(!read.entered||!local())return {};
+        const auto changes=sqlite3_total_changes64(db);
+        prefix=helper.normal_entry_prefix(restoration,catalog);
+        if(!prefix||!local()||!sqlite3_get_autocommit(db)||sqlite3_total_changes64(db)!=changes)return {};
+    }
+    auto material=std::make_shared<const Material>(Material{std::move(initialization),std::move(restoration),
+        std::move(*prefix),{},id,account,character,generation,phase,std::move(coverage)});
     Observation result(std::move(state),std::move(material));
     if(!result.current())return {};
     return result;

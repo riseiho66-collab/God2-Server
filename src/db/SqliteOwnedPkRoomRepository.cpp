@@ -130,7 +130,7 @@ Json companion_material(const OwnedTaiwanPkCompanionSource::Material& m){
     }
     for(const auto& d:m.prefix.catalog_records())definitions.push_back(companion_definition(d));
     for(const auto& w:m.writes)writes.push_back(w.logical());
-    return Json{{"owner",Json::array({m.session,m.account,m.character,m.battle_generation,static_cast<int>(m.phase)})},
+    auto result=Json{{"owner",Json::array({m.session,m.account,m.character,m.battle_generation,static_cast<int>(m.phase)})},
         {"normal_entry",m.initialization.entry_frame()},{"normal_logical",m.initialization.entry_logical()},
         {"accepted_tail",m.initialization.accepted_tail()},{"config_flag",m.initialization.config_flag()},
         {"roster_owner",Json::array({roster.account(),roster.character()})},{"roster",rows},
@@ -139,6 +139,20 @@ Json companion_material(const OwnedTaiwanPkCompanionSource::Material& m){
         {"prefix_rows",prefix_rows},{"prefix_count",m.prefix.roster_count()},
         {"prefix_selected",m.prefix.selected_row()},{"prefix_catalog",definitions},
         {"prefix_batches",m.prefix.actual_batches()}};
+    if(m.whole_response){
+        const auto& coverage=*m.whole_response;
+        if(!m.writes.empty())throw DatabaseError("PK whole companion readset cannot mix per-frame observations");
+        // ONLY the new private whole-response source adds this binding. Keep
+        // historical written_batches as the actual old per-frame observations;
+        // restoration bytes never manufacture individual socket receipts.
+        result["whole_response_transport"]=Json{{"design_id","CUSTOM-0129"},
+            {"observation","actual-one-original-WWR-local-complete-write-with-restored-ordered-suffix"},
+            {"original_wire",coverage.wire()},{"encoded_restoration_suffix",coverage.suffix()},
+            {"suffix_offset",coverage.suffix_offset()},{"suffix_size",coverage.suffix_size()},
+            {"batch_count",coverage.batch_count()},
+            {"scope","full-original-response-coverage;not-per-frame-receipts-native-ACK-or-companion-HP"}};
+    }
+    return result;
 }
 bool owned_appearance_current(const SqliteOwnedPkRoomRepository::Input& input,sqlite3* db){
     if(!input.entry.owned_appearances())return true; // Historical path unchanged.

@@ -689,3 +689,15 @@ Lua/native/formula/opcode/defaultactivation/fullroute. ActualMainnullauthority/
 mixedfacade/fullScene/wholeWWRlearnedlineage/fullactions/wholeinventory remain
 OPEN; parser77=50/11/16,pending12/frontier26 21/105,whole%null. TW100firstACTIVE,
 commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.
+
+Round393 connects actual wholeWWR companion publication: immutable original
+INIT/ownWritten response/fulloriginalwire ->nonempty ordered restoration suffix
+at genuineframeboundary ->sameDB/helper/catalog typedsource ->conditionalonly
+transportreadset ->Main exactholder cachedsupplier/actualwholeprefix ongame
+BEFORE independent playerreadyflag. No TLS impersonation/fakeperframes/replay30/
+newplayergrant/stalelearning remint; legacy perbatch andstored roster/catalog
+SQL source unchanged. FiveexistingCPP/V30pins derivedfrom89/no newprojectPY/
+Lua/native/formula/opcode/defaultactivation/fullroute. Mainnullbackend/mixedC69/
+fullplayer/fullScene/activationinventory closedSQL/issuedlineage/nativeacceptance/
+wholeinventory OPEN; parser77=50/11/16,pending12/frontier26 21/105,whole%null.
+TW100firstACTIVE/commonCN/web64/saves/frozen/PHASE1sourceonly unchanged.

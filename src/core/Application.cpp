@@ -952,6 +952,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 std::shared_ptr<const Session::WorldResponseWrite> whole_response;
                 std::shared_ptr<const std::vector<std::uint8_t>> whole_response_wire;
                 std::size_t whole_response_batch_count=0;
+                // CUSTOM-0129 retains the actual published source once. Stale
+                // learning/selection/INIT lineage is never reset or reminted.
+                std::optional<OwnedTaiwanPkCompanionSource::Observation> pk_publication;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -2266,6 +2269,61 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             std::map<std::uint64_t,std::uint64_t> pk_world_generations;
             // This guard covers EVERY PK peer observer, not only the roster
             // reader. A caught nested resolver still poisons the outer result.
+            // Genuine cached supplier for the configured preparation owner.
+            // It also qualifies actual PK readiness below. No restore, send,
+            // per-frame receipt conversion or strong holder callback cycle.
+            const OwnedTaiwanPkEntryPreparation::Companions pk_companions=[&](
+                    const std::shared_ptr<Session>& peer,const Session::NormalWorldInitialization& initialization)
+                    ->std::optional<OwnedTaiwanPkCompanionSource::Observation>{
+                if(!peer||!peer->normal_world_initialization_current_on_game(initialization)||
+                   !initialization.entry_written())return {};
+                const auto id=peer->id(),account=peer->account_id,character=peer->character_id;
+                const auto battle=peer->battle_generation();const auto phase=peer->state();
+                const auto at=owned_companion_restoration_sources.find(id);
+                if(at==owned_companion_restoration_sources.end())return {};
+                const auto source=at->second;
+                const auto observation=source->pk_publication;const auto material=source->material;
+                const auto prefix=source->expected_receiving_prefix;
+                const auto whole=source->whole_response;const auto wire=source->whole_response_wire;
+                const auto batches=source->whole_response_batch_count;
+                const auto submitted=source->submission_calls_completed;
+                const auto writes=source->write_observations;
+                const bool completed=source->all_submission_calls_returned;
+                if(!observation||!material||!prefix||!completed)return {};
+                const auto local=[&]{
+                    if(!peer->normal_world_initialization_current_on_game(initialization)||
+                       !initialization.entry_written()||peer->closing()||peer->id()!=id||
+                       peer->account_id!=account||peer->character_id!=character||peer->state()!=phase||
+                       peer->battle_generation()!=battle||!peer->recovered_world_ready())return false;
+                    const auto now=owned_companion_restoration_sources.find(id);
+                    if(now==owned_companion_restoration_sources.end()||now->second!=source||
+                       source->session.lock()!=peer||source->account!=account||source->character!=character||
+                       source->phase_at_restore!=phase||source->battle_generation_at_restore!=battle||
+                       source->pk_publication!=observation||source->material!=material||
+                       source->whole_response!=whole||source->whole_response_wire!=wire||
+                       source->whole_response_batch_count!=batches||
+                       source->submission_calls_completed!=submitted||source->all_submission_calls_returned!=completed||
+                       source->write_observations.size()!=writes.size()||!source->normal_initialization||
+                       !source->normal_initialization->same_initialization(initialization)||
+                       !source->expected_receiving_prefix)return false;
+                    const auto& current=*source->expected_receiving_prefix;
+                    if(current.rows()!=prefix->rows()||current.roster_count()!=prefix->roster_count()||
+                       current.selected_row()!=prefix->selected_row()||current.catalog_records()!=prefix->catalog_records()||
+                       current.actual_batches()!=prefix->actual_batches())return false;
+                    for(std::size_t i=0;i<writes.size();++i)
+                        if(source->write_observations[i].logical()!=writes[i].logical())return false;
+                    const auto& retained=observation->material();
+                    return retained.initialization.same_initialization(initialization)&&
+                        retained.session==id&&retained.account==account&&retained.character==character&&
+                        retained.battle_generation==battle&&retained.phase==phase&&
+                        retained.prefix.rows()==prefix->rows()&&retained.prefix.roster_count()==prefix->roster_count()&&
+                        retained.prefix.selected_row()==prefix->selected_row()&&
+                        retained.prefix.catalog_records()==prefix->catalog_records()&&
+                        retained.prefix.actual_batches()==prefix->actual_batches();
+                };
+                if(!local()||!observation->current()||!local())return {};
+                return observation;
+            };
             bool pk_peer_reading=false,pk_peer_reentered=false;
             const auto pk_peer=[&](std::uint64_t id)->std::optional<OwnedPkInvitationService::Peer> {
                 if(pk_peer_reading){pk_peer_reentered=true;return {};}
@@ -2297,13 +2355,15 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         std::shared_ptr<const RecoveredOwnedCompanions::Restoration>{};
                     const auto initialization=source?source->normal_initialization:
                         std::optional<Session::NormalWorldInitialization>{};
-                    const auto prefix=source?source->expected_receiving_prefix:
+                    auto prefix=source?source->expected_receiving_prefix:
                         std::optional<TaiwanNativeDeityRosterPrefix>{};
                     const auto receipts=source?source->write_observations:
                         std::vector<Session::WorldRecordsWrite>{};
                     const auto whole=source?source->whole_response:std::shared_ptr<const Session::WorldResponseWrite>{};
                     const auto whole_wire=source?source->whole_response_wire:std::shared_ptr<const std::vector<std::uint8_t>>{};
                     const auto whole_batches=source?source->whole_response_batch_count:std::size_t{};
+                    auto pk_publication=source?source->pk_publication:
+                        std::optional<OwnedTaiwanPkCompanionSource::Observation>{};
                     const auto submitted=source?source->submission_calls_completed:std::size_t{};
                     const bool all_submitted=source && source->all_submission_calls_returned;
                     if(initialization && !peer->normal_world_initialization_current_on_game(*initialization))return {};
@@ -2321,7 +2381,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             peer->state()==phase && peer->battle_generation()==battle;
                     };
                     const auto source_local=[&] {
-                        if(!local() || !source || !material || !initialization || !prefix || !all_submitted ||
+                        if(!local() || !source || !material || !initialization || (!prefix&&!whole) || !all_submitted ||
                            !peer->recovered_world_ready() ||
                            (phase!=SessionState::CharacterSelected && phase!=SessionState::InWorld))return false;
                         const auto at=owned_companion_restoration_sources.find(id);
@@ -2331,13 +2391,16 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                            source->phase_at_restore!=phase || source->battle_generation_at_restore!=battle ||
                            source->all_submission_calls_returned!=all_submitted ||
                            source->submission_calls_completed!=submitted || !source->normal_initialization ||
-                           !source->expected_receiving_prefix || source->write_observations.size()!=receipts.size() ||
+                           source->expected_receiving_prefix.has_value()!=prefix.has_value() || source->write_observations.size()!=receipts.size() ||
                            source->whole_response!=whole || source->whole_response_wire!=whole_wire ||
-                           source->whole_response_batch_count!=whole_batches)return false;
-                        const auto& now=*source->expected_receiving_prefix;
-                        if(now.rows()!=prefix->rows() || now.roster_count()!=prefix->roster_count() ||
-                           now.selected_row()!=prefix->selected_row() || now.catalog_records()!=prefix->catalog_records() ||
-                           now.actual_batches()!=prefix->actual_batches() ||
+                           source->whole_response_batch_count!=whole_batches||source->pk_publication!=pk_publication)return false;
+                        if(prefix){
+                            const auto& now=*source->expected_receiving_prefix;
+                            if(now.rows()!=prefix->rows()||now.roster_count()!=prefix->roster_count()||
+                               now.selected_row()!=prefix->selected_row()||now.catalog_records()!=prefix->catalog_records()||
+                               now.actual_batches()!=prefix->actual_batches())return false;
+                        }
+                        if(!source->normal_initialization->same_initialization(*initialization) ||
                            source->normal_initialization->entry_frame()!=initialization->entry_frame() ||
                            source->normal_initialization->entry_logical()!=initialization->entry_logical() ||
                            source->normal_initialization->accepted_tail()!=initialization->accepted_tail() ||
@@ -2364,11 +2427,28 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         return source_local();
                     };
                     const auto saved_prefix_current=[&] {
-                        if(!transport_current() || !owned_companions.restoration_current(*material) ||
+                        if(!prefix||!transport_current() || !owned_companions.restoration_current(*material) ||
                            !transport_current())return false;
                         return owned_companions.normal_entry_prefix_current(*material,*prefix,database.native_skill_catalog()) &&
                             transport_current();
                     };
+                    if(whole&&!pk_publication&&transport_current()){
+                        // The common facade has no legacy peer TLS observer.
+                        // Derive the expected DATA prefix from THIS actual own
+                        // Written source, independently of player/battle grants.
+                        auto observed=database.observe_owned_taiwan_pk_companions(owned_companions,peer,*initialization,
+                            *material,*whole,*whole_wire);
+                        if(!observed||!local()||!transport_current()||!source_local())return {};
+                        const auto& issued=observed->material().prefix;
+                        if(prefix&&(prefix->rows()!=issued.rows()||prefix->roster_count()!=issued.roster_count()||
+                           prefix->selected_row()!=issued.selected_row()||prefix->catalog_records()!=issued.catalog_records()||
+                           prefix->actual_batches()!=issued.actual_batches()))return {};
+                        std::optional<TaiwanNativeDeityRosterPrefix> holder_prefix{issued},captured_prefix{issued};
+                        if(!observed->current()||!local()||!transport_current()||!source_local())return {};
+                        source->expected_receiving_prefix=std::move(holder_prefix);prefix=std::move(captured_prefix);
+                        source->pk_publication=observed;pk_publication=std::move(observed);
+                        if(!source_local()||!saved_prefix_current())return {};
+                    }
                     const auto position=recovered_movement->current_location(id,account,character);
                     if(!position || !local())return {};
                     const bool blocked=trade_active(id)||diagnostic_town_scene_pending.contains(id)||
@@ -2376,14 +2456,33 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         supply_repository.owned_pending_battle(account,character);
                     if(!local())return {};
                     bool ready=owned_player_and_companions_projected.contains(id) && saved_prefix_current();
+                    if(ready){
+                        // Capture actual own publication, never restore or
+                        // convert a whole physical write into per-batch writes.
+                        if(!pk_publication){
+                            auto observed=whole?
+                                database.observe_owned_taiwan_pk_companions(owned_companions,peer,*initialization,
+                                    *material,*whole,*whole_wire):
+                                database.observe_owned_taiwan_pk_companions(owned_companions,peer,*initialization,
+                                    *material,receipts);
+                            if(!observed||!local()||!saved_prefix_current()||!source_local())return {};
+                            // Pure installation on this exact holder after the
+                            // complete original input was requalified. Its State
+                            // owns no holder/callback, so this creates no cycle.
+                            source->pk_publication=observed;pk_publication=std::move(observed);
+                        }
+                        ready=pk_companions(peer,*initialization)==pk_publication&&
+                            saved_prefix_current()&&source_local();
+                    }
                     // Reobserve real position after all earlier observers, then
                     // requalify the full saved roster/catalog on both sides of
                     // the pure transport checks. This is a current readset, not
                     // atomic future admission CAS or remote consumer attestation.
                     if(!local() || recovered_movement->current_location(id,account,character)!=position || !local())return {};
-                    if(ready)ready=saved_prefix_current();
+                    if(ready)ready=pk_companions(peer,*initialization)==pk_publication&&saved_prefix_current();
                     if(!local() || recovered_movement->current_location(id,account,character)!=position || !local())return {};
-                    if(ready)ready=owned_player_and_companions_projected.contains(id) && transport_current();
+                    if(ready)ready=owned_player_and_companions_projected.contains(id)&&
+                        pk_companions(peer,*initialization)==pk_publication&&transport_current();
                     if(!local())return {};
                     std::optional<OwnedPkInvitationService::NativeIdentity> native_identity;
                     if(taiwan_entry_identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle){

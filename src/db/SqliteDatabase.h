@@ -158,6 +158,12 @@ public:
     std::optional<OwnedTaiwanPkCompanionSource::Observation> observe_owned_taiwan_pk_companions(
         RecoveredOwnedCompanions&,std::shared_ptr<Session>,Session::NormalWorldInitialization,
         RecoveredOwnedCompanions::Restoration,std::vector<Session::WorldRecordsWrite>);
+    // CUSTOM-0129 actual one original response, including its existing prefix
+    // and the privately verified ordered restoration suffix. No per-frame
+    // receipt conversion, replay, schema installation or native ACK is inferred.
+    std::optional<OwnedTaiwanPkCompanionSource::Observation> observe_owned_taiwan_pk_companions(
+        RecoveredOwnedCompanions&,std::shared_ptr<Session>,Session::NormalWorldInitialization,
+        RecoveredOwnedCompanions::Restoration,Session::WorldResponseWrite,std::vector<std::uint8_t>);
     SqliteWorldDisplayRepository& world_displays();
     SqliteQuestJournalRepository& quest_journals();
     // Borrowed reader; valid only for this database's lifetime, after migration.

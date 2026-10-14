@@ -542,6 +542,15 @@ std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe
         *impl_->native_skill_catalog,std::move(session),std::move(initialization),
         std::move(restoration),std::move(writes));
 }
+std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe_owned_taiwan_pk_companions(
+        RecoveredOwnedCompanions& helper,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,RecoveredOwnedCompanions::Restoration restoration,
+        Session::WorldResponseWrite whole_response,std::vector<std::uint8_t> original_whole_wire){
+    if(!migrated_||!impl_)throw DatabaseError("TW PK whole companion source requires actual Database");
+    return OwnedTaiwanPkCompanionSource::observe(impl_->connection.get(),*impl_->companions,helper,
+        *impl_->native_skill_catalog,std::move(session),std::move(initialization),
+        std::move(restoration),std::move(whole_response),std::move(original_whole_wire));
+}
 std::unique_ptr<SqliteBeastBankRepository> SqliteDatabase::make_beast_bank_repository(){
     if(!migrated_)throw DatabaseError("Migrate before PET bank access");
     auto* raw=impl_->connection.get();
