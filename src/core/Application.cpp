@@ -995,6 +995,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 // CUSTOM-0149/0129: ONE original scoped player graph, never a
                 // replacement observation after stale saved state or INIT.
                 std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> pk_player;
+                // CUSTOM-0148: actual typed learning commit + bound original WWR.
+                // Old restoration/player/initial WWR remain admission history.
+                std::optional<OwnedSkillBookLearningService::LearningPublication> learning_publication;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -8647,7 +8650,7 @@ if(guild_officer_runtime && player_guild(session) &&
                         }
                         return source->material;
                     };
-                    game_handlers.world_records=[learning,original,presence,bag,restored](Session& session,
+                    game_handlers.world_records=[&,learning,original,presence,bag,restored](Session& session,
                         std::span<const RecoveredWorldRecords::Record> records)
                         ->std::optional<std::vector<std::uint8_t>> {
                         learning->preflight(session);
@@ -8687,26 +8690,62 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(!use)return std::nullopt;
                             // Dispatch the owning native type, never fabricate
                             // a C25 from C26 or bypass its complete target proof.
-                            auto response=std::visit([&](const auto& request) {
-                                return learning->use(session,request,presence);
+                            // Own the exact canonical holder BEFORE any observer.
+                            // No borrowed map iterator survives the learning call.
+                            const auto source=[&] {
+                                const auto at=owned_companion_restoration_sources.find(session.id());
+                                return at==owned_companion_restoration_sources.end()?
+                                    std::shared_ptr<OwnedCompanionRestorationSource>{}:at->second;
+                            }();
+                            const auto previous_learning=source?source->learning_publication:
+                                std::optional<OwnedSkillBookLearningService::LearningPublication>{};
+                            auto result=std::visit([&](const auto& request) {
+                                return learning->use_with_source(session,request,presence);
                             },*use);
-                            if(response && !response->empty()) {
-                                // The legitimate learning commit advanced both
-                                // full banks. Retire only this Session's passive
-                                // older movement/bag response; never re-read its
-                                // consumed tuple or rebase a foreign receipt.
-                                if(const auto host=bag.lock()) {
-                                    const auto at=host->mutations.find(session.id());
-                                    if(at!=host->mutations.end() && at->second->session.lock().get()==&session)
-                                        host->mutations.erase(at);
+                            if(!result)return std::nullopt;
+                            const auto publication=result->publication(); // Owning preallocated Data copy.
+                            auto response=std::move(*result).take_wire(); // Exact original prebuilt result.
+                            if(!response.empty()) {
+                                try {
+                                    const auto source_current=[&] {
+                                        const auto at=owned_companion_restoration_sources.find(session.id());
+                                        return publication && source && at!=owned_companion_restoration_sources.end() &&
+                                            at->second==source && source->session.lock().get()==&session &&
+                                            source->account==session.account_id && source->character==session.character_id &&
+                                            source->material==publication->original_restoration() && source->normal_initialization &&
+                                            source->normal_initialization->same_initialization(publication->initialization()) &&
+                                            source->learning_publication==previous_learning;
+                                    };
+                                    if(!source_current())throw std::logic_error("Learning commit lost its original canonical source");
+                                    // The legitimate commit advances both full banks.
+                                    // Retire only this Session's passive older response;
+                                    // never re-read consumed tuples or rebase old proofs.
+                                    if(const auto host=bag.lock()) {
+                                        const auto at=host->mutations.find(session.id());
+                                        if(at!=host->mutations.end() && at->second->session.lock().get()==&session)
+                                            host->mutations.erase(at);
+                                    }
+                                    if(!source_current())throw std::logic_error("Learning source retired before original response bind");
+                                    const auto write=session.observe_world_response(response); // ONE original capture.
+                                    session.hold_world_input_until_response_written(write);
+                                    learning->bind_learning_response(session,*publication,write);
+                                    if(!source_current())throw std::logic_error("Learning source changed while binding original response");
+                                    // No allocation after the final cut. This SAME holder
+                                    // retains actual lineage; old Player/roster never renew.
+                                    source->learning_publication=publication;
+                                } catch(...) {
+                                    const auto failure=std::current_exception();
+                                    try{learning->release(session);}catch(...){}
+                                    try{session.close();}catch(...){}
+                                    std::rethrow_exception(failure); // Durable prefix: no retry/rollback.
                                 }
-                                // This is the whole original prebuilt result.
-                                // A failure here closes after its durable prefix;
-                                // no retry, rollback or remote ACK is inferred.
-                                const auto write=session.observe_world_response(*response);
-                                session.hold_world_input_until_response_written(write);
+                            } else if(publication) {
+                                // A duplicate has no new commit/publication/receipt.
+                                try{learning->release(session);}catch(...){}
+                                try{session.close();}catch(...){}
+                                throw std::logic_error("Empty learning result carried a durable publication");
                             }
-                            return response;
+                            return std::optional<std::vector<std::uint8_t>>(std::move(response));
                         }
                         auto response=original(session,records);
                         // No bootstrap appended after an unrelated mutation or

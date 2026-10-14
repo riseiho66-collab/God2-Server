@@ -522,6 +522,54 @@ std::optional<SqliteSkillBookLearningRepository::Committed> SqliteSkillBookLearn
     transaction.commit();return result; // Only noexcept carrier moves/destruction, no post-COMMIT query/retry/allocation.
 }
 
+bool SqliteSkillBookLearningRepository::retained_plan_issuer(const PlanData& data) const noexcept {
+    if(std::this_thread::get_id()!=thread_||!data.before||!data.before->state||!data.after)return false;
+    const auto issued=[&](const State& state) noexcept {
+        return state.repository==this&&state.identity.lock()==identity_&&
+            state.roster.repository_==&companions_&&
+            state.roster.identity_.lock()==companions_.readset_identity_;
+    };
+    return issued(*data.before->state)&&issued(*data.after);
+}
+std::optional<SqliteSkillBookLearningRepository::Restoration>
+SqliteSkillBookLearningRepository::committed_after_source(const Committed& value) const noexcept {
+    if(!value.data_||!retained_plan_issuer(*value.data_))return std::nullopt;
+    return Restoration(value.data_->after); // SAME original after State/controlblock.
+}
+bool SqliteSkillBookLearningRepository::committed_matches_plan(const Committed& committed,
+        const Plan& plan) const noexcept {
+    return committed.data_&&plan.data_&&committed.data_==plan.data_&&
+        !committed.data_.owner_before(plan.data_)&&!plan.data_.owner_before(committed.data_)&&
+        retained_plan_issuer(*committed.data_);
+}
+std::optional<SqliteSkillBookLearningRepository::Restoration>
+SqliteSkillBookLearningRepository::planned_after_source(const Plan& value) const noexcept {
+    if(!value.data_||!retained_plan_issuer(*value.data_))return std::nullopt;
+    return Restoration(value.data_->after); // PROVISIONAL storage only; never commit/readiness evidence.
+}
+bool SqliteSkillBookLearningRepository::plan_matches_restoration(const Plan& plan,
+        const Restoration& restoration) const noexcept {
+    if(!plan.data_||!restoration.state_||!retained_plan_issuer(*plan.data_))return false;
+    const auto& before=*plan.data_->before->state;const auto& expected=*restoration.state_;
+    if(expected.repository!=this||expected.identity.lock()!=identity_||
+       expected.roster.repository_!=&companions_||
+       expected.roster.identity_.lock()!=companions_.readset_identity_||
+       before.inventory!=expected.inventory||before.equipment!=expected.equipment||
+       before.headers!=expected.headers||before.activations!=expected.activations||
+       before.roster.account()!=expected.roster.account()||before.roster.character()!=expected.roster.character()||
+       before.roster.selection()!=expected.roster.selection()||before.roster.template_keys()!=expected.roster.template_keys()||
+       before.roster.rows().size()!=expected.roster.rows().size())return false;
+    for(std::size_t i=0;i<before.roster.rows().size();++i) {
+        const auto& a=before.roster.rows()[i];const auto& b=expected.roster.rows()[i];
+        if(a.revision!=b.revision||a.provenance!=b.provenance||
+           a.snapshot.declaration.encode()!=b.snapshot.declaration.encode()||
+           a.snapshot.status.encode()!=b.snapshot.status.encode()||
+           a.snapshot.skills.size()!=b.snapshot.skills.size())return false;
+        for(std::size_t j=0;j<a.snapshot.skills.size();++j)
+            if(a.snapshot.skills[j].encode()!=b.snapshot.skills[j].encode())return false;
+    }
+    return true;
+}
 const OwnedInventorySnapshot& SqliteSkillBookLearningRepository::Restoration::inventory() const noexcept {return state_->inventory;}
 const NativeEquipmentSnapshot& SqliteSkillBookLearningRepository::Restoration::equipment() const noexcept {return state_->equipment;}
 const OwnedDeityRosterReadset& SqliteSkillBookLearningRepository::Restoration::roster() const noexcept {return state_->roster;}

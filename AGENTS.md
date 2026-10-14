@@ -775,3 +775,15 @@ Room authority already checks SAME PreparedPlayer stored graph. Zero companion
 closed readers retain full roster/learning/INIT/Lease identity; Active/Finished
 use immutable admitted player plus actual terminal saved-after resource ledger,
 not retired admission HP/revision. Two old LF bytes restored exactly.
+
+Round399 connects actual learning Commit/originalWWR typedsource. Original
+preallocatedPlanData.after alias/exactprivateCommittedPlan/fullbefore tuple ->
+preallocatedService typedresult/publication/custody ->Root owningC25C26 exactwire
+->ONEoriginal callbackWWR/hold/bind ->SAMEcanonicalholder retainedlineage.
+WeakEntry/Session/lifetime, explicitunbounddurabledrop andvalidboundPending
+handoff; duplicateempty no pub/receipt, legacyraw behaviorno fakeproof.
+Oldroster/Player/WWR neverrenewed; complete actualS34S35S41 Companion/Player
+successor/fullReturnScene/native6F/resources/selection/opaqueorder/Extended64
+acceptance OPEN. FiveexistingCPP/V36pins91/sourceonly/no newPY/Lua/native/default
+activation/fullroutes. Parser77=50/11/16,pending12/frontier26 21/105,whole%null;
+TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.

@@ -110,12 +110,24 @@ public:
     // already active transaction. Read-only qualification, not room authority;
     // preserves generic pending-battle rejection and never opens a transaction.
     bool restoration_current_in_transaction(const Restoration&,sqlite3* actual_connection);
+    // Original preallocated immutable after State/controlblock only. No SQL,
+    // restore, vector copy or new allocation. Committed is the actual carrier.
+    std::optional<Restoration> committed_after_source(const Committed&) const noexcept;
+    bool committed_matches_plan(const Committed&,const Plan&) const noexcept;
+    // PROVISIONAL alias for preallocation before COMMIT. It provides no commit,
+    // grant, publication or SourceCurrent authority; match the actual Committed
+    // to this exact Plan before using it as an after-source.
+    std::optional<Restoration> planned_after_source(const Plan&) const noexcept;
+    // Complete retained BEFORE State equality, including ordered raw roster,
+    // all activation headers/events and full inventory/equipment provenance.
+    bool plan_matches_restoration(const Plan&,const Restoration&) const noexcept;
 private:
     void owner() const;
     void namespaces() const;
     std::shared_ptr<State> read_state(OwnedDeityRosterReadset);
     bool state_current(const State&);
     bool observation_current(const ObservationData&);
+    bool retained_plan_issuer(const PlanData&) const noexcept;
     SqliteOwnedInventoryRepository& inventory_;
     SqliteNativeEquipmentSnapshotRepository& equipment_;
     SqliteCompanionRepository& companions_;

@@ -5689,7 +5689,27 @@
     "default_enabled": false,
     "complete_bidirectional_route": false,
     "build_tests_runtime_SQL_activation_deployment": false
-  }
+  },
+      "actual_learning_commit_original_WWR_publication": {
+        "round": 399,
+        "document": "docs/research/tw-learning-publication-source-20261014.md",
+        "implementation": [
+          "src/core/Application.cpp",
+          "src/db/SqliteSkillBookLearningRepository.cpp",
+          "src/db/SqliteSkillBookLearningRepository.h",
+          "src/handlers/OwnedSkillBookLearningService.cpp",
+          "src/handlers/OwnedSkillBookLearningService.h"
+        ],
+        "source_connected": true,
+        "producer": "Original preallocated PlanData after alias and exact actual private Committed/Plan/completebefore matcher; preallocated typedService result/publication no postcommit query/vectorcopy/newcontrolblock",
+        "custody": "Private Prepared/Committed/Bound/Revoked; explicit unbound resultdrop closesexact Session despiteEntryretention; boundPending transfersEntry+actualWWR ownership; weakEntry/Session/lifetime avoidscycles",
+        "Main": "Owning nativeC25/C26 typedvisitor -> exactprebuiltwire -> ONE originalcallback WWR/hold -> samepublication bind -> samecanonical holder retainsactuallineage; oldmaterial/player/WWR neverrenewed",
+        "legacy": "Original raw use behavior no fake typedproof; duplicateempty no publication/receipt; typedpending prevents overwrite/foreignbinding",
+        "complete_Companion_Player_successor_or_native_return_provider": false,
+        "runtime_or_default_activated": false,
+        "whole_gameplay_complete": false,
+        "product_execution": false
+      }
 },
 {
   "id": "CUSTOM-0149",
