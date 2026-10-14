@@ -1,6 +1,8 @@
 #pragma once
 #include "db/SqliteCompanionRepository.h"
+#include "db/SqliteSkillBookLearningRepository.h"
 #include "protocol/RecoveredDeitySelection.h"
+#include "protocol/RecoveredDeityActivation.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include "protocol/TaiwanNativeDeityRosterPrefix.h"
 #include <thread>
@@ -14,6 +16,10 @@ public:
     class Restoration {
     public:
         const OwnedDeityRosterReadset& deity_roster() const noexcept {return deity_roster_;}
+        const std::optional<SqliteSkillBookLearningRepository::Restoration>& learning_source() const noexcept {return learning_source_;}
+        bool owns_learning_repository(const SqliteSkillBookLearningRepository& value) const noexcept {
+            return learning_repository_==&value && bool(learning_source_);
+        }
         // Exact existing logical-boundary batches, including the separate pet
         // projection. The deity readset does not certify pet revisions or an
         // atomic cross-family snapshot, queue acceptance or socket write.
@@ -22,8 +28,14 @@ public:
         friend class RecoveredOwnedCompanions;
         Restoration(OwnedDeityRosterReadset roster,std::vector<std::vector<std::uint8_t>> batches)
             :deity_roster_(std::move(roster)),batches_(std::move(batches)) {}
+        Restoration(OwnedDeityRosterReadset roster,std::vector<std::vector<std::uint8_t>> batches,
+            SqliteSkillBookLearningRepository::Restoration learning,SqliteSkillBookLearningRepository& repository)
+            :deity_roster_(std::move(roster)),batches_(std::move(batches)),
+             learning_source_(std::move(learning)),learning_repository_(&repository) {}
         OwnedDeityRosterReadset deity_roster_;
         std::vector<std::vector<std::uint8_t>> batches_;
+        std::optional<SqliteSkillBookLearningRepository::Restoration> learning_source_;
+        SqliteSkillBookLearningRepository* learning_repository_=nullptr; // Actual DB owner outlives source/current calls.
     };
     // Fresh world entry only, AFTER saved player vitals. Empty ownership sends
     // nothing. Records are split at logical boundaries within native queue cap.
@@ -32,7 +44,16 @@ public:
     // from the same existing projection. Construct/current on game; no saved
     // mutations, invented learned flags, battle positions or grant generated.
     Restoration restore_with_source(std::uint64_t account,std::uint64_t character);
+    // CUSTOM-0148 one original restoration sender: same full learning readset,
+    // legacy pets, and only genuine activation records. No second S30 replay.
+    Restoration restore_with_source(std::uint64_t account,std::uint64_t character,
+        SqliteSkillBookLearningRepository&);
     bool restoration_current(const Restoration&);
+    // CUSTOM-0148 explicit actual readset + genuinely retained activation source.
+    // Deity records only; legacy account/character restoration and pets unchanged.
+    // Caller requalifies the actual repository readset before/after this projection.
+    static std::optional<std::vector<std::vector<std::uint8_t>>> restore(
+        const OwnedDeityRosterReadset&,std::span<const RecoveredDeityActivation::Record>);
     // Expected reset + issued-data prefix only. Application must supply its
     // actual normal-entry/current/write epoch; this API supplies no such lease
     // or remote consumer attestation. Missing qualified448 material is absent.

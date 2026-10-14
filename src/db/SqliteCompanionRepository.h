@@ -41,6 +41,7 @@ public:
     const std::vector<std::uint8_t>& template_keys() const noexcept { return template_keys_; }
 private:
     friend class SqliteCompanionRepository;
+    friend class SqliteSkillBookLearningRepository;
     OwnedDeityRosterReadset(const SqliteCompanionRepository* repository,
         std::weak_ptr<const std::uint8_t> identity,std::uint64_t account,
         std::uint64_t character,std::vector<StoredDeity> rows,
@@ -175,6 +176,7 @@ public:
         const std::function<void(const Pet2TransferCommit&)>& prepare);
 private:
     friend class OwnedTaiwanPkCompanionSource;
+    friend class SqliteSkillBookLearningRepository;
     friend class SqliteRecoveredCharacterRepository;
     // CUSTOM-0139: private read-only validation inside the same writer txn.
     bool selected_deity_skill_current_in_transaction(const SelectedDeitySkillReadset&);

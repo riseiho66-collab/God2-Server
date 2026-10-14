@@ -63,6 +63,7 @@ public:
         std::uint64_t account,std::uint64_t character);
 private:
     friend class SqliteOwnedEquipmentTransaction;
+    friend class SqliteSkillBookLearningRepository;
     // Internal only: caller owns the one outer transaction and both writer
     // guards. Never returns an uncommitted public receipt or invokes a supplier.
     void validate_change(const std::optional<Snapshot>&,const Snapshot&) const;

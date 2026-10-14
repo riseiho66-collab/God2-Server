@@ -33,6 +33,7 @@
 #include "handlers/RecoveredWorldDisplays.h"
 #include "handlers/RecoveredPlayerPresence.h"
 #include "handlers/DiagnosticSupplyService.h"
+#include "handlers/OwnedSkillBookLearningService.h"
 #include "handlers/InventoryMoveService.h"
 #include "game/SharedTaiwanOwnedBagMoveSource.h"
 #include "handlers/InventoryDiscardService.h"
@@ -1344,6 +1345,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             }
             auto whole_bag_moves=config.owned_whole_bag_moves_enabled?std::make_shared<WholeBagMoveHost>():nullptr;
             if(whole_bag_moves)whole_bag_moves->actual_session_capacity=config.max_sessions;
+            std::shared_ptr<OwnedSkillBookLearningService> skill_book_learning_service;
             Session::RecoveredCharacterHandlers character_handlers;
             std::unique_ptr<RecoveredWorldService> recovered_world;
             if(config.recovered_character_creation) {
@@ -4867,7 +4869,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                 const auto actual_session=session.weak_from_this().lock();
                                 if(actual_session.get()!=&session)throw DatabaseError("Owned companion source requires actual Session");
                                 const auto companions=std::make_shared<const RecoveredOwnedCompanions::Restoration>(
-                                    owned_companions.restore_with_source(session.account_id,session.character_id));
+                                    config.owned_skillbook_learning_enabled?
+                                        owned_companions.restore_with_source(session.account_id,session.character_id,
+                                            database.skill_book_learning()):
+                                        owned_companions.restore_with_source(session.account_id,session.character_id));
                                 const auto& roster=companions->deity_roster();
                                 if(roster.account()!=session.account_id || roster.character()!=session.character_id)
                                     throw DatabaseError("Owned companion restoration owner changed");
@@ -7874,6 +7879,130 @@ if(guild_officer_runtime && player_guild(session) &&
                     };
                     spdlog::warn("OWNED_WHOLE_BAG_MOVES_SOURCE CUSTOM-0094 full25 only existing_owner no_grants stale_pose_rejected");
                 }
+                // CUSTOM-0148: actual C25 source, installed after native/legacy
+                // dispatch selection and WholeBag, before C67's final capture.
+                // Learning and reconnect use the same formal shared stores.
+                if(config.owned_skillbook_learning_enabled) {
+                    if(!game_handlers.world_records || !game_handlers.world_ready || !config.max_sessions)
+                        throw std::invalid_argument("Skill-book learning requires actual TW records and readiness");
+                    auto learning=std::make_shared<OwnedSkillBookLearningService>(
+                        database.skill_book_learning(),lua,config.max_sessions);
+                    skill_book_learning_service=learning;
+                    const auto original=game_handlers.world_records;
+                    const auto presence=common_world?common_world->presence():std::shared_ptr<SharedWorldPresence>{};
+                    const std::weak_ptr<WholeBagMoveHost> bag=whole_bag_moves;
+                    // Only the actual original companion sender can supply this
+                    // source. Pending writes defer learning; equal saved keys or
+                    // a newer INIT alone never reconstruct the old native list.
+                    const auto restored=[&owned_companion_restoration_sources,
+                        observe_companion_restoration_write](Session& session)
+                        ->std::shared_ptr<const RecoveredOwnedCompanions::Restoration> {
+                        observe_companion_restoration_write(session);
+                        const auto at=owned_companion_restoration_sources.find(session.id());
+                        if(at==owned_companion_restoration_sources.end())return {};
+                        const auto source=at->second;
+                        if(!source || source->session.lock().get()!=&session || !source->material ||
+                           source->account!=session.account_id || source->character!=session.character_id ||
+                           source->phase_at_restore!=session.state() ||
+                           (session.state()!=SessionState::CharacterSelected && session.state()!=SessionState::InWorld) ||
+                           source->battle_generation_at_restore!=session.battle_generation() ||
+                           session.closing() || !session.recovered_world_ready() ||
+                           !source->normal_initialization || !source->normal_initialization->entry_written() ||
+                           !session.normal_world_initialization_current_on_game(*source->normal_initialization) ||
+                           !source->all_submission_calls_returned ||
+                           (source->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityPrefixCurrent &&
+                            source->last_observed_write!=CompanionWriteObservation::NoRecords))return {};
+                        const auto& batches=source->material->batches();
+                        if(source->submission_calls_completed!=batches.size() ||
+                           source->write_observations.size()!=batches.size())return {};
+                        for(std::size_t i=0;i<batches.size();++i) {
+                            const auto& receipt=source->write_observations[i];
+                            if(receipt.logical()!=batches[i] ||
+                               receipt.status()!=Session::WorldRecordsWriteStatus::Written ||
+                               !session.world_records_write_current(receipt))return {};
+                        }
+                        return source->material;
+                    };
+                    game_handlers.world_records=[learning,original,presence,bag,restored](Session& session,
+                        std::span<const RecoveredWorldRecords::Record> records)
+                        ->std::optional<std::vector<std::uint8_t>> {
+                        learning->preflight(session);
+                        if(records.empty())return original(session,records);
+                        const bool claimed=std::any_of(records.begin(),records.end(),[&](const auto& record) {
+                            const auto* use=std::get_if<RecoveredInventoryItemRequest::Request>(&record);
+                            return use && learning->claims(use->client_item_id);
+                        });
+                        if(claimed) {
+                            if(const auto host=bag.lock()) {
+                                if(!host->live || !host->accepting)return std::nullopt;
+                                if(host->active) {
+                                    host->active->invalid=true;
+                                    if(host->binding)host->binding->invalidate_active();
+                                    throw std::logic_error("Skill-book use reentered an active inventory mutation");
+                                }
+                            }
+                            // Preflight the complete frame before any mutation.
+                            // A raw tail is never a quantity or replay nonce.
+                            std::optional<RecoveredInventoryItemRequest::Request> use;
+                            for(std::size_t index=0;index<records.size();++index) {
+                                const auto& record=records[index];
+                                if(const auto* request=std::get_if<RecoveredInventoryItemRequest::Request>(&record)) {
+                                    if(use || !learning->claims(request->client_item_id))return std::nullopt;
+                                    use=*request;
+                                }else if(std::holds_alternative<RecoveredWorldRecords::Tick>(record))continue;
+                                else if(!use || index+1!=records.size() ||
+                                    !std::holds_alternative<RecoveredWorldRecords::ClientControl1F>(record))
+                                    return std::nullopt;
+                            }
+                            if(!use)return std::nullopt;
+                            auto response=learning->use(session,*use,presence);
+                            if(response && !response->empty()) {
+                                // The legitimate learning commit advanced both
+                                // full banks. Retire only this Session's passive
+                                // older movement/bag response; never re-read its
+                                // consumed tuple or rebase a foreign receipt.
+                                if(const auto host=bag.lock()) {
+                                    const auto at=host->mutations.find(session.id());
+                                    if(at!=host->mutations.end() && at->second->session.lock().get()==&session)
+                                        host->mutations.erase(at);
+                                }
+                                // This is the whole original prebuilt result.
+                                // A failure here closes after its durable prefix;
+                                // no retry, rollback or remote ACK is inferred.
+                                const auto write=session.observe_world_response(*response);
+                                session.hold_world_input_until_response_written(write);
+                            }
+                            return response;
+                        }
+                        auto response=original(session,records);
+                        // No bootstrap appended after an unrelated mutation or
+                        // battle transition; C67 remains the final capture owner.
+                        const bool idle=std::all_of(records.begin(),records.end(),[](const auto& record) {
+                            return std::holds_alternative<RecoveredWorldRecords::Tick>(record);
+                        });
+                        if(!response || !idle ||
+                           (session.state()!=SessionState::CharacterSelected && session.state()!=SessionState::InWorld))return response;
+                        auto bootstrap=learning->bootstrap(session,presence,restored);
+                        if(!bootstrap)return std::nullopt;
+                        if(!bootstrap->empty()) {
+                            if(bootstrap->size()>response->max_size()-response->size())
+                                throw std::length_error("Skill-book bootstrap aggregate exceeds storage bounds");
+                            response->insert(response->end(),bootstrap->begin(),bootstrap->end());
+                            const auto write=session.observe_world_response(*response);
+                            session.hold_world_input_until_response_written(write);
+                            learning->bind_bootstrap_response(session,write);
+                        }
+                        return response;
+                    };
+                    const auto previous=on_disconnect;
+                    on_disconnect=[learning,previous](std::shared_ptr<Session> session) {
+                        std::exception_ptr failure;
+                        try {if(session)learning->release(*session);}catch(...) {failure=std::current_exception();}
+                        try {if(previous)previous(std::move(session));}
+                        catch(...) {if(!failure)failure=std::current_exception();}
+                        if(failure)std::rethrow_exception(failure);
+                    };
+                }
                 if(deity_selection_publication) {
                     if(!game_handlers.world_records || !owned_deity_skill_source ||
                        configured_deity_selection_source.lock()!=owned_deity_skill_source)
@@ -8024,6 +8153,7 @@ if(guild_officer_runtime && player_guild(session) &&
                 guild_delivery_lifetime->store(false);
                 stop_blacklist_outputs();
                 stopping=true;
+                if(skill_book_learning_service)skill_book_learning_service->stop();
                 if(whole_bag_moves)whole_bag_moves->stop_dispatch();
                 spdlog::info("Stopping server and draining sessions");
                 scheduler->stop(); signals.cancel(); deadline.cancel();

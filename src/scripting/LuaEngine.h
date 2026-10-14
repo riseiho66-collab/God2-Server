@@ -13,6 +13,7 @@
 #include "game/TownGuideRule.h"
 #include "game/DiagnosticDoorRule.h"
 #include "game/OwnedGuildMembershipRule.h"
+#include "game/SkillBookLearningRule.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -90,6 +91,8 @@ public:
     CharacterGrowthResult allocate_attribute(const CharacterAllocationInput& input);
     // CUSTOM-0016: pure diagnostic policy. Caller owns item authorization/storage.
     SupplyResult supply(const SupplyInput& input);
+    // CUSTOM-0148 pure policy; actual common transaction/issuer remains in C++.
+    SkillBookLearningResult skill_book_learning(const SkillBookLearningInput& input);
     // CUSTOM-0085 placement only. C++ supplies explicitly owned empty bag
     // cells; scripts receive no DB/session refs or item-generation authority.
     std::optional<std::uint8_t> beast_equipment_destination(std::uint8_t source,

@@ -645,6 +645,15 @@ Config Config::load(const std::filesystem::path& path) {
         if(c.owned_supply_enabled && (!c.recovered_world_entry || !c.recovered_movement || !c.recovered_account_auth || c.mock_login || c.diagnostic_world_supply))
             throw std::runtime_error("Owned supply requires authenticated native world and movement without diagnostic supply");
     }
+    if(j.contains("world") && j.at("world").contains("owned_skillbook_learning")) {
+        const auto& learning=j.at("world").at("owned_skillbook_learning");
+        if(!learning.is_object() || !learning.at("enabled").is_boolean())
+            throw std::runtime_error("Owned skill-book learning bool required");
+        c.owned_skillbook_learning_enabled=learning.at("enabled").get<bool>();
+        if(c.owned_skillbook_learning_enabled && (!c.recovered_world_entry || !c.recovered_movement ||
+           !c.recovered_account_auth || !c.recovered_dual_connection || c.mock_login))
+            throw std::runtime_error("Owned skill-book learning requires authenticated native TW world and movement");
+    }
     if(j.contains("world") && j.at("world").contains("owned_beast_panel")) {
         const auto& beast=j.at("world").at("owned_beast_panel");
         if(!beast.is_object()||!beast.at("enabled").is_boolean())throw std::runtime_error("Owned beast panel bool required");

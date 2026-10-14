@@ -30,7 +30,38 @@ RecoveredOwnedCompanions::Restoration RecoveredOwnedCompanions::restore_with_sou
     if(!repository_.deity_roster_current(roster))throw DatabaseError("Owned deity restoration source changed");
     return Restoration(std::move(roster),std::move(batches));
 }
+RecoveredOwnedCompanions::Restoration RecoveredOwnedCompanions::restore_with_source(
+        std::uint64_t account,std::uint64_t character,SqliteSkillBookLearningRepository& learning) {
+    if(!learning.owns_companions(repository_))throw DatabaseError("Skill learning companion repository mismatch");
+    auto source=learning.restore(account,character);
+    auto roster=source.roster();
+    auto batches=restore_rows(account,character,roster.rows(),roster.selection(),roster.template_keys());
+    std::vector<RecoveredDeityActivation::Record> activations;activations.reserve(source.activations().size());
+    for(const auto& event:source.activations()) {
+        const auto raw=RecoveredDeityActivation::encode(event.subject,event.kind,event.definition_id);
+        activations.push_back(*RecoveredDeityActivation::parse(raw));
+    }
+    // Validate against the SAME private roster; append35 only, after the one
+    // existing deity+pet projection. The temporary projection issues nothing.
+    if(!RecoveredOwnedCompanions::restore(roster,activations))
+        throw DatabaseError("Skill activation restoration has no exact saved identity");
+    for(const auto& activation:activations) {
+        const auto& raw=activation.encode();
+        if(batches.empty() || batches.back().size()+raw.size()>RecoveredWorldFrame::max_logical_size)batches.emplace_back();
+        batches.back().insert(batches.back().end(),raw.begin(),raw.end());
+    }
+    if(!repository_.deity_roster_current(roster)||!learning.restoration_current(source))
+        throw DatabaseError("Skill activation restoration source changed");
+    return Restoration(std::move(roster),std::move(batches),std::move(source),learning);
+}
 bool RecoveredOwnedCompanions::restoration_current(const Restoration& restoration) {
+    if(restoration.learning_source()) {
+        // The actual learning source includes the SAME full roster, inventory,
+        // witness and activation headers. No partial observer after this cut.
+        return restoration.learning_repository_ &&
+            restoration.learning_repository_->owns_companions(repository_) &&
+            restoration.learning_repository_->restoration_current(*restoration.learning_source());
+    }
     return repository_.deity_roster_current(restoration.deity_roster());
 }
 std::optional<TaiwanNativeDeityRosterPrefix> RecoveredOwnedCompanions::normal_entry_prefix(
@@ -53,7 +84,7 @@ std::optional<TaiwanNativeDeityRosterPrefix> RecoveredOwnedCompanions::normal_en
         const Restoration& restoration,const NativeSkillCatalog& catalog) {
     // These sequential observations are not an atomic cross-source readset or
     // future CAS. No callbacks, imported rows, learned rights or writes added.
-    if(!repository_.deity_roster_current(restoration.deity_roster()) || prefix_reentered_)return std::nullopt;
+    if(!restoration_current(restoration) || prefix_reentered_)return std::nullopt;
     std::vector<NativeSkillRecord> definitions;
     for(const auto& row:restoration.deity_roster().rows()) {
         for(const auto& skill:row.snapshot.skills) {
@@ -66,13 +97,14 @@ std::optional<TaiwanNativeDeityRosterPrefix> RecoveredOwnedCompanions::normal_en
             definitions.push_back(std::move(*definition));
         }
     }
-    auto model=TaiwanNativeDeityRosterPrefix::from_reset_and_records(restoration.batches(),definitions);
+    auto model=TaiwanNativeDeityRosterPrefix::from_reset_and_records(restoration.batches(),definitions,
+        bool(restoration.learning_source()));
     if(!model || prefix_reentered_)return std::nullopt;
     for(const auto& expected:model->catalog_records()) {
         const auto actual=catalog.lookup_main_digest_checked(NativeSkillCatalog::current_dataset_id,expected.kind,expected.definition_id);
         if(prefix_reentered_ || !actual || *actual!=expected)return std::nullopt;
     }
-    if(!repository_.deity_roster_current(restoration.deity_roster()) || prefix_reentered_)return std::nullopt;
+    if(!restoration_current(restoration) || prefix_reentered_)return std::nullopt;
     return model;
 }
 std::vector<std::vector<std::uint8_t>> RecoveredOwnedCompanions::restore_rows(
@@ -118,6 +150,34 @@ std::vector<std::vector<std::uint8_t>> RecoveredOwnedCompanions::restore_rows(
         if(batches.empty() || batches.back().size()+size>RecoveredWorldFrame::max_logical_size) batches.emplace_back();
         batches.back().insert(batches.back().end(),logical.begin()+static_cast<std::ptrdiff_t>(at),
             logical.begin()+static_cast<std::ptrdiff_t>(at+size));at+=size;
+    }
+    return batches;
+}
+std::optional<std::vector<std::vector<std::uint8_t>>> RecoveredOwnedCompanions::restore(
+        const OwnedDeityRosterReadset& roster,std::span<const RecoveredDeityActivation::Record> activations) {
+    std::vector<RecoveredDeityState::Snapshot> rows;
+    for(const auto& row:roster.rows())rows.push_back(row.snapshot);
+    auto logical=RecoveredDeityState::restore(rows,roster.selection()?std::optional{roster.selection()->key}:std::nullopt,
+        roster.template_keys());
+    if(!logical)return std::nullopt;
+    for(std::size_t i=0;i<activations.size();++i) {
+        const auto& raw=activations[i].encode();
+        const auto row=std::find_if(rows.begin(),rows.end(),[&](const auto& value){return value.status.key_raw()==raw[1];});
+        if(row==rows.end() || std::none_of(row->skills.begin(),row->skills.end(),[&](const auto& skill){
+            const auto& identity=skill.encode();return identity[1]==raw[1] && identity[2]==raw[2] && identity[3]==raw[3];
+        }))return std::nullopt;
+        for(std::size_t j=0;j<i;++j)if(activations[j].encode()==raw)return std::nullopt;
+        logical->insert(logical->end(),raw.begin(),raw.end());
+    }
+    // All actual identities precede activation; no old S34 gets a default35.
+    std::vector<std::vector<std::uint8_t>> batches;
+    for(std::size_t at=0;at<logical->size();) {
+        const auto opcode=(*logical)[at];
+        const std::size_t size=opcode==0x30?19:opcode==0x31?29:(opcode==0x34||opcode==0x35)?4:0;
+        if(!size || size>logical->size()-at)return std::nullopt;
+        if(batches.empty() || batches.back().size()+size>RecoveredWorldFrame::max_logical_size)batches.emplace_back();
+        batches.back().insert(batches.back().end(),logical->begin()+static_cast<std::ptrdiff_t>(at),
+            logical->begin()+static_cast<std::ptrdiff_t>(at+size));at+=size;
     }
     return batches;
 }

@@ -27,6 +27,8 @@ struct Config {
     bool streamer_privileges_enabled=false; // CUSTOM-0054 requires the matching embedded client.
     bool owned_whole_bag_moves_enabled=false; // CUSTOM-0094 existing-owner full25 only; no population/import.
     bool owned_supply_enabled=false;
+    // CUSTOM-0148: explicit source-only skill-book rule; never enabled by default.
+    bool owned_skillbook_learning_enabled=false;
     bool owned_beast_panel_enabled=false; // CUSTOM-0085 display only; source-phase opt-in
     bool owned_pk_invitation_enabled=false; // CUSTOM-0086 incomplete until shared room authority exists
     bool owned_attribute_allocation_enabled=false;

@@ -5428,6 +5428,52 @@
   "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
   "reason": "Committed row/S31 alone did not establish one final whole response epoch or handoff to the actual same selected-skill source in the constructed mixed host.",
   "replacement": "Qualify actual native selected-menu adoption/currentness and connect C56 targets/action/cost/status/effects/settlement/full reply plus default host, then comprehensive native acceptance."
+},
+{
+  "id": "CUSTOM-0148",
+  "name": "Shared owned skill-book selected-deity learning transaction and actual TW publication",
+  "authority": "OWNER_AUTHORIZED_CUSTOM_SELECTED_SUBJECT_LEARNING_WITH_QUALIFIED_NATIVE_WIRE_NOT_NATIVE_RULE_RECOVERY",
+  "implementation": [
+    "src/db/SqliteSkillBookLearningRepository.h",
+    "src/db/SqliteSkillBookLearningRepository.cpp",
+    "src/db/NativeSkillBookCatalog.h",
+    "src/db/NativeSkillBookCatalog.cpp",
+    "src/db/SqliteDatabase.h",
+    "src/db/SqliteDatabase.cpp",
+    "src/handlers/OwnedSkillBookLearningService.h",
+    "src/handlers/OwnedSkillBookLearningService.cpp",
+    "src/handlers/RecoveredOwnedCompanions.h",
+    "src/handlers/RecoveredOwnedCompanions.cpp",
+    "src/game/SkillBookLearningRule.h",
+    "scripts/gameplay/skill_book_learning.lua",
+    "src/scripting/LuaEngine.h",
+    "src/scripting/LuaEngine.cpp",
+    "src/protocol/RecoveredDeityActivation.h",
+    "src/protocol/TaiwanNativeDeityRosterPrefix.h",
+    "src/core/Config.h",
+    "src/core/Config.cpp",
+    "src/core/Application.cpp"
+  ],
+  "native_gap": "Original server eligibility/debit/recipient/order not recovered. All381 inventory declarations qualify C25 (362direct/19masterconfirmation); distinct shortcut C26, native list adoption, complete actions and CN native adapters remain OPEN.",
+  "rules": {
+    "subject": "C25 has no qualified subject. Use the exact currently selected owned deity, same common definition and genuine uniquely bound owned book. All381 source bindings use one policy; no guessed12C/level/stat exclusions.",
+    "policy": "Pure Lua owning numeric/boolean snapshots: absent valid skill below native100 capacity consumes exactly one book; already learned consumes zero and issues no new activation. Stack99. C++ independently validates values.",
+    "material": "Full common inventory/all regional aliases, actual TW20 and paired genuine full3B25, native1215 full witness, full roster/selection/revisions/provenance, book raw/parsed digests and owning common/native definition. Actual normalINIT nativeactor matches witness and optional exact fullLease; full64 database owner independent.",
+    "transaction": "Same SQLite connection, own immediate transaction, complete before/after CAS, guarded namespaces/reentry/pending battle, one debit+saved34+durableevent+activationheader/links. Preserve opaque raw data; tag derived population/witness/deity CUSTOM0148 provenance. No alias custody revision grants CN projection.",
+    "publication": "Preallocate full S34->S35->S41 wire and committed carrier before COMMIT; actual Main captures one whole original response and input hold. Local Written is not native ACK/adoption; postcommit failure terminal, no SQL retry/rollback.",
+    "restoration": "Single original activation-aware deity+pet projection, only exact legitimately retained events35. Service waits exact original Written source and adds book material only, never duplicateS30 or default35from34. Pending/missing source defers; stale epoch retires before genuine successor qualification. Empty extra output requires final actualWritten/source cut.",
+    "scope": "Default-off world.owned_skillbook_learning.enabled; explicit schema installer only, never Main DDL/import/backfill. Actual independently constructed CommonWorld/battle-return publisher and other legitimate deity-writer lineage remain OPEN.",
+    "regional": "Common skill definitions/ownership/event storage retained. CN native-only adapter unqualified; original CN453 unchanged. Required126/150 CN resources/profile/effects/cast still independently OPEN."
+  },
+  "activation": false,
+  "production_activated": false,
+  "schema_installed": false,
+  "deployment": false,
+  "native_client_acceptance": false,
+  "tests": [],
+  "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+  "reason": "Close actual TW C25 book/deity/debit/save/event/reply source gap after targeted native material/consumer search, without inventing original server rules.",
+  "replacement": "Recover native eligibility/order, qualify shortcut/actual CommonWorld and return publishers/legitimate mutation lineage/CN adapters, connect complete skill actions, then comprehensive builds/tests/native acceptance."
 }
 ]
 }

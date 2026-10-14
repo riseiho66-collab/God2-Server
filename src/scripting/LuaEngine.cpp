@@ -1069,6 +1069,34 @@ std::optional<DiagnosticDoorPlan> LuaEngine::diagnostic_door(const DiagnosticDoo
     return plan;
 }
 
+SkillBookLearningResult LuaEngine::skill_book_learning(const SkillBookLearningInput& input) {
+    if(!input.book_count || input.book_count>99 || input.skill_count>100)
+        throw std::invalid_argument("Skill book policy requires bounded owned snapshots");
+    auto& state=vm();
+    const auto module=state.execute(contained_path(root_,root_/"gameplay/skill_book_learning.lua"));
+    if(module.get_type()!=sol::type::table)throw std::runtime_error("Skill book module must return table");
+    const auto callback=module.as<sol::table>().raw_get<sol::object>("policy");
+    if(callback.get_type()!=sol::type::function)throw std::runtime_error("Skill book module requires policy");
+    auto result=invoke(callback.as<sol::protected_function>(),state.lua.create_table_with(
+        "book_count",input.book_count,"skill_count",input.skill_count,
+        "already_learned",input.already_learned,"display_valid",input.display_valid));
+    if(result.return_count()!=1 || result.get_type()!=sol::type::table)
+        throw std::runtime_error("Skill book policy must return one table");
+    const auto output=result.get<sol::table>();
+    const auto allowed=output.raw_get<sol::object>("allowed");
+    const auto duplicate=output.raw_get<sol::object>("duplicate");
+    if(allowed.get_type()!=sol::type::boolean || duplicate.get_type()!=sol::type::boolean)
+        throw std::runtime_error("Skill book policy requires boolean decisions");
+    SkillBookLearningResult value{allowed.as<bool>(),duplicate.as<bool>(),
+        static_cast<std::uint8_t>(catalog_selector(output.raw_get<sol::object>("consume"),0,1,"skill book debit"))};
+    const bool expected=input.display_valid && input.book_count>=1 &&
+        (input.already_learned || input.skill_count<100);
+    if(value.allowed!=expected || value.duplicate!=input.already_learned ||
+       value.consume!=static_cast<unsigned>(expected && !input.already_learned))
+        throw std::runtime_error("Skill book policy exceeded its explicit qualified boundaries");
+    return value;
+}
+
 OwnedGuildMembershipPolicy LuaEngine::owned_guild_membership(const OwnedGuildMembershipInput& input) {
     static_assert(std::numeric_limits<lua_Integer>::max()>=
         static_cast<std::int64_t>(ExtendedCoinAmount::maximum),"Coin policy requires wide Lua integers");

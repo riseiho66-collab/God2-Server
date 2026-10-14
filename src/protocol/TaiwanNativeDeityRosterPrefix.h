@@ -27,7 +27,8 @@ public:
 
     static std::optional<TaiwanNativeDeityRosterPrefix> from_reset_and_records(
             std::span<const std::vector<std::uint8_t>> actual_batches,
-            std::span<const NativeSkillRecord> owned_definitions) {
+            std::span<const NativeSkillRecord> owned_definitions,
+            bool issued_activation_records=false) {
         TaiwanNativeDeityRosterPrefix next;
         for(const auto& definition:owned_definitions) {
             if(!valid_definition(definition))return std::nullopt;
@@ -52,13 +53,16 @@ public:
             // logical batches. A record crossing a boundary is unsupported.
             if(batch.size()>2560)return std::nullopt;
             for(std::size_t at=0;at<batch.size();) {
-                const auto size=record_size(batch[at]);
+                // S35 is opt-in only for an actual separately qualified issued source.
+                const auto size=(issued_activation_records && batch[at]==0x35)?
+                    std::optional<std::size_t>{4}:record_size(batch[at]);
                 if(!size || *size>batch.size()-at)return std::nullopt;
                 const auto record=std::span<const std::uint8_t>(batch).subspan(at,*size);
                 switch(record[0]) {
                 case 0x30:if(!next.apply30(record))return std::nullopt;break;
                 case 0x31:next.apply31(record);break;
                 case 0x34:if(!next.apply34(record))return std::nullopt;break;
+                case 0x35:if(!issued_activation_records || !next.apply35(record))return std::nullopt;break;
                 default:break; // Known pet records: exact full bytes retained.
                 }
                 at+=*size;
@@ -148,6 +152,25 @@ private:
             // this model exposes only the expected row/skill data prefix.
             selected_row_=std::int8_t(i);break;
         }
+    }
+    // Actual4AA830 direct data prefix only: existing same catalog pointer,
+    // whole flag3 overwrite then flags&2 auxiliary rebuild. Opaque UI omitted.
+    bool apply35(std::span<const std::uint8_t> record) {
+        const auto definition=std::find_if(catalog_records_.begin(),catalog_records_.end(),
+            [&](const auto& value){return value.kind==record[2] && value.definition_id==record[3];});
+        if(definition==catalog_records_.end())return false;
+        for(std::size_t i=0;i<roster_count_;++i) {
+            auto& row=rows_[i];if(row.row_key!=record[1])continue;
+            for(std::size_t j=0;j<row.learned_count;++j) {
+                const auto& owned=row.learned_definitions[j];
+                if(!owned || *owned!=*definition)continue;
+                row.learned_flags[j]=3;
+                auto rebuilt=TaiwanNativePrimarySkillList::rebuild_roster_auxiliary(row,definition->source);
+                if(!rebuilt)return false;
+                row=std::move(*rebuilt);break;
+            }
+        }
+        return true;
     }
     bool apply34(std::span<const std::uint8_t> record) {
         const auto definition=std::find_if(catalog_records_.begin(),catalog_records_.end(),

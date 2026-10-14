@@ -2,6 +2,15 @@
 #include "db/SqliteSupport.h"
 
 #include <algorithm>
+#include <array>
+#include <limits>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <bcrypt.h>
+#endif
 
 namespace god2 {
 namespace {
@@ -18,10 +27,54 @@ std::string sha(sqlite_detail::Statement& row, int column) {
         })) throw DatabaseError("Invalid native skill book SHA-256 text");
     return value;
 }
+bool digest_matches(const std::vector<std::uint8_t>& bytes,const std::string& expected) {
+#ifdef _WIN32
+    if(bytes.empty()||bytes.size()>std::numeric_limits<ULONG>::max())return false;
+    struct Algorithm {BCRYPT_ALG_HANDLE value=nullptr;~Algorithm(){if(value)BCryptCloseAlgorithmProvider(value,0);}} algorithm;
+    struct Hash {BCRYPT_HASH_HANDLE value=nullptr;~Hash(){if(value)BCryptDestroyHash(value);}};
+    if(BCryptOpenAlgorithmProvider(&algorithm.value,BCRYPT_SHA256_ALGORITHM,nullptr,0)<0)return false;
+    DWORD length=0,returned=0;
+    if(BCryptGetProperty(algorithm.value,BCRYPT_OBJECT_LENGTH,reinterpret_cast<PUCHAR>(&length),
+        sizeof(length),&returned,0)<0||returned!=sizeof(length)||!length)return false;
+    std::vector<std::uint8_t> object(length);Hash hash;
+    if(BCryptCreateHash(algorithm.value,&hash.value,object.data(),length,nullptr,0,0)<0)return false;
+    std::array<std::uint8_t,32> result{};
+    if(BCryptHashData(hash.value,const_cast<PUCHAR>(bytes.data()),static_cast<ULONG>(bytes.size()),0)<0||
+       BCryptFinishHash(hash.value,result.data(),static_cast<ULONG>(result.size()),0)<0)return false;
+    constexpr char hex[]="0123456789abcdef";std::string digest;digest.reserve(64);
+    for(const auto byte:result){digest.push_back(hex[byte>>4]);digest.push_back(hex[byte&15]);}
+    return digest==expected;
+#else
+    (void)bytes;(void)expected;return false;
+#endif
+}
 }
 
 NativeSkillBookCatalog::NativeSkillBookCatalog(sqlite3* db) : db_(db) {
     if (!db_) throw DatabaseError("Null native skill book connection");
+}
+
+std::optional<NativeSkillBookRecord> NativeSkillBookCatalog::lookup_item(std::int64_t item_id) const {
+    if(item_id<6501||item_id>7199)return std::nullopt;
+    const bool own=sqlite3_get_autocommit(db_)!=0;
+    if(own)sqlite_detail::execute(db_,"BEGIN");
+    struct Read {sqlite3* db;bool own,done=false;~Read(){if(own&&!done)sqlite3_exec(db,"ROLLBACK",nullptr,nullptr,nullptr);}} read{db_,own};
+    sqlite_detail::Statement shadow(db_,"SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('native_skill_book_bindings','native_skill_books','native_data_sources','native_skill_catalog') OR tbl_name COLLATE NOCASE IN ('native_skill_book_bindings','native_skill_books','native_data_sources','native_skill_catalog')");
+    if(shadow.row())throw DatabaseError("Skill book item lookup TEMP shadow rejected");
+    sqlite_detail::Statement tables(db_,"SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ('native_skill_book_bindings','native_skill_books','native_data_sources','native_skill_catalog')");
+    if(!tables.row()||tables.integer(0)!=4||tables.row())throw DatabaseError("Skill book item lookup requires actual main tables");
+    sqlite_detail::Statement rows(db_,"SELECT kind,definition_id FROM main.native_skill_book_bindings WHERE book_dataset_id='current-skill-books-v1' AND item_id=? ORDER BY kind,definition_id LIMIT 2");
+    rows.bind(1,item_id);
+    std::optional<NativeSkillBookRecord> result;
+    if(rows.row()) {
+        const auto kind=rows.integer(0),id=rows.integer(1);
+        if(rows.row())throw DatabaseError("Ambiguous skill book item association");
+        result=lookup(kind,id);
+        if(!result||result->item_id!=item_id)throw DatabaseError("Skill book item association changed");
+        if(!digest_matches(result->raw_record,result->record_sha256)||
+           !digest_matches(result->parsed_record,result->parsed_sha256))result.reset();
+    }
+    if(own)sqlite_detail::execute(db_,"COMMIT");read.done=true;return result;
 }
 
 std::optional<NativeSkillBookRecord> NativeSkillBookCatalog::lookup(

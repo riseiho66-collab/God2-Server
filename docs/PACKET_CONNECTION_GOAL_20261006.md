@@ -5480,3 +5480,31 @@ TW156/252/3chains40bindings36unique and CN156/280phase/253/35chains93bindings71u
 unchanged. Whole denominator/percentage unknown, goalactive/TW100 first. Native
 157 historical members7364185B reused; no original image/large archive copies.
 PHASE1/no build/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deploy.
+
+## Round381 - Actual TW owned C25 book transaction (2026-10-14)
+
+All381 retained SKB rows have the same original use flags: inventory C25,
+362ordinary plus19masterconfirmation. Shortcut C26 remains separately OPEN.
+CUSTOM-0148 connects default-off actual Main C25 to C++ shared ownership/full
+inventory+native1215+full deity roster/selection, owning common definition, pure
+Lua onebook policy and one SQLite learning/debit/event/activation transaction.
+Exact raw/parsed book hashes are recomputed. Complete S34->35->41 wire and
+private committed carrier allocate before COMMIT; final whole callback write
+and input continuation hold preserve durable-prefix failure semantics.
+
+The actual original companion restoration emits one deity/pet list, including
+only retained activation events. Book bootstrap waits its actual Written/private
+INIT/Session/fullsource epoch and never appends duplicate ordinary S30. Stale
+epochs retire and defer until a genuine successor source instead of closing an
+otherwise unrelated idle/battle-return callback. No equal-key rights rebase,
+zero raw25, default35-from34, grants, production schema or save migration.
+
+This is one conditional actual custom source branch. Independent CommonWorld
+and battle-return restoration publishers, shortcut C26, legitimate future deity
+writer lineage, C56/C35 full action and CN native/custom126/150 integration remain
+OPEN. Original eligibility, learning sequence and client adoption are not
+recovered. Parser77=50partial+11control+16unconnected/pending12 and frontier26
+21formats/105gaps remain; complete routes added0, whole denominator/%null.
+TW100 first/fullgoal/commoncore/saves/frozen features remain. No newprojectPY;
+PHASE1 forbids builds/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/
+deployment. Details: docs/research/tw-skillbook-learning-source-20261014.md.

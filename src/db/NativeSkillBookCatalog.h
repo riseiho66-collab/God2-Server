@@ -29,6 +29,10 @@ class NativeSkillBookCatalog final {
 public:
     static constexpr char current_dataset_id[] = "current-skill-books-v1";
     explicit NativeSkillBookCatalog(sqlite3* db);
+    bool uses_connection(const sqlite3* db) const noexcept {return db_==db;}
+    // Unique forward association on the same actual source; no alias inversion
+    // into native learning entitlement. Ambiguous source associations throw.
+    std::optional<NativeSkillBookRecord> lookup_item(std::int64_t item_id) const;
     std::optional<NativeSkillBookRecord> lookup(std::int64_t kind,
                                                 std::int64_t definition_id) const;
 private:

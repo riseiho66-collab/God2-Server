@@ -74,6 +74,8 @@ struct SqliteDatabase::Impl {
     std::unique_ptr<SqliteGuildRosterRepository> guild_roster;
     std::unique_ptr<SqliteOwnedGuildLeaveRepository> guild_leave;
     std::unique_ptr<SqliteTeleportGemRepository> teleport_gems;
+    // Borrowed sources above outlive this concrete shared learning coordinator.
+    std::unique_ptr<SqliteSkillBookLearningRepository> skill_book_learning;
 };
 SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration> migrations)
     : path_(std::move(path)), migrations_(std::move(migrations)) {}
@@ -606,6 +608,28 @@ cn::CnNativeSkillCatalogImport::Result SqliteDatabase::import_cn_native_skill_ca
 const NativeSkillBookCatalog& SqliteDatabase::native_skill_book_catalog() const {
     if (!migrated_) throw DatabaseError("Migrate database before accessing repositories");
     return *impl_->native_skill_book_catalog;
+}
+SqliteSkillBookLearningRepository& SqliteDatabase::skill_book_learning() {
+    if(!migrated_)throw DatabaseError("Migrate before accessing skill-book learning sources");
+    if(!impl_->skill_book_learning)
+        impl_->skill_book_learning=std::make_unique<SqliteSkillBookLearningRepository>(
+            owned_inventory_writer(),native_equipment_snapshot_writer(),companions(),
+            native_skill_book_catalog(),native_skill_catalog());
+    return *impl_->skill_book_learning;
+}
+void SqliteDatabase::install_skill_book_learning_schema() {
+    if(!migrated_ || !impl_ || !sqlite3_get_autocommit(impl_->connection.get()))
+        throw DatabaseError("Skill-book learning schema requires initialized common storage and its own transaction");
+    auto* db=impl_->connection.get();
+    if(!impl_->accounts->uses_connection(db) || !impl_->recovered_characters->uses_connection(db))
+        throw DatabaseError("Skill-book learning schema requires exact common sources");
+    sqlite_detail::Statement fk(db,"PRAGMA foreign_keys");
+    if(!fk.row() || fk.integer(0)!=1 || fk.row())
+        throw DatabaseError("Skill-book learning schema requires foreign keys");
+    sqlite_detail::Transaction transaction(db);
+    // Explicit installer only; Main never calls this or backfills activation.
+    sqlite_detail::execute(db,SqliteSkillBookLearningRepository::schema());
+    transaction.commit();
 }
 const NativeSkillBookSourceCatalog& SqliteDatabase::native_skill_book_source_catalog() {
     if(!migrated_)throw DatabaseError("Migrate before shared book source reader access");

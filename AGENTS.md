@@ -485,3 +485,21 @@ canonical492; explicitC25/C26 book pending group11->12. Parser77/50partial/
 11control/16unconnected and frontier26 21/105 unchanged; fullroute0/whole%null.
 Actual book/actor/material/subject/eligibility/atomic learning+debit+event/replay/
 complete native result still OPEN. TW100 priority/PHASE1/frozen/fullgoal retained.
+
+Round381 qualifies all381 original SKB flags: inventory uses C25 (362ordinary,
+19masterconfirmation); distinct shortcut C26 stays OPEN. CUSTOM-0148 adds
+default-off actual Main C25/Lua onebook/selectedowneddeity/commondefinition,
+sameSQLite fullinventory+1215+roster/selection+event/activation CAS and prebuilt
+S34->35->41 whole response/inputhold. Genuine paired20/full25 only; full64owner,
+actualINITactor/fullLease/witness affinity, all regional opaque aliases kept.
+One original activation-aware companion restoration sends deity+pet rows once;
+book bootstrap waits exact original Written/source/privateepoch, never repeats
+ordinaryS30 or defaults35 from old34. Staleepochs retire/defer until a real new
+restoration, not equalkeyrebase/idleclose. Explicit schema installer never Main.
+Actual commonworld/battlereturn publisher,C26,otherwriterlineage,C56/C35 action,
+CN native/custom126/150 resources/cast and originaleligibility/adoption remain
+OPEN. This is custom source integration, not native learning recovery/fullroute
+or TW100. Source19 pins69 (42old exact,5old updated,22added);canonical502.
+Parser77/50partial/11control/16unconnected,frontier26 21/105 unchanged;
+whole%null. No newprojectPY; PHASE1 no builds/tests/runtime/SQL/migrate/activate/
+deploy and fullTW-first/commoncore/frozen scope preserved.

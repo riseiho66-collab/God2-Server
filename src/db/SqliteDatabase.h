@@ -24,6 +24,7 @@
 #include "db/NativeSkillCatalog.h"
 #include "cn/assets/CnNativeSkillCatalogImport.h"
 #include "db/NativeSkillBookCatalog.h"
+#include "db/SqliteSkillBookLearningRepository.h"
 #include "db/NativeSkillBookSourceCatalog.h"
 #include "cn/assets/CnNativeSkillBookSourceImport.h"
 #include "db/SqliteCompanionRepository.h"
@@ -166,6 +167,10 @@ public:
     cn::CnNativeSkillCatalogImport::Result import_cn_native_skill_catalog(
         std::shared_ptr<const god2cn::CnNativeSkillCatalog>);
     const NativeSkillBookCatalog& native_skill_book_catalog() const;
+    // CUSTOM-0148: exact shared writers/readers; access performs no schema install.
+    SqliteSkillBookLearningRepository& skill_book_learning();
+    // Explicit empty event/activation schema only. No import/backfill or grants.
+    void install_skill_book_learning_schema();
     // Additive shared raw evidence; lazy borrowed reader on this same DB.
     // Existing TW parsed catalog/default migrations/Main remain unchanged.
     const NativeSkillBookSourceCatalog& native_skill_book_source_catalog();
