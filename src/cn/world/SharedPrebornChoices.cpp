@@ -11,10 +11,15 @@ void SharedPrebornChoices::owner() const {
 }
 bool SharedPrebornChoices::current() const {
     const auto connection=connection_.lock();
-    return connection && !connection->closing() && connection->role()==Connection::Transport::Role::World &&
-        connection->world_session_id()==lease_.session && connection->verified_account_id()==lease_.account &&
-        connection->world_admission_current() && connection->world_character_offered(lease_.character) &&
-        presence_->ready(lease_);
+    const auto local=[&] {
+        // Pure connection/admission/offer/full-Lease registry checks. The one
+        // original ownership observer below may retire any of these sources.
+        return connection && !connection->closing() && connection->role()==Connection::Transport::Role::World &&
+            connection->world_session_id()==lease_.session && connection->verified_account_id()==lease_.account &&
+            connection->world_admission_current() && connection->world_character_offered(lease_.character) &&
+            presence_->retained_ready_current(lease_);
+    };
+    return local() && presence_->ready(lease_) && local();
 }
 bool SharedPrebornChoices::current_scope(const Scope& scope) const {
     return scope.lease==lease_ && scope.source_revision && current() && world_.current(scope) && current();

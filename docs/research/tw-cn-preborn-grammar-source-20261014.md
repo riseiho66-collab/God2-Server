@@ -69,3 +69,11 @@ required with their unresolved integrations. Whole denominator/percentage
 unknown, goal active. PHASE1 static only: no build/tests/runtime/native/API/VM/
 product codec/gameDBSQL/import/migration/activation/deployment. Preserve saves,
 accounts, resources/fonts/conversion/frozen features and common C++/Lua core.
+
+
+Round376 closes the identified CN current() observer-retirement boundary by
+repeating pure connection/admission/offer/full-Lease checks before/after the
+one original ownership observer. No staged policy or old-scope postcommit
+recheck is added. TW local mask removal/cancel bodies are qualified separately;
+isolated84 has no invoking caller/phase and stays unregistered. See
+preborn-current-source-20261014.md / source17; actual operation/save remainsOPEN.

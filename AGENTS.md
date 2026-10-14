@@ -422,3 +422,14 @@ ordinal stage/A3 body-unused A780 setter/removal compaction are conditional
 source only, no ACK or book consume. Frontier26 formats21/unclassified105.
 CN current observer retirement/cancellation coupling and actual operation/save
 remain OPEN; PHASE1/no newPY/full goal preserved.
+
+
+Round376 actual CN Choices current now repeats pure full connection/admission/
+offered/full active Lease around its one original ownership observer. Retired
+connection/ticket/offer/presence cannot pass unchanged returned rows; no old
+operation-scope Current after COMMIT/retry/newrule. Source/17 pins45,old39 exact.
+TW mask removal266B/86 captured withcancel/pureleaf/callers qualified;cancel
+children opaque. Separate84 reference45B/13 has no actual caller/WORLDphase,
+so remains unregistered. ABI typo retained plusadditive12Bcaller-stack correction.
+Next TW A0window4FDC30/eventowner affiliation; actualoperation/save stillOPEN.
+Frontier26 immutable21/105;PHASE1/no newPY/full goal preserved.

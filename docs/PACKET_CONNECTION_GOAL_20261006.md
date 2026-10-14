@@ -5348,3 +5348,29 @@ adoption and CNcurrent observer retirement/cancellation coupling stillOPEN.
 Whole denominator/%null;goalactive. PHASE1 static/no build/tests/runtime/native/
 API/VM/codec/gameDBSQL/migration/activation/deploy. All common453/TWTraditional/
 clientprimary/maxHPdiv10/CNcustom126/150/numeric/frozen/account/save preserved.
+
+
+## Round376 - actual staged-choice current source qualification (2026-10-14)
+
+CN Choices current retainsone strongconnection and pure oldtuple/admission/
+offered/full activeLease predicate before/after oneoriginal presence.ready
+virtualownership observer. Observercouldclose/revoke/retire while returning
+same rows;finalpurecut nowrejects. Actualattach/current_scope/windowactivation/
+postapply/helddelivery covered. No oldconsumed ScopeCurrent afterCOMMIT or
+durableretry/newSQL/rule/wire.1existingCPP/1literal/1wholeinverse==oldrefs/Git
+7977a01;independentreviewPASS. Source/17 pins45,old39exact,canonical464/newPY0.
+TWlocalmaskremove/cancel/pureordinalleaf+truecontrol4caller/decision266B86sites
+=3whole243/79+2partial23/7,data0. MaskdirectAE24formal/index/no lowercountguard,
+compactABEE/count--/tailunchanged/no pagemath;cancelownnostore/noqueue BUT
+507BB0/47E2C0opaque. Separate84producer/thunk in-place45B13sites retainsraw
+WORDbody2 yetinvokingcaller/phaseOPEN;no WORLD84registration/A0causality/grant.
+OriginalABI RET16typo preserved withadditive12Bcaller-cleanup premise correction,
+calleeunexpanded. NextactualTW A0windowconstructor4FDC30/eventowner affiliation.
+Sharedgrammar unchanged,actualoperation/subject/rules/rights/save/replay/full
+reply/Main/adoption/cancellationcoupling remainOPEN. Newopcode/formula/phase/
+ownerchain/fullroute/classifications0;frontier26 byteexact21formats/105gaps;
+parser77=50partial+11control+16unconnected/pending11,64.9%parseronly. TW156/252/
+3/40/36,CN156/280phase/253/35/93/71 unchanged;whole denominator/%null,goalactive.
+PHASE1/no build/tests/runtime/native/API/VM/codec/gameDBSQL/migration/activation/
+deploy;all453/TWTraditional/clientprimary/maxHPdiv10/CNcustom126/150/common64/
+frozen/save/account requirements retained.
