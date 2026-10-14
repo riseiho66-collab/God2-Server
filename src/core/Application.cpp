@@ -606,6 +606,11 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
     if(config.owned_initial_player_enabled && (!world_plan || !config.owned_skillbook_learning_enabled ||
        !world_plan->supports_app_owned_initial_deities || !world_plan->supports_app_owned_initial_player))
         throw std::invalid_argument("Initial player requires an exclusive native player and deity world plan");
+    // CUSTOM-0125/0149: an explicit common-world PK request needs real sources.
+    const bool hosted_pk=world_plan && config.owned_pk_invitation_enabled;
+    if(hosted_pk && (!config.owned_initial_player_enabled || !config.owned_skillbook_learning_enabled ||
+       !world_plan->make_owned_taiwan_pk_sources || !world_plan->make_taiwan_world_records))
+        throw std::invalid_argument("Common PK hosting requires the actual player, deity, mixed and complete PK sources");
     const bool deity_selection_publication=world_plan && world_plan->owned_deity_selection_publication;
     if(deity_selection_publication && (!world_plan->make_taiwan_world_records || !world_plan->make_taiwan_movement))
         throw std::invalid_argument("Owned deity selection publication requires an actual constructed mixed world plan");
@@ -735,6 +740,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             SharedTaiwanMovementSource::Binding taiwan_movement;
             SharedTaiwanWorldRecordSource::Binding taiwan_records;
             SharedTaiwanNativeCharacterListSource::Binding taiwan_native_characters;
+            std::optional<SharedWorldHostPlan::OwnedPkSources> owned_pk_sources;
             if(world_plan) {
                 if(config.owned_skillbook_learning_enabled && !world_plan->supports_app_owned_initial_deities)
                     throw std::invalid_argument("Owned skill learning requires the actual exclusive initial deity publisher");
@@ -783,7 +789,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     &database.native_skill_catalog(),entry_snapshots,summary_accounts,summary_snapshots,summary_writer,entry_writer,
                     &database.native_enemy_display_catalog(),equipment_snapshots,equipment_writer,owned_inventory,owned_inventory_writer,
                     &database.companions(),&owned_companions,owned_deity_skill_source,
-                    config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled};
+                    config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled,hosted_pk};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
@@ -815,6 +821,11 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                    (!owned_deity_skill_source || taiwan_records.deity_selection_source.lock()!=owned_deity_skill_source))
                     throw std::invalid_argument("Constructed mixed C67 binding does not retain the actual Context source");
                 configured_deity_selection_source=taiwan_records.deity_selection_source;
+                if(hosted_pk) {
+                    owned_pk_sources=world_plan->make_owned_taiwan_pk_sources(context);
+                    if(!owned_pk_sources)throw std::invalid_argument("Requested common PK lacks its actual complete source bundle");
+                    owned_pk_sources->require_complete();
+                }
                 // Check the actual constructed owners after all external factories.
                 // An explicit independent handle must never fall through to the
                 // legacy selected-character movement when a supplier changes plan metadata.
@@ -2282,6 +2293,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             // Do not install the opt-in schema or publish an invitation until
             // that adapter is complete;69 still returns RoomUnavailable.
             std::unique_ptr<OwnedPkInvitationService::RoomAuthority> pk_rooms;
+            std::unique_ptr<OwnedTaiwanPkRoomBackend> owned_pk_backend;
             std::map<std::uint64_t,std::uint64_t> pk_world_generations;
             // This guard covers EVERY PK peer observer, not only the roster
             // reader. A caught nested resolver still poisons the outer result.
@@ -2697,10 +2709,57 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     const auto peer=at->second.lock();if(!peer)return false;
                     peer->send_world_records(std::vector<std::uint8_t>(bytes.begin(),bytes.end()));
                     return true; // transport submission only; native69 must echo its exact lease
-                },[&]{return pk_rooms.get();});
-            if(config.owned_pk_invitation_enabled)
+                },[&]() ->OwnedPkInvitationService::RoomAuthority* {
+                    return owned_pk_backend?static_cast<OwnedPkInvitationService::RoomAuthority*>(owned_pk_backend.get()):pk_rooms.get();
+                });
+            // Declared AFTER Invitations: drain borrowed raw authority pointers
+            // BEFORE backend stop/destruction on every exit, including exceptions.
+            struct HostedPkLifetime {
+                OwnedPkInvitationService& invitations;
+                std::unique_ptr<OwnedTaiwanPkRoomBackend>& backend;
+                bool live=true,busy=false,reentered=false;
+                void stop() noexcept {
+                    if(!live)return;live=false;if(busy)reentered=true;
+                    if(!backend)return;
+                    invitations.stop();
+                    try{backend->stop();}catch(...){} // Both children are attempted by backend.
+                    backend.reset(); // Destroy while every actual resolver dependency is still alive.
+                }
+                ~HostedPkLifetime(){stop();}
+            } hosted_pk_lifetime{pk_invitations,owned_pk_backend};
+            if(hosted_pk) {
+                if(!owned_pk_sources || !common_world)throw std::invalid_argument("PK hosting lost its actual source owner");
+                owned_pk_sources->require_complete();
+                const OwnedTaiwanPkEntryPreparation::Sessions sessions=[&](std::uint64_t id) {
+                    const auto at=party_sessions.find(id);
+                    return at==party_sessions.end()?std::shared_ptr<Session>{}:at->second.lock();
+                };
+                const OwnedTaiwanPkEntryPreparation::Initializations initializations=[&](const std::shared_ptr<Session>& peer)
+                        ->std::optional<Session::NormalWorldInitialization> {
+                    if(!peer)return {};
+                    const auto at=owned_companion_restoration_sources.find(peer->id());
+                    if(at==owned_companion_restoration_sources.end() || at->second->session.lock()!=peer ||
+                       !at->second->normal_initialization)return {};
+                    const auto init=*at->second->normal_initialization;
+                    if(!peer->normal_world_initialization_current_on_game(init) || !init.entry_written())return {};
+                    return init;
+                };
+                owned_pk_backend=database.make_owned_taiwan_pk_room_backend(game.get_executor(),lua,
+                    common_world->presence(),common_world->visibility(),owned_pk_sources->fight_archive,
+                    sessions,initializations,pk_peer,owned_pk_sources->seed,owned_pk_sources->parameters,
+                    owned_pk_sources->order,owned_pk_sources->retry,pk_companions,
+                    owned_pk_sources->return_scene,pk_players);
+                if(!owned_pk_backend)throw std::invalid_argument("Actual PK backend construction failed");
+            }
+            if(config.owned_pk_invitation_enabled && !hosted_pk)
                 spdlog::warn("OWNED_PK_SOURCE_INCOMPLETE room_authority=unavailable invitations_not_published CUSTOM-0086");
             Session::DisconnectHandler on_disconnect=[&](std::shared_ptr<Session> session) {
+                    if(hosted_pk && session) {
+                        pk_invitations.invalidate(session->id());
+                        if(owned_pk_backend)try{owned_pk_backend->disconnected(*session);}
+                        catch(const std::exception& error){spdlog::warn("PK_DISCONNECT_RETIRE_FAILED reason={}",error.what());}
+                        pk_world_generations.erase(session->id());
+                    }
                     if(party_preview_transport)party_preview_transport->retire_source(*session); // Before throwing observers.
                     if(blacklist_lifetime->load()) {
                         const auto at=blacklist_replays.find(session->id());
@@ -2859,7 +2918,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     spdlog::warn("Historical scalar bootstrap retired; no unverified character attributes are replayed after the initialization tail");
                     if(recovered_movement) {
                         game_handlers.world_ready=[&](Session& session) {
-                            if(config.owned_pk_invitation_enabled){
+                            if(config.owned_pk_invitation_enabled && !hosted_pk){
                                 pk_invitations.invalidate(session.id());auto& generation=pk_world_generations[session.id()];
                                 if(generation==UINT64_MAX)throw std::runtime_error("PK world generation exhausted");
                                 ++generation;
@@ -8551,6 +8610,54 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(failure)std::rethrow_exception(failure);
                     };
                 }
+                if(hosted_pk) {
+                    if(!owned_pk_backend || !game_handlers.world_records || !game_handlers.world_ready)
+                        throw std::invalid_argument("PK host requires the final actual mixed dispatcher and ready hook");
+                    game_handlers.pk_invitations=true;
+                    const auto original=game_handlers.world_records;
+                    game_handlers.world_records=[&,original](Session& session,
+                            std::span<const RecoveredWorldRecords::Record> records)
+                            ->std::optional<std::vector<std::uint8_t>> {
+                        if(!hosted_pk_lifetime.live)throw std::logic_error("PK hosted input retired");
+                        if(hosted_pk_lifetime.busy){hosted_pk_lifetime.reentered=true;throw std::logic_error("PK hosted input reentered");}
+                        hosted_pk_lifetime.busy=true;hosted_pk_lifetime.reentered=false;
+                        struct End {bool& value;~End(){value=false;}} end{hosted_pk_lifetime.busy};
+                        const auto current=[&] {
+                            if(!hosted_pk_lifetime.live || hosted_pk_lifetime.reentered || !owned_pk_backend)
+                                throw std::logic_error("PK hosted input changed its actual owner");
+                        };
+                        // The real bound owner validates the WHOLE batch before
+                        // storing input. Driver alone resolves/sends on later turns.
+                        const auto bound=owned_pk_backend->dispatch_native_basic(session,records);current();
+                        if(bound)return std::vector<std::uint8_t>{}; // Includes genuine Idle, no fabricated frame/ACK.
+                        if(OwnedPkInvitationService::handles(records)) {
+                            const auto request=OwnedPkInvitationService::request(records);
+                            if(!request)throw std::runtime_error("PK invitation requires one complete native request plus Ticks");
+                            pk_invitations.handle(session.id(),*request,OwnedPkInvitationService::Clock::now());current();
+                            return std::vector<std::uint8_t>{};
+                        }
+                        // Preserve retirement before ordinary topology changes.
+                        if(std::any_of(records.begin(),records.end(),[](const auto& record) {
+                            return std::holds_alternative<RecoveredMovement::Request>(record) ||
+                                std::holds_alternative<RecoveredTeleport::Selection>(record) ||
+                                std::holds_alternative<RecoveredWorldRecords::ContextNotification>(record);
+                        }))pk_invitations.invalidate(session.id());
+                        pk_invitations.expire(OwnedPkInvitationService::Clock::now());current();
+                        auto response=original(session,records);current();return response;
+                    };
+                    const auto ready=game_handlers.world_ready;
+                    game_handlers.world_ready=[&,ready](Session& session) {
+                        if(!hosted_pk_lifetime.live)throw std::logic_error("PK host ready after retirement");
+                        pk_invitations.invalidate(session.id());
+                        owned_pk_backend->disconnected(session); // Never rebind an active private pair as WORLD.
+                        if(session.closing())throw std::logic_error("PK-bound peer cannot start a fresh WORLD source");
+                        auto& generation=pk_world_generations[session.id()];
+                        if(generation==UINT64_MAX)throw std::runtime_error("PK world generation exhausted");
+                        ++generation;
+                        ready(session);
+                        if(!hosted_pk_lifetime.live)throw std::logic_error("PK ready retired its actual host");
+                    };
+                }
                 if(deity_selection_publication) {
                     if(!game_handlers.world_records || !owned_deity_skill_source ||
                        configured_deity_selection_source.lock()!=owned_deity_skill_source)
@@ -8697,6 +8804,7 @@ if(guild_officer_runtime && player_guild(session) &&
             bool stopping=false;
             auto stop=[&] {
                 if(stopping) return;
+                if(hosted_pk)hosted_pk_lifetime.stop(); // Offers BEFORE backend/vault/scheduler/network.
                 if(party_preview_transport)party_preview_transport->stop(); // Before scheduler/network and borrowed game teardown.
                 guild_delivery_lifetime->store(false);
                 stop_blacklist_outputs();

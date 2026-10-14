@@ -165,7 +165,14 @@ public:
     OwnedPkInvitationService(Resolve resolve,Target target,Rule rule,Publish publish,Authority rooms)
         :resolve_(std::move(resolve)),target_(std::move(target)),rule_(std::move(rule)),
          publish_(std::move(publish)),rooms_(std::move(rooms)),lifetime_(std::make_shared<Lifetime>(Lifetime{this})){}
-    ~OwnedPkInvitationService(){lifetime_->owner=nullptr;while(!offers_.empty())retire(offers_.begin());}
+    ~OwnedPkInvitationService(){stop();}
+    // Terminal game-owner drain before the borrowed RoomAuthority stops.
+    // Reentrant abandon/completion cannot publish a new offer or re-drain it.
+    void stop()noexcept{
+        if(stopped_)return;
+        stopped_=true;lifetime_->owner=nullptr;
+        while(!offers_.empty())retire(offers_.begin());
+    }
     OwnedPkInvitationService(const OwnedPkInvitationService&)=delete;
     OwnedPkInvitationService& operator=(const OwnedPkInvitationService&)=delete;
     static bool handles(std::span<const RecoveredWorldRecords::Record> records){
@@ -180,7 +187,9 @@ public:
         return result;
     }
     Outcome handle(std::uint64_t sender,const RecoveredPk69::Request&r,Clock::time_point now){
+        if(stopped_)return Outcome::Denied;
         expire(now);
+        if(stopped_)return Outcome::Denied;
         if(r.control!=RecoveredPk69::Control::Invite)return answer(sender,r,now);
         if(!RecoveredPk69::right_click(r)||!resolve_||!target_||!rule_||!publish_||!rooms_)return Outcome::Denied;
         const auto source=resolve_(sender),destination=target_(r.second);
@@ -217,12 +226,17 @@ public:
     // Invoke on logout, fresh WORLD admission or movement/scene transition.
     // No fabricated close/timeout ACK: this native UI closes locally.
     void invalidate(std::uint64_t session)noexcept{
+        if(stopped_)return;
         for(auto it=offers_.begin();it!=offers_.end();){
-            if(it->second.pair.challenger.session==session||it->second.pair.recipient.session==session){auto old=it++;retire(old);}
+            if(it->second.pair.challenger.session==session||it->second.pair.recipient.session==session){
+                auto old=it++;retire(old);
+                if(stopped_)return; // abandon may have terminally drained the remaining map.
+            }
             else ++it;
         }
     }
     void expire(Clock::time_point now){
+        if(stopped_)return;
         for(auto it=offers_.begin();it!=offers_.end();){
             bool valid=false;
             try {
@@ -234,7 +248,8 @@ public:
                     valid=current(it->second.pair)&&it->second.authority->current(it->second.reservation);
             }
             catch(...){valid=false;}
-            if(!valid){auto old=it++;retire(old);}else ++it;
+            if(stopped_)return;
+            if(!valid){auto old=it++;retire(old);if(stopped_)return;}else ++it;
         }
     }
 private:
@@ -245,6 +260,7 @@ private:
     Resolve resolve_;Target target_;Rule rule_;Publish publish_;Authority rooms_;
     Offers offers_;
     std::shared_ptr<Lifetime> lifetime_;
+    bool stopped_=false; // LAST member; absence of stop preserves normal operation.
     static RecoveredPk69::Text opaque_context(std::uint64_t n){
         // UINT64 base36 fits13 chars plus NUL in native16. These are custom
         // replay identities, never guessed player names or stat values.

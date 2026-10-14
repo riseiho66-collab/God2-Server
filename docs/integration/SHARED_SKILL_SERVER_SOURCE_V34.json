@@ -1,0 +1,700 @@
+{
+  "contract_version": "god2-server/shared-skills/source/34",
+  "phase": "PHASE1",
+  "custom_designs": [
+    "CUSTOM-0138",
+    "CUSTOM-0139",
+    "CUSTOM-0140",
+    "CUSTOM-0141",
+    "CUSTOM-0142",
+    "CUSTOM-0143",
+    "CUSTOM-0144",
+    "CUSTOM-0145",
+    "CUSTOM-0146",
+    "CUSTOM-0147",
+    "CUSTOM-0148",
+    "CUSTOM-0133",
+    "CUSTOM-0149"
+  ],
+  "source_files": [
+    {
+      "path": "src/db/SqliteCompanionRepository.h",
+      "bytes": 11426,
+      "sha256": "06ba899aacdef0fa5e5eaa8572471004b48041df4a30aff59aedd89a0a83ec05"
+    },
+    {
+      "path": "src/db/SqliteCompanionRepository.cpp",
+      "bytes": 48580,
+      "sha256": "e2fc84dec74b6af579473dfcaf1d4e88e9d91042d1a95a226753601b382056d2"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.h",
+      "bytes": 16737,
+      "sha256": "91cf797fd2412b51bb6cb875760d4ab02218680e960542c6737b34347438d8d0"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.cpp",
+      "bytes": 71468,
+      "sha256": "ec47b2668a6d2a0c6a80b8bb1f63622132bb47765bb87bfc7d833a384307b0a8"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.h",
+      "bytes": 9053,
+      "sha256": "6b72768cb05b77c8c064f17d814dec62650bc226db9ad668144f29d58d637fc5"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.cpp",
+      "bytes": 48477,
+      "sha256": "5a19c0bd5398e08817e69601e3ac9e39cb96e57cc9d4ba7519055a0a4834d87c"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "bytes": 805072,
+      "sha256": "c04b493ddf88f56feef785a0f3019d21194e6b32eddb39d634332ac77833351c"
+    },
+    {
+      "path": "src/net/Session.h",
+      "bytes": 47325,
+      "sha256": "9fbfac6e3d9df75758da5e24a4cbfb6d46cb375141ad540f7187ae43900c6879"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "bytes": 350533,
+      "sha256": "00ba69551e3e4144c2a700c2cd8dbae849f132277a665383b817805a15810dd2"
+    },
+    {
+      "path": "src/cn/world/SharedNativeBattleCommandData.h",
+      "bytes": 6091,
+      "sha256": "0ff6c0da2ef5821cc30e73f4d78f127ff6a4a2641b896bcb0ff7553834a760b7"
+    },
+    {
+      "path": "src/cn/world/SharedNativeBattleCommandData.cpp",
+      "bytes": 22083,
+      "sha256": "48a6b16da9b97dcf0438b5edbe4fcef9a06d3f7a9ced57d4e7882ac43bfb4b0b"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeSkillCommandSource.h",
+      "bytes": 4137,
+      "sha256": "df661e92a22debf2faf451bb86b13a574b19f83743e60ada37304355385b6f3a"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeSkillCommandSource.cpp",
+      "bytes": 12644,
+      "sha256": "05133443079c9ce0a6cd72f5f724fb5d824d9f207b3f541f94a919a145caaac8"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldRecords.h",
+      "bytes": 37620,
+      "sha256": "04faf655c818fecc9269c786270d07fc19b7d20f2e65e8d6a61b918bfa84569e"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.h",
+      "bytes": 5907,
+      "sha256": "27bee675c6bb8eb0736540451fdb190e434a45e380341ef989632dd79b27925e"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "bytes": 22413,
+      "sha256": "4051a8639f1f3bb1a92e6bd2c0e6cbcc2fdf62a333a206e6da7f3d59e0181207"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeRecordHandlerSource.cpp",
+      "bytes": 12348,
+      "sha256": "1c20a8f90c69721005388ebfd0264ced93306436620ff7f1b6139048d5ddb091"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "bytes": 59346,
+      "sha256": "df2a3d5074925a8303f273d727c2c83ae55f4be0093418105d2389b9637d043c"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldSkillRequest.h",
+      "bytes": 1810,
+      "sha256": "9a0c36f78d76ffdd64b0a30361ee92177ca93ad0bb0c23eec53336374e8e965a"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedDeitySkillSource.h",
+      "bytes": 5845,
+      "sha256": "988c38b24bd963208ebabf3e5d920dbb8e5010228f65bbb8efe4eb19446baacd"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedDeitySkillSource.cpp",
+      "bytes": 27389,
+      "sha256": "d153e31c3af0970623b2d888d0b1cd6148a507e2fa055509250ae2b3d61a1f88"
+    },
+    {
+      "path": "src/game/TaiwanWorldEntryIdentity.h",
+      "bytes": 872,
+      "sha256": "83f91533178397a75aa211321add4988857b7e67579635c6262aefc5c85705c3"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.h",
+      "bytes": 5304,
+      "sha256": "54eead92fee2d580f898626317f7df4fe6f74c30a320cc5f4e82b4706a4ba8a4"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.cpp",
+      "bytes": 8981,
+      "sha256": "22d1164df74d12a752b38fc249999735df1bdbad4ef4196e1c2cf0177511876d"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.h",
+      "bytes": 4436,
+      "sha256": "651a9b5d0599d4c3f7bcd4782402179456b8d88ec6e30af6e8a88eb8bf18dbf7"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.cpp",
+      "bytes": 17402,
+      "sha256": "7a9b5015fa00466e9ca07d301adb9633cd22c61169f436b89de0c4969755b083"
+    },
+    {
+      "path": "src/handlers/RecoveredOwnedCompanions.h",
+      "bytes": 7555,
+      "sha256": "5b306e96ce42fe0de17525ff85b56a01950b82d49407edbc43c39e171f4a4620"
+    },
+    {
+      "path": "src/handlers/RecoveredOwnedCompanions.cpp",
+      "bytes": 18675,
+      "sha256": "0297656969d63a2f02a466c857423001938bba15c7a4f318513af9cb599c8792"
+    },
+    {
+      "path": "src/core/SharedWorldHostPlan.h",
+      "bytes": 11644,
+      "sha256": "2e0af6101174ba28c8a3653029c5145576a87607643f39b39327feb01334c4b5"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemSelectionSource.h",
+      "bytes": 6015,
+      "sha256": "74a8069e89a807c812042cc35a29b0efe0fb36c39a061cc186111c66ecccbb7f"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemSelectionSource.cpp",
+      "bytes": 7853,
+      "sha256": "58eeeb9c4112cef4fc2a898d6ba72105a727a50b5fd55ac8d6ecd6f0dd6451ff"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemRequestSource.h",
+      "bytes": 1360,
+      "sha256": "555b52404cf2617ae1680961de17a70b14f3f5c5caa6210a687689e71ed10574"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemRequestSource.cpp",
+      "bytes": 5903,
+      "sha256": "4c33c8ca85dc7f4ea99a08be0120055ac9e3f2cd1f55135d816022e219384e5f"
+    },
+    {
+      "path": "src/db/NativeItemDefinitionObservation.h",
+      "bytes": 2268,
+      "sha256": "f18b0e6f5c9487a0781641ebbed74c6ecf64740562026e07607314ab23cf006a"
+    },
+    {
+      "path": "src/db/SqliteOwnedInventoryRepository.h",
+      "bytes": 4719,
+      "sha256": "41e1d9f11b8058f880289cdc75696f4612c952fc01eaf48b14aa7194e24e69b3"
+    },
+    {
+      "path": "src/db/SqliteOwnedInventoryRepository.cpp",
+      "bytes": 26973,
+      "sha256": "d247d89eda898ec5c0b3129b270a448c7da4ad84a5f20f44daf8a4f85ad870af"
+    },
+    {
+      "path": "src/protocol/RecoveredPrebornChoiceRequest.h",
+      "bytes": 3153,
+      "sha256": "7e584eeb7c2e1ec2bc9714d5ef60ecf51c41d93d4239988761402ed06287d503"
+    },
+    {
+      "path": "src/cn/protocol/CnPrebornChoices.h",
+      "bytes": 3417,
+      "sha256": "9521ca558ea808458dea9ef83f88025c8955463db1405e71d24c7032b5bafc61"
+    },
+    {
+      "path": "src/cn/world/SharedWorldGameplay.cpp",
+      "bytes": 24913,
+      "sha256": "311baed1368e60d0c0e748a05888f4a1255b884617eb3ac0c6e3c38eb7287fe9"
+    },
+    {
+      "path": "src/cn/world/SharedPrebornChoices.cpp",
+      "bytes": 8774,
+      "sha256": "e14a7472d822896a39528d1df9b010c1af093180879954720fdc72737ad7d083"
+    },
+    {
+      "path": "src/cn/net/SharedCredentialConnection.cpp",
+      "bytes": 16934,
+      "sha256": "6d52aa4ca66e6b6d51645df5e9d90c18dffc239fb3c58802ec0e776eb587e164"
+    },
+    {
+      "path": "src/cn/net/SharedCredentialConnection.h",
+      "bytes": 8058,
+      "sha256": "aeb8e534beeae101ef8c4cb8fe63cf12821093f47340c2cc093ae14cc88189a4"
+    },
+    {
+      "path": "src/auth/SharedWorldAdmission.cpp",
+      "bytes": 14889,
+      "sha256": "6be5b21ee3e50b00e34cc416d6d31fd9520ad7d81f90b584253e3b38bed6953f"
+    },
+    {
+      "path": "src/auth/SharedWorldAdmission.h",
+      "bytes": 10864,
+      "sha256": "a62606af525210e86947001d3b5ef21af0807d90fa62c01ddb59c7a97422f26c"
+    },
+    {
+      "path": "src/cn/net/CnTransportSession.h",
+      "bytes": 3959,
+      "sha256": "b0d54c19594c9a74370aa2309268a35d6401e854fc8efb17406c7dcd0dd8bf78"
+    },
+    {
+      "path": "src/game/SharedTaiwanIssuedSkillSource.h",
+      "bytes": 6812,
+      "sha256": "36f12476dc4b7b01b4b79a38611acb4e89929d025098cd0e1404d3ed0a295ec6"
+    },
+    {
+      "path": "src/game/SharedTaiwanIssuedSkillSource.cpp",
+      "bytes": 24477,
+      "sha256": "7f5e49a8955ef1dbb2c3bc5dbd7e7fa2cf46a679acbb692fe653aecd67efc2db"
+    },
+    {
+      "path": "src/core/Config.h",
+      "bytes": 7600,
+      "sha256": "2842df4e86719c8e386a66fe82a027fac9eb635ebfb81f6a5dc34cb7046d2857"
+    },
+    {
+      "path": "src/core/Config.cpp",
+      "bytes": 62108,
+      "sha256": "024f456273e9d8778b8630c216b0e55f0a86a5b0a28dcd00591c087c0fc864fb"
+    },
+    {
+      "path": "src/db/SqliteDatabase.h",
+      "bytes": 15343,
+      "sha256": "8dec8998b9b9bd71c3ac63f1103cbdb9ebf991aacbfd8b48c38990717cd21ba3"
+    },
+    {
+      "path": "src/db/SqliteDatabase.cpp",
+      "bytes": 62953,
+      "sha256": "2f9c5036ec9ac3f637b2756c520fca790a3f0c9375b3a474a26fd36b8b138305"
+    },
+    {
+      "path": "src/db/NativeSkillBookCatalog.h",
+      "bytes": 1396,
+      "sha256": "74133d3fe1dd1371d557debceeeab2e4bb112f7c5067767894b840c026616336"
+    },
+    {
+      "path": "src/db/NativeSkillBookCatalog.cpp",
+      "bytes": 8435,
+      "sha256": "6b7ad75a21b2ec60d718694f29a936bdfd6408361f789b7817179cc4240e4c7f"
+    },
+    {
+      "path": "src/db/SqliteSkillBookLearningRepository.h",
+      "bytes": 6449,
+      "sha256": "fa4203d7951759fff998d8fce814ac2d1b6afcf96a11297cf1a094c7bc604a14"
+    },
+    {
+      "path": "src/db/SqliteSkillBookLearningRepository.cpp",
+      "bytes": 42134,
+      "sha256": "e4a4d481ce393b823eee5edc5817f4b1d759b2cd3595921f797651f78436a347"
+    },
+    {
+      "path": "src/db/SqliteNativeEquipmentSnapshotRepository.h",
+      "bytes": 4219,
+      "sha256": "50b0c204149578eb5c81172679b988ccc1e95c8714de1f56a6c78618a6e90b3e"
+    },
+    {
+      "path": "src/handlers/OwnedSkillBookLearningService.h",
+      "bytes": 3116,
+      "sha256": "dab3dd5cb97f1bdd1ce4baf8f6b303de49520fd48bc0c321179e1cd58505d621"
+    },
+    {
+      "path": "src/handlers/OwnedSkillBookLearningService.cpp",
+      "bytes": 19037,
+      "sha256": "039565ce8945d90bd614c62576c1f719cf9a7b323f0b5c8bff7084a0618872ce"
+    },
+    {
+      "path": "src/game/SkillBookLearningRule.h",
+      "bytes": 481,
+      "sha256": "62ebdae0226a9aab262145e09268f32e170d6f4812ec08b12d4613c835f88e43"
+    },
+    {
+      "path": "scripts/gameplay/skill_book_learning.lua",
+      "bytes": 447,
+      "sha256": "24f2e6e5a91edd1f44cfdf248b5314631ffdd5677dc55d3aa59840b84f63b7a9"
+    },
+    {
+      "path": "src/scripting/LuaEngine.h",
+      "bytes": 8462,
+      "sha256": "7aaf10809096c0d9f626eef0e3f45f20fd89c45fe47c4721683a49d9f485877f"
+    },
+    {
+      "path": "src/scripting/LuaEngine.cpp",
+      "bytes": 75436,
+      "sha256": "8b5844a6fde3ed2a80752b8093b724be81a82b851c0b7e491d5aaf720285956a"
+    },
+    {
+      "path": "src/protocol/RecoveredDeityActivation.h",
+      "bytes": 683,
+      "sha256": "fe05727d91a94998f210a49033130344eafb042308e2eb61b51290f2d5dfa0bd"
+    },
+    {
+      "path": "src/protocol/TaiwanNativeDeityRosterPrefix.h",
+      "bytes": 10926,
+      "sha256": "ca87cc162fc32ef0d9e6d525ef5758509aa9e745d5a077b87b2d9c5051b1b887"
+    },
+    {
+      "path": "src/game/TaiwanOwnedBagItemMaterial.h",
+      "bytes": 2434,
+      "sha256": "e02911f54dd54ebb9044edaf30cbeac51d2f27e184997b0be093148072f845ef"
+    },
+    {
+      "path": "src/db/NativeEquipmentSnapshotRepository.h",
+      "bytes": 2916,
+      "sha256": "c52e9e30871abf2e09e01037964a7048219aeadf37231b1504d2d1d22d5f2164"
+    },
+    {
+      "path": "src/protocol/RecoveredTaiwanInventoryItemRecord.h",
+      "bytes": 1234,
+      "sha256": "960b4d1d79922a44e7e1e51bcf32f05356b7d5df7a92b4fbae23c1339ab3cce1"
+    },
+    {
+      "path": "src/protocol/RecoveredInventory.h",
+      "bytes": 2835,
+      "sha256": "3d27484062f51655bce1a37c33ab0f551e623e8b14763c1cdbb518bba3031eb9"
+    },
+    {
+      "path": "src/protocol/RecoveredInventoryItemRequest.h",
+      "bytes": 1711,
+      "sha256": "7553f13c9cd050b0fa953bb117e8a21d62f72731006b9cefe91d8269782bc026"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldEntered.h",
+      "bytes": 4142,
+      "sha256": "b218f1e44c43f85103bb767d2a3a6d47216f880b16ba4de70f018691b11b796e"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldEntered.cpp",
+      "bytes": 17494,
+      "sha256": "4189ee4289fc1e503ac478f980b172bb5acae3d58d83e89c0a5f4a8c4e307681"
+    },
+    {
+      "path": "src/protocol/RecoveredTaiwanServerRecords.h",
+      "bytes": 4383,
+      "sha256": "fc6e33ced71dc429c7ada74fbd820eefa695ae157bd5dcf0c50751b7567d46b1"
+    },
+    {
+      "path": "src/protocol/RecoveredTargetItemRequest.h",
+      "bytes": 1170,
+      "sha256": "f2e46c7c804afbb7f00c8d9b54dd4c25b56ec29358434884e34f195a1d57e0ec"
+    },
+    {
+      "path": "src/handlers/OwnedPkOutboxPublication.h",
+      "bytes": 89536,
+      "sha256": "3a68c9fcc817777af93f36297f417e2dd034cfe30b1dfe2bf59402fc9f944f38"
+    },
+    {
+      "path": "src/cn/world/SharedActorVisibility.h",
+      "bytes": 32706,
+      "sha256": "68c689edf5c59d66f7c012e161b94ae71f89f46e117f4e9398bfeb4091d300e4"
+    },
+    {
+      "path": "src/cn/world/SharedActorVisibility.cpp",
+      "bytes": 140154,
+      "sha256": "03d7c4d96c137004c8218f6028713f3f411d8d968b18f6d33d35608d0f74703c"
+    },
+    {
+      "path": "src/db/SqliteOwnedPkRoomRepository.h",
+      "bytes": 15992,
+      "sha256": "4d4adea09ac288f42dd9bd748457b54ac0ecd5caabe1eeb1501dca0140e5dead"
+    },
+    {
+      "path": "src/db/SqliteOwnedPkRoomRepository.cpp",
+      "bytes": 121946,
+      "sha256": "135e071805f762c50d5e736894a7ea6d133b54b204ff1465033a0caec4581ab5"
+    },
+    {
+      "path": "src/handlers/OwnedPkRoomState.h",
+      "bytes": 21883,
+      "sha256": "ae61806065769b5c150eb9d1602b1145d03ba12b6943e7712ed624947d5f3d31"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkReturnRoleTextSource.h",
+      "bytes": 18917,
+      "sha256": "e7a532ab8cca6b99c49ef0e5e38cf68c430ce92e39c8051d3a56b2773a5a3a27"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkBasicDriver.h",
+      "bytes": 13267,
+      "sha256": "1d636d1c5e8d743d9a48446e6b9a7215d421cec3172427894daadbb3a9430ce2"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkLuaBasicOwner.h",
+      "bytes": 5983,
+      "sha256": "ff977c75b9d774468aa4e7ff3cc6bf65d0e47851e1c1c7f9d776cf2c6bc0a9d8"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkRoomBackend.h",
+      "bytes": 7728,
+      "sha256": "9c74c93d502e6756fff89e24c318b5db9682e492e0c36043497ccae35cb6bb8d"
+    },
+    {
+      "path": "src/handlers/OwnedPkEntryAdmission.h",
+      "bytes": 22458,
+      "sha256": "d246eb95f814a159a17688b573557539ccdd4d643511bbfe8e2624c973021ee1"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkAppearanceSource.h",
+      "bytes": 13627,
+      "sha256": "2e62c61ee2a5b7f1c3f512272e070cb1cbd54770b8144015c8355f225ef9e032"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkPlayerEntrySource.h",
+      "bytes": 11380,
+      "sha256": "212f69fc5ac5dccebb9f76645efcf8af5fc91b20075e51132dc3f6991ea3ad52"
+    },
+    {
+      "path": "src/handlers/OwnedPkInvitationService.h",
+      "bytes": 20511,
+      "sha256": "833418684d17562ac8aa76ca00deb10001f260df920b1ddba29dd8dbac1733ef"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkEntryPreparation.h",
+      "bytes": 16736,
+      "sha256": "2db313f3c1ca9876756b95bf7f561f24844699295fe9e070487629f05f555fe1"
+    },
+    {
+      "path": "src/protocol/RecoveredPkEntryProjection.h",
+      "bytes": 26272,
+      "sha256": "3cb30aa8ee69a6bf585f02406685dde9bb1431f1f20313ad85d095e5f64fa884"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkCompanionSource.h",
+      "bytes": 17587,
+      "sha256": "a5db4bcd1f6b51a1070e87c746f9e0e0f87115e2e291eec29777827071c66301"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.h",
+      "bytes": 19805,
+      "sha256": "3ccff776980453ad50b28409b75badd45bdba242d179e962ddd5d7f474e950b1"
+    }
+  ],
+  "traditional_names_primary": true,
+  "skills": [
+    {
+      "kind": 0,
+      "id": 126,
+      "design_id": "CUSTOM-0058",
+      "name": "瞬影三煞斬"
+    },
+    {
+      "kind": 0,
+      "id": 150,
+      "design_id": "CUSTOM-0059",
+      "name": "牛轉仙界踏"
+    }
+  ],
+  "qualification": {
+    "common_definition_query_source_connected": true,
+    "common_saved_readset_consumption_source_connected": true,
+    "actual_TW_diagnostic_bootstrap_roster_source_connected": true,
+    "actual_original_callback_write_custody_source_connected": true,
+    "actual_general_TW_gameplay_host_complete": false,
+    "full_native_primary_secondary_list_qualified": false,
+    "native_list_adoption": false,
+    "native_turn_grant": false,
+    "native_processing_ACK": false,
+    "native_input_barrier": false,
+    "CN_custom_cast_source_connected": false,
+    "CN_custom_native_profile_qualified": false,
+    "CN_native_effect_source_qualified": false,
+    "CN_runtime_enabled": false,
+    "learned_grant": false,
+    "native_source": false,
+    "actual_owned_response_input_continuation_source_connected": true,
+    "actual_CN_command_data_common_definition_handoff_source_connected": true,
+    "actual_CN_command_data_host_complete": false,
+    "actual_TW_command_common_definition_handoff_source_connected": true,
+    "actual_TW_native_command_host_complete": false,
+    "TW_world_C56_lossless_ingress_source_connected": true,
+    "TW_world_C56_actual_action_host_complete": false,
+    "saved_selected_deity_owning_common_definition_source_connected": true,
+    "saved_selected_deity_actual_Main_host_complete": false,
+    "saved_selected_deity_C56_self_input_source_connected": true,
+    "actual_Main_C56_self_action_host_complete": false,
+    "actual_Main_C67_full_row_commit_reply_source_connected": true,
+    "actual_Main_C67_final_response_publication_complete": true,
+    "actual_constructed_mixed_C67_same_source_publication_connected": true,
+    "actual_default_CLI_C67_publication_enabled": false,
+    "TW_WORLD35_original_receive_effect_statically_qualified": true,
+    "TW_WORLD35_authoritative_event_issuer_source_connected": false,
+    "TW_WORLD35_saved_flag_event_and_final_publication_source_connected": false,
+    "TW_key_selector_flag_bit0_is_universal_C56_permission": false,
+    "actual_C28_selection_and_action_retained_presence_fence_connected": true,
+    "actual_C28_skill_book_learning_source_connected": false,
+    "actual_TW_native_preborn_81_83_owned_raw_ingress_connected": true,
+    "actual_TW_native_preborn_81_83_stage_apply_learning_authority_connected": false,
+    "actual_TW_mixed_source_and_regular_saved_skill_retained_presence_fences_connected": true,
+    "TW_WORLD_A0_A2_original_staged_pointer_suppliers_statically_qualified": true,
+    "TW_WORLD_A0_A2_authoritative_staged_operation_issuer_connected": false,
+    "actual_TW_CN_C81_C83_structural_ingress_uses_one_common_size_qualifier": true,
+    "actual_TW_CN_staged_operation_saved_authority_shared": false,
+    "TW_WORLD_A1_A3_original_receive_effects_statically_qualified": true,
+    "TW_WORLD_A3_is_learning_or_save_ACK": false,
+    "actual_CN_preborn_connection_admission_offer_full_lease_before_after_ownership_observer_connected": true,
+    "TW_local_mask_removal_and_cancel_own_bodies_statically_qualified": true,
+    "TW_cancel_whole_path_no_send_or_server_cancel_proven": false,
+    "TW_C84_actual_caller_and_WORLD_phase_qualified": false,
+    "TW_C84_WORLD_registered": false,
+    "actual_TW_C35_full_active_lease_before_after_final_ownership_position_observers_connected": true,
+    "actual_TW_issued_list_install_select_and_private_native_publication_full_active_lease_fenced": true,
+    "TW_S34_presence_automatically_supplies_S35_flag_or_learning_grant": false,
+    "actual_CUSTOM0148_Main_C25_shared_atomic_learning_debit_event_source_connected": true,
+    "actual_CUSTOM0148_single_original_activation_restoration_source_connected": true,
+    "actual_CUSTOM0148_whole_original_response_input_hold_source_connected": true,
+    "actual_CUSTOM0148_default_CLI_enabled": false,
+    "actual_CUSTOM0148_schema_installed": false,
+    "actual_CUSTOM0148_CommonWorld_entry_return_restoration_publisher_complete": false,
+    "actual_CUSTOM0148_other_deity_writer_activation_lineage_complete": false,
+    "TW_shortcut_C26_book_learning_complete": false,
+    "TW_original_learning_eligibility_debit_sequence_recovered": false,
+    "TW_complete_skill_book_route": false,
+    "actual_CUSTOM0148_CommonWorld_initial_deity_source_connected": true,
+    "actual_CUSTOM0148_initial_nativeaggregate_exclusive_deity_policy_connected": true,
+    "actual_CUSTOM0148_originalprefix_and_deitysuffix_one_written_response_source_connected": true,
+    "actual_CUSTOM0148_CommonWorld_firstphysicalentry_only": true,
+    "actual_CUSTOM0148_commonworld_whole_write_native_reset_or_adoption": false,
+    "actual_CUSTOM0148_PK_return_deity_publication_complete": false,
+    "actual_CUSTOM0148_player_pet_sources_taken_over": false,
+    "actual_CUSTOM0148_Main_typed_C26_self_book_source_connected": true,
+    "actual_CUSTOM0148_C25_C26_share_one_learning_transaction": true,
+    "actual_CUSTOM0148_C26_complete_target_private_written_INIT_fence": true,
+    "actual_CUSTOM0148_C26_nonself_book_learning_complete": false,
+    "actual_CUSTOM0148_C26_original_server_eligibility_recovered": false,
+    "actual_TW_paired_terminal_strand_return_reservation_connected": true,
+    "actual_TW_return_reservation_owning_game_source_continuation_connected": true,
+    "actual_TW_return_reservation_wholepair_failed_before_close": true,
+    "actual_TW_return_reservation_grants_world_output_or_input_resume": false,
+    "actual_TW_complete_world_return_host_connected": false,
+    "actual_TW_Main_PK_backend_installed": false,
+    "actual_TW_Reserved_privateplan_pair_owning_records_handoff_connected": true,
+    "actual_TW_return_records_exact_ordered_Session_preparation_join": true,
+    "actual_TW_return_records_only_existing_full6F_subset": true,
+    "actual_TW_return_records_mutual_directed_edge_once": true,
+    "TW_original_joint_outgoing_native_sender_order_recovered": false,
+    "actual_TW_return_records_grant_send_liveWORLD_release_or_inputresume": false,
+    "actual_TW_return_private_recipient_multiframe_held_cohort_connected": true,
+    "actual_TW_return_survivor_private_INIT_normal_output_caps_connected": true,
+    "actual_TW_return_own_weak_markers_and_pending_task_drop_failure_connected": true,
+    "actual_TW_return_failure_preserves_unowned_observer_cohorts": true,
+    "actual_TW_return_empty_receivers_have_realcuts_without_dummyframes": true,
+    "actual_TW_return_held_cohort_is_local_fullwrite_or_nativeACK": false,
+    "actual_TW_return_liveconsume_visibility_release_Finished_inputresume_complete": false,
+    "actual_TW_return_Held_one_use_successor_identity_consume_connected": true,
+    "actual_TW_return_provisional_visibility_node_transfer_connected": true,
+    "actual_TW_return_unsent_successor_models_cleanup_before_lifecycle_hide": true,
+    "actual_TW_return_old_battle_caps_deliberately_retired": true,
+    "actual_TW_return_Consumed_complete_provider_saved_tail_release_connected": true,
+    "actual_TW_return_exact_local_whole_socket_write_callback_connected": true,
+    "actual_TW_return_real_older_active_and_held_FIFO_continuation_connected": true,
+    "actual_TW_return_exposure_sticky_and_exact_cohort_abandon_before_model_detach": true,
+    "actual_TW_return_whole_write_is_native_ACK": false,
+    "actual_TW_return_paired_finalisation_quiet_strands_connected": true,
+    "actual_TW_return_exact_durable_Finished_lock_release_source_connected": true,
+    "actual_TW_return_same_connection_in_transaction_joint_stored_fence_connected": true,
+    "actual_TW_return_successful_model_and_old_capability_retirement_connected": true,
+    "actual_TW_return_paired_real_input_resume_history_connected": true,
+    "actual_TW_return_released_history_recovery_without_mutable_rebind_connected": true,
+    "actual_TW_return_canonical_backend_ownership_lifecycle_source_connected": true,
+    "actual_TW_return_old_driver_processing_quiesced_before_consume": true,
+    "actual_TW_return_exact_driver_and_admission_retirement_without_close_connected": true,
+    "actual_TW_return_shared_pair_iterator_safe_adoption_and_weak_factory_coordinator_connected": true,
+    "actual_TW_return_finished_extension_factory_preflight_connected": true,
+    "actual_TW_PK_Main_authentic_mixed_host_complete": false,
+    "actual_TW_PK_QualifiedSceneHandle_full64_DB_native_actor_mapping_complete": false,
+    "actual_TW_PK_qualified_saved64_to_private_native_actor_source_connected": true,
+    "actual_TW_PK_legacy_identity_factories_and_readsets_preserved": true,
+    "actual_TW_PK_private_Session_sender_qualified_scene_actor_connected": true,
+    "actual_TW_PK_whole_WWR_companion_source_connected": true,
+    "actual_TW_PK_whole_WWR_same_DB_factory_and_conditional_readset_connected": true,
+    "actual_TW_PK_Main_exact_cached_companion_supplier_and_whole_prefix_source_connected": true,
+    "actual_TW_PK_Main_backend_complete": false,
+    "actual_TW_companion_learning_activation_inventory_closed_SQL_source_complete": true,
+    "actual_TW_PK_original_learning_complete_saved_tuple_closed_SQL_source_connected": true,
+    "actual_TW_PK_learning_borrowed_read_preserves_generic_battle_and_foreign_issuer_guards": true,
+    "actual_TW_PK_Main_fullplayer_written_source_complete": false,
+    "actual_TW_PK_learning_issued_or_recovered_lineage_complete": false,
+    "actual_TW_initial_saved_player22_24_source_connected": true,
+    "actual_TW_initial_saved_player_exclusive_native_policy_default_off": true,
+    "actual_TW_initial_saved_player_fullWWR_Written_and_saved_tuple_consumer_connected": true,
+    "actual_TW_full_initial_native_pet_opaque_sideeffect_ordering_closed": false,
+    "actual_TW_PK_original_player_graph_connected_to_written_initial_snapshot": true,
+    "actual_TW_PK_cached_player_whole_Current_sameDatabase_reentry_DML_guard": true,
+    "actual_TW_PK_only_optin_scoped_player_source_replaces_legacy_callreturn_flag_dependency": true,
+    "actual_TW_PK_preparation_optional_same_original_players_supplier_source_connected": true,
+    "actual_TW_PK_Main_backend_installed": false,
+    "actual_TW_PK_Main_conditional_backend_hosting_source_connected": true,
+    "actual_TW_PK_Main_final_mixed_C69_and_bound_basic_input_source_connected": true,
+    "actual_TW_PK_Main_offer_backend_source_teardown_order_connected": true,
+    "actual_TW_complete_native_ReturnScene_provider_qualified": false
+  },
+  "publication_source": "One complete selected saved roster -> unchanged actual87/id/80 producer -> same full callback frame captured before actual service binding -> typed final full-roster qualifier",
+  "owned_bootstrap_epoch": "Original tuple fence adjacent existing set_state; only actual result tuple, independent of cosmetic pose, no predicted increment or observer rebase",
+  "command_source": "Optional opted receipt requires Written and current plus existing361 fresh learned observation and same-txn persistence",
+  "remaining_timing": "Exact opted original callback response holds bounded input through actual full write and successful old bookkeeping; native interaction acceptance/general executor convergence remain open",
+  "postcommit_fence_limit": "refuse stale memory publication; cannot roll back successful COMMIT",
+  "persistence_branches": [
+    "active_checkpoint",
+    "terminal_checkpoint",
+    "resources_without_checkpoint",
+    "settlement_without_checkpoint"
+  ],
+  "owned_settlement_request_version": 4,
+  "ordinary_requests_preserved": true,
+  "new_native_formulas": 0,
+  "build": false,
+  "test": false,
+  "runtime": false,
+  "game_database_SQL": false,
+  "migrate": false,
+  "activate": false,
+  "deploy": false,
+  "owned_input_continuation": "Exact private Attempt published atomically on game; same FIFO full response/current phase+epoch releases original input once; failure retires first",
+  "CN_command_source": "Exact qualified original CN requested row + owning common definition -> existing actual DataAuthority current/prepare/execute_group; sequential same-value checks and original skill-group prefix/private holder retained",
+  "cross_source_atomic_CAS": false,
+  "original_CN_row_absence_not_bypassed": true,
+  "TW_command_source": "Exact original digestchecked TW and issued/requested-native row + retained owning common Scope -> existing qualification/current/action/after_action callbacks; no old catalog/grant reread after actual action",
+  "owner_resumed_after_round364": true,
+  "TW_world_C56": "Independent default-off raw7 ingress with conditional self identity source; opt-in C67 local Written/current publication now available. Native selected-menu adoption, other targets, action/cost/status/effects/full reply remain open.",
+  "saved_selected_deity_source": "Exact original digestchecked TW/full saved selected row and owning full common value; same private observation current checks, no rebase or native action authority",
+  "world_menu_source": "Actual selected roster pointer/key lineage qualifies a saved-deity supplier candidate; native pointer affinity across opaque children and real ordered publication/current receipts remain required.",
+  "TW_world_C56_self_input": "Exact owning raw7 and private Written/current normal INIT; entryWORD&3FFF equals ready lease handle, complete incoming targetWORD equals without mask; same full64owner/phase/generation, no permission.",
+  "TW_C67_selected_commit": "Private exact one-row transaction proof and prebuilt S31 preserved; opt-in complete original response publication now bound to actual same source. Native adoption/cast permission remain separate.",
+  "TW_C67_final_publication": "Explicit opt-in constructed mixed Context typed C67 supplier -> actual ordered commit chain -> LAST Application wrapper one complete original response/write/input hold -> exact private publication in same common selected-skill source; Written/current required, no native adoption/permission.",
+  "TW_C67_observer_fence": "Full pure private/local tuple before/after ready_lease observer includes retained active presence registry, Session recovered readiness/current common delivery/no pending entry, private publication pointer rather than equal key.",
+  "TW_WORLD35_native_event": "Original fixedlogical4/body3 key/kind/id; for every matching subject row first exact live bank pointer match overwrites flag byte3, learned count/pointer unchanged; called auxiliary/UI children and actual authority/event/currentness remain separate.",
+  "TW_native_kind_id_selector": "Bounded complete4A92D0 first checks signedWORD U232DDC>=0, nonnull selected row/positive learned count, lowBYTEkind/id, definitionBYTE67 nonzero and rowflag&1; no qualified actual caller or universal direct-selector/type2/C56 permission.",
+  "TW_world_skill_actual_source_gap": "CUSTOM-0148 default-off actual C25 same-connection learning/debit/event/activation and single original restoration source now connected. Original eligibility/sequence/adoption, shortcut C26, independently constructed CommonWorld/return publishers, other deity-writer lineage and full C56 action remain open. Saved34 alone grants no35.",
+  "TW_C28_presence_fence": "Actual existing selection/current/ready_current and Action.handle pre/post boundaries repeat pure retained active exact common Lease registry inside existing local lambda before/after virtual position/presence observers; original whole input/custody/reply behavior preserved.",
+  "TW_C28_book_gap": "Definitions-required owned selection currently qualifies historical TWP/WPN/EQU/TEQ only; SKB learning/subject/right/item consume/WORLD35 event/joint durable transaction remain missing, not inferred from shared definitions.",
+  "TW_preborn_input_source": "Default-false actual mandatory Others capability reaches actual Session through mixed installed Binding; owned raw81 mask and complete self-length83 ordered raw WORDs, existing whole-batch parse and Current/action/native reply decision preserved; no pointer namespace/right inferred.",
+  "TW_preborn_input_gap": "Actual issued-window WORLD phase/current subject/rights/A91C issuer/stage/apply/rules/learning/book consume/once durable event/persistence/full replies/replay/default Main remain OPEN. Native producer complete initialization only conditional, no universal count cap.",
+  "TW_native_preborn_suppliers": "Conditional real S2CA2 -> actual role definition-bank pointer -> A91C/AB10, A0 clear/display limits and actual selected-row/local-click path qualified independently. No universal bounds, server grants or book-consumption pairing inferred.",
+  "TW_source_presence_fences": "Mixed source mandatory snapshots/action handoff and regular saved/common skill observe/current repeat pure active entire Lease registry through existing local predicate before/after repository observers; Session/private/reply checks preserved.",
+  "TW_CN_common_staged_grammar": "Actual CN split+receive delegate common size/exactwhole structural qualifier used by TW. Original CN raw value projection/S2C helpers and TW parser bodies unchanged; one CN vector per read_request, no common raw-vector conversion. Authority/window/rules/save remain separate and incomplete.",
+  "TW_native_mask_state_and_removal": "Conditional A1 lowfourbits -> ordinal stage -> C81; A3 ignoresbody and writes A780=1 only; actual staged pointer compaction lacks lower/index guard and leaves AAAC/lastpointer untouched. No ACK/grant/cap or server operation inferred.",
+  "CN_preborn_currentness": "One strong connection, pure full old connection/admission/offered/full active Lease before and after the one original presence.ready ownership observer. Actual attach/stage/window/postapply/held-delivery cuts covered; no obsolete operation Current after COMMIT or durable retry.",
+  "TW_mask_cancel_frontier": "Mask ordinal compaction/tail retained and mode0 actual AE24 formal qualified conditionally; cancel ownbody no writes/send but two children opaque. Separate raw84 body/thunk references have no qualified invoking caller/phase; original ABI typo superseded by additive caller-stack correction.",
+  "TW_skill_source_currentness": "Pure exact active full Lease repeated by existing local cuts around original ready_lease/saved_position observers in actual C35 action and issued-list/private native publication paths. No old consumed catalog/issued/grant Current after action; actual next receipt remains mandatory.",
+  "TW_native_menu_flag_frontier": "Full-byte nonzero visible marker differs mask1 key-selector and mask2 auxiliary copy; S34 append0 and actual S35 overwrite3 distinct. Inactive global tails/opaque children require current visible-source premises; saved34 alone is not S35/permission/event history.",
+  "TW_CUSTOM0148_source": "Actual ready CharacterSelected/InWorld captured phase/privateWrittenINIT/nativeactor/fullLease/witness; real uniquely bound book/fullcommondefinition+selectedowneddeity -> pureLuaonebook -> fullinventory/1215/roster/selection/event CAS -> prebuilt34/35/41 -> one whole local response/inputhold. Single original genuine activation restoration, books-only bootstrap after actual Written source; no duplicate30/emptyraw25/grants/rebase/retry.",
+  "TW_CUSTOM0148_CommonWorld_initial": "Actual nativefactory/capturedContext enforces onlyinitial30/31/34/35 ownership beforequeue. First physical commonWorld Session/battle0/ready activeLease/currentWrittenINIT -> deity-only fullsavedsource -> originalTickwireprefix+deitysuffix ONEactualWWR/hold -> same private immutablewholewire currentWritten in actualobserver/bookbootstrap/PKpeer. Defaults/player/pet/originalnativebytes retained; no native reset/ACK/adoption/oldcompleteplayerPKflag or battle-return replay.",
+  "TW_CUSTOM0148_shortcut": "Actual typedC26 own fullWORDself target equals originalWrittenINIT/nativewitness/fullLease actor, no mask/DBID/tailmeaning/fakeC25. Both C25/C26 overloads enter ONEprivate operation and same Repo/Lua/CAS/event/prebuilt34->35->41/actualwholeWWR/inputhold. Main atmostone typeduse perwholeframe; allnonbookframes originaldelegate unchanged. Selectedowneddeity custom policy unchanged; nonself/nativeeligibility/adoption/fullgame OPEN.",
+  "TW_paired_return_reservation": "PrivatebothacceptedReadyterminal/sameactualSessions/game -> realtwo stranddraincuts -> onegameweakowner/fullpairCurrent. ActualOutbox complete scene/ledger/context/finaljointstoredcut/purefences; exactFailed cleanup/terminalrevocation/close/state/attemptdrop. Original5sdeadline/inputhold/writeblock persist, no liveWORLD/reset/unlock/resume/ACK; actualfullreturn/App/issuedlineage OPEN.",
+  "TW_return_owning_records": "Exact plan/Reservedpair/creatingregistry with actual endpoints/fullLeases/immutable full6F -> actualOutbox Reserved callback -> savedledger/contexts/finaljointstored cut -> pureprivate matches -> owningretention. Incomingorder/mutualdedup, survivor member0then1 CUSTOM0133 composition only. No send/liveWORLD/identity/visibilityconsume/Finishedunlock/inputresume/ACK or invented24/39/HP/bag. Fullreturn/App/issuedlineage OPEN.",
+  "TW_return_output_cohort": "ActualReserved->sameprivateRecords/Plan/pair->Visibilityfriend exactrecipientgroups->Session privateINIT/caps/whole81B chunks<=0xA00->realallrecipient heldqueue/emptycuts->oneGameweakowner->actualOutbox fullscene/ledger/twocontexts/finaljointstored/pureCurrent. Weak queueData/Frame markers; Attempt actualtasks only. Sharedfailure ownsreturnpair+acquiredobserver slots, preservesunowned nominees/currentunrelatedcohort. No release/Written/liveidentity/merge/unlock/inputresume/ACK; original5sdeadline/Main/resources/issuedlineage stillOPEN.",
+  "TW_return_consumption": "ActualHeld preallocates exact successor/expectedmodels/weakregistrations beforefinalfullscene/savedledger/contexts/jointstored/purecuts ->actualsamepaironeuseSessioncommit ->preallocatedregistrymodels/exactolddeparture transfer. NewCurrent only for exactsuccessor; allframes/input held/originalterminaldeadline. Exactunsentcleanup beforegenericlifecyclehide; noSocketWritten/nativeACK/Finishedunlock/Main/fullresources/issuedlineage completion.",
+  "TW_return_publication": "ActualConsumed ->typedPublicationpreallocation ->fullConsumedprovider/readset/savedledger/twocontexts/finalstored/purecuts ->oneuserelease ->exactactualallrecipientFIFOframes/emptycuts ->completeasyncwrites/ordinals ->actualGameweakOwnerWritten fullsource/savedtail/currentbeforeafter. Realolderactive+heldapprovalholders/weakqueues preserveFIFO/dropfailure; unrelatedsuffixWorkdetached. Stickyexposure/explicitabandon beforeexactmodeldetach, no73/rollback. Originalterminal/input/deadline/Finishedlocks remain; Main/resources/issuedlineage/fullreturn/nativeACKOPEN.",
+  "TW_return_finalisation": "Actual localWritten ->typedprivateFinalisation+runtimeRoomReleasePlan ->completeConsumed/saved/finalstored ->actualtwoquietstrandsReady ->sameactualDB Tx finalstored/pure fence ->canonicalCUSTOM0133returnedledger/exact2lockdeletes ->COMMIT stickyoutcome/typedreleasedreceipt ->releasedhistory+completeConsumed/finalstored ->successfulmodeladoption/exactprivateSession oldcustodyretirement ->actualownstrandexistinginputresume cuts/historical pairedcallback. Preserveoriginal5s/no renewal; oldobserverepochs/models/newcohortsuntouched, postdetachfailurepaironly; no nativeACK/SQLexecution/defaultMain/fullroute.",
+  "TW_return_backend_lifecycle": "OpaqueactualReturnFlight/weakLifetime+Binding+Sessions/immutableTicket+holds ->actualHeld Returning BEFOREfinalfullsource/saved/finalstored thenconsume ->canonicalDriveroldPKprocessingquiesce+privateAdmissionStageCompletejoin. Postdurable/model/privateSession/pureRoomretire Adopted BEFOREgameyield ->exactAdmissionAttempt+DriverPair/index retirementnoclose/SQL/oldCurrent. SharedPair/localcallback ownership/freshupper_bound/adoptedcleanup; configuredweaksiblingexpiryfailclosed/privatecoordinator lifecycle; explicitfinishedschemawrapper+conditionalfactorypreflight beforearchive only. Main/mixedC69/64DB-nativeactor/fullsupplier/wholeWWRlineage/nativeadoption/fullinventoryOPEN.",
+  "TW_PK_native_actor_identity": "Actual original qualified Entry ->opaque exactprivateINIT+samePresence readyLease identity ->Main Peer/C69 target+source ->EntryPreparation/ownedPlayer S1C/private owningProjection ->Prepared full64 characters +separate handles ->Room retainedprivate namespace/incarnation/readset ->actualSession private sender. Legacy profile/rawfactories/readsets preserved; completeMain/fullscene/wholeWWRlineage/nativeacceptance remainOPEN.",
+  "TW_PK_companion_whole_response": "Actual immutable original INIT + own Written WWR + untouched original wire -> source-derived nonempty exact ordered restoration suffix at real frame boundary -> sameDB/helper/catalog observation -> optional-only transport provenance -> Main original holder exact typed cache/private same INIT prefix before player-ready flag -> PK eligibility/cached supplier. Legacy perbatch/no-record source retained; no fabricated receipts/S30 replay/native ACK/HP/learning rebase. Fullplayer/backend/fullscene/activation inventory closed SQL/issuedlineage/nativeacceptance OPEN.",
+  "TW_PK_learning_closed_SQL": "Actual original opaque learning Restoration / sameDB / private issuer / game thread -> private existing-transaction readonly Operation -> byte-unchanged complete state_current inventory/equipment/root/pose/roster/fullheaders/events/books +namespace/reentry/changes -> actual CompanionSource stored_current in real Room owner checks. Genericbattle guards and default own read scope unchanged, borrowedread never clears foreign issuer flags. All serialized readsets/metadata unchanged; no restore/rebase/rawbool/Current callback inSQL; Main fullplayer/backend/issuedlineage/rehydration/nativeacceptance OPEN.",
+  "TW_initial_player_publication": "CUSTOM0149 actual defaultoff config -> exact Context/Factory before source/Owner bit -> new exclusive initial22/24+deity overlap rejection beforequeue -> genuine common pureTick delegate wholeprefix collision rejection -> original Written2A/fullLease/savedpose -> complete original CUSTOM12/13 snapshot beforelearning -> repeated savedtuple/learning fences -> originalprefix + real22/24 frame + deitysuffix ONEactualWWR/inputhold -> separate original source/frameoffset/fullwire/currentWritten/savedtuple predicate consumed by actual optin PK companion eligibility. Old broadplayerflag unchanged. Full native early pet/opaque effects are explicit provider premise, legacyDWORD rejects overflow. Main fullplayer/auxtext/nullbackend/fullreturn/issuedlineage/extendedprofile/nativeacceptance OPEN.",
+  "TW_PK_original_player_source": "Original actualWritten22/24/frameoffset/fullwire/privateINIT/fullLease and completeCUSTOM12/13 publishedtuple ->sameactualDB private jointCommitted/Appearance/Combat/PlayerEntry with wholeobserver game/reentry/autocommit/totalchanges guard ->ONEretained privatecache/no stale remint +fullpublishedrole/resources/profile join ->actualoptin MainPK readiness +optionalPrep supplier retainsSAMEPlayer/Combat/Vitals/privateRoomgraph. Oldbroadflag andotherconsumers/legacyfalse path/Peer andJSONreadsets unchanged. Normal/archive/backend LASTsupplier forwarded throughone actualResolver callable; actualMain default absent; actual requested complete-source host now connected. Existing6bf/custom0045/<=1e6 policy not149nativeformula/Extended64permission; missingaux/text rejects. FullMain/mixedC69/fullreturn/issuedlineage/zero-deitysuffix/nativeopaqueorder/wire64/nativeacceptance OPEN.",
+  "TW_PK_actual_Main_host": "Actual requested sameContext mandatoryarchive/explicitpolicy/Seed/fullReturnScene/dependency recipe ->realDB/game/Lua/registry/privateINIT/peer/sameplayer+companion backend authority ->finalmixed boundwholebasic/control/context thenexactC69 beforelastC67; genuineemptyinputresponse only Driver lateroutput. Offers/completions retire beforebothchildren stop/backenddestroy whileallcallbacksourcesalive, evenctor exceptions; freshready/disconnect beforeerase/generationonce. Defaults/legacy preserved. NativefullReturnprovider/allskills/zero-deitysuffix/issuedlineage/recovery/Extended64/nativeacceptance remainopen; no activation/tests/SQL/deploy."
+}

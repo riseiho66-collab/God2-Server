@@ -13,6 +13,19 @@ namespace god2 {
 namespace {
 using Plan=SharedTaiwanNativeWorldHostPlan;
 using Context=SharedWorldHostPlan::Context;
+using OwnedPkSources=SharedWorldHostPlan::OwnedPkSources;
+void require_owned_pk_context(const Context& context,Plan::Dispatch dispatch) {
+    if(context.app_owned_pk&&(dispatch!=Plan::Dispatch::MixedRecords||
+       !context.app_owned_initial_player||!context.app_owned_initial_deities))
+        throw std::invalid_argument("Owned PK hosting requires actual mixed records and exclusive initial player/deities");
+}
+void require_owned_pk_sources(const Context& context,const std::optional<OwnedPkSources>& sources,
+        Plan::Dispatch dispatch) {
+    require_owned_pk_context(context,dispatch);
+    if(context.app_owned_pk!=bool(sources))
+        throw std::invalid_argument("Owned PK source presence differs from the exact requested Context");
+    if(sources)sources->require_complete();
+}
 struct Owner {
     RecoveredCharacterRepository* characters;
     const NativeMapCatalog* maps;
@@ -32,6 +45,7 @@ struct Owner {
     std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> owned_deity_skills;
     const bool app_owned_initial_deities;
     const bool app_owned_initial_player;
+    const bool app_owned_pk;
     asio::any_io_executor game;
     std::shared_ptr<SharedWorldHost> common;
     const std::thread::id thread=std::this_thread::get_id();
@@ -40,11 +54,12 @@ struct Owner {
     std::shared_ptr<SharedTaiwanNativeMovementHost> movement;
     SharedTaiwanMovementSource::Binding binding;
     std::optional<Plan::RecordSources> records;
+    std::optional<OwnedPkSources> owned_pk;
     std::optional<SharedTaiwanNativeCharacterListSource::Binding> characters_source;
     std::function<void()> records_invalidate;
     const std::size_t capacity;
     bool entry_taken=false,entered_taken=false,movement_taken=false,records_taken=false;
-    bool characters_taken=false;
+    bool characters_taken=false,pk_taken=false;
 
     Owner(const Context& context,Plan::Sources sources,Plan::Dispatch dispatch,bool native_characters,
           TaiwanWorldEntryIdentity identity)
@@ -59,9 +74,11 @@ struct Owner {
          owned_inventory(context.owned_inventory),owned_inventory_writer(context.owned_inventory_writer),
          companions(context.companions),owned_companions(context.owned_companions),owned_deity_skills(context.owned_deity_skills),
          app_owned_initial_deities(context.app_owned_initial_deities),
-         app_owned_initial_player(context.app_owned_initial_player),
+         app_owned_initial_player(context.app_owned_initial_player),app_owned_pk(context.app_owned_pk),
          game(context.game),common(context.common_world),
-         records(std::move(sources.records)),characters_source(std::move(sources.characters)),capacity(sources.actual_session_capacity) {
+         records(std::move(sources.records)),owned_pk(std::move(sources.owned_pk)),
+         characters_source(std::move(sources.characters)),capacity(sources.actual_session_capacity) {
+        require_owned_pk_sources(context,owned_pk,dispatch);
         if(app_owned_initial_player&&!app_owned_initial_deities)
             throw std::invalid_argument("Owned initial player requires exclusive initial deity ownership");
         if(!valid_taiwan_world_entry_identity(identity) ||
@@ -130,6 +147,7 @@ struct Owner {
         // Real callbacks are game-affine. The plan factory keeps only a weak
         // reference; these owners therefore drain with Application's facades.
         records_invalidate={};records.reset();characters_source.reset();binding={};movement.reset();entered={};entry={};
+        owned_pk.reset(); // Untaken recipe dependencies drain before common world.
         if(owned_deity_skills)owned_deity_skills->stop_selection_publications();
         owned_deity_skills.reset();common.reset();
     }
@@ -151,7 +169,7 @@ struct Owner {
            context.companions!=companions || context.owned_companions!=owned_companions ||
            context.owned_deity_skills!=owned_deity_skills ||
            context.app_owned_initial_deities!=app_owned_initial_deities ||
-           context.app_owned_initial_player!=app_owned_initial_player ||
+           context.app_owned_initial_player!=app_owned_initial_player ||context.app_owned_pk!=app_owned_pk ||
            context.common_world!=common || context.game!=game || !common->owns_repository(*characters)) {
             invalidate();
             throw std::invalid_argument("TW native host plan cannot join a different Application Context");
@@ -211,12 +229,15 @@ struct Factory {
         }
         if(existing) {existing->same(context);return existing;}
         try {
+            // Reject requested PK mode before invoking any actual supplier.
+            require_owned_pk_context(context,dispatch);
             // CUSTOM-0149 reject before invoking any actual source supplier.
             if(context.app_owned_initial_player&&!context.app_owned_initial_deities)
                 throw std::invalid_argument("Owned initial player requires exclusive initial deity ownership");
             if(!context.common_world || !context.common_world->owns_repository(context.characters))
                 throw std::invalid_argument("TW native host plan needs the actual Application common world");
             auto sources=source(context);
+            require_owned_pk_sources(context,sources.owned_pk,dispatch);
             {
                 std::lock_guard lock(mutex);
                 if(stage!=Stage::Preparing)
@@ -603,13 +624,15 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
         throw std::invalid_argument("TW stored host requires actual build and complete source factory");
     if(owned_inventory && client!=SharedTaiwanOwnedItemSelectionSource::client_pin)
         throw std::invalid_argument("TW owned selection requires the exact recovered native build");
-    auto plan=create([client=std::move(client),supply=std::move(supply),native_characters,identity](const Context& context) {
+    auto plan=create([client=std::move(client),supply=std::move(supply),native_characters,identity,dispatch](const Context& context) {
         // Check exact borrowed reader before invoking any external supplier.
         // Existing Factory::get owns construction/reentry/lifetime qualification.
         if(!context.native_world_entries || !context.native_world_entries->owns_characters(context.characters))
             throw std::invalid_argument("TW stored host requires its actual Application character delivery reader");
         const auto* reader=context.native_world_entries;
         auto actual=supply(context);
+        // Before constructing list/entry owners from the stored wrapper.
+        require_owned_pk_sources(context,actual.owned_pk,dispatch);
         if(native_characters!=bool(actual.characters))
             throw std::invalid_argument("TW stored native list selection differs from the explicit plan");
         std::optional<SharedTaiwanNativeCharacterListSource::Binding> characters;
@@ -651,7 +674,7 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
         }
         return Sources{std::move(entry),std::move(actual.entered),std::move(actual.movement_rules),
             std::move(actual.movement_resources),actual.actual_session_capacity,std::move(actual.records),std::move(characters),
-            std::move(entry_prepare),std::move(actual.movement_custody)};
+            std::move(entry_prepare),std::move(actual.movement_custody),std::move(actual.owned_pk)};
     },dispatch,native_characters,identity);
     plan.requires_native_world_entry_snapshots=true;
     plan.requires_native_character_summaries=native_characters;
@@ -671,6 +694,19 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
     plan.taiwan_entry_identity=identity;
     plan.supports_app_owned_initial_deities=true;
     plan.supports_app_owned_initial_player=true; // CUSTOM-0149 enforced by this actual Entered owner.
+    plan.make_owned_taiwan_pk_sources=[factory](const Context& context)->std::optional<OwnedPkSources> {
+        // Unrequested recipe calls do not invoke or drain the weak source owner.
+        if(!context.app_owned_pk)return std::nullopt;
+        auto owner=factory->get(context); // Exact existing Context or one guarded construction.
+        if(!owner->owned_pk||std::exchange(owner->pk_taken,true)) {
+            owner->invalidate();throw std::logic_error("TW owned PK source was already taken or missing");
+        }
+        owner->owned_pk->require_complete();
+        auto actual=std::move(owner->owned_pk);
+        owner->owned_pk.reset(); // Remove before retaining Owner; never create a cycle.
+        actual->host_owner_=owner; // Keeps callback-first Factory::bound alive.
+        return actual;
+    };
     plan.requires_native_character_summaries=native_characters;
     if(native_characters)plan.make_taiwan_native_characters=[factory](const Context& context) {
         auto owner=factory->get(context);

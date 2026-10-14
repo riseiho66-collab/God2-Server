@@ -8,6 +8,14 @@
 #include "db/NativeMapCatalog.h"
 #include <asio.hpp>
 #include <functional>
+#include "handlers/OwnedTaiwanPkRoomBackend.h"
+#include <array>
+#include <chrono>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <utility>
 
 namespace god2 {
 class NativeSkillCatalog;
@@ -25,6 +33,45 @@ class SharedTaiwanOwnedDeitySkillSource;
 // Explicit Application common-world hosting only. No native frame, placement,
 // scene authority or success callback is supplied by this plan or the host.
 struct SharedWorldHostPlan {
+    // Explicit complete CUSTOM PK hosting recipe; no native rule, seed or
+    // return material is manufactured. Construct and drain runtime owners on
+    // the actual game executor, retaining the original dependencies strongly.
+    struct OwnedPkSources {
+    private:
+        friend class SharedTaiwanNativeWorldHostPlan;
+        // Destroy last, after callable/dependency targets. Set only by the
+        // exact one-use native Owner take; the public dependency is untouched.
+        std::shared_ptr<const void> host_owner_;
+    public:
+        // Declared before callables so their destruction retains dependencies.
+        std::shared_ptr<const void> dependency_owner;
+        std::filesystem::path fight_archive;
+        OwnedTaiwanPkRoomBackend::Parameters parameters;
+        std::array<std::uint8_t,2> order;
+        std::chrono::milliseconds retry;
+        OwnedTaiwanPkEntryPreparation::Seed seed;
+        OwnedTaiwanPkRoomBackend::ReturnSceneSource return_scene;
+        OwnedPkSources(std::filesystem::path archive,OwnedTaiwanPkRoomBackend::Parameters actual_parameters,
+            std::array<std::uint8_t,2> actual_order,std::chrono::milliseconds actual_retry,
+            OwnedTaiwanPkEntryPreparation::Seed actual_seed,
+            OwnedTaiwanPkRoomBackend::ReturnSceneSource actual_return_scene,
+            std::shared_ptr<const void> actual_dependency_owner)
+            :dependency_owner(std::move(actual_dependency_owner)),fight_archive(std::move(archive)),
+             parameters(actual_parameters),order(actual_order),retry(actual_retry),
+             seed(std::move(actual_seed)),return_scene(std::move(actual_return_scene)) {
+            require_complete();
+        }
+        void require_complete()const {
+            if(fight_archive.empty()||!seed||!return_scene||!dependency_owner)
+                throw std::invalid_argument("Owned PK hosting requires original archive/seed/full return/dependencies");
+            // Unchanged explicit CUSTOM-0125 backend bounds, not native defaults.
+            if(parameters.power_percent>10000||parameters.defense_percent>100||parameters.critical_chance_bp>10000||
+               parameters.critical_multiplier_percent<100||parameters.critical_multiplier_percent>1000||
+               (order!=std::array<std::uint8_t,2>{0,1}&&order!=std::array<std::uint8_t,2>{1,0})||
+               retry.count()<1||retry>std::chrono::seconds(1))
+                throw std::invalid_argument("Owned PK hosting requires explicit bounded basic/order/retry policy");
+        }
+    };
     struct Context {
         RecoveredCharacterRepository& characters;
         const NativeMapCatalog& maps;
@@ -71,6 +118,7 @@ struct SharedWorldHostPlan {
         bool app_owned_initial_deities=false;
         // CUSTOM-0149 explicit saved player22/24 publisher; requires deities.
         bool app_owned_initial_player=false;
+        bool app_owned_pk=false; // Explicit complete hosted PK only; default off.
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in
@@ -126,5 +174,8 @@ struct SharedWorldHostPlan {
     bool supports_app_owned_initial_deities=false;
     // CUSTOM-0149 actual factory enforcing exclusive player/deity boundaries.
     bool supports_app_owned_initial_player=false;
+    // Actual same-Context native Owner recipe, taken at most once. Default
+    // plans retain absence; no ordinary configuration or supplier is activated.
+    std::function<std::optional<OwnedPkSources>(const Context&)> make_owned_taiwan_pk_sources;
 };
 }

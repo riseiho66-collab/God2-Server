@@ -1,6 +1,7 @@
 #pragma once
 #include "handlers/OwnedTaiwanPkEntryPreparation.h"
 #include "handlers/OwnedTaiwanPkBasicDriver.h"
+#include <exception>
 #include "handlers/OwnedPkEntryAdmission.h"
 
 namespace god2 {
@@ -12,7 +13,7 @@ class SqliteDatabase;
 // external callback captures outlive it. InvitationService borrows a RAW
 // RoomAuthority pointer: drain its offers/completions BEFORE stop/destruction.
 // Configured return uses the exact private Driver/Admission lifecycle below.
-// Full Application hosting, actor mapping and reconnect recovery remain open.
+// Conditional Main hosting is explicit; full native provider/return and reconnect recovery remain open.
 class OwnedTaiwanPkRoomBackend final:public OwnedPkInvitationService::AsyncRoomAuthority {
     friend class SqliteDatabase;
 public:
@@ -56,7 +57,10 @@ public:
         // synchronous source callbacks. Invalidate weak entry callbacks first;
         // cancel reservations/close active peers, then cancel scheduled output.
         // Invitation offers must already be drained; no completion is invented.
-        admission_->stop();driver_->stop();
+        std::exception_ptr failure;
+        try{admission_->stop();}catch(...){failure=std::current_exception();}
+        try{driver_->stop();}catch(...){if(!failure)failure=std::current_exception();}
+        if(failure)std::rethrow_exception(failure);
     }
 private:
     static bool admission_return_lifecycle(OwnedPkEntryAdmission& admission,

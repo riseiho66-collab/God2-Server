@@ -4753,7 +4753,28 @@
   "tests": [],
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Consume the real preparation/admission/scheduled basic owner chain with one issuer and explicit lifetime, rather than independent caller-supplied components.",
-  "replacement": "Complete actual Application/invitation drain/terminal return/recovery/native policy sources and eventual full-client acceptance before production promotion."
+  "replacement": "Complete actual Application/invitation drain/terminal return/recovery/native policy sources and eventual full-client acceptance before production promotion.",
+      "actual_Main_conditional_PK_hosting_source": {
+        "round": 397,
+        "document": "docs/research/tw-pk-main-host-source-20261014.md",
+        "implementation": [
+          "src/core/Application.cpp",
+          "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+          "src/core/SharedTaiwanNativeWorldHostPlan.h",
+          "src/core/SharedWorldHostPlan.h",
+          "src/handlers/OwnedPkInvitationService.h",
+          "src/handlers/OwnedTaiwanPkRoomBackend.h"
+        ],
+        "source_connected": true,
+        "recipe": "Mandatory actual archive/explicitParameters/order/retry/trustedSeed/fullReturnScene/strongdependency; exactContext requestedMixed/player/deity policy andone-use privateOwner retention; defaultsabsent",
+        "Main": "Actual sameDB/game/Lua/common registry/Session/privateINIT/peer/pkCompanion/pkPlayer ->typed backend authority; finalmixed boundwholebatch/C69 dispatch beforelastC67, noinlineoutput/ACK",
+        "lifetime": "Nonallocating guard afterInvitations beforebackendconstructor, offers+completion retirement BEFORE bothAdmission/Driver stop andbackenddestruction whileallresolver/source dependencies live; actualfreshready/disconnect retirementbeforeerase, generationonce",
+        "actual_Main_backend_source_hosting_connected": true,
+        "production_or_default_activated": false,
+        "complete_ReturnScene_provider_or_native_route_proven": false,
+        "whole_gameplay_complete": false,
+        "product_execution": false
+      }
 },
 {
   "id": "CUSTOM-0126",

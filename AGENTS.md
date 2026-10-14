@@ -742,3 +742,17 @@ Mainnullbackend/mixedC69/fullreturn/issuedlineage/zero-deitysuffix/publisher
 combinedtopology/nativeopaqueorder/wire64/fullskills/wholeinventory OPEN.
 Parser77=50/11/16,pending12,frontier26 21/105,whole%null; fullTW100firstACTIVE,
 commonCNweb/saves/fonts/text/qualifiednumericdomains/PHASE1sourceonly retained.
+
+Round397 connects conditional actualMain PKbackend andfinalmixed C69 ingress.
+MandatorysameContext archive/explicitpolicy/Seed/fullReturnScene/strongOwner
+recipe ->actualDB/game/Lua/registry/sourceINIT/peer/pkCompanion/pkPlayer backend
+->finalmixed boundwholebasic/control/context thenexactC69 beforeLASTC67;
+Driver ownsfutureoutput/no dummyACK. Nonallocatingguard AFTERInvitations BEFORE
+backendconstruction ->offers/completions drain BEFOREbothAdmission/Driver stop
+andbackenddestroy whileallcallbacksourceslive. Freshready/disconnect retirement
+beforeerase/generationonce, defaultfalse/legacy/nonPK behaviorpreserved.
+SixexistingCPP/V34pins derive90/no newprojectPY/Lua/nativebytes/formula/default
+activation/fullroute. ActualproductionReturnprovider/nativeopaqueorder/full
+skills/zero-deitysuffix/issuedlineage/recovery/Extended64wire/client OPEN.
+Parser77=50/11/16,pending12/frontier26 21/105,whole%null; TW100firstACTIVE,
+commonCNweb/saves/fonts/text/qualifiednumericdomains/PHASE1sourceonly retained.
