@@ -22,6 +22,7 @@
 #include "db/NativeEnemyDisplayCatalog.h"
 #include "db/NativeSupplyCatalog.h"
 #include "db/NativeSkillCatalog.h"
+#include "db/TaiwanInstalledSkillCatalogImport.h"
 #include "cn/assets/CnNativeSkillCatalogImport.h"
 #include "db/NativeSkillBookCatalog.h"
 #include "db/SqliteSkillBookLearningRepository.h"
@@ -192,6 +193,11 @@ public:
     // actual pinned provider; bind the same native_skill_catalog() afterward.
     cn::CnNativeSkillCatalogImport::Result import_cn_native_skill_catalog(
         std::shared_ptr<const god2cn::CnNativeSkillCatalog>);
+    // Explicit insertion-only453 source installation on this actual connection.
+    // The writer is bound to initialize's installation thread; no default/Main
+    // import, schema install, selected-profile change or learned rights.
+    TaiwanInstalledSkillCatalogImport::Outcome import_taiwan_installed_skill_catalog(
+        std::shared_ptr<const TaiwanInstalledSkillCatalogSource>);
     const NativeSkillBookCatalog& native_skill_book_catalog() const;
     // CUSTOM-0148: exact shared writers/readers; access performs no schema install.
     SqliteSkillBookLearningRepository& skill_book_learning();

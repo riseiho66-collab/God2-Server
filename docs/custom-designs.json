@@ -5398,6 +5398,31 @@
         "runtime_or_default_activated": false,
         "whole_gameplay_complete": false,
         "product_execution": false
+      },
+      "actual_installed453_Cplusplus_import": {
+        "round": 401,
+        "document": "docs/research/tw-installed453-skill-import-source-20261014.md",
+        "implementation": [
+          "src/db/SqliteDatabase.cpp",
+          "src/db/SqliteDatabase.h",
+          "src/db/TaiwanInstalledSkillCatalogImport.cpp",
+          "src/db/TaiwanInstalledSkillCatalogImport.h",
+          "src/db/TaiwanInstalledSkillCatalogSource.cpp",
+          "src/db/TaiwanInstalledSkillCatalogSource.h"
+        ],
+        "source_connected": true,
+        "explicit_dataset": "tw-installed-cbspec2-3adcda70-149c1b45-453-v1",
+        "private_full112660_and453_record_source_material": true,
+        "actual_same_Database_persistent_installation_thread_writer": true,
+        "insert_only_exact_source_full453_readback_and_local_COMMIT_report": true,
+        "observed_ended_transaction_ownership_retired_before_cleanup": true,
+        "preservation_means_importer_owned_insert_only_SQL": true,
+        "preservation_under_arbitrary_schema_changing_observers": false,
+        "silent_external_transaction_replacement_or_general_observer_convergence": false,
+        "actual_raw_file_operator_caller_connected": false,
+        "runtime_or_default_activated": false,
+        "whole_gameplay_complete": false,
+        "product_execution": false
       }
 },
 {

@@ -798,3 +798,14 @@ Installed dataset import/activation, fulllearnedCompanion/Player successor,
 nativeReturn/current6F/resources/selection/numerics/nativeacceptance remainOPEN.
 Sourceonly/V37/no newPY; parser77=50/11/16,pending12/frontier26 21/105,fullroutes0
 whole%null; TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.
+
+Round401 adds private full112660/453 raw C++ source material and sameactual
+DatabaseImpl persistentinstallationthread explicitsourcewriter. Insert-only main
+source+453 rows/fullreadback/localCOMMIT latch, observedendedownership retired
+beforefinalize/cleanup; no confirmedprefixrollback/retry. Old448/SKB/CN preserved
+byownSQL only, arbitrarysameDDLschema callbacks/silenttransactionreplacement and
+generalobserverconvergence unqualified. No operatorfilecaller/defaultactivation/
+newrights/nativeformula; actuallearnedCompanionPlayer/nativeReturn/current6F/
+numerics/wholeinventory remainOPEN. FournewCPP/2existingCPP/V38/no newPY;
+parser77=50/11/16,pending12/frontier26 21/105,fullroutes0/whole%null;
+TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.

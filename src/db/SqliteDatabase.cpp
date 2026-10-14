@@ -58,6 +58,7 @@ struct SqliteDatabase::Impl {
     std::unique_ptr<NativeEnemyDisplayCatalog> native_enemy_display_catalog;
     std::unique_ptr<NativeSupplyCatalog> native_supply_catalog;
     std::unique_ptr<NativeSkillCatalog> native_skill_catalog;
+    std::unique_ptr<TaiwanInstalledSkillCatalogImport> taiwan_installed_skill_import;
     std::unique_ptr<NativeSkillBookCatalog> native_skill_book_catalog;
     std::unique_ptr<NativeSkillBookSourceCatalog> native_skill_book_source_catalog;
     std::unique_ptr<NativeQuestCatalog> native_quest_catalog;
@@ -173,6 +174,8 @@ void SqliteDatabase::initialize() {
     candidate->native_enemy_display_catalog = std::make_unique<NativeEnemyDisplayCatalog>(raw);
     candidate->native_supply_catalog = std::make_unique<NativeSupplyCatalog>(raw);
     candidate->native_skill_catalog = std::make_unique<NativeSkillCatalog>(raw,taiwan_skill_profile_);
+    // Constructor binds identity/thread only; it performs no SQL or import.
+    candidate->taiwan_installed_skill_import = std::make_unique<TaiwanInstalledSkillCatalogImport>(raw);
     candidate->native_skill_book_catalog = std::make_unique<NativeSkillBookCatalog>(raw);
     candidate->native_quest_catalog = std::make_unique<NativeQuestCatalog>(raw);
     candidate->native_multi_message_catalog = std::make_unique<NativeMultiMessageCatalog>(raw);
@@ -796,6 +799,15 @@ cn::CnNativeSkillCatalogImport::Result SqliteDatabase::import_cn_native_skill_ca
     std::shared_ptr<const god2cn::CnNativeSkillCatalog> native) {
     if(!migrated_)throw DatabaseError("Migrate database before explicit CN skill import");
     return cn::CnNativeSkillCatalogImport::import_actual_source(impl_->connection.get(),std::move(native));
+}
+TaiwanInstalledSkillCatalogImport::Outcome SqliteDatabase::import_taiwan_installed_skill_catalog(
+    std::shared_ptr<const TaiwanInstalledSkillCatalogSource> source) {
+    if(!migrated_ || !impl_ || !source || !impl_->taiwan_installed_skill_import ||
+       !impl_->taiwan_installed_skill_import->uses_connection(impl_->connection.get()))
+        throw DatabaseError("TW installed skill import requires the actual initialized common Database and qualified source");
+    // Forward the same owning proof. This never changes the selected catalog
+    // profile, installs schemas, populates old448 or creates learned skills.
+    return impl_->taiwan_installed_skill_import->import_source(source);
 }
 const NativeSkillBookCatalog& SqliteDatabase::native_skill_book_catalog() const {
     if (!migrated_) throw DatabaseError("Migrate database before accessing repositories");
