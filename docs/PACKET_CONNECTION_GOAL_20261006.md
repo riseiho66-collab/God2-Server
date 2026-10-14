@@ -5937,3 +5937,19 @@ parser77=50/11/16,pending12/frontier26 21/105,fullroutes0/whole%null;
 TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.
 
 Details: docs/research/tw-installed453-skill-import-source-20261014.md
+
+## Round402 - Actual installed453 C++ file and existing-database operator (2026-10-14)
+
+Round402 connects actual exclusiveMain C++widepath operator->openedRoot/File
+exactsnapshot prefix/bounded112660EOF/privatefull453pin FIRST ->configSQLite
+UTF8ownednativepath ->actualprivate existingRW/noCREATE/importonlyDatabase
+noGameplayowners/migratedfalse ->SAMEsource/401writer/localCOMMITreport/exit.
+DefaultCLI/valueconsumption/help/migrations retained; caseSensitive sibling/
+legacyflagfilename/char8aliasing fixed; Csealedv1 preservedRootdelta.
+No universalFS/DBhandle/schemaobserverconvergence, runtime/profile/grants or
+fullroutecredit. 7CPP(3existing4new)+Cmake/V39/no newPY; actualinstallation/
+learnedCompanionPlayer/nativeReturn/current6F/skills/numerics remainOPEN.
+TW156/252 parser77=50/11/16,pending12/frontier26 21/105,whole%null;
+TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.
+
+Details: docs/research/tw-installed453-skill-operator-source-20261014.md

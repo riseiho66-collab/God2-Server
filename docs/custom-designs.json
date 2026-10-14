@@ -5423,6 +5423,32 @@
         "runtime_or_default_activated": false,
         "whole_gameplay_complete": false,
         "product_execution": false
+      },
+      "actual_installed453_Cplusplus_operator": {
+        "round": 402,
+        "document": "docs/research/tw-installed453-skill-operator-source-20261014.md",
+        "implementation": [
+          "CMakeLists.txt",
+          "src/core/TaiwanSkillImportOperator.cpp",
+          "src/core/TaiwanSkillImportOperator.h",
+          "src/db/SqliteDatabase.cpp",
+          "src/db/SqliteDatabase.h",
+          "src/db/TaiwanInstalledSkillCatalogFileSource.cpp",
+          "src/db/TaiwanInstalledSkillCatalogFileSource.h",
+          "src/main.cpp"
+        ],
+        "source_connected": true,
+        "actual_rooted_opened_handle_full_BIN_producer_before_DB_SQL": true,
+        "actual_Main_exclusive_native_Windows_wide_path_operator": true,
+        "legacy_cli_option_position_and_UTF8_owned_paths_preserved": true,
+        "actual_private_existing_only_no_CREATE_no_migrate_no_gameplay_owner_mode": true,
+        "actual_same_owning_source_to_same_private_453_writer_then_exit": true,
+        "actual_raw_file_operator_caller_connected": true,
+        "migrated_gameplay_schema_qualified_or_profile_changed": false,
+        "universal_filesystem_DB_handle_or_SQL_observer_convergence": false,
+        "runtime_or_default_activated": false,
+        "whole_gameplay_complete": false,
+        "product_execution": false
       }
 },
 {

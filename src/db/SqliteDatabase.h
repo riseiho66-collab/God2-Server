@@ -72,6 +72,10 @@ public:
     SqliteDatabase(const SqliteDatabase&) = delete;
     SqliteDatabase& operator=(const SqliteDatabase&) = delete;
     void initialize() override;
+    // Dedicated fresh connection to an existing regular DB, for explicit453
+    // import only. No CREATE, migration, guild selector or gameplay owners.
+    // Ordinary initialize/migrate and repository access remain unavailable.
+    void initialize_existing_for_taiwan_skill_import();
     void migrate() override;
     AccountRepository& accounts() override;
     CharacterRepository& characters() override;
@@ -194,8 +198,9 @@ public:
     cn::CnNativeSkillCatalogImport::Result import_cn_native_skill_catalog(
         std::shared_ptr<const god2cn::CnNativeSkillCatalog>);
     // Explicit insertion-only453 source installation on this actual connection.
-    // The writer is bound to initialize's installation thread; no default/Main
-    // import, schema install, selected-profile change or learned rights.
+    // The writer is bound to the chosen initialization's installation thread;
+    // migrated normal DB or explicit private import-only connection allowed.
+    // No default/Main import, schema install, profile change or learned rights.
     TaiwanInstalledSkillCatalogImport::Outcome import_taiwan_installed_skill_catalog(
         std::shared_ptr<const TaiwanInstalledSkillCatalogSource>);
     const NativeSkillBookCatalog& native_skill_book_catalog() const;

@@ -17,8 +17,10 @@
 #include "db/NativeDeliverySnapshotSchema.h"
 #include "game/OwnedTaiwanPkReturnRoleTextSource.h"
 #include <utility>
+#include <system_error>
 namespace god2 {
 struct SqliteDatabase::Impl {
+    bool taiwan_skill_import_only=false;
     struct Close { void operator()(sqlite3* db) const noexcept { sqlite3_close_v2(db); } };
     std::unique_ptr<sqlite3, Close> connection;
     std::unique_ptr<SqliteAccountRepository> accounts;
@@ -140,6 +142,8 @@ SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration
 }
 SqliteDatabase::~SqliteDatabase() = default;
 void SqliteDatabase::initialize() {
+    if(impl_ && impl_->taiwan_skill_import_only)
+        throw DatabaseError("Import-only database cannot initialize gameplay owners");
     if (impl_) return;
     if (path_.empty()) throw DatabaseError("SQLite path must not be empty");
     const auto utf8 = path_.u8string();
@@ -215,8 +219,58 @@ void SqliteDatabase::initialize() {
         [raw](std::uint16_t item){return NativeWeaponCatalog(raw).lookup(item);});
     impl_ = std::move(candidate);
 }
+void SqliteDatabase::initialize_existing_for_taiwan_skill_import() {
+    if(impl_ || migrated_)throw DatabaseError("Existing skill import requires a fresh Database object");
+    if(path_.empty())throw DatabaseError("Existing skill import database path is empty");
+    const auto original_utf8=path_.u8string();
+    if(original_utf8.find(u8'\0')!=std::u8string::npos)
+        throw DatabaseError("Existing skill import database path contains NUL");
+    // Reject SQLite URI syntax even if a global SQLite URI option is enabled.
+    if(original_utf8.size()>=5 && (original_utf8[0]==u8'f'||original_utf8[0]==u8'F') &&
+       (original_utf8[1]==u8'i'||original_utf8[1]==u8'I') &&
+       (original_utf8[2]==u8'l'||original_utf8[2]==u8'L') &&
+       (original_utf8[3]==u8'e'||original_utf8[3]==u8'E') && original_utf8[4]==u8':')
+        throw DatabaseError("Existing skill import database must not be a SQLite URI");
+    std::error_code error;
+    if(!std::filesystem::is_regular_file(path_,error) || error)
+        throw DatabaseError("Existing skill import database must be an existing regular file");
+    const auto opened_path=std::filesystem::canonical(path_,error);
+    if(error || !std::filesystem::is_regular_file(opened_path,error) || error)
+        throw DatabaseError("Existing skill import database cannot be resolved");
+    const auto utf8=opened_path.u8string();
+    if(utf8.empty() || utf8.find(u8'\0')!=std::u8string::npos)
+        throw DatabaseError("Existing skill import resolved path is invalid");
+    auto candidate=std::make_unique<Impl>();candidate->taiwan_skill_import_only=true;
+    sqlite3* raw=nullptr;
+    const int result=sqlite3_open_v2(reinterpret_cast<const char*>(utf8.c_str()),&raw,
+        SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,nullptr); // Deliberately no CREATE/URI.
+    candidate->connection.reset(raw);
+    if(result!=SQLITE_OK)throw DatabaseError(raw?sqlite3_errmsg(raw):"Unable to open existing skill import DB");
+    const char* actual_name=sqlite3_db_filename(raw,"main");
+    if(!actual_name || !*actual_name)throw DatabaseError("Existing skill import DB filename is unavailable");
+    const auto actual_path=std::filesystem::canonical(std::filesystem::u8path(actual_name),error);
+    if(error || !std::filesystem::is_regular_file(actual_path,error) || error)
+        throw DatabaseError("Existing skill import opened filename is not an existing regular file");
+    // Equivalent canonical spellings permit native Windows case/path handling;
+    // this metadata join is not a private file-handle incarnation attestation.
+    if(!std::filesystem::equivalent(opened_path,actual_path,error) || error)
+        throw DatabaseError("Existing skill import opened a different database path");
+    sqlite_detail::check(raw,sqlite3_busy_timeout(raw,5000));
+    sqlite_detail::execute(raw,"PRAGMA foreign_keys=ON"); // Connection setting only, no schema change.
+    {
+        sqlite_detail::Statement keys(raw,"PRAGMA foreign_keys");
+        if(!keys.row() || keys.integer(0)!=1 || keys.row())
+            throw DatabaseError("Existing skill import requires foreign keys");
+    }
+    candidate->taiwan_installed_skill_import=std::make_unique<TaiwanInstalledSkillCatalogImport>(raw);
+    // No gameplay readers/writers, default guild selector or migration is constructed.
+    // migrated_ stays false; schema4/5 is qualified by the actual importer before DML.
+    impl_=std::move(candidate);
+}
 void SqliteDatabase::migrate() {
     if (!impl_) throw DatabaseError("Initialize database before migrating");
+    if(impl_->taiwan_skill_import_only)
+        throw DatabaseError("Import-only database cannot run migrations");
     migrated_ = false;
     if(migrations_.back().version==53) {
         auto* raw=impl_->connection.get();int installed=0;
@@ -802,7 +856,7 @@ cn::CnNativeSkillCatalogImport::Result SqliteDatabase::import_cn_native_skill_ca
 }
 TaiwanInstalledSkillCatalogImport::Outcome SqliteDatabase::import_taiwan_installed_skill_catalog(
     std::shared_ptr<const TaiwanInstalledSkillCatalogSource> source) {
-    if(!migrated_ || !impl_ || !source || !impl_->taiwan_installed_skill_import ||
+    if(!impl_ || (!migrated_ && !impl_->taiwan_skill_import_only) || !source || !impl_->taiwan_installed_skill_import ||
        !impl_->taiwan_installed_skill_import->uses_connection(impl_->connection.get()))
         throw DatabaseError("TW installed skill import requires the actual initialized common Database and qualified source");
     // Forward the same owning proof. This never changes the selected catalog
