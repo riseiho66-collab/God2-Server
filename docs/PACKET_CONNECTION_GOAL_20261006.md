@@ -6136,3 +6136,26 @@ saves/fonts/IME/auth/portraits/text preserved. PHASE1 no build/test/product
 runtime/native/VM/gamecodec/gameDBSQL/schema/migrate/activate/deploy.
 
 Details: docs/research/tw-actor-native-argument-source-20261015.md
+
+## Round413 - Concrete actor resource source and return host assembly (2026-10-15)
+
+Round413 adds concrete TaiwanNativeActorResourceSource fourHero actualfile/
+ROM/fullaction binding from sameprivate Input/row/jointEQ/ArgumentSource. Explicit
+immutableServerAssetGeneration vswholePhysicalSelection (request/candidate/
+probe/branch/openedbytes) scopes; weakcache sameInputrowEQ sharededges, private
+CurrentCarrier exactData, no uncheckedvoidcast/selfcycle/nativecacheclaim.
+SceneMaterialSources actualsharedInput byvalue; actualHost helper creates
+Argument/Resource owners fromsameprivateinstalledentrybanks/currentcallables,
+mandatoryrealstrongstatus supplier thenactualfirsttimeScene returnrecipe.
+CUSTOM0133 ordinarysubset/defaultoff; no inferredNone frommissingEA. SixCPP
+fourexisting+twonew/V50pins129=123same4updated2new/canonical612/Git12/8whole
+inverse4newabsence/no newPY/Lua/CMake/EXE. No nativebytes/opcode/formula/routes
+credit, wholepercentunknown. Actualstatuswriter/lifecycle/nativecache/window/
+actionchoice/nonemptytail/transforms/badges/CN/fullworld/movement/PK/skills/
+formulas/numerics/fourWS/nativeacceptance remainOPEN. TW100firstACTIVE,
+shared453繁體/clientformulas/currentmaxHPpoison10分1/original907pins/64domains/
+coin99999999999/stack99/nativelevels/saves/fonts/IME/auth/portraits/text retained.
+PHASE1no build/test/productruntime/native/VM/gamecodec/gameDBSQL/schema/migrate/
+activate/deploy.
+
+Details: docs/research/tw-actor-resource-source-20261015.md

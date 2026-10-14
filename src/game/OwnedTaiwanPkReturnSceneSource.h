@@ -28,9 +28,9 @@ public:
         // not a live resource epoch; missing EA is not confirmed absence.
         std::shared_ptr<const void> dependency_owner;
         std::function<std::optional<ProfileOwner::ResourceInput>(
-            const Input&,std::size_t,const Equipment&,const Lease&)> resources;
+            std::shared_ptr<const Input>,std::size_t,const Equipment&,const Lease&)> resources;
         std::function<std::optional<ProfileOwner::StatusInput>(
-            const Input&,std::size_t,const Equipment&,const Lease&)> status;
+            std::shared_ptr<const Input>,std::size_t,const Equipment&,const Lease&)> status;
     };
     static std::shared_ptr<OwnedTaiwanPkReturnSceneSource> create(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<SharedNativeWorldTransports>,

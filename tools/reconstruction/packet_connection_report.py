@@ -248,6 +248,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_return_actor_saved409', {}).get('source_paths', [])) |
                    set(ledger.get('tw_return_profile_input410', {}).get('source_paths', [])) |
                    set(ledger.get('tw_actor_native_arguments412', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_actor_resources413', {}).get('source_paths', [])) |
                    set(ledger.get('tw_full_actor_profile411', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_operator402', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_import401', {}).get('source_paths', [])) |
@@ -476,6 +477,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_return_actor_saved409': ledger.get('tw_return_actor_saved409'),
         'tw_return_profile_input410': ledger.get('tw_return_profile_input410'),
         'tw_actor_native_arguments412': ledger.get('tw_actor_native_arguments412'),
+        'tw_actor_resources413': ledger.get('tw_actor_resources413'),
         'tw_full_actor_profile411': ledger.get('tw_full_actor_profile411'),
         'tw_installed453_operator402': ledger.get('tw_installed453_operator402'),
         'tw_installed453_import401': ledger.get('tw_installed453_import401'),

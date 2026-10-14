@@ -5393,6 +5393,31 @@
           "src/game/TaiwanNativeActorArgumentSource.cpp"
         ],
         "evidence": "docs/research/tw-actor-native-argument-source-20261015.md"
+      },
+      "actor_resources413": {
+        "classification": "ACTUAL_SERVER_ASSET_RESOURCE_SOURCE_AND_CUSTOM0133_RETURN_HOST_ASSEMBLY_PARTIAL_ROUTE",
+        "round": 413,
+        "actual_private_shared_Input_row_joint_EQ_argument_source": true,
+        "four_actual_native_selected_resource_ROM_full_action_bindings": true,
+        "weak_cached_same_Input_row_EQ_shared_across_recipient_edges": true,
+        "immutable_server_generation_or_whole_physical_selection_scopes_explicit": true,
+        "no_unchecked_shared_void_Data_cast_or_selfcycle": true,
+        "actual_same_Context_private_installed_entry_banks_host_helper": true,
+        "mandatory_strong_real_status_supplier_no_inferred_absent_EA": true,
+        "native_client_cache_window_current_and_chosen_action_proved": false,
+        "actual_status_writer_lifecycle_implemented": false,
+        "all_actor_domains_and_full_route_connected": false,
+        "new_native_bytes_or_opcode_or_formula": 0,
+        "default_enabled": false,
+        "source_paths": [
+          "src/game/OwnedTaiwanPkReturnSceneSource.h",
+          "src/game/OwnedTaiwanPkReturnSceneSource.cpp",
+          "src/core/SharedTaiwanNativeWorldHostPlan.h",
+          "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+          "src/game/TaiwanNativeActorResourceSource.h",
+          "src/game/TaiwanNativeActorResourceSource.cpp"
+        ],
+        "evidence": "docs/research/tw-actor-resource-source-20261015.md"
       }
     },
     {

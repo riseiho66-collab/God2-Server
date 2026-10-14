@@ -16,6 +16,7 @@
 #include "game/SharedTaiwanNativeSkillCommandSource.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "game/OwnedTaiwanPkReturnSceneSource.h"
+#include "game/TaiwanNativeActorResourceSource.h"
 #include <utility>
 #include <optional>
 #include <string>
@@ -223,6 +224,22 @@ public:
             std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
             OwnedTaiwanPkReturnSceneSource::Selection,OwnedTaiwanPkReturnSceneSource::MaterialSources,
             OwnedPkProfileRecipe,StoredSources);
+        struct ActualStatusSources {
+            // Actual status writer/lifecycle ownership is still mandatory.
+            // No packet absence or immutable resource pin proves ordinary status.
+            std::shared_ptr<const void> dependency_owner;
+            std::function<std::optional<TaiwanCustomFullActorProfile::StatusInput>(
+                std::shared_ptr<const OwnedTaiwanPkReturnSceneSource::Input>,std::size_t,
+                const OwnedTaiwanPkReturnSceneSource::Equipment&,const SharedWorldPresence::Lease&)> status;
+        };
+        // CUSTOM-0133 explicit server resource generation / physical selection
+        // owner, created inside this same actual Context from installed banks.
+        // Native contexts/actions/bounds and real status source have no defaults.
+        // Actual private shared population input reaches both material owners.
+        static StoredSources with_owned_pk_return_resources(const SharedWorldHostPlan::Context&,
+            std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
+            OwnedTaiwanPkReturnSceneSource::Selection,TaiwanNativeActorResourceSource::Configuration,
+            ActualStatusSources,OwnedPkProfileRecipe,StoredSources);
         // Construct on startup's game owner without writes. The returned
         // game-only closure accepts a future real post-COMMIT token; retain it
         // in the later request owner, never retain this borrowed Context.

@@ -187,9 +187,9 @@ std::optional<OwnedTaiwanPkReturnSceneSource::Scene> OwnedTaiwanPkReturnSceneSou
                 if(!observed||!fence(*state,Check::Prepare))return {};
                 eq=equipment.emplace(source_row,std::move(*observed)).first;
             }
-            auto resources=material_.resources(*input,source_row,eq->second,recipient_saved.lease);
+            auto resources=material_.resources(input,source_row,eq->second,recipient_saved.lease);
             if(!resources||!fence(*state,Check::Prepare))return {};
-            auto status=material_.status(*input,source_row,eq->second,recipient_saved.lease);
+            auto status=material_.status(input,source_row,eq->second,recipient_saved.lease);
             if(!status||!fence(*state,Check::Prepare))return {};
             ProfileOwner::SourceInput source_input{source->session,source,
                 [source](Check check,const Lease& lease,Session& actual){
