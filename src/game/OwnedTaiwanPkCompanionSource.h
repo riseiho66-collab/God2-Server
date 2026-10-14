@@ -1,5 +1,6 @@
 #pragma once
 #include "handlers/RecoveredOwnedCompanions.h"
+#include "handlers/OwnedSkillBookLearningService.h"
 #include "db/SqliteSupport.h"
 #include "net/Session.h"
 #include "protocol/RecoveredWorldFrame.h"
@@ -127,6 +128,26 @@ public:
         explicit WholeResponseCoverage(std::shared_ptr<const Data> data):data_(std::move(data)){}
         std::shared_ptr<const Data> data_;
     };
+    class Observation;
+    class LearningSuccessor {
+    public:
+        const Observation& predecessor()const noexcept{return *data_->before;}
+        const OwnedSkillBookLearningService::WrittenLearningSource& publication()const noexcept{return data_->publication;}
+        const OwnedTaiwanPkPlayerEntrySource::Observation& player()const noexcept{return data_->player;}
+    private:
+        friend class OwnedTaiwanPkCompanionSource;
+        struct Data {
+            const std::shared_ptr<const Observation> before;
+            const OwnedSkillBookLearningService::WrittenLearningSource publication;
+            const OwnedTaiwanPkPlayerEntrySource::Observation player;
+            Data(std::shared_ptr<const Observation> b,
+                    OwnedSkillBookLearningService::WrittenLearningSource p,
+                    OwnedTaiwanPkPlayerEntrySource::Observation actual_player)
+                :before(std::move(b)),publication(std::move(p)),player(std::move(actual_player)){}
+        };
+        explicit LearningSuccessor(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
+    };
     struct Material {
         Session::NormalWorldInitialization initialization;
         RecoveredOwnedCompanions::Restoration restoration;
@@ -136,6 +157,7 @@ public:
         SessionState phase;
         std::optional<WholeResponseCoverage> whole_response{}; // Absent on the exact legacy path.
         std::optional<ZeroPublication> zero_publication{}; // Original one-shot zero mode only.
+        std::optional<LearningSuccessor> learning_successor{}; // Distinct actual Written learning lineage only.
     };
     class Observation {
     public:
@@ -147,6 +169,9 @@ public:
         bool current()const;
         bool uses_connection(const sqlite3*)const noexcept;
         bool stored_current_in_room_transaction(sqlite3*)const;
+        // Pure exact private node join for the actual Prepared player;
+        // absence preserves legacy Room behavior, successors require the node.
+        bool learning_player_matches(const OwnedTaiwanPkPlayerEntrySource::Observation&)const noexcept;
         bool operator==(const Observation&)const=default;
     private:
         friend class OwnedTaiwanPkCompanionSource;
@@ -166,7 +191,39 @@ public:
     static std::optional<Observation> observe_zero(sqlite3*,SqliteCompanionRepository&,
         RecoveredOwnedCompanions&,const NativeSkillCatalog&,std::shared_ptr<Session>,
         Session::NormalWorldInitialization,RecoveredOwnedCompanions::Restoration,ZeroPublication);
+    static std::optional<Observation> observe_learning(sqlite3*,SqliteCompanionRepository&,
+        RecoveredOwnedCompanions&,const NativeSkillCatalog&,std::shared_ptr<Session>,
+        Session::NormalWorldInitialization,const Observation& predecessor,
+        const OwnedTaiwanPkPlayerEntrySource::Observation& successor_player,
+        OwnedSkillBookLearningService::WrittenLearningSource);
 private:
+    static bool learning_shape(const Material& m) {
+        if(!m.learning_successor || m.zero_publication || m.whole_response || !m.writes.empty() ||
+           !m.restoration.learning_source())return false;
+        const auto& lineage=*m.learning_successor;const auto& before=lineage.predecessor().material();
+        const auto& publication=lineage.publication();const auto& player=lineage.player();
+        const auto& appearance=player.combat().appearance();const auto& shape=appearance.material();
+        const auto& delta=publication.logical_delta();const auto& history=m.restoration.batches();
+        const auto& prior=before.restoration.batches();
+        std::optional<OwnedSkillBookLearningService::LearningPublication> previous;
+        if(before.learning_successor)previous.emplace(before.learning_successor->publication().publication());
+        if(!publication.follows(previous) || !player.matches_learning_source(publication) ||
+           !publication.initialization().same_initialization(m.initialization) ||
+           !before.initialization.same_initialization(m.initialization) ||
+           before.session!=m.session || before.account!=m.account || before.character!=m.character ||
+           before.battle_generation!=m.battle_generation || before.phase!=m.phase ||
+           m.prefix.profile()!=before.prefix.profile() || history.size()!=prior.size()+1 ||
+           m.prefix.actual_batches()!=history || history.back().size()!=delta.size() ||
+           !std::equal(delta.begin(),delta.end(),history.back().begin()) ||
+           publication.wire()!=publication.response().wire() ||
+           !appearance.owns_initialization(m.initialization) ||
+           shape.lease.session!=m.session || shape.lease.account!=m.account ||
+           shape.lease.character!=m.character || shape.battle_generation!=m.battle_generation ||
+           shape.inventory!=publication.after_source().inventory() ||
+           shape.equipment!=publication.after_source().equipment())return false;
+        for(std::size_t i=0;i<prior.size();++i)if(history[i]!=prior[i])return false;
+        return true; // Private factories retain the exact committed fullafter State.
+    }
     static bool zero_shape(const Material& m) {
         if(!m.zero_publication||!m.whole_response||!m.writes.empty()||
            !m.restoration.learning_source()||!m.restoration.learning_source()->activations().empty()||
@@ -225,6 +282,32 @@ private:
         return WholeResponseCoverage(std::make_shared<const WholeResponseCoverage::Data>(
             std::move(receipt),std::move(wire),std::move(suffix),batches.size()));
     }
+    static bool transport_history_current(const Material& latest,const Session& peer) {
+        const Material* node=&latest;
+        // Immutable single-predecessor private construction is acyclic. This
+        // loop retains all original receipts without recursively querying old
+        // saved tuples or requiring an earlier publication to remain latest.
+        while(node->learning_successor) {
+            if(!learning_shape(*node))return false;
+            const auto& lineage=*node->learning_successor;const auto& written=lineage.publication().response();
+            if(written.status()!=Session::WorldResponseWriteStatus::Written ||
+               !peer.world_response_write_current_on_game(written))return false;
+            node=&lineage.predecessor().material();
+        }
+        if(node->zero_publication)
+            return zero_shape(*node) && node->zero_publication->receipt().status()==Session::WorldResponseWriteStatus::Written &&
+                peer.world_response_write_current_on_game(node->zero_publication->receipt());
+        const auto& batches=node->restoration.batches();
+        if(node->whole_response)
+            return node->writes.empty() && node->prefix.actual_batches()==batches &&
+                whole_current(*node->whole_response,peer,batches.size());
+        if(node->writes.size()!=batches.size() || node->prefix.actual_batches()!=batches)return false;
+        for(std::size_t i=0;i<node->writes.size();++i)
+            if(node->writes[i].logical()!=batches[i] ||
+               node->writes[i].status()!=Session::WorldRecordsWriteStatus::Written ||
+               !peer.world_records_write_current_on_game(node->writes[i]))return false;
+        return true;
+    }
     struct State {
         sqlite3* db;
         SqliteCompanionRepository& repository;
@@ -259,6 +342,17 @@ private:
                peer->battle_generation()!=m.battle_generation ||
                m.restoration.deity_roster().account()!=m.account ||
                m.restoration.deity_roster().character()!=m.character)return false;
+            if(m.learning_successor) {
+                const auto& lineage=*m.learning_successor;
+                return learning_shape(m) && lineage.predecessor().uses_connection(db) &&
+                    lineage.player().uses_connection(db) && lineage.publication().current(*peer) &&
+                    !reentered && transport_history_current(m,*peer) &&
+                    lineage.player().current() && !reentered &&
+                    peer->normal_world_initialization_current_on_game(m.initialization) &&
+                    m.initialization.entry_written() && !peer->closing() && peer->state()==m.phase &&
+                    peer->id()==m.session && peer->account_id==m.account && peer->character_id==m.character &&
+                    peer->battle_generation()==m.battle_generation;
+            }
             if(m.zero_publication) {
                 if(!zero_shape(m)||!m.zero_publication->player().uses_connection(db)||
                    !m.zero_publication->current()||reentered||
@@ -282,9 +376,23 @@ private:
             }
             return !reentered;
         }
+        bool learning_catalog_current(const Material& m) {
+            if(m.prefix.profile()!=catalog.taiwan_profile())return false;
+            for(const auto& expected:m.prefix.catalog_records()) {
+                const auto actual=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),
+                    expected.kind,expected.definition_id);
+                if(reentered || !actual || *actual!=expected)return false;
+            }
+            return !reentered;
+        }
         bool current(const Material& m){
             Read read(*this);if(!read.entered || !identities() || !sqlite3_get_autocommit(db))return false;
             const auto changes=sqlite3_total_changes64(db);
+            if(m.learning_successor)
+                return local(m) && helper.restoration_current(m.restoration) && local(m) &&
+                    learning_catalog_current(m) && local(m) &&
+                    helper.restoration_current(m.restoration) && local(m) && !reentered &&
+                    sqlite3_get_autocommit(db) && sqlite3_total_changes64(db)==changes;
             return local(m) && helper.restoration_current(m.restoration) && local(m) &&
                 helper.normal_entry_prefix_current(m.restoration,m.prefix,catalog) && local(m) &&
                 helper.restoration_current(m.restoration) && local(m) && !reentered &&
@@ -295,6 +403,11 @@ private:
             if(!read.entered || actual!=db || !identities() ||
                m.prefix.profile()!=catalog.taiwan_profile() || sqlite3_get_autocommit(db))return false;
             const auto changes=sqlite3_total_changes64(db);
+            // Immutable successor identity only. Do not call carrier/service/
+            // Session/player Current or inspect old HP here; Reserved checks the
+            // SAME Prepared player separately, Active/Finished use their ledger.
+            if(m.learning_successor && (!learning_shape(m) ||
+               !m.learning_successor->player().uses_connection(actual)))return false;
             // Only concrete closed SQL reads. Never invoke live helper Current or
             // Session/presence/world-init callbacks inside the room transaction.
             if(!repository.deity_roster_current_in_transaction(m.restoration.deity_roster()))return false;
@@ -327,6 +440,13 @@ private:
 inline bool OwnedTaiwanPkCompanionSource::Observation::current()const{
     const auto state=state_;const auto material=material_;
     return state && material && state->current(*material);
+}
+inline bool OwnedTaiwanPkCompanionSource::Observation::learning_player_matches(
+        const OwnedTaiwanPkPlayerEntrySource::Observation& player)const noexcept {
+    if(!material_)return false;
+    if(!material_->learning_successor)return true; // Exact legacy Room behavior remains unchanged.
+    return material_->learning_successor->player()==player &&
+        player.matches_learning_source(material_->learning_successor->publication());
 }
 inline bool OwnedTaiwanPkCompanionSource::Observation::uses_connection(const sqlite3* db)const noexcept{
     return state_ && state_->db==db && state_->identities();
@@ -441,6 +561,67 @@ inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCom
         std::move(*prefix),{},id,account,character,generation,phase,std::move(coverage),std::move(publication)});
     Observation result(std::move(state),std::move(material));
     if(!zero_shape(result.material())||!result.current())return {};
+    return result;
+}
+inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCompanionSource::observe_learning(
+        sqlite3* db,SqliteCompanionRepository& repository,RecoveredOwnedCompanions& helper,
+        const NativeSkillCatalog& catalog,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,const Observation& predecessor,
+        const OwnedTaiwanPkPlayerEntrySource::Observation& successor_player,
+        OwnedSkillBookLearningService::WrittenLearningSource publication) {
+    const auto before=predecessor;const auto player=successor_player; // Own private nodes before observers.
+    if(!db || !repository.uses_connection(db) || !helper.owns_repository(repository) ||
+       !catalog.uses_connection(db) || !session || !before.uses_connection(db) ||
+       !player.uses_connection(db) || !player.matches_learning_source(publication) ||
+       !sqlite3_get_autocommit(db) || !initialization.entry_written() ||
+       !session->normal_world_initialization_current_on_game(initialization))return {};
+    const auto& original=before.material();
+    const auto phase=session->state();const auto id=session->id(),account=session->account_id,character=session->character_id;
+    const auto battle=session->battle_generation();
+    if((phase!=SessionState::CharacterSelected && phase!=SessionState::InWorld) ||
+       !account || !character || original.session!=id || original.account!=account ||
+       original.character!=character || original.battle_generation!=battle || original.phase!=phase ||
+       !original.initialization.same_initialization(initialization) ||
+       !publication.initialization().same_initialization(initialization) ||
+       original.prefix.profile()!=catalog.taiwan_profile() || !original.restoration.learning_source())return {};
+    std::optional<OwnedSkillBookLearningService::LearningPublication> previous;
+    if(original.learning_successor)previous.emplace(original.learning_successor->publication().publication());
+    if(!publication.follows(previous))return {};
+    const auto& delta=publication.logical_delta();
+    const auto framed=RecoveredWorldFrame::encode(delta);
+    if(framed!=publication.wire() || publication.response().wire()!=publication.wire())return {};
+    auto state=std::make_shared<State>(State{db,repository,helper,catalog,session});
+    std::optional<RecoveredOwnedCompanions::Restoration> restoration;
+    std::optional<TaiwanNativeDeityRosterPrefix> prefix;
+    {
+        State::Read read(*state);if(!read.entered)return {};
+        const auto changes=sqlite3_total_changes64(db);
+        const auto local=[&] {
+            return !state->reentered && state->identities() && sqlite3_get_autocommit(db) &&
+                sqlite3_total_changes64(db)==changes && !session->closing() && session->state()==phase &&
+                session->id()==id && session->account_id==account && session->character_id==character &&
+                session->battle_generation()==battle && initialization.entry_written() &&
+                session->normal_world_initialization_current_on_game(initialization) &&
+                player.matches_learning_source(publication);
+        };
+        if(!local() || !publication.current(*session) || !local() ||
+           !transport_history_current(original,*session) || !local())return {};
+        auto history=original.restoration.batches();
+        history.emplace_back(delta.begin(),delta.end());
+        restoration=helper.learning_successor_from_committed(original.restoration,publication.committed(),std::move(history));
+        if(!restoration || !local() || !publication.current(*session) || !local())return {};
+        const auto definition=catalog.lookup_main_digest_checked(catalog.taiwan_dataset_id(),delta[2],delta[3]);
+        if(!definition || !local())return {};
+        prefix=TaiwanNativeDeityRosterPrefix::advance_written_learning(original.prefix,delta,*definition);
+        if(!prefix || prefix->actual_batches()!=restoration->batches() || !local() ||
+           !publication.current(*session) || !local() || !player.current() || !local())return {};
+    }
+    LearningSuccessor lineage(std::make_shared<const LearningSuccessor::Data>(
+        std::make_shared<const Observation>(before),std::move(publication),player));
+    auto material=std::make_shared<const Material>(Material{std::move(initialization),std::move(*restoration),
+        std::move(*prefix),{},id,account,character,battle,phase,{},{},std::move(lineage)});
+    Observation result(std::move(state),std::move(material));
+    if(!learning_shape(result.material()) || !result.learning_player_matches(player) || !result.current())return {};
     return result;
 }
 }

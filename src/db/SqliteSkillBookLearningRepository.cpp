@@ -549,6 +549,11 @@ bool SqliteSkillBookLearningRepository::committed_matches_plan(const Committed& 
         !committed.data_.owner_before(plan.data_)&&!plan.data_.owner_before(committed.data_)&&
         retained_plan_issuer(*committed.data_);
 }
+bool SqliteSkillBookLearningRepository::committed_matches_restoration_before(
+        const Committed& committed,const Restoration& before) const noexcept {
+    if(!committed.data_ || !retained_plan_issuer(*committed.data_))return false;
+    return plan_matches_restoration(Plan(committed.data_),before); // SAME actual PlanData owner, no allocation.
+}
 std::optional<SqliteSkillBookLearningRepository::Restoration>
 SqliteSkillBookLearningRepository::planned_after_source(const Plan& value) const noexcept {
     if(!value.data_||!retained_plan_issuer(*value.data_))return std::nullopt;

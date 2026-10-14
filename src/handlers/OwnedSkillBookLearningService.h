@@ -4,6 +4,7 @@
 #include "protocol/RecoveredInventoryItemRequest.h"
 #include "protocol/RecoveredTargetItemRequest.h"
 #include <atomic>
+#include <array>
 #include <utility>
 #include <cstddef>
 #include <cstdint>
@@ -27,6 +28,7 @@ class OwnedSkillBookLearningService final {
     struct Operation;
     struct Lifetime;
 public:
+    class WrittenLearningSource;
     OwnedSkillBookLearningService(SqliteSkillBookLearningRepository&,LuaEngine&,std::size_t actual_session_capacity);
     ~OwnedSkillBookLearningService();
     // Game-owned immutable provenance; only this actual service publishes it.
@@ -34,6 +36,7 @@ public:
     class LearningPublication {
         struct Data;
         friend class OwnedSkillBookLearningService;
+        friend class WrittenLearningSource;
     public:
         LearningPublication(const LearningPublication&)=default;
         LearningPublication& operator=(const LearningPublication&)=default;
@@ -47,6 +50,37 @@ public:
     private:
         explicit LearningPublication(std::shared_ptr<Data> data)noexcept:data_(std::move(data)){}
         std::shared_ptr<Data> data_;
+    };
+    // Owning copy of the actual Bound/Written learning event, not Current by
+    // its getters. Only the service mints it after full own-source qualification.
+    class WrittenLearningSource {
+        friend class OwnedSkillBookLearningService;
+    public:
+        WrittenLearningSource(const WrittenLearningSource&)=default;
+        WrittenLearningSource& operator=(const WrittenLearningSource&)=default;
+        // Retain non-null private holders in the moved-from value too.
+        WrittenLearningSource(WrittenLearningSource&& value)noexcept
+            :publication_(value.publication_),response_(value.response_){}
+        WrittenLearningSource& operator=(WrittenLearningSource&& value)noexcept {
+            publication_=value.publication_;response_=value.response_;return *this;
+        }
+        const SqliteSkillBookLearningRepository::Restoration& before_source()const noexcept;
+        const SqliteSkillBookLearningRepository::Restoration& after_source()const noexcept;
+        const SqliteSkillBookLearningRepository::Committed& committed()const noexcept;
+        const LearningPublication& publication()const noexcept{return publication_;}
+        const Session::WorldResponseWrite& response()const noexcept{return response_;}
+        const std::vector<std::uint8_t>& wire()const noexcept;
+        const std::array<std::uint8_t,13>& logical_delta()const noexcept;
+        const std::shared_ptr<const RecoveredOwnedCompanions::Restoration>& original_restoration()const noexcept;
+        const Session::NormalWorldInitialization& initialization()const noexcept;
+        bool follows(const std::optional<LearningPublication>&)const noexcept;
+        bool current(Session&)const;
+        bool operator==(const WrittenLearningSource& value)const noexcept{return publication_==value.publication_;}
+    private:
+        WrittenLearningSource(const LearningPublication& p,const Session::WorldResponseWrite& r)noexcept
+            :publication_(p),response_(r){}
+        LearningPublication publication_;
+        Session::WorldResponseWrite response_;
     };
     class UseResult {
         friend class OwnedSkillBookLearningService;
@@ -83,6 +117,8 @@ public:
     void bind_learning_response(Session&,const LearningPublication&,const Session::WorldResponseWrite&);
     bool learning_publication_current(Session&,const LearningPublication&);
     std::optional<LearningPublication> latest_learning_publication(Session&);
+    std::optional<WrittenLearningSource> written_learning_source(Session&,const LearningPublication&);
+    bool written_learning_source_current(Session&,const WrittenLearningSource&);
     // Original complete framed aggregate, allocated before any mutation.
     // Projection is not Written. Root captures ONE final whole callback WWR,
     // holds existing input continuation and then binds that actual receipt.

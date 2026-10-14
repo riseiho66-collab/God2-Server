@@ -1,4 +1,5 @@
 #include "handlers/RecoveredOwnedCompanions.h"
+#include "protocol/RecoveredInventory.h"
 #include "db/DbTypes.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -133,6 +134,29 @@ std::optional<TaiwanNativeDeityRosterPrefix> RecoveredOwnedCompanions::normal_en
     }
     if(!restoration_current(restoration) || prefix_reentered_)return std::nullopt;
     return model;
+}
+std::optional<RecoveredOwnedCompanions::Restoration> RecoveredOwnedCompanions::learning_successor_from_committed(
+        const Restoration& before,const SqliteSkillBookLearningRepository::Committed& committed,
+        std::vector<std::vector<std::uint8_t>> actual_history) {
+    PrefixRead read(*this);
+    const auto owned=before;
+    auto* const learning=owned.learning_repository_;
+    if(!owned.learning_source_ || !learning || !learning->owns_companions(repository_) ||
+       !learning->committed_matches_restoration_before(committed,*owned.learning_source_))return {};
+    auto after=learning->committed_after_source(committed);
+    if(!after || after->roster().account()!=owned.deity_roster().account() ||
+       after->roster().character()!=owned.deity_roster().character() ||
+       actual_history.size()!=owned.batches().size()+1)return {};
+    for(std::size_t i=0;i<owned.batches().size();++i)
+        if(actual_history[i]!=owned.batches()[i])return {};
+    const auto& delta=actual_history.back();
+    if(delta.size()!=13 || delta[0]!=0x34 || delta[4]!=0x35 || delta[8]!=0x41 ||
+       !std::equal(delta.begin()+1,delta.begin()+4,delta.begin()+5) ||
+       !RecoveredInventory::decode_slot_update(std::span<const std::uint8_t>(delta).subspan(8,5)))return {};
+    if(!learning->restoration_current(*after) || prefix_reentered_)return {};
+    // Carry the actual original reset/roster plus appended Written delta. The
+    // private learning State retains all after headers/events and both banks.
+    return Restoration(after->roster(),std::move(actual_history),std::move(*after),*learning);
 }
 std::vector<std::vector<std::uint8_t>> RecoveredOwnedCompanions::restore_rows(
         std::uint64_t account,std::uint64_t character,std::span<const StoredDeity> deities,

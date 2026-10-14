@@ -821,3 +821,15 @@ fullroutecredit. 7CPP(3existing4new)+Cmake/V39/no newPY; actualinstallation/
 learnedCompanionPlayer/nativeReturn/current6F/skills/numerics remainOPEN.
 TW156/252 parser77=50/11/16,pending12/frontier26 21/105,whole%null;
 TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1 retained.
+
+Round403 connects actualownBound/Written learning carrier/fullbeforeafter/13Bdelta
+->privateCommitted Companion history/prefix advance +distinctsameINIT/lease/pose/
+DA/role/resources/aux/text stable Player ->ONEstrongbackwardMain pairednode.
+Actualpk_players/pk_companions/invitationpk_peer/ReservedsamePlayerjoin allconsume
+thatnode; originalsource/historyimmutable, nooldCurrentafterdebit/resetreplay/fake
+write/half-source. ClosedStoredonlyfullafterSQL/catalog/identity;398terminalledger
+preserved. Finalpositionobservers precedeexactpairedsourcecut. 13existingCPP/V40,
+no newPY/Lua/native/defaultactivation/fullroutes. Complete movement/return/current6F/
+resources/selection/opaqueS35/S41nativeUI/learningcausality/allskills/numerics/
+acceptance/wholeinventoryOPEN. TW156/252 parser77=50/11/16,pending12/frontier26
+21/105,whole%null;TW100firstACTIVE/commonCNweb/saves/fonts/text/numerics/PHASE1.

@@ -7,6 +7,7 @@
 #include "protocol/TaiwanNativeDeityRosterPrefix.h"
 #include <thread>
 namespace god2 {
+class OwnedTaiwanPkCompanionSource;
 class RecoveredOwnedCompanions {
 public:
     explicit RecoveredOwnedCompanions(SqliteCompanionRepository& repository):repository_(repository) {}
@@ -106,6 +107,12 @@ public:
     std::optional<std::vector<std::uint8_t>> select_pet2(
         std::uint64_t account,std::uint64_t character,const RecoveredSelectionItemRequest::Request& request);
 private:
+    friend class OwnedTaiwanPkCompanionSource;
+    // Actual committed fullafter plus genuine immutable wire history only.
+    // No fresh restore/reset, original stale Current or public raw constructor.
+    std::optional<Restoration> learning_successor_from_committed(const Restoration&,
+        const SqliteSkillBookLearningRepository::Committed&,
+        std::vector<std::vector<std::uint8_t>> actual_history);
     struct PrefixRead;
     std::optional<TaiwanNativeDeityRosterPrefix> normal_entry_prefix_impl(
         const Restoration&,const NativeSkillCatalog&);

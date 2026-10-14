@@ -114,6 +114,9 @@ public:
     // restore, vector copy or new allocation. Committed is the actual carrier.
     std::optional<Restoration> committed_after_source(const Committed&) const noexcept;
     bool committed_matches_plan(const Committed&,const Plan&) const noexcept;
+    // Actual private Committed -> its complete retained BEFORE source. Pure
+    // issuer/full-tuple comparison; no SQL or new State/controlblock.
+    bool committed_matches_restoration_before(const Committed&,const Restoration&) const noexcept;
     // PROVISIONAL alias for preallocation before COMMIT. It provides no commit,
     // grant, publication or SourceCurrent authority; match the actual Committed
     // to this exact Plan before using it as an after-source.

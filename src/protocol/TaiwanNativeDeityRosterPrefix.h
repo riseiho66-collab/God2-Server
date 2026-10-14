@@ -1,6 +1,7 @@
 #pragma once
 
 #include "protocol/TaiwanNativePrimarySkillList.h"
+#include "protocol/RecoveredInventory.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -80,6 +81,36 @@ public:
     const std::vector<NativeSkillRecord>& catalog_records() const noexcept {return catalog_records_;}
     const std::vector<std::vector<std::uint8_t>>& actual_batches() const noexcept {return actual_batches_;}
 private:
+    friend class OwnedTaiwanPkCompanionSource;
+    // Restricted actual S34/S35/S41 successor. Retain every old physical row,
+    // selector and inactive tail; never execute a new normal-entry reset.
+    static std::optional<TaiwanNativeDeityRosterPrefix> advance_written_learning(
+            const TaiwanNativeDeityRosterPrefix& before,std::span<const std::uint8_t> delta,
+            const NativeSkillRecord& definition) {
+        if(delta.size()!=13 || delta[0]!=0x34 || delta[4]!=0x35 || delta[8]!=0x41 ||
+           !std::equal(delta.begin()+1,delta.begin()+4,delta.begin()+5) ||
+           !RecoveredInventory::decode_slot_update(delta.subspan(8,5)) ||
+           definition.kind!=delta[2] || definition.definition_id!=delta[3] ||
+           !valid_definition(definition,before.profile_))return {};
+        auto next=before;
+        if(!next.catalog_records_.empty() && definition.source!=next.catalog_records_.front().source)return {};
+        const auto old=std::find_if(next.catalog_records_.begin(),next.catalog_records_.end(),
+            [&](const auto& value){return same_identity(value,definition);});
+        if(old!=next.catalog_records_.end()) {if(*old!=definition)return {};}
+        else next.catalog_records_.push_back(definition);
+        bool subject=false;
+        for(std::size_t i=0;i<before.roster_count_;++i) {
+            const auto& row=before.rows_[i];if(row.row_key!=delta[1])continue;
+            subject=true;if(row.learned_count>=skill_capacity)return {};
+            for(std::size_t j=0;j<row.learned_count;++j)
+                if(!row.learned_definitions[j] || same_identity(*row.learned_definitions[j],definition))return {};
+        }
+        if(!subject || !next.apply34(delta.first(4)) || !next.apply35(delta.subspan(4,4)))return {};
+        // S41 bytes are genuine history; this prefix models no inventory/UI or
+        // opaque S35 page/shortcut effects. Those remain independent evidence.
+        next.actual_batches_.emplace_back(delta.begin(),delta.end());
+        return next;
+    }
     TaiwanNativeDeityRosterPrefix()=default;
     NativeTaiwanSkillProfile profile_=NativeTaiwanSkillProfile::Historical448;
     std::array<Row,row_capacity> rows_;

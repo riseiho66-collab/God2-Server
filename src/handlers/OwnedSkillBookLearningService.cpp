@@ -75,8 +75,10 @@ struct OwnedSkillBookLearningService::LearningPublication::Data {
     const std::weak_ptr<Session> session;
     const Session::NormalWorldInitialization initialization;
     const std::shared_ptr<const RecoveredOwnedCompanions::Restoration> original_restoration;
+    const SqliteSkillBookLearningRepository::Restoration before;
     const SqliteSkillBookLearningRepository::Plan plan;
     const SqliteSkillBookLearningRepository::Restoration after;
+    const std::array<std::uint8_t,13> logical_delta;
     const std::vector<std::uint8_t> wire;
     const std::weak_ptr<Data> previous;
     const std::thread::id thread=std::this_thread::get_id();
@@ -84,11 +86,12 @@ struct OwnedSkillBookLearningService::LearningPublication::Data {
     std::optional<SqliteSkillBookLearningRepository::Committed> committed;
     std::optional<Session::WorldResponseWrite> response;
     Data(std::weak_ptr<Lifetime> owner,std::shared_ptr<Entry> source,
-         const SqliteSkillBookLearningRepository::Plan& p,SqliteSkillBookLearningRepository::Restoration a,
+         const SqliteSkillBookLearningRepository::Plan& p,SqliteSkillBookLearningRepository::Restoration b,
+         SqliteSkillBookLearningRepository::Restoration a,std::array<std::uint8_t,13> delta,
          std::vector<std::uint8_t> bytes,std::shared_ptr<Data> prior)
         :life(std::move(owner)),entry(source),session(source->session),initialization(source->initialization),
-         original_restoration(source->original_restoration),plan(p),after(std::move(a)),
-         wire(std::move(bytes)),previous(std::move(prior)){}
+         original_restoration(source->original_restoration),before(std::move(b)),plan(p),after(std::move(a)),
+         logical_delta(delta),wire(std::move(bytes)),previous(std::move(prior)){}
 };
 struct OwnedSkillBookLearningService::Operation {
     OwnedSkillBookLearningService& service;
@@ -118,6 +121,31 @@ const SqliteSkillBookLearningRepository::Restoration& OwnedSkillBookLearningServ
 const SqliteSkillBookLearningRepository::Committed& OwnedSkillBookLearningService::LearningPublication::committed()const noexcept{return *data_->committed;}
 const std::shared_ptr<const RecoveredOwnedCompanions::Restoration>& OwnedSkillBookLearningService::LearningPublication::original_restoration()const noexcept{return data_->original_restoration;}
 const Session::NormalWorldInitialization& OwnedSkillBookLearningService::LearningPublication::initialization()const noexcept{return data_->initialization;}
+const SqliteSkillBookLearningRepository::Restoration& OwnedSkillBookLearningService::WrittenLearningSource::before_source()const noexcept{return publication_.data_->before;}
+const SqliteSkillBookLearningRepository::Restoration& OwnedSkillBookLearningService::WrittenLearningSource::after_source()const noexcept{return publication_.data_->after;}
+const SqliteSkillBookLearningRepository::Committed& OwnedSkillBookLearningService::WrittenLearningSource::committed()const noexcept{return *publication_.data_->committed;}
+const std::vector<std::uint8_t>& OwnedSkillBookLearningService::WrittenLearningSource::wire()const noexcept{return publication_.data_->wire;}
+const std::array<std::uint8_t,13>& OwnedSkillBookLearningService::WrittenLearningSource::logical_delta()const noexcept{return publication_.data_->logical_delta;}
+const std::shared_ptr<const RecoveredOwnedCompanions::Restoration>& OwnedSkillBookLearningService::WrittenLearningSource::original_restoration()const noexcept{return publication_.data_->original_restoration;}
+const Session::NormalWorldInitialization& OwnedSkillBookLearningService::WrittenLearningSource::initialization()const noexcept{return publication_.data_->initialization;}
+bool OwnedSkillBookLearningService::WrittenLearningSource::follows(const std::optional<LearningPublication>& prior)const noexcept {
+    const auto& previous=publication_.data_->previous;
+    if(prior) {
+        if(!prior->data_)return false;
+        return previous.lock()==prior->data_ && !previous.owner_before(prior->data_) && !prior->data_.owner_before(previous);
+    }
+    const std::weak_ptr<LearningPublication::Data> empty;
+    // An expired nonempty controlblock is NOT the first learning event.
+    return !previous.owner_before(empty) && !empty.owner_before(previous);
+}
+bool OwnedSkillBookLearningService::WrittenLearningSource::current(Session& session)const {
+    const auto owned=*this;const auto data=owned.publication_.data_;
+    if(!data || data->thread!=std::this_thread::get_id())return false;
+    const auto peer=data->session.lock();if(peer.get()!=&session)return false;
+    const auto life=data->life.lock();if(!life || !life->owner)return false;
+    // Actual serial game-owned service/dependencies must outlive source calls.
+    return life->owner->written_learning_source_current(session,owned);
+}
 OwnedSkillBookLearningService::UseResult::UseResult(std::vector<std::uint8_t> wire,std::optional<LearningPublication> publication)noexcept
     :wire_(std::move(wire)),publication_(std::move(publication)),owns_unbound_(bool(publication_)){}
 OwnedSkillBookLearningService::UseResult::UseResult(UseResult&& other)noexcept
@@ -350,6 +378,36 @@ std::optional<OwnedSkillBookLearningService::LearningPublication> OwnedSkillBook
     if(!publication_current(session,data))return std::nullopt;
     return LearningPublication(data);
 }
+std::optional<OwnedSkillBookLearningService::WrittenLearningSource>
+OwnedSkillBookLearningService::written_learning_source(Session& session,const LearningPublication& supplied) {
+    owner();const auto publication=supplied;const auto data=publication.data_;
+    if(!data || data->thread!=std::this_thread::get_id())return std::nullopt;
+    const auto peer=data->session.lock();if(peer.get()!=&session)return std::nullopt;
+    const auto life=data->life.lock();if(!life || life->owner!=this)return std::nullopt;
+    Operation operation(*this,true);
+    if(!publication_current(session,data) || !data->committed ||
+       !repository_.committed_matches_plan(*data->committed,data->plan) ||
+       !repository_.committed_matches_restoration_before(*data->committed,data->before))return std::nullopt;
+    const auto response=*data->response; // Copy only the actual same private Written receipt.
+    WrittenLearningSource source(publication,response); // No allocation/controlblock/SQL.
+    if(!publication_local(session,data->entry.lock(),data) ||
+       source.response().status()!=Session::WorldResponseWriteStatus::Written ||
+       source.response().wire()!=data->wire || !session.world_response_write_current_on_game(source.response()))return std::nullopt;
+    return source;
+}
+bool OwnedSkillBookLearningService::written_learning_source_current(Session& session,const WrittenLearningSource& supplied) {
+    owner();const auto source=supplied;const auto data=source.publication_.data_;
+    if(!data || data->thread!=std::this_thread::get_id())return false;
+    const auto peer=data->session.lock();if(peer.get()!=&session)return false;
+    const auto life=data->life.lock();if(!life || life->owner!=this)return false;
+    Operation operation(*this,true);
+    if(!publication_current(session,data) || !data->committed ||
+       !repository_.committed_matches_plan(*data->committed,data->plan) ||
+       !repository_.committed_matches_restoration_before(*data->committed,data->before))return false;
+    return publication_local(session,data->entry.lock(),data) &&
+        source.response().status()==Session::WorldResponseWriteStatus::Written && source.response().wire()==data->wire &&
+        session.world_response_write_current_on_game(source.response());
+}
 void OwnedSkillBookLearningService::bind_learning_response(Session& session,const LearningPublication& publication,
         const Session::WorldResponseWrite& response) {
     Operation operation(*this,true);const auto data=publication.data_;
@@ -480,7 +538,9 @@ std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningSe
         }
         const auto planned=repository_.planned_after_source(*plan);
         if(!planned||!request_current())return std::nullopt;
-        data=std::make_shared<LearningPublication::Data>(lifetime_,entry,*plan,*planned,wire,previous);
+        if(logical.size()!=13)return std::nullopt;
+        std::array<std::uint8_t,13> delta;std::copy(logical.begin(),logical.end(),delta.begin());
+        data=std::make_shared<LearningPublication::Data>(lifetime_,entry,*plan,*before_source,*planned,delta,wire,previous);
         UseResult result(std::move(wire),LearningPublication(data)); // ALL carrier/wire allocations BEFORE COMMIT.
         entry->pending_publication=data;active_publication_=data; // Existing Entry slot, no map allocation.
         if(!request_current())return std::nullopt;

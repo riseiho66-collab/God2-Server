@@ -1,5 +1,6 @@
 #pragma once
 #include "game/OwnedTaiwanPkCombatSource.h"
+#include "handlers/OwnedSkillBookLearningService.h"
 #include "game/TaiwanWorldEntryIdentity.h"
 #include "db/SqliteRoleTextRepository.h"
 #include "protocol/RecoveredBattleBootstrap.h"
@@ -40,6 +41,7 @@ public:
         TaiwanWorldEntryIdentity identity_profile()const noexcept;
         RecoveredBattleIdentity::Record identity(std::uint8_t position,std::uint16_t recipient_codepage)const;
         bool current()const;
+        bool matches_learning_source(const OwnedSkillBookLearningService::WrittenLearningSource&)const noexcept;
         bool uses_connection(const sqlite3*)const noexcept;
         bool stored_current_in_room_transaction(sqlite3*)const;
         bool operator==(const Observation&)const=default;
@@ -53,7 +55,15 @@ public:
     static std::optional<Observation> observe(sqlite3*,SqliteRoleTextRepository&,
         OwnedTaiwanPkCombatSource::Observation,
         TaiwanWorldEntryIdentity=TaiwanWorldEntryIdentity::SelectedCharacter);
+    static std::optional<Observation> observe_after_learning(sqlite3*,SqliteRoleTextRepository&,
+        OwnedTaiwanPkCombatSource::Observation,const Observation&,
+        OwnedSkillBookLearningService::WrittenLearningSource,std::shared_ptr<Session>);
 private:
+    struct LearningLineage {
+        const Observation predecessor;
+        const OwnedSkillBookLearningService::WrittenLearningSource source;
+        const std::weak_ptr<Session> session;
+    };
     struct State {
         sqlite3* db;
         SqliteRoleTextRepository& texts;
@@ -61,6 +71,7 @@ private:
         const TaiwanWorldEntryIdentity identity_profile;
         const std::thread::id thread=std::this_thread::get_id();
         bool reading=false,reentered=false;
+        std::shared_ptr<const LearningLineage> learning{}; // Only genuine Written successor mode.
         struct Operation {
             State& state;
             explicit Operation(State& s):state(s){
@@ -121,12 +132,18 @@ private:
             return reentered?std::nullopt:std::optional{Material{primary,root.name_codepage,
                 std::move(utf8),*secondary,role->level()}};
         }
+        bool learning_current(){
+            if(!learning)return true;
+            const auto peer=learning->session.lock();
+            return peer&&learning->source.current(*peer)&&!reentered;
+        }
         bool current(const Material& expected){
             Operation operation(*this);
-            if(!owns(db)||!sqlite3_get_autocommit(db)||!combat.current())return false;
+            if(!owns(db)||!sqlite3_get_autocommit(db)||!learning_current()||!combat.current())return false;
             std::optional<Material> actual;
             {ReadScope scope(db);actual=read();scope.finish();}
-            return actual&&*actual==expected&&!reentered&&combat.current()&&!reentered;
+            return actual&&*actual==expected&&!reentered&&learning_current()&&!reentered&&
+                combat.current()&&!reentered&&learning_current()&&!reentered;
         }
         bool stored_current(const Material& expected,sqlite3* supplied){
             Operation operation(*this);
@@ -180,6 +197,45 @@ inline bool OwnedTaiwanPkPlayerEntrySource::Observation::uses_connection(const s
 }
 inline bool OwnedTaiwanPkPlayerEntrySource::Observation::stored_current_in_room_transaction(sqlite3* db)const{
     return state_->stored_current(*material_,db);
+}
+// CUSTOM-0148: distinct genuine learned graph. The original remains immutable.
+inline bool OwnedTaiwanPkPlayerEntrySource::Observation::matches_learning_source(
+        const OwnedSkillBookLearningService::WrittenLearningSource& source)const noexcept{
+    return state_->learning&&state_->learning->source==source;
+}
+inline std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> OwnedTaiwanPkPlayerEntrySource::observe_after_learning(
+        sqlite3* db,SqliteRoleTextRepository& texts,OwnedTaiwanPkCombatSource::Observation combat,
+        const Observation& predecessor,OwnedSkillBookLearningService::WrittenLearningSource source,
+        std::shared_ptr<Session> peer){
+    if(!peer||!predecessor.uses_connection(db)||!combat.uses_connection(db)||!source.current(*peer))return {};
+    const auto previous=predecessor.state_->learning?
+        std::optional<OwnedSkillBookLearningService::LearningPublication>{predecessor.state_->learning->source.publication()}:
+        std::nullopt;
+    if(!source.follows(previous))return {};
+    const auto& before=predecessor.combat().appearance();const auto& next=combat.appearance();
+    const auto& b=before.material();const auto& n=next.material();
+    // Full immediate-before/after tuples, not a new observation of the old state.
+    // Only book-bank bytes/provenance/revisions may advance; world, DA, role,
+    // actual published resources, auxiliary and text must remain exactly stable.
+    if(b.inventory!=source.before_source().inventory()||b.equipment!=source.before_source().equipment()||
+       n.inventory!=source.after_source().inventory()||n.equipment!=source.after_source().equipment()||
+       !before.owns_initialization(source.initialization())||!next.owns_initialization(source.initialization())||
+       b.lease!=n.lease||b.battle_generation!=n.battle_generation||b.world!=n.world||
+       b.entry_frame!=n.entry_frame||b.entry_logical!=n.entry_logical||b.accepted_tail!=n.accepted_tail||
+       b.config_flag!=n.config_flag||b.appearance!=n.appearance||
+       !NativeEquipmentSnapshot::same_root(b.equipment.root,n.equipment.root)||
+       b.equipment.position!=n.equipment.position||b.equipment.actor_handle!=n.equipment.actor_handle||
+       b.equipment.record.size()!=NativeEquipmentSnapshot::record_bytes||
+       n.equipment.record.size()!=NativeEquipmentSnapshot::record_bytes||
+       !std::equal(b.equipment.record.begin()+NativeEquipmentSnapshot::inventory_bytes,b.equipment.record.end(),
+           n.equipment.record.begin()+NativeEquipmentSnapshot::inventory_bytes)||
+       predecessor.combat().material()!=combat.material())return {};
+    auto result=observe(db,texts,std::move(combat),predecessor.identity_profile());
+    if(!result||result->material()!=predecessor.material()||!source.current(*peer))return {};
+    auto lineage=std::make_shared<const LearningLineage>(LearningLineage{predecessor,source,peer});
+    result->state_->learning=std::move(lineage); // New private graph, never changes predecessor.
+    if(!result->current()||!result->matches_learning_source(source))return {};
+    return result;
 }
 inline std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> OwnedTaiwanPkPlayerEntrySource::observe(
         sqlite3* db,SqliteRoleTextRepository& texts,OwnedTaiwanPkCombatSource::Observation combat,

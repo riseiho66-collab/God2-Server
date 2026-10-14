@@ -484,6 +484,8 @@ void SqliteOwnedPkRoomRepository::validate(const Input& in){
                !m.zero_publication->player().combat().appearance().owns_initialization(m.initialization)||
                m.zero_publication->player().combat().appearance().material().lease!=original.lease))
                 throw DatabaseError("PK zero deity publication requires the same original prepared player graph");
+            if(!(*in.companion_sources)[i].learning_player_matches((*in.entry.owned_players())[i]))
+                throw DatabaseError("PK learned companion requires the same paired prepared player graph");
         }
     }
     if(in.combat_sources){

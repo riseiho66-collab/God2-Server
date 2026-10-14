@@ -5797,6 +5797,36 @@
         "runtime_or_default_activated": false,
         "whole_gameplay_complete": false,
         "product_execution": false
+      },
+      "actual_written_learning_PK_successors": {
+        "round": 403,
+        "document": "docs/research/tw-learning-pk-successor-source-20261014.md",
+        "implementation": [
+          "src/core/Application.cpp",
+          "src/db/SqliteDatabase.cpp",
+          "src/db/SqliteDatabase.h",
+          "src/db/SqliteOwnedPkRoomRepository.cpp",
+          "src/db/SqliteSkillBookLearningRepository.cpp",
+          "src/db/SqliteSkillBookLearningRepository.h",
+          "src/game/OwnedTaiwanPkCompanionSource.h",
+          "src/game/OwnedTaiwanPkPlayerEntrySource.h",
+          "src/handlers/OwnedSkillBookLearningService.cpp",
+          "src/handlers/OwnedSkillBookLearningService.h",
+          "src/handlers/RecoveredOwnedCompanions.cpp",
+          "src/handlers/RecoveredOwnedCompanions.h",
+          "src/protocol/TaiwanNativeDeityRosterPrefix.h"
+        ],
+        "source_connected": true,
+        "actual_own_bound_Written_response_and_complete_before_after_carrier": true,
+        "actual_pair_same_event_Companion_Player_and_PK_peer_Application_consumers": true,
+        "original_sources_immutable_and_no_predecessor_Current_after_debit": true,
+        "actual_history_no_reset_replay_or_synthetic_receipts": true,
+        "closed_SQL_lineage_and_exact_Reserved_player_join": true,
+        "stable_initial_world_pose_INIT_resources_scope_only": true,
+        "full_movement_return_UI_or_native_learning_causality_qualified": false,
+        "runtime_or_default_activated": false,
+        "whole_gameplay_complete": false,
+        "product_execution": false
       }
 },
 {
