@@ -347,7 +347,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
         return a.source==b.source&&a.recipient==b.recipient&&a.source_position==b.source_position&&
             a.recipient_position==b.recipient_position&&a.source_connection==b.source_connection&&
             a.native.connection.lock()==b.native.connection.lock()&&a.qualification==b.qualification&&
-            a.native.common_name_source==b.native.common_name_source&&
+            a.native.common_name_source==b.native.common_name_source&&a.actor_override==b.actor_override&&
             RecoveredRemoteActor::encode_logical(a.native.spawn)==RecoveredRemoteActor::encode_logical(b.native.spawn)&&
             RecoveredRemoteActorMove::encode_logical(a.native.movement)==RecoveredRemoteActorMove::encode_logical(b.native.movement)&&
             RecoveredRemoteActorRemove::encode_logical(a.native.removal)==RecoveredRemoteActorRemove::encode_logical(b.native.removal);
@@ -370,7 +370,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
                actor.source.session==actor.recipient.session||actor.source.character==actor.recipient.character||
                actor.source.actor_handle>0xfff||actor.source_position.area!=actor.recipient_position.area||
                actor.source_position.scene!=actor.recipient_position.scene||
-               !actor.qualification||!actor.qualification->revision||!actor.qualification->current||
+               !actor.actor_override||!actor.qualification||!actor.qualification->revision||!actor.qualification->current||
                !actor.qualification->receiver_text||
                !actor.qualification->receiver_text->source_revision||!actor.qualification->receiver_text->current||
                (actor.qualification->receiver_text->wire_codepage!=950&&actor.qualification->receiver_text->wire_codepage!=936)||
@@ -378,7 +378,11 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
                actor.native.movement.identity()!=actor.source.actor_handle||
                actor.native.spawn.x()!=actor.source_position.x||actor.native.spawn.y()!=actor.source_position.y||
                actor.native.movement.x()!=actor.source_position.x||actor.native.movement.y()!=actor.source_position.y)return {};
-            // Complete supplied actor/resources remains mandatory.
+            // Native EA uses full WORD identity, without the6F12-bit mask.
+            // This path is remote only; its self consumer has different state.
+            if(const auto& replay=actor.actor_override->replay();replay&&
+               (replay->identity()!=actor.source.actor_handle||replay->is_self(actor.recipient.actor_handle)))return {};
+            // Complete supplied actor/resources/override remains mandatory.
             // Text2/3 are replaced only by the factory-owned actual saved source.
             // Optional common stored first-name source is qualified privately
             // only after all nodes and ordered copies have been allocated.
@@ -465,7 +469,8 @@ std::optional<SharedActorVisibility::TaiwanPkReturnRecords> SharedActorVisibilit
         const auto& actor=found->second;const auto receiver=actor.native.connection.lock();
         const auto from=source->endpoints.find(key.first),to=source->endpoints.find(key.second);
         const auto logical=RecoveredRemoteActor::encode_logical(actor.native.spawn);
-        if(actor.source!=supplied.source||actor.recipient!=supplied.recipient||
+        if(!actor.actor_override||actor.actor_override!=supplied.actor_override||
+           actor.source!=supplied.source||actor.recipient!=supplied.recipient||
            from==source->endpoints.end()||to==source->endpoints.end()||
            from->second.lease!=actor.source||to->second.lease!=actor.recipient||
            from->second.session!=actor.source_connection||to->second.session!=receiver||
@@ -478,8 +483,11 @@ std::optional<SharedActorVisibility::TaiwanPkReturnRecords> SharedActorVisibilit
             return returning_source&&returning_recipient;
         }
         emitted.emplace(key,incoming);
+        std::optional<RecoveredTaiwanActorOverride::LogicalRecord> actor_override;
+        if(const auto& replay=actor.actor_override->replay())
+            actor_override=RecoveredTaiwanActorOverride::encode_logical(*replay);
         ordered.push_back(TaiwanPkReturnRecords::Record(actor.source,actor.recipient,
-            actor.source_connection,receiver,bytes));
+            actor.source_connection,receiver,bytes,std::move(actor_override)));
         return true;
     };
     // Each returning recipient keeps its supplied incoming order.
@@ -551,7 +559,11 @@ std::optional<Session::NativePkReturnOutputPlan> SharedActorVisibility::prepare_
         }
         // Filter the canonical ordered records into their actual recipient;
         // never treat an outgoing SOURCE list as a returning receiver batch.
-        group->logical.insert(group->logical.end(),record.logical().begin(),record.logical().end());
+        auto& actor=group->actors.emplace_back(record.logical());
+        // Keep the native6F reset and its optional actual remoteEA together.
+        // No normalized-index inversion, guessed clear or self override.
+        if(const auto& replay=record.override_logical())
+            actor.insert(actor.end(),replay->begin(),replay->end());
     }
     const std::weak_ptr<const void> identity(state);
     auto output=Session::prepare_native_pk_return_output(reservation,source->sessions,

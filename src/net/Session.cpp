@@ -26,6 +26,7 @@
 #include "protocol/RecoveredBattleVitalsBatch.h"
 #include "protocol/RecoveredTaiwanPkTerminalNotification.h"
 #include "protocol/RecoveredRemoteActor.h"
+#include "protocol/RecoveredTaiwanActorOverride.h"
 #include <asio/bind_cancellation_slot.hpp>
 #include <asio/cancellation_signal.hpp>
 #include <spdlog/spdlog.h>
@@ -4444,12 +4445,12 @@ Session::NativePkReturnOutputPlan Session::prepare_native_pk_return_output(
         throw std::invalid_argument("Return output requires exact private paired Records source");
     std::vector<NativePkReturnOutputPlan::Data::Group> owned;owned.reserve(groups.size());
     constexpr auto record_size=RecoveredRemoteActor::logical_size;
-    constexpr auto records_per_frame=RecoveredWorldFrame::max_logical_size/record_size;
-    static_assert(records_per_frame>0);
+    constexpr auto override_size=RecoveredTaiwanActorOverride::logical_size;
+    static_assert(record_size+override_size<=RecoveredWorldFrame::max_logical_size);
     for(std::size_t index=0;index<groups.size();++index){
         auto& supplied=groups[index];const auto session=supplied.recipient;
         if(!session||!session->same_native_pk_game_executor(*sessions[0])||
-           supplied.logical.size()%record_size||(!supplied.logical.size()&&index>=2))
+           (supplied.actors.empty()&&index>=2))
             throw std::invalid_argument("Return output recipient or record boundaries");
         for(const auto& prior:owned)if(prior.recipient==session)throw std::invalid_argument("Duplicate return output recipient");
         std::optional<NormalWorldOutputHandle> normal;
@@ -4463,14 +4464,30 @@ Session::NativePkReturnOutputPlan Session::prepare_native_pk_return_output(
             if(!normal)throw std::invalid_argument("Return survivor private output epoch");
         }
         NativePkReturnOutputPlan::Data::Group recipient{session,std::move(normal),{}};
-        recipient.frames.reserve((supplied.logical.size()/record_size+records_per_frame-1)/records_per_frame);
-        for(std::size_t at=0;at<supplied.logical.size();at+=record_size*records_per_frame){
-            const auto length=std::min(record_size*records_per_frame,supplied.logical.size()-at);
-            const auto logical=std::span<const std::uint8_t>(supplied.logical).subspan(at,length);
-            for(std::size_t offset=0;offset<logical.size();offset+=record_size)
-                if(logical[offset]!=0x6f)throw std::invalid_argument("Return output full6F source only");
-            recipient.frames.push_back(std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(logical)));
+        // CUSTOM-0133 known native records, deterministic replay composition.
+        // Each supplied actor stays whole across outer0xA00 frame boundaries.
+        // All allocations/encoding precede source observers and IO installation.
+        std::vector<std::uint8_t> frame;frame.reserve(RecoveredWorldFrame::max_logical_size);
+        const auto flush=[&]{
+            if(frame.empty())return;
+            recipient.frames.push_back(std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(frame)));
+            frame.clear();
+        };
+        for(const auto& actor:supplied.actors){
+            if(actor.size()!=record_size&&actor.size()!=record_size+override_size)
+                throw std::invalid_argument("Return output whole6F/EA boundaries");
+            const auto logical=std::span<const std::uint8_t>(actor);
+            const auto spawn=RecoveredRemoteActor::parse_logical(logical.first(record_size));
+            if(!spawn)throw std::invalid_argument("Return output full6F source only");
+            if(actor.size()!=record_size){
+                const auto replay=RecoveredTaiwanActorOverride::parse_logical(logical.subspan(record_size));
+                if(!replay||replay->identity()!=spawn->identity())
+                    throw std::invalid_argument("Return output EA full identity mismatch");
+            }
+            if(frame.size()>RecoveredWorldFrame::max_logical_size-actor.size())flush();
+            frame.insert(frame.end(),actor.begin(),actor.end());
         }
+        flush();
         owned.push_back(std::move(recipient));
     }
     const auto data=std::make_shared<NativePkReturnOutputPlan::Data>(reservation,sessions,preparations,

@@ -5984,3 +5984,20 @@ return/skills/numerics/nativeacceptance OPEN;TW100firstACTIVE/commonCNweb/saves/
 fonts/text/numerics/PHASE1 retained.
 
 Details: docs/research/tw-native-return-actor-field-source-20261014.md
+
+## Round405 - Actual return actor override output source (2026-10-14)
+
+Round405 connects original5BEA into the selected actual pairedreturn output.
+Everyactor needs explicit immutable currentabsence ororiginalrawEA witness,
+fullqualification/resources/wholeSceneCurrent andsameproofmutualdedup. Native
+full6F resetsremote258/259; actualEA replayedAFTERits6F withoutnormalizedindex
+inversion/fullWORDmask/selfbranchguess. OwningRecords andactualSession pack
+whole81/86Bunits under0xA00; trueempty stayszeroFrames. Existingterminalledger/
+heldcohort/consume/publication/deadlines untouched. FourexistingCPP/V42pins109;
+CUSTOM0133 partialsource/defaultoff, fullActor/resource/receiver/audience maker
+stillOPEN. TW156/252/parser77=50/11/16/pending12/format22/unclassified104/V27,
+fullroutesadded0/percentnull. No newprojectPY/Lua/CMake/clientbinary, no product
+execution. TW100firstACTIVE/commonCNweb/skills453繁體/clientformulas/saves/fonts/
+text/numerics/PHASE1 retained.
+
+Details: docs/research/tw-return-actor-override-publication-20261014.md

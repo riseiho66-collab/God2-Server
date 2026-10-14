@@ -734,7 +734,9 @@ private:
     friend class cn::SharedActorVisibility;
     struct NativePkReturnOutputGroup {
         std::shared_ptr<Session> recipient;
-        std::vector<std::uint8_t> logical;
+        // Private Visibility-issued indivisible81B6F or81B6F+5BEA units.
+        // Deliberate empty groups still create no fabricated frame.
+        std::vector<std::vector<std::uint8_t>> actors;
     };
     // Only the genuine Visibility Records builder may supply these groups.
     static NativePkReturnOutputPlan prepare_native_pk_return_output(const NativePkReturnReservation&,

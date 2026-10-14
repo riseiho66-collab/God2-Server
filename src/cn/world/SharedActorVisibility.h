@@ -6,6 +6,7 @@
 #include "game/SharedWorldPresence.h"
 #include "net/Session.h"
 #include "protocol/RecoveredRemoteActor.h"
+#include "protocol/RecoveredTaiwanActorOverride.h"
 #include "protocol/RecoveredTaiwanPlayerAppearanceUpdate.h"
 #include <functional>
 #include <array>
@@ -303,12 +304,30 @@ public:
         // mutual-edge inputs. Legacy native.raw_name_state is not authority.
         std::shared_ptr<const TaiwanRawNameState> receiver_text;
     };
+    // CUSTOM-0133 explicit current remote override after full6F recreation.
+    // Native4FC214/4FC222 reset type/index to0. Explicit absence therefore
+    // needs no EA; a supplied exact original EA is replayed AFTER that6F.
+    // This immutable source is not reconstructed from a normalized index,
+    // an old visibility model, or an assumed missing-packet default.
+    class TaiwanReturnActorOverride {
+    public:
+        explicit TaiwanReturnActorOverride(std::optional<RecoveredTaiwanActorOverride::Record> actual_replay)
+            :replay_(std::move(actual_replay)) {}
+        const std::optional<RecoveredTaiwanActorOverride::Record>& replay()const noexcept {return replay_;}
+    private:
+        const std::optional<RecoveredTaiwanActorOverride::Record> replay_;
+    };
     struct TaiwanReturnActor {
         Lease source,recipient;
         RecoveredPosition source_position,recipient_position;
         std::shared_ptr<Session> source_connection;
         Taiwan native; // Exact receiving connection plus complete6F/5E/73.
         std::shared_ptr<const TaiwanReturnQualification> qualification;
+        // Mandatory explicit current absence or original raw EA witness.
+        // qualification.current and whole scene.current own this exact state,
+        // including marker resources, at Prepare/Retained/Consumed. Duplicate
+        // mutual copies must share THIS witness, not just equal bytes.
+        std::shared_ptr<const TaiwanReturnActorOverride> actor_override;
     };
     enum class TaiwanReturnCheck {Prepare,Retained,Consumed};
     struct TaiwanReturnScene {
@@ -365,15 +384,21 @@ public:
             const std::shared_ptr<Session>& source_session() const noexcept {return source_session_;}
             const std::shared_ptr<Session>& recipient_session() const noexcept {return recipient_session_;}
             const std::vector<std::uint8_t>& logical() const noexcept {return logical_;}
+            const std::optional<RecoveredTaiwanActorOverride::LogicalRecord>& override_logical()const noexcept {
+                return override_logical_;
+            }
         private:
             friend class SharedActorVisibility;
             Record(Lease source,Lease recipient,std::shared_ptr<Session> from,
-                std::shared_ptr<Session> to,std::vector<std::uint8_t> logical)
+                std::shared_ptr<Session> to,std::vector<std::uint8_t> logical,
+                std::optional<RecoveredTaiwanActorOverride::LogicalRecord> actor_override)
                 :source_(std::move(source)),recipient_(std::move(recipient)),
-                 source_session_(std::move(from)),recipient_session_(std::move(to)),logical_(std::move(logical)){}
+                 source_session_(std::move(from)),recipient_session_(std::move(to)),logical_(std::move(logical)),
+                 override_logical_(std::move(actor_override)){}
             Lease source_,recipient_;
             std::shared_ptr<Session> source_session_,recipient_session_;
             std::vector<std::uint8_t> logical_;
+            std::optional<RecoveredTaiwanActorOverride::LogicalRecord> override_logical_;
         };
         TaiwanPkReturnRecords(const TaiwanPkReturnRecords&)=default;
         TaiwanPkReturnRecords& operator=(const TaiwanPkReturnRecords&)=default;
