@@ -48,6 +48,10 @@ public:
     // legacy pets, and only genuine activation records. No second S30 replay.
     Restoration restore_with_source(std::uint64_t account,std::uint64_t character,
         SqliteSkillBookLearningRepository&);
+    // CUSTOM-0148 exclusive Application initial deity publisher. Same full
+    // saved source and genuine activation lineage; no pets or player records.
+    Restoration restore_deities_with_source(std::uint64_t account,std::uint64_t character,
+        SqliteSkillBookLearningRepository&);
     bool restoration_current(const Restoration&);
     // CUSTOM-0148 explicit actual readset + genuinely retained activation source.
     // Deity records only; legacy account/character restoration and pets unchanged.

@@ -54,6 +54,23 @@ RecoveredOwnedCompanions::Restoration RecoveredOwnedCompanions::restore_with_sou
         throw DatabaseError("Skill activation restoration source changed");
     return Restoration(std::move(roster),std::move(batches),std::move(source),learning);
 }
+RecoveredOwnedCompanions::Restoration RecoveredOwnedCompanions::restore_deities_with_source(
+        std::uint64_t account,std::uint64_t character,SqliteSkillBookLearningRepository& learning) {
+    if(!learning.owns_companions(repository_))throw DatabaseError("Skill learning companion repository mismatch");
+    auto source=learning.restore(account,character);
+    auto roster=source.roster();
+    std::vector<RecoveredDeityActivation::Record> activations;activations.reserve(source.activations().size());
+    for(const auto& event:source.activations()) {
+        const auto raw=RecoveredDeityActivation::encode(event.subject,event.kind,event.definition_id);
+        const auto activation=RecoveredDeityActivation::parse(raw);
+        if(!activation)throw DatabaseError("Invalid saved skill activation record");
+        activations.push_back(*activation);
+    }
+    auto batches=RecoveredOwnedCompanions::restore(roster,activations);
+    if(!batches)throw DatabaseError("Skill activation restoration has no exact saved identity");
+    if(!learning.restoration_current(source))throw DatabaseError("Skill activation restoration source changed");
+    return Restoration(std::move(roster),std::move(*batches),std::move(source),learning);
+}
 bool RecoveredOwnedCompanions::restoration_current(const Restoration& restoration) {
     if(restoration.learning_source()) {
         // The actual learning source includes the SAME full roster, inventory,

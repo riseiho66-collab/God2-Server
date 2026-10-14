@@ -24,6 +24,7 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     std::shared_ptr<Visibility> visibility;
     Entered::Source source;
     TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter;
+    Entered::InitialDeityPublisher deity_publisher=Entered::InitialDeityPublisher::External;
     const std::thread::id thread=std::this_thread::get_id();
     std::map<std::uint64_t,std::shared_ptr<Pending>> pending;
     bool supplying=false,reentered=false;
@@ -154,6 +155,13 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
             if(material.decision==Entered::ReplyDecision::CompleteNativeAggregate) {
                 native_records=RecoveredTaiwanServerRecords::read(material.logical);
                 if(!native_records) {fail(state);return;}
+                // Inspect ALL actual initial boundaries before any queue. Never
+                // drop or rewrite an overlapping native deity publication.
+                if(deity_publisher==Entered::InitialDeityPublisher::ApplicationOwned &&
+                   std::any_of(native_records->begin(),native_records->end(),[](const auto& record) {
+                       return record.opcode==0x30 || record.opcode==0x31 ||
+                              record.opcode==0x34 || record.opcode==0x35;
+                   })) {fail(state);return;}
             }
             state->incoming=visibility->prepare_initial_taiwan_recipient(lease,session.shared_from_this(),std::move(material.incoming));
             if(!state->incoming || !current(state,false,Entered::Check::AfterSupply)) {fail(state);return;}
@@ -210,11 +218,13 @@ SharedTaiwanWorldEntered::Native::Native(ReplyDecision selected,std::vector<std:
 }
 SharedTaiwanWorldLifecycle::AsyncOwner SharedTaiwanWorldEntered::create(
     std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<Visibility> visibility,Source source,
-    TaiwanWorldEntryIdentity identity) {
-    if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !source || !visibility->owns_presence(presence))
+    TaiwanWorldEntryIdentity identity,InitialDeityPublisher deity_publisher) {
+    if((deity_publisher!=InitialDeityPublisher::External && deity_publisher!=InitialDeityPublisher::ApplicationOwned) ||
+       !valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !source || !visibility->owns_presence(presence))
         throw std::invalid_argument("TW entered requires exact common owners and actual native scene supplier");
     auto state=std::make_shared<SceneOwner>();state->presence=std::move(presence);
     state->visibility=std::move(visibility);state->source=std::move(source);state->identity=identity;
+    state->deity_publisher=deity_publisher;
     return {
         [state](Session& session,const Lease& lease,const RecoveredWorldEntryView& entry,
                 SharedTaiwanWorldLifecycle::ReadyCompletion done) {state->enter(session,lease,entry,std::move(done));},

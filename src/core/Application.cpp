@@ -34,6 +34,7 @@
 #include "handlers/RecoveredPlayerPresence.h"
 #include "handlers/DiagnosticSupplyService.h"
 #include "handlers/OwnedSkillBookLearningService.h"
+#include "protocol/RecoveredTaiwanServerRecords.h"
 #include "handlers/InventoryMoveService.h"
 #include "game/SharedTaiwanOwnedBagMoveSource.h"
 #include "handlers/InventoryDiscardService.h"
@@ -731,6 +732,8 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             SharedTaiwanWorldRecordSource::Binding taiwan_records;
             SharedTaiwanNativeCharacterListSource::Binding taiwan_native_characters;
             if(world_plan) {
+                if(config.owned_skillbook_learning_enabled && !world_plan->supports_app_owned_initial_deities)
+                    throw std::invalid_argument("Owned skill learning requires the actual exclusive initial deity publisher");
                 common_world=std::make_shared<SharedWorldHost>(database.recovered_characters());
                 if(deity_selection_publication)
                     owned_deity_skill_source=SharedTaiwanOwnedDeitySkillSource::create(
@@ -771,7 +774,8 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     database.native_map_catalog(),game.get_executor(),common_world,
                     &database.native_skill_catalog(),entry_snapshots,summary_accounts,summary_snapshots,summary_writer,entry_writer,
                     &database.native_enemy_display_catalog(),equipment_snapshots,equipment_writer,owned_inventory,owned_inventory_writer,
-                    &database.companions(),&owned_companions,owned_deity_skill_source};
+                    &database.companions(),&owned_companions,owned_deity_skill_source,
+                    config.owned_skillbook_learning_enabled};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
@@ -943,8 +947,46 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 // catalog rows;
                 // never a remote afterstate, battle list, actor or grant.
                 std::optional<TaiwanNativeDeityRosterPrefix> expected_receiving_prefix;
+                // CUSTOM-0148 CommonWorld uses one actual complete ORIGINAL
+                // response. Legacy per-batch push receipts remain independent.
+                std::shared_ptr<const Session::WorldResponseWrite> whole_response;
+                std::shared_ptr<const std::vector<std::uint8_t>> whole_response_wire;
+                std::size_t whole_response_batch_count=0;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
+            // CUSTOM-0148: first physical CommonWorld entry only. A later
+            // private INIT/battle successor never renews this one-shot sender.
+            struct CommonInitialDeityPublisher {
+                struct Attempt {
+                    const std::shared_ptr<OwnedCompanionRestorationSource> source;
+                    const SharedWorldPresence::Lease lease;
+                    Attempt(std::shared_ptr<OwnedCompanionRestorationSource> value,SharedWorldPresence::Lease actual)
+                        :source(std::move(value)),lease(std::move(actual)) {}
+                };
+                const std::thread::id thread=std::this_thread::get_id();
+                const std::size_t capacity;
+                std::map<std::uint64_t,std::shared_ptr<Attempt>> attempts;
+                bool live=true,busy=false,reentered=false;
+                explicit CommonInitialDeityPublisher(std::size_t bound):capacity(bound) {
+                    if(!bound)throw std::invalid_argument("Initial deity publisher requires actual session capacity");
+                }
+                void preflight() {
+                    if(thread!=std::this_thread::get_id())throw std::logic_error("Initial deity publisher game owner mismatch");
+                    if(busy){reentered=true;throw std::logic_error("Initial deity publisher reentry rejected");}
+                    if(!live)throw std::logic_error("Initial deity publisher stopped");
+                }
+                void release(Session& session) {
+                    if(thread!=std::this_thread::get_id())throw std::logic_error("Initial deity release game owner mismatch");
+                    if(busy)reentered=true;
+                    const auto at=attempts.find(session.id());
+                    if(at!=attempts.end() && at->second->source->session.lock().get()==&session)attempts.erase(at);
+                }
+                void stop() {
+                    if(thread!=std::this_thread::get_id())throw std::logic_error("Initial deity stop game owner mismatch");
+                    live=false;if(busy)reentered=true;attempts.clear();
+                }
+            };
+            std::shared_ptr<CommonInitialDeityPublisher> common_initial_deities;
             // CUSTOM-0096: source353 actual original-response custody plus peer attempt chain.
             // Original response Queued means its validated final wire entered the FIFO.
             // Pending endpoints remain provisional, never native adoption or socket Written.
@@ -1039,13 +1081,18 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 const auto at=owned_companion_restoration_sources.find(session.id());
                 if(at==owned_companion_restoration_sources.end())return;
                 const auto source=at->second;
+                const auto whole=source->whole_response;
+                const auto whole_wire=source->whole_response_wire;
+                const auto whole_material=source->material;
                 const auto local=[&] {
                     const auto found=owned_companion_restoration_sources.find(session.id());
                     return found!=owned_companion_restoration_sources.end() && found->second==source &&
                         source->session.lock().get()==&session && source->material && !session.closing() &&
                         source->account==session.account_id && source->character==session.character_id &&
                         source->phase_at_restore==session.state() && session.recovered_world_ready() &&
-                        source->battle_generation_at_restore==session.battle_generation();
+                        source->battle_generation_at_restore==session.battle_generation() &&
+                        source->whole_response==whole && source->whole_response_wire==whole_wire &&
+                        (!whole || source->material==whole_material);
                 };
                 source->last_observed_write=CompanionWriteObservation::Pending;
                 source->expected_receiving_prefix.reset();
@@ -1061,10 +1108,20 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 }
                 if(!source->all_submission_calls_returned)return;
                 const auto& batches=source->material->batches();
-                if(source->submission_calls_completed!=batches.size() || source->write_observations.size()!=batches.size()) {
+                if(whole) {
+                    if(!whole_wire || whole->wire()!=*whole_wire || source->whole_response_batch_count!=batches.size() ||
+                       source->submission_calls_completed || !source->write_observations.empty() ||
+                       !session.world_response_write_current_on_game(*whole)) {
+                        source->last_observed_write=CompanionWriteObservation::Stale;return;
+                    }
+                    if(whole->status()==Session::WorldResponseWriteStatus::Failed) {
+                        source->last_observed_write=CompanionWriteObservation::Failed;return;
+                    }
+                    if(whole->status()!=Session::WorldResponseWriteStatus::Written)return;
+                }else if(source->submission_calls_completed!=batches.size() || source->write_observations.size()!=batches.size()) {
                     source->last_observed_write=CompanionWriteObservation::Failed;return;
                 }
-                for(std::size_t i=0;i<batches.size();++i) {
+                if(!whole)for(std::size_t i=0;i<batches.size();++i) {
                     const auto& observation=source->write_observations[i];
                     if(observation.logical()!=batches[i] || !session.world_records_write_current(observation)) {
                         source->last_observed_write=CompanionWriteObservation::Stale;return;
@@ -1077,8 +1134,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                 }
                 // No network callback retains this source/repository. This is
                 // the actual next world-records game callback, AFTER all exact
-                // frames wrote. Pet bytes wrote too; only deity state is read
-                // here, and no source freshness during the write is claimed.
+                // frames wrote. Legacy batches also include pets; the explicit
+                // CommonWorld whole-response source covers deities only. No
+                // source freshness during the write is claimed here.
                 bool saved_current=false;
                 try {saved_current=owned_companions.restoration_current(*source->material);}
                 catch(...) {
@@ -2243,6 +2301,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         std::optional<TaiwanNativeDeityRosterPrefix>{};
                     const auto receipts=source?source->write_observations:
                         std::vector<Session::WorldRecordsWrite>{};
+                    const auto whole=source?source->whole_response:std::shared_ptr<const Session::WorldResponseWrite>{};
+                    const auto whole_wire=source?source->whole_response_wire:std::shared_ptr<const std::vector<std::uint8_t>>{};
+                    const auto whole_batches=source?source->whole_response_batch_count:std::size_t{};
                     const auto submitted=source?source->submission_calls_completed:std::size_t{};
                     const bool all_submitted=source && source->all_submission_calls_returned;
                     if(initialization && !peer->normal_world_initialization_current_on_game(*initialization))return {};
@@ -2269,7 +2330,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                            source->phase_at_restore!=phase || source->battle_generation_at_restore!=battle ||
                            source->all_submission_calls_returned!=all_submitted ||
                            source->submission_calls_completed!=submitted || !source->normal_initialization ||
-                           !source->expected_receiving_prefix || source->write_observations.size()!=receipts.size())return false;
+                           !source->expected_receiving_prefix || source->write_observations.size()!=receipts.size() ||
+                           source->whole_response!=whole || source->whole_response_wire!=whole_wire ||
+                           source->whole_response_batch_count!=whole_batches)return false;
                         const auto& now=*source->expected_receiving_prefix;
                         if(now.rows()!=prefix->rows() || now.roster_count()!=prefix->roster_count() ||
                            now.selected_row()!=prefix->selected_row() || now.catalog_records()!=prefix->catalog_records() ||
@@ -2286,6 +2349,12 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         if(!source_local() || !peer->normal_world_initialization_current_on_game(*initialization) ||
                            !initialization->entry_written())return false;
                         const auto& batches=material->batches();
+                        if(whole) {
+                            return whole_wire && whole->wire()==*whole_wire && whole_batches==batches.size() &&
+                                !submitted && receipts.empty() &&
+                                whole->status()==Session::WorldResponseWriteStatus::Written &&
+                                peer->world_response_write_current_on_game(*whole) && source_local();
+                        }
                         if(submitted!=batches.size() || receipts.size()!=batches.size())return false;
                         for(std::size_t i=0;i<receipts.size();++i)
                             if(receipts[i].logical()!=batches[i] ||
@@ -6823,6 +6892,137 @@ if(guild_officer_runtime && player_guild(session) &&
                         }else game_handlers.movement=common_world_lifetime.vault->movement_facade();
                     }
                 }
+                if(common_world && config.owned_skillbook_learning_enabled) {
+                    if(!game_handlers.world_records || !world_plan || !world_plan->supports_app_owned_initial_deities)
+                        throw std::invalid_argument("Initial deity publisher requires the actual exclusive native mixed host");
+                    common_initial_deities=std::make_shared<CommonInitialDeityPublisher>(config.max_sessions);
+                    const auto host=common_initial_deities;
+                    const auto original=game_handlers.world_records;
+                    const auto presence=common_world->presence();
+                    game_handlers.world_records=[&,host,original,presence](Session& session,
+                            std::span<const RecoveredWorldRecords::Record> records)
+                            ->std::optional<std::vector<std::uint8_t>> {
+                        host->preflight();
+                        const bool idle=!records.empty() && std::all_of(records.begin(),records.end(),[](const auto& record) {
+                            return std::holds_alternative<RecoveredWorldRecords::Tick>(record);
+                        });
+                        if(!idle)return original(session,records);
+                        host->busy=true;host->reentered=false;
+                        struct End {bool& busy;~End(){busy=false;}} end{host->busy};
+                        auto response=original(session,records); // Actual completed vault/mixed dispatcher, once.
+                        if(host->reentered || !host->live)throw std::logic_error("Initial deity delegate retired its sender");
+                        if(!response || session.state()!=SessionState::InWorld || session.battle_generation()!=0)return response;
+                        if(const auto at=host->attempts.find(session.id());at!=host->attempts.end()) {
+                            if(at->second->source->session.lock().get()!=&session)
+                                throw std::logic_error("Initial deity sender Session incarnation conflict");
+                            return response; // Pending/Written/stale all remain one-shot; no replay.
+                        }
+                        // Existing Others returns its native output; it must not
+                        // side-submit that output. Its Current remains a pure observer.
+                        // Check every returned frame before competing publication.
+                        for(std::size_t at=0;at<response->size();) {
+                            if(response->size()-at<2)throw std::logic_error("Initial deity delegate truncated native frame");
+                            const auto size=std::size_t((*response)[at])+256u*(*response)[at+1];
+                            if(size<4 || size>response->size()-at)throw std::logic_error("Initial deity delegate frame bounds invalid");
+                            const auto logical=RecoveredWorldFrame::decode(std::span<const std::uint8_t>(*response).subspan(at,size));
+                            const auto decoded=logical?RecoveredTaiwanServerRecords::read(*logical):std::nullopt;
+                            if(!decoded)throw std::logic_error("Initial deity delegate lacks complete native record boundaries");
+                            for(const auto& record:*decoded)
+                                if(record.opcode==0x30 || record.opcode==0x31 || record.opcode==0x34 || record.opcode==0x35)
+                                    throw std::logic_error("Initial deity delegate conflicts with the exclusive saved sender");
+                            at+=size;
+                        }
+                        const auto actual=session.weak_from_this().lock();
+                        const auto init=session.normal_world_initialization();
+                        const auto account=session.account_id,character=session.character_id;
+                        const auto base=[&] {
+                            return host->live && !host->reentered && actual.get()==&session && !session.closing() &&
+                                session.account_id==account && session.character_id==character &&
+                                session.state()==SessionState::InWorld && session.battle_generation()==0 &&
+                                session.recovered_world_ready() && init && init->entry_written() &&
+                                session.normal_world_initialization_current_on_game(*init);
+                        };
+                        if(!base())return response;
+                        const auto lease=presence->ready_lease(session.id(),account,character);
+                        if(!base())throw std::logic_error("Initial deity ready observer changed its original epoch");
+                        if(!lease)return response;
+                        const auto& entry=init->entry_logical();
+                        if(entry.size()!=37 || entry[0]!=0x2a ||
+                           ((std::uint16_t(entry[1])|(std::uint16_t(entry[2])<<8))&0x3fff)!=lease->actor_handle ||
+                           !presence->retained_ready_current(*lease) ||
+                           !session.common_world_delivery_current(account,character,lease->generation) ||
+                           session.common_world_entry_current(account,character,lease->generation))
+                            throw std::logic_error("Initial deity source lacks its actual ready actor and delivery");
+                        if(host->attempts.size()>=host->capacity)throw std::logic_error("Initial deity sender capacity exhausted");
+                        if(owned_companion_restoration_sources.contains(session.id()))
+                            throw std::logic_error("Initial deity source already has a competing restoration");
+                        auto lineage=std::make_shared<OwnedCompanionRestorationSource>(OwnedCompanionRestorationSource{
+                            actual,account,character,0,SessionState::InWorld,{}});
+                        lineage->normal_initialization=*init;
+                        auto attempt=std::make_shared<CommonInitialDeityPublisher::Attempt>(lineage,*lease);
+                        host->attempts.emplace(session.id(),attempt); // Private one-shot installed BEFORE saved observers.
+                        const auto local=[&] {
+                            const auto at=host->attempts.find(session.id());
+                            return base() && at!=host->attempts.end() && at->second==attempt &&
+                                lineage->session.lock().get()==&session &&
+                                presence->retained_ready_current(attempt->lease) &&
+                                session.common_world_delivery_current(account,character,attempt->lease.generation) &&
+                                !session.common_world_entry_current(account,character,attempt->lease.generation);
+                        };
+                        if(!local())throw std::logic_error("Initial deity sender retired before reading saved source");
+                        auto material=std::make_shared<const RecoveredOwnedCompanions::Restoration>(
+                            owned_companions.restore_deities_with_source(account,character,database.skill_book_learning()));
+                        lineage->material=material;
+                        if(!local() || !material->learning_source())
+                            throw std::logic_error("Initial deity restoration lost its actual common source");
+                        const auto& equipment=material->learning_source()->equipment();
+                        if(equipment.actor_handle!=attempt->lease.actor_handle)
+                            throw std::logic_error("Initial deity saved witness actor mismatch");
+                        const auto qualified=[&] {
+                            if(!local())return false;
+                            const auto current=presence->ready_lease(session.id(),account,character);
+                            const auto position=presence->saved_position(attempt->lease);
+                            return current && *current==attempt->lease && position && *position==equipment.position && local();
+                        };
+                        if(!qualified() || !owned_companions.restoration_current(*material) || !qualified() ||
+                           !owned_companions.restoration_current(*material) || !local())
+                            throw std::logic_error("Initial deity source changed before submission");
+                        owned_companion_restoration_sources.emplace(session.id(),lineage);
+                        const auto issued=[&] {
+                            const auto at=owned_companion_restoration_sources.find(session.id());
+                            return local() && at!=owned_companion_restoration_sources.end() && at->second==lineage &&
+                                lineage->material==material;
+                        };
+                        for(const auto& batch:material->batches()) {
+                            if(!issued())throw std::logic_error("Initial deity sender retired during submission");
+                            auto frame=RecoveredWorldFrame::encode(batch);
+                            if(frame.size()>response->max_size()-response->size())
+                                throw std::length_error("Initial deity aggregate exceeds native output storage");
+                            response->insert(response->end(),frame.begin(),frame.end());
+                        }
+                        if(!material->batches().empty()) {
+                            // Original Tick frames remain BEFORE the new deity
+                            // suffix. One physical callback response, no push
+                            // bypass, fake per-frame observation or dummy FIFO.
+                            lineage->whole_response_wire=std::make_shared<const std::vector<std::uint8_t>>(*response);
+                            if(!issued())throw std::logic_error("Initial deity sender retired before whole capture");
+                            const auto write=session.observe_world_response(*response);
+                            session.hold_world_input_until_response_written(write);
+                            lineage->whole_response=std::make_shared<const Session::WorldResponseWrite>(write);
+                            lineage->whole_response_batch_count=material->batches().size();
+                        }
+                        lineage->all_submission_calls_returned=true;
+                        if(!issued())throw std::logic_error("Initial deity sender retired after submitted prefix");
+                        return response; // Original prefix and owned deity suffix in the SAME actual FIFO response.
+                    };
+                    const auto previous=on_disconnect;
+                    on_disconnect=[host,previous](std::shared_ptr<Session> session) {
+                        std::exception_ptr failure;
+                        try{if(session)host->release(*session);}catch(...){failure=std::current_exception();}
+                        try{if(previous)previous(std::move(session));}catch(...){if(!failure)failure=std::current_exception();}
+                        if(failure)std::rethrow_exception(failure);
+                    };
+                }
                 // Install AFTER the final legacy/common handler selection. This
                 // wrapper owns only C89/8A; contiguous unrelated runs retain the
                 // existing dispatcher and its already-framed reply order.
@@ -7913,6 +8113,15 @@ if(guild_officer_runtime && player_guild(session) &&
                            (source->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityPrefixCurrent &&
                             source->last_observed_write!=CompanionWriteObservation::NoRecords))return {};
                         const auto& batches=source->material->batches();
+                        if(source->whole_response) {
+                            const auto& write=*source->whole_response;
+                            if(!source->whole_response_wire || write.wire()!=*source->whole_response_wire ||
+                               source->whole_response_batch_count!=batches.size() || source->submission_calls_completed ||
+                               !source->write_observations.empty() ||
+                               write.status()!=Session::WorldResponseWriteStatus::Written ||
+                               !session.world_response_write_current_on_game(write))return {};
+                            return source->material;
+                        }
                         if(source->submission_calls_completed!=batches.size() ||
                            source->write_observations.size()!=batches.size())return {};
                         for(std::size_t i=0;i<batches.size();++i) {
@@ -8153,6 +8362,7 @@ if(guild_officer_runtime && player_guild(session) &&
                 guild_delivery_lifetime->store(false);
                 stop_blacklist_outputs();
                 stopping=true;
+                if(common_initial_deities)common_initial_deities->stop();
                 if(skill_book_learning_service)skill_book_learning_service->stop();
                 if(whole_bag_moves)whole_bag_moves->stop_dispatch();
                 spdlog::info("Stopping server and draining sessions");

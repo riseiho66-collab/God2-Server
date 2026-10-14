@@ -9,6 +9,8 @@ namespace god2 {
 class SharedTaiwanWorldEntered {
 public:
     using Lease=SharedWorldPresence::Lease;
+    // Exclusive ownership of initial deity records only; no player/pet policy.
+    enum class InitialDeityPublisher {External,ApplicationOwned};
     struct Scope {
         Lease lease;
         RecoveredWorldEntryView entry;
@@ -58,6 +60,7 @@ public:
     // Providers must not retain Session/Scope references, yield or pump events.
     static SharedTaiwanWorldLifecycle::AsyncOwner create(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,Source,
-        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter);
+        TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter,
+        InitialDeityPublisher deity_publisher=InitialDeityPublisher::External);
 };
 }

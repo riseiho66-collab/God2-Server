@@ -66,6 +66,9 @@ struct SharedWorldHostPlan {
         // Null retains saved-observation-only plans; no synthetic publisher.
         RecoveredOwnedCompanions* owned_companions=nullptr;
         std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> owned_deity_skills={};
+        // CUSTOM-0148: Application exclusively publishes initial30/31/34/35.
+        // Default native scene ownership of all initial records is unchanged.
+        bool app_owned_initial_deities=false;
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in
@@ -117,5 +120,7 @@ struct SharedWorldHostPlan {
     TaiwanWorldEntryIdentity taiwan_entry_identity=TaiwanWorldEntryIdentity::SelectedCharacter;
     // Explicit constructed mixed plan only; no ordinary CLI/default activation.
     bool owned_deity_selection_publication=false;
+    // Advertised only by a factory enforcing the exact initial deity policy.
+    bool supports_app_owned_initial_deities=false;
 };
 }

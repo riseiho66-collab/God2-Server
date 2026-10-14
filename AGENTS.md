@@ -503,3 +503,23 @@ or TW100. Source19 pins69 (42old exact,5old updated,22added);canonical502.
 Parser77/50partial/11control/16unconnected,frontier26 21/105 unchanged;
 whole%null. No newprojectPY; PHASE1 no builds/tests/runtime/SQL/migrate/activate/
 deploy and fullTW-first/commoncore/frozen scope preserved.
+
+Round382 extends CUSTOM-0148 to actual CommonWorld initial deity publication.
+Same actual Context flag + realnativefactory capability enforces explicit
+ApplicationOwned30/31/34/35 policy at FULL initial native aggregate boundaries
+beforequeue; false/External defaults unchanged. Root AFTERcompleted vault/mixed
+dispatcher firstpureTick owns original Session/WrittenINIT/fullLease/actor/
+delivery and battle0 one-shot, installs boundedattempt before saved observers.
+Deity-only helper retains same complete learning source/legitimate35; no player/
+pet source takeover. Original returnedwire prefix + deity suffix form ONE actual
+wholeWWR/inputhold; old perpushreceipts separate, three real consumers require
+exact immutable wholewire/Written/current/logicalcoverage. No directpush/dummy/
+fakeframe observation/replay or oldplayerPKflag grant. Finalfullsource Current
+follows virtualpresence then purelocal. Initialstage1 ordering defect corrected
+before execution/publication; immutablecandidate retained. Native reset remains
+conditional, PKreturn samephysicalEntry/Data-only preparation NOT anewreset.
+Source20 pins72/canonical508, CPP7changed/Lua0/newPY0/newnative0/fullroute0.
+Parser77/50partial/11control/16unconnected,pending12/frontier26 21/105 unchanged;
+wholedenominator/%null. Fullbattle-return/otherwriterlineage/C26/actions/CN/web/
+64bit/commoncore/saves/frozen scope remains; PHASE1 no builds/tests/runtime/
+native/VM/codec/gameDBSQL/migration/activation/deployment.

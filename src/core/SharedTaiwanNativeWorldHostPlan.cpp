@@ -30,6 +30,7 @@ struct Owner {
     SqliteCompanionRepository* companions;
     RecoveredOwnedCompanions* owned_companions;
     std::shared_ptr<SharedTaiwanOwnedDeitySkillSource> owned_deity_skills;
+    const bool app_owned_initial_deities;
     asio::any_io_executor game;
     std::shared_ptr<SharedWorldHost> common;
     const std::thread::id thread=std::this_thread::get_id();
@@ -56,6 +57,7 @@ struct Owner {
          native_equipment_snapshot_writer(context.native_equipment_snapshot_writer),
          owned_inventory(context.owned_inventory),owned_inventory_writer(context.owned_inventory_writer),
          companions(context.companions),owned_companions(context.owned_companions),owned_deity_skills(context.owned_deity_skills),
+         app_owned_initial_deities(context.app_owned_initial_deities),
          game(context.game),common(context.common_world),
          records(std::move(sources.records)),characters_source(std::move(sources.characters)),capacity(sources.actual_session_capacity) {
         if(!valid_taiwan_world_entry_identity(identity) ||
@@ -102,7 +104,9 @@ struct Owner {
         entry=SharedTaiwanWorldEntrySource::create(*characters,*maps,std::move(sources.entry),
             characters_source?characters_source->selected:SharedTaiwanNativeCharacterListSource::SelectedSource{},
             std::move(sources.entry_prepare),characters_source?presence:nullptr,identity);
-        entered=SharedTaiwanWorldEntered::create(presence,visibility,std::move(sources.entered),identity);
+        entered=SharedTaiwanWorldEntered::create(presence,visibility,std::move(sources.entered),identity,
+            app_owned_initial_deities?SharedTaiwanWorldEntered::InitialDeityPublisher::ApplicationOwned:
+                SharedTaiwanWorldEntered::InitialDeityPublisher::External);
         if(sources.movement_custody && (!accounts || !owned_inventory_writer || !native_equipment_snapshot_writer ||
            !sources.movement_custody->owns_sources(*accounts,*characters) ||
            !sources.movement_custody->owns_writers(*owned_inventory_writer,*native_equipment_snapshot_writer)))
@@ -141,6 +145,7 @@ struct Owner {
            context.owned_inventory!=owned_inventory || context.owned_inventory_writer!=owned_inventory_writer ||
            context.companions!=companions || context.owned_companions!=owned_companions ||
            context.owned_deity_skills!=owned_deity_skills ||
+           context.app_owned_initial_deities!=app_owned_initial_deities ||
            context.common_world!=common || context.game!=game || !common->owns_repository(*characters)) {
             invalidate();
             throw std::invalid_argument("TW native host plan cannot join a different Application Context");
@@ -655,6 +660,7 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
         throw std::invalid_argument("Independent TW entry identity requires the complete native selection source");
     auto factory=std::make_shared<Factory>(std::move(source),dispatch,native_characters,identity);SharedWorldHostPlan plan;
     plan.taiwan_entry_identity=identity;
+    plan.supports_app_owned_initial_deities=true;
     plan.requires_native_character_summaries=native_characters;
     if(native_characters)plan.make_taiwan_native_characters=[factory](const Context& context) {
         auto owner=factory->get(context);

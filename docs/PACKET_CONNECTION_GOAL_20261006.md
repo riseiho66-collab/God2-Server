@@ -5508,3 +5508,41 @@ recovered. Parser77=50partial+11control+16unconnected/pending12 and frontier26
 TW100 first/fullgoal/commoncore/saves/frozen features remain. No newprojectPY;
 PHASE1 forbids builds/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/
 deployment. Details: docs/research/tw-skillbook-learning-source-20261014.md.
+
+## Round382 - CommonWorld initial deity source and whole response (2026-10-14)
+
+The actual CommonWorld records facade replaces the old callback containing
+legacy first-Tick companion restoration. CUSTOM-0148 now supplies a concrete
+initial deity publisher after that real completed vault/mixed dispatcher. The
+same actual Context flag and native factory capability enforce an explicit
+sole deity publisher: complete original initial aggregate boundaries reject
+30/31/34/35 before queue only in ApplicationOwned mode. Default External,
+player/pet and other supplied initial bytes stay unchanged.
+
+One physical initial Session entry, original Written/current private INIT,
+actual ready full lease/nativeactor/position/delivery and battleGeneration0
+qualify the bounded private one-shot attempt. It never renews on new equalkeys/
+private Data/PKreturn. The deity-only helper retains the same complete shared
+learning readset and legitimately retained35 events. Final complete source
+Current follows virtual presence observers and precedes a pure local cut.
+
+The corrected sender appends encoded deity batches AFTER the exact original
+returned Tick wire, captures one actual whole WWR/inputhold and returns that
+same aggregate. All three real source consumers support exact immutable whole
+wire/Written/current/logical batch coverage while retaining legacy per-push
+receipts. No directpush, fabricated frame receipt, dummy reply, native ACK/reset/
+adoption or old complete-player/PK projection flag is generated. The initial
+ordering candidate is retained externally, never built/run/published.
+
+Source20 pins72/canonical508; seven existing C++ files changed, no new C++/Lua/
+Python file, formula/opcode/native code or complete route. Parser77 remains
+50partial+11control+16unconnected, pending12 and frontier26 formats21/gaps105.
+TW156/252/3chains40bindings36unique and CN156/280phase/253/35chains93bindings71unique
+remain. Native reset is conditional; PK preparation retains the old physical
+Entry and future Data only. Actual battle-return, other writer activation
+lineage, C26, full skill actions/native adoption, CN/custom126/150 adapters and
+the whole-game denominator remain OPEN. Goal active/TW100 first, all existing
+commoncore/web/64bit/numeric/save/frozen requirements preserved. PHASE1 source/
+accounting only; no builds/tests/runtime/native/VM/codec/gameDBSQL/migration/
+schema installation/activation/deployment. Details:
+docs/research/tw-common-world-skill-restoration-source-20261014.md.
