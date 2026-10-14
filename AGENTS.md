@@ -551,3 +551,17 @@ returnresources/text/visibility/Finishedrelease/inputresume and owninglegitimate
 issuedlineage required. Source21 all73unchanged/noCPP/Lua/PY/nativecuts/formula/
 fullroute; parser77=50partial/11control/16unconnected,pending12,frontier26 21/105,
 whole%null. ActiveTW100first/fullgoal/PHASE1 sourceonly preserved.
+
+Round385 connects actualconfigured PKreturnscene to privatepairedstrand
+reservation: genuinebothAcceptedReady terminals/preps/samegame Sessions,
+preallocate2slots+attempt, realeachstrand transport/draincut ->oneGameweakowner
+wholepairCurrent before/after. Outbox ownsfullinputs and requalifies complete
+scene/ledger/contexts/finaljointstoredcut thenpureretainedfences withreentryguard.
+Failpoison beforelogger/close, idempotentexactslot cleanup/finalinstall check,
+exactoriginalterminalFailed beforeclear preventsoldprep reuse; replacement/nil
+defaults unchanged. ConfiguredReturnSource requiresdeparture; oldabsentdefault
+prep-only preserved. Reserved original5sdeadline remains/inputheld/nooutput/
+WORLD/reset/liveidentity/unlock/resume/ACK. CPP3/Source22pins74(71oldexact2updated
+1added),newPY/Lua/native/opcode/rule0; fullsender/visibilityconsume/Finishedrelease/
+issuedlineage/Appbackend/fullskills/CN/web/wholegame remainOPEN. Parser77=50/11/16,
+pending12/frontier26 21/105/whole%null; activeTW100fullgoal/PHASE1 retained.

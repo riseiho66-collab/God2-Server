@@ -21,6 +21,7 @@ class OwnedPkOutboxPublication final {
     struct Binding;
     struct Flight;
     struct TerminalFlight;
+    struct ReturnFlight;
     struct Lifetime {OwnedPkOutboxPublication* owner;};
 public:
     using Ticket=OwnedPkRoomState::Ticket;
@@ -65,6 +66,9 @@ public:
         if(bindings_.size()>=256 || bindings_.contains(ticket.id()) || !rooms_.owns_ticket(ticket) ||
            !sessions[0] || !sessions[1] || sessions[0]==sessions[1] ||
            !sessions[0]->same_native_pk_game_executor(*sessions[1]))return false;
+        // A configured return scene dereferences this exact departure later.
+        // Historical preparation-only bindings retain their absent default.
+        if(return_scene_source_ && !departure)return false;
         const auto& input=ticket.input();
         if(!input.entry.owned_appearances() || !input.entry.owned_players() ||
            !input.combat_sources || !input.entry.waiting_control())return false;
@@ -396,6 +400,35 @@ private:
             if(life&&life->owner)life->owner->terminal_failed(*this,session,value);
         }
     };
+    // CUSTOM-0133 paired real-strand reservation continuation. A reservation
+    // is a held transport cut, not a world write, reset, durable release or ACK.
+    struct ReturnFlight final:Session::NativePkReturnOwner {
+        std::weak_ptr<Lifetime> lifetime;
+        std::weak_ptr<Binding> binding;
+        const std::array<Session::NativePkReturnPreparation,2> preparations;
+        const cn::SharedActorVisibility::TaiwanPkReturnPlan visibility;
+        const std::array<Session::NativeBattleSkill,2> final_writes;
+        const std::array<std::uint64_t,2> revisions;
+        const std::array<std::array<std::uint8_t,4>,2> payloads;
+        std::optional<Session::NativePkReturnReservation> reservation;
+        bool reserved_seen=false,failed_seen=false;
+        ReturnFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
+                std::array<Session::NativePkReturnPreparation,2> prepared,
+                cn::SharedActorVisibility::TaiwanPkReturnPlan plan,
+                std::array<Session::NativeBattleSkill,2> outputs,
+                std::array<std::uint64_t,2> versions,
+                std::array<std::array<std::uint8_t,4>,2> contexts)
+            :lifetime(std::move(life)),binding(std::move(owner)),preparations(std::move(prepared)),
+             visibility(std::move(plan)),final_writes(std::move(outputs)),revisions(versions),payloads(contexts){}
+        bool native_pk_return_reserved(const Session::NativePkReturnReservation& value)override{
+            const auto life=lifetime.lock();
+            return life&&life->owner&&life->owner->return_reserved(*this,value);
+        }
+        void native_pk_return_failed(const Session::NativePkReturnReservation& value)override{
+            const auto life=lifetime.lock();
+            if(life&&life->owner)life->owner->return_failed(*this,value);
+        }
+    };
     struct Flight final:Session::NativeBattleSkillPublicationOwner {
         std::weak_ptr<Lifetime> lifetime;
         std::weak_ptr<Binding> binding;
@@ -439,6 +472,7 @@ private:
         std::optional<std::array<Session::NativePkReturnPreparation,2>> return_preparations;
         // CUSTOM-0133 private preallocated visibility; never published/current WORLD.
         std::optional<cn::SharedActorVisibility::TaiwanPkReturnPlan> return_visibility;
+        std::shared_ptr<ReturnFlight> return_flight;
         bool return_preparing=false,return_reentered=false;
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
         Binding(Ticket value,std::array<std::shared_ptr<Session>,2> peers,
@@ -652,8 +686,80 @@ private:
             }
             binding->return_visibility=std::move(visibility_plan);
             binding->return_preparations.emplace(std::move(prepared));
+            if(binding->return_visibility){
+                auto continuation=std::make_shared<ReturnFlight>(lifetime_,binding,
+                    *binding->return_preparations,*binding->return_visibility,binding->terminal_written,
+                    binding->terminal_written_revision,
+                    std::array<std::array<std::uint8_t,4>,2>{binding->terminal_inputs[0]->payload,
+                                                          binding->terminal_inputs[1]->payload});
+                if(!pair_current() || binding->return_flight)
+                    throw DatabaseError("PK return reservation lost its exact prepared pair");
+                binding->return_flight=continuation; // Strong game owner before either real strand post.
+                auto reservation=Session::reserve_native_pk_return_pair(binding->sessions,
+                    continuation->preparations,continuation);
+                continuation->reservation.emplace(std::move(reservation));
+            }
             return true; // No publish, state change, marker removal, unlock or input release.
         }catch(...){fail(*binding);return false;}
+    }
+    bool return_exact(const Binding& binding,const ReturnFlight& flight,
+            const Session::NativePkReturnReservation& value)const{
+        if(!on_thread() || binding.failed || binding.return_reentered || flight.failed_seen ||
+           binding.return_flight.get()!=&flight || !flight.reservation || *flight.reservation!=value ||
+           !binding.return_visibility || !binding.return_preparations ||
+           *binding.return_preparations!=flight.preparations || !binding.departure ||
+           !binding.departure->visibility || !binding.departure->presence)return false;
+        const auto at=bindings_.find(binding.ticket.id());
+        if(at==bindings_.end() || at->second.get()!=&binding ||
+           !Session::native_pk_return_reservation_current(value))return false;
+        for(std::uint8_t i=0;i<2;++i){
+            const auto& own=binding.terminal_inputs[i];
+            if(!own || !own->barrier || !own->ready_seen || !own->accepted_seen || own->failed_seen ||
+               !terminal_exact(binding,*own,*binding.sessions[i],*own->barrier) ||
+               !written_current(binding,i) || !departure_retained_current(binding,i) ||
+               binding.flights[i] || binding.terminal_written[i]!=flight.final_writes[i] ||
+               binding.terminal_written_revision[i]!=flight.revisions[i] || own->payload!=flight.payloads[i] ||
+               binding.sessions[i]->native_battle_skill_publication_pending() ||
+               binding.sessions[i]->native_battle_skill_written()!=flight.final_writes[i] ||
+               !binding.sessions[i]->native_pk_return_preparation_current(flight.preparations[i]))return false;
+        }
+        return flight.revisions[0]==flight.revisions[1];
+    }
+    bool return_reserved(ReturnFlight& flight,const Session::NativePkReturnReservation& value){
+        if(!on_thread())return false;
+        const auto binding=flight.binding.lock();if(!binding)return false;
+        try{
+            if(binding->return_preparing){binding->return_reentered=true;
+                throw DatabaseError("PK paired return reservation reentered its source");}
+            if(flight.reserved_seen || !return_exact(*binding,flight,value))
+                throw DatabaseError("PK reservation lacks both original real strand cuts");
+            binding->return_preparing=true;binding->return_reentered=false;
+            struct End{bool& busy;~End(){busy=false;}}end{binding->return_preparing};
+            const auto current=[&]{return return_exact(*binding,flight,value);};
+            const auto& visibility=*binding->departure->visibility;
+            if(!visibility.taiwan_pk_return_current(flight.visibility) || !current())
+                throw DatabaseError("PK reserved return complete scene changed");
+            if(rooms_.require_terminal_resources_saved(binding->ticket.id(),
+                    {flight.final_writes[0]->logical,flight.final_writes[1]->logical})!=flight.revisions[0] || !current())
+                throw DatabaseError("PK reserved return lost its actual saved resource ledger");
+            for(std::uint8_t i=0;i<2;++i)
+                if(rooms_.require_terminal_context(binding->ticket.id(),i,flight.payloads[i],
+                        flight.final_writes[i]->logical)!=flight.revisions[i] || !current())
+                    throw DatabaseError("PK reserved return lost its exact terminal context");
+            // SQL observers above precede the final joint stored cut; only
+            // pure retained whole-pair/registry fences follow that observer.
+            if(!visibility.taiwan_pk_return_stored_current(flight.visibility) || !current() ||
+               !visibility.taiwan_pk_return_retained_current(flight.visibility) || !current())
+                throw DatabaseError("PK reserved return stored or retained source changed");
+            flight.reserved_seen=true;
+            return true; // Held prerequisite only; deadlines/input/output/world states stay unchanged.
+        }catch(...){flight.failed_seen=true;fail(*binding);return false;}
+    }
+    void return_failed(ReturnFlight& flight,const Session::NativePkReturnReservation& value){
+        if(!on_thread())return;
+        const auto binding=flight.binding.lock();if(!binding || flight.failed_seen ||
+           binding->return_flight.get()!=&flight || !flight.reservation || *flight.reservation!=value)return;
+        flight.failed_seen=true;fail(*binding);
     }
     void terminal_failed(TerminalFlight& flight,Session& session,const Session::NativePkTerminalBarrier& value){
         if(!on_thread())return;

@@ -5024,7 +5024,19 @@
   "tests": [],
   "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
   "reason": "Do not reuse cleared native pool or old moved scene vectors; retain an explicitly current complete private plan at reachable real callback.",
-  "replacement": "Supply actual current full6F authority and finish paired transport/visibility/resources/durable release/recovery, then comprehensive native acceptance."
+  "replacement": "Supply actual current full6F authority and finish paired transport/visibility/resources/durable release/recovery, then comprehensive native acceptance.",
+  "paired_strand_reservation_source": {
+    "classification": "ROUND385_ACTUAL_PRIVATE_PAIRED_STRAND_PREREQUISITE_NOT_WORLD_RETURN",
+    "Session": "Both actual acceptedReady terminal preparations/samegame Sessions -> preallocateprivatepair+attempt -> installtwoexactslots -> eachactualstrand immutable/atomictransport and draincheck -> onlybothcuts postsonegameweakowner callback withcompletepairCurrent before/after.",
+    "failure": "SharedFailed beforelogger/closures; idempotentexactslot cleanup/finalinstallcheck closeshalfslot race. Exact originalterminal acceptedfalse/Failed beforematchingpairslotremoval preventsoldPrep reuse; replacements/nildefaults untouched. DroppedPendingattempt failswholepair, deadlines/state/close retirepair.",
+    "Outbox": "Actualconfigured completeReturnScenePlan terminalacceptance retainsimmutableReturnFlight thenreservesactualpair. Returnnotification rechecksoriginalcontexts/finalwrites/privatepair/fullscene/resourceledger/twoSQLcontexts/finaljointstoredcut/pureretainedguards underownerwide reentryfence.",
+    "old_null_departure": "ConfiguredReturnSceneSource withoutdeparture rejected atbind beforefutureconditionaldereference; oldabsentdefaultunchanged.",
+    "limits": "Reserved boundedbyoriginal5sdeadline; no output/liveWORLD/INITreset/identitypublication/unlock/inputresume/ACK. Fullsender/visibilityconsume/resources/issuedlineage/Finishedrelease/Appbackend/nativeacceptance remainOPEN.",
+    "source_connected": true,
+    "default_activated": false,
+    "whole_route_complete": false,
+    "build_tests_runtime_SQL_activation_deployment": false
+  }
 },
 {
   "id": "CUSTOM-0134",

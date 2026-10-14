@@ -279,9 +279,32 @@ public:
         bool operator==(const NativePkReturnPreparation&)const=default;
     private:
         friend class Session;
+        friend struct Impl;
         struct Data;
         explicit NativePkReturnPreparation(std::shared_ptr<const Data> data):data_(std::move(data)){}
         std::shared_ptr<const Data> data_;
+    };
+    // Actual paired strand drain reservation only. It grants no output,
+    // live WORLD/INIT publication, unlock or input-resume permission.
+    class NativePkReturnReservation {
+    public:
+        NativePkReturnReservation(const NativePkReturnReservation&)=default;
+        NativePkReturnReservation& operator=(const NativePkReturnReservation&)=default;
+        bool operator==(const NativePkReturnReservation&)const=default;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit NativePkReturnReservation(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class NativePkReturnOwner {
+    public:
+        virtual ~NativePkReturnOwner()=default;
+        // Same actual serial game owner only; no yield or borrowed retention.
+        // Reserved is a local prerequisite, not return publication/native ACK.
+        virtual bool native_pk_return_reserved(const NativePkReturnReservation&)=0;
+        virtual void native_pk_return_failed(const NativePkReturnReservation&)=0;
     };
     struct NativeCharacterSelectionInput {
         std::uint64_t session,account;
@@ -518,6 +541,10 @@ public:
     bool native_pk_terminal_barrier_accepted_current(const NativePkTerminalBarrier&)const noexcept;
     NativePkReturnPreparation prepare_native_pk_return_generation(const NativePkTerminalBarrier&);
     bool native_pk_return_preparation_current(const NativePkReturnPreparation&)const noexcept;
+    static NativePkReturnReservation reserve_native_pk_return_pair(
+        std::array<std::shared_ptr<Session>,2>,std::array<NativePkReturnPreparation,2>,
+        std::weak_ptr<NativePkReturnOwner>);
+    static bool native_pk_return_reservation_current(const NativePkReturnReservation&) noexcept;
     // Separate retained-entry PK output only; old skill sender grammar stays
     // unchanged. Exact durable grant/result authority belongs to weak owner.
     void send_native_pk_output(const NativePkEntryHold&,NativeBattleSkill,
@@ -572,6 +599,7 @@ public:
     std::uint64_t character_id = 0;
 
 private:
+    static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
     void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);
     std::unique_ptr<Impl> impl_;
     std::atomic<SessionState> state_{SessionState::Connected};

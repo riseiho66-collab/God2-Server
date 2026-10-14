@@ -5597,3 +5597,30 @@ activation or complete route. Source21 pins73 unchanged; parser77=50partial+
 11control+16unconnected,pending12/frontier26 21formats105gaps,whole%null. Full
 TW100-first/CN/web/sharedcore/numeric/saves/frozen/PHASE1 retained. Details:
 docs/research/tw-battle-return-source-20261014.md.
+
+## Round385 - Actual paired terminal-strand reservation (2026-10-14)
+
+The configured PK return-scene continuation now reserves two actual Session
+strands under their original accepted Ready terminal barriers. A private pair
+capability owns both preparations/incarnations; each strand rechecks actual
+transport and drained input/write state before one game-owner notification.
+Exact wholepair Current precedes and follows the weak source callback. Outbox
+retains immutable full inputs and requalifies scene/resource ledger/terminal
+contexts/final joint stored data then pure registry/pair guards under reentry
+protection. Original absent-source preparation-only behavior stays unchanged.
+
+Failure invalidates the pair before logging/closure, cleans exact slots even
+after half-install races and retires only matching original terminal preparation
+before clearing slots. Configured return without departure rejects before the
+old conditional null dereference. Dropped Pending posts, timeout/state/closure
+retire the pair; no readiness renewal or fabricated write.
+
+This is a bounded prerequisite: original five-second deadline, input hold and
+output block remain. Actual sender/liveWORLD/visibility consume/Finished durable
+release/input resume/issued lineage/Main backend and native acceptance remain
+OPEN. Three existing C++ sources change; V22pins74 old73=71 exact/2updated plus
+existingOutbox1. No new Python/Lua/opcode/formula/default activation/fullroute.
+Parser77=50partial+11control+16unconnected/pending12/frontier26 21formats105gaps
+and whole%null unchanged. FullTW100-first/CN/web/commoncore/numeric/saves/frozen
+and PHASE1 no build/tests/runtime/native/codec/gameDBSQL/deploy remain. Details:
+docs/research/tw-paired-return-reservation-source-20261014.md.

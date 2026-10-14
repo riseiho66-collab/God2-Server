@@ -299,6 +299,23 @@ struct Session::NativePkReturnPreparation::Data {
         :terminal(std::move(barrier)),initialization(std::move(normal)),world_identity(std::move(world)) {}
 };
 
+struct Session::NativePkReturnReservation::Data {
+    enum class Phase {Pending,Reserved,Failed};
+    const std::array<std::weak_ptr<Session>,2> sessions;
+    const std::array<NativePkReturnPreparation,2> preparations;
+    const asio::any_io_executor game;
+    const std::thread::id thread=std::this_thread::get_id();
+    const std::weak_ptr<NativePkReturnOwner> source;
+    std::atomic<Phase> phase{Phase::Pending};
+    std::atomic<unsigned> cuts{0};
+    std::atomic<bool> installed{false},game_posted{false},failed_notified{false};
+    Data(const std::array<std::shared_ptr<Session>,2>& actual,
+        std::array<NativePkReturnPreparation,2> prepared,asio::any_io_executor executor,
+        std::weak_ptr<NativePkReturnOwner> owner)
+        :sessions{actual[0],actual[1]},preparations(std::move(prepared)),
+         game(std::move(executor)),source(std::move(owner)) {}
+};
+
 struct Session::NativeWorldSelectionInput::Data {
     const std::weak_ptr<Session> session;
     const std::shared_ptr<const void> world_identity;
@@ -483,6 +500,17 @@ struct Session::Impl {
     std::shared_ptr<Reservation> native_pk_output_reservation;
     std::atomic<std::shared_ptr<NativePkEntryHold::Data>> native_pk_pending;
     std::atomic<std::shared_ptr<NativePkTerminalBarrier::Data>> native_pk_terminal;
+    std::atomic<std::shared_ptr<NativePkReturnReservation::Data>> native_pk_return;
+    // Separate from the pair Data kept by the game owner. Last abandoned post
+    // marks Pending failed even when that owning capability is still retained.
+    struct NativePkReturnAttempt {
+        const std::shared_ptr<NativePkReturnReservation::Data> data;
+        explicit NativePkReturnAttempt(std::shared_ptr<NativePkReturnReservation::Data> value):data(std::move(value)) {}
+        ~NativePkReturnAttempt() {
+            if(data->phase.load()==NativePkReturnReservation::Data::Phase::Pending)
+                Session::fail_native_pk_return_reservation(data);
+        }
+    };
     // Game-only incarnation of this actual callback, surviving strand retirement.
     std::shared_ptr<NativePkTerminalBarrier::Data> native_pk_terminal_callback_capture;
     // Strand-only staging until the accepted world's callback ACK has queued
@@ -961,7 +989,45 @@ struct Session::Impl {
             !native_battle_pending.load() && native_pk_written_transport_current(data->entry.data_) &&
             owner.native_battle_skill_written_.load()==data->final;
     }
+    bool native_pk_return_transport_current(const std::shared_ptr<NativePkReturnReservation::Data>& data,
+            std::size_t index) const {
+        // Atomic/immutable only. Never use public game-owned account/character.
+        if(!data || index>=2 || !data->installed.load() || data->game!=game ||
+           data->sessions[index].lock().get()!=&owner || native_pk_return.load()!=data ||
+           data->phase.load()==NativePkReturnReservation::Data::Phase::Failed || data->source.expired())return false;
+        const auto terminal=data->preparations[index].data_->terminal.data_;
+        return terminal && terminal->phase.load()==NativePkTerminalBarrier::Data::Phase::Ready &&
+            terminal->accepted.load() && terminal->armed.load() && terminal->acknowledged.load() &&
+            native_pk_terminal_transport_current(terminal);
+    }
+    void stage_native_pk_return(const std::shared_ptr<NativePkReturnReservation::Data>& data,
+            std::size_t index,const std::shared_ptr<NativePkReturnAttempt>& attempt) {
+        if(!native_pk_return_transport_current(data,index) || closing || game_busy || read_inflight ||
+           !writes.empty() || write_bytes || input.size() || !world_input.empty() || !world_pending_records.empty() ||
+           skill_deadline || native_skill_generation || native_pk_terminal_cancel_read || native_pk_cancel_read ||
+           native_pk_output_staged || native_pk_output_reservation || native_pk_reservation ||
+           common_ready_waiting.load() || common_entry_identity.load() ||
+           c2s0002_state!=C2S0002State::WorldTailAccepted) {
+            Session::fail_native_pk_return_reservation(data);return;
+        }
+        const auto cut=1u<<index;
+        if((data->cuts.fetch_or(cut)|cut)!=3u || data->game_posted.exchange(true))return;
+        try {asio::post(data->game,[data,attempt] {
+            if(data->thread!=std::this_thread::get_id()) {Session::fail_native_pk_return_reservation(data);return;}
+            auto pending=NativePkReturnReservation::Data::Phase::Pending;
+            if(!data->phase.compare_exchange_strong(pending,NativePkReturnReservation::Data::Phase::Reserved))return;
+            const NativePkReturnReservation reservation(data);
+            bool accepted=false;
+            if(Session::native_pk_return_reservation_current(reservation))
+                if(const auto source=data->source.lock())try {
+                    accepted=source->native_pk_return_reserved(reservation);
+                }catch(...) {}
+            if(!accepted || !Session::native_pk_return_reservation_current(reservation))
+                Session::fail_native_pk_return_reservation(data);
+        });}catch(...) {Session::fail_native_pk_return_reservation(data);}
+    }
     void retire_native_pk_terminal() {
+        if(const auto pair=native_pk_return.exchange({}))Session::fail_native_pk_return_reservation(pair);
         const auto data=native_pk_terminal.exchange({});if(!data)return;
         // Only this exact returned game callback may retire its busy latch.
         if(data->ack_handoff_failed.load())game_busy=false;
@@ -2661,6 +2727,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        if(const auto pair=native_pk_return.load())Session::fail_native_pk_return_reservation(pair);
         retire_owned_input(); // Opt-in socket/atomic retirement precedes potentially throwing logging.
         if (finished) return;
         if (auto log = logger("session")) log->debug("session_id={} remote_ip={} closing: {}", id, ip, reason);
@@ -3635,6 +3702,100 @@ bool Session::native_pk_return_preparation_current(const NativePkReturnPreparati
         data->world_identity->world_generation==original->world_generation &&
         data->world_identity->battle_generation==future->effective_battle;
 }
+void Session::fail_native_pk_return_reservation(
+        const std::shared_ptr<NativePkReturnReservation::Data>& data) noexcept {
+    if(!data)return;
+    const bool first=data->phase.exchange(NativePkReturnReservation::Data::Phase::Failed)!=
+        NativePkReturnReservation::Data::Phase::Failed;
+    // Always remove exact slots: a concurrent installation may finish AFTER
+    // the first failure swept them. Only the first transition closes/notifies.
+    for(std::size_t index=0;index<2;++index)if(const auto session=data->sessions[index].lock()) {
+        const auto terminal=data->preparations[index].data_->terminal.data_;
+        if(session->impl_->native_pk_terminal.load()==terminal) {
+            terminal->accepted.store(false);
+            terminal->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
+        }
+        auto expected=data;session->impl_->native_pk_return.compare_exchange_strong(expected,{});
+    }
+    if(!first)return;
+    // The ENTIRE pair is poisoned before callbacks/close posts; no peer IDs read.
+    for(const auto& weak:data->sessions)if(const auto session=weak.lock())
+        try {session->close();}catch(...) {session->impl_->close_requested.store(true);}
+    try {asio::post(data->game,[data] {
+        if(data->failed_notified.exchange(true))return;
+        if(data->thread!=std::this_thread::get_id())return;
+        if(const auto source=data->source.lock())try {
+            source->native_pk_return_failed(NativePkReturnReservation(data));
+        }catch(...) {} // Both exact peers are already poisoned/closing.
+    });}catch(...) {} // Failed remains durable-in-process; no fake callback or rollback.
+}
+Session::NativePkReturnReservation Session::reserve_native_pk_return_pair(
+        std::array<std::shared_ptr<Session>,2> sessions,std::array<NativePkReturnPreparation,2> preparations,
+        std::weak_ptr<NativePkReturnOwner> source) {
+    if(!sessions[0] || !sessions[1] || sessions[0]==sessions[1])
+        throw std::invalid_argument("PK return reservation requires two distinct actual Sessions");
+    // Qualify the actual recorded game thread BEFORE any game-owned fields.
+    for(std::size_t i=0;i<2;++i) {
+        const auto data=preparations[i].data_;
+        if(!data || !data->terminal.data_ || data->terminal.data_->thread!=std::this_thread::get_id() ||
+           data->terminal.data_->session.lock()!=sessions[i] || data->terminal.data_->game!=sessions[i]->impl_->game)
+            throw std::logic_error("PK return pair game owner or private preparation mismatch");
+    }
+    std::shared_ptr<NativePkReturnReservation::Data> data;
+    try {
+        if(source.expired() || sessions[0]->impl_->game!=sessions[1]->impl_->game)
+            throw std::logic_error("PK return pair requires one actual game executor and live owner");
+        for(std::size_t i=0;i<2;++i) {
+            if(const auto existing=sessions[i]->impl_->native_pk_return.load()) {
+                fail_native_pk_return_reservation(existing);
+                throw std::logic_error("PK return pair already reserved");
+            }
+            if(!sessions[i]->native_pk_return_preparation_current(preparations[i]))
+                throw std::logic_error("PK return pair lost original accepted terminal preparation");
+        }
+        // Two immutable slots and the independent attempt are allocated before
+        // installation. No observer, state publication or output lies between.
+        data=std::make_shared<NativePkReturnReservation::Data>(sessions,std::move(preparations),
+            sessions[0]->impl_->game,std::move(source));
+        auto attempt=std::make_shared<Impl::NativePkReturnAttempt>(data);
+        for(std::size_t i=0;i<2;++i) {
+            if(!sessions[i]->native_pk_return_preparation_current(data->preparations[i]))
+                throw std::logic_error("PK return pair source changed before slot installation");
+        }
+        for(std::size_t i=0;i<2;++i) {
+            std::shared_ptr<NativePkReturnReservation::Data> absent;
+            if(!sessions[i]->impl_->native_pk_return.compare_exchange_strong(absent,data))
+                throw std::logic_error("PK return pair slot installation rejected");
+        }
+        data->installed.store(true);
+        if(data->phase.load()!=NativePkReturnReservation::Data::Phase::Pending ||
+           sessions[0]->impl_->native_pk_return.load()!=data || sessions[1]->impl_->native_pk_return.load()!=data ||
+           !sessions[0]->native_pk_return_preparation_current(data->preparations[0]) ||
+           !sessions[1]->native_pk_return_preparation_current(data->preparations[1]))
+            throw std::logic_error("PK return pair retired during slot installation");
+        for(std::size_t i=0;i<2;++i)
+            asio::post(sessions[i]->impl_->strand,[self=sessions[i],data,attempt,i] {
+                self->impl_->stage_native_pk_return(data,i,attempt);
+            });
+        return NativePkReturnReservation(data);
+    }catch(...) {
+        if(data)fail_native_pk_return_reservation(data);
+        else for(const auto& session:sessions)try {session->close();}catch(...) {session->impl_->close_requested.store(true);}
+        throw;
+    }
+}
+bool Session::native_pk_return_reservation_current(const NativePkReturnReservation& reservation) noexcept {
+    const auto data=reservation.data_;
+    if(!data || data->thread!=std::this_thread::get_id() || !data->installed.load() ||
+       data->phase.load()!=NativePkReturnReservation::Data::Phase::Reserved || data->cuts.load()!=3u ||
+       data->source.expired())return false;
+    const auto first=data->sessions[0].lock(),second=data->sessions[1].lock();
+    if(!first || !second || first==second || first->impl_->game!=data->game || second->impl_->game!=data->game)return false;
+    return first->impl_->native_pk_return.load()==data && second->impl_->native_pk_return.load()==data &&
+        first->native_pk_return_preparation_current(data->preparations[0]) &&
+        second->native_pk_return_preparation_current(data->preparations[1]) &&
+        data->phase.load()==NativePkReturnReservation::Data::Phase::Reserved;
+}
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){
     // CUSTOM-0115 explicit exact accepted entry. Raw output is never room,
@@ -3830,6 +3991,7 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
     });
 }
 void Session::close() {
+    if(const auto pair=impl_->native_pk_return.load())fail_native_pk_return_reservation(pair);
     impl_->retire_normal_output(); // Synchronized retirement before close publication/post.
     if (impl_->close_requested.exchange(true)) return;
     asio::post(impl_->strand, [self = shared_from_this()] { self->impl_->close(); });
@@ -3866,7 +4028,10 @@ SessionState Session::state() const noexcept { return state_.load(); }
 void Session::set_state(SessionState state) noexcept {
     auto current = state_.load();
     while(current!=SessionState::Disconnected) {
-        if(current!=state)impl_->retire_normal_output(); // Before phase/battle mutation, even same final pose.
+        if(current!=state) {
+            if(const auto pair=impl_->native_pk_return.load())fail_native_pk_return_reservation(pair);
+            impl_->retire_normal_output(); // Before phase/battle mutation, even same final pose.
+        }
         if(state_.compare_exchange_weak(current,state))break;
     }
     // Preserve the existing state transition; observe only successful battle
