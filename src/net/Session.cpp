@@ -3459,6 +3459,7 @@ struct Session::Impl {
         }
     }
     void close() {
+        owner.retire_actor_status_incarnation();
         owner.invalidate_actor_status_writes();
         if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
             Session::fail_native_pk_return_finalisation(final);
@@ -3481,6 +3482,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        owner.retire_actor_status_incarnation();
         [[maybe_unused]] const auto status_admission=owner.begin_actor_status_writer();
         owner.invalidate_actor_status_writes();
         if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
@@ -3562,8 +3564,35 @@ Session::Session(asio::ip::tcp::socket socket, asio::any_io_executor game_execut
     }
 }
 Session::~Session() {
+    retire_actor_status_incarnation();
     destruction_status_writer_=begin_actor_status_writer();
     invalidate_actor_status_writes();
+}
+bool Session::actor_status_incarnation_matches(const TaiwanActorStatusIncarnationSource::Token& token) const noexcept {
+    if(actor_status_incarnation_closed_.load(std::memory_order_acquire))return false;
+    const auto retained=actor_status_incarnation_.load(std::memory_order_acquire);
+    return retained&&*retained==token&&!actor_status_incarnation_closed_.load(std::memory_order_acquire);
+}
+void Session::retire_actor_status_incarnation() noexcept {
+    // Independent early latch: legacy close_requested is published later.
+    actor_status_incarnation_closed_.store(true,std::memory_order_release);
+    if(const auto token=actor_status_incarnation_.exchange({},std::memory_order_acq_rel))token->retire();
+}
+bool Session::bind_actor_status_incarnation(TaiwanActorStatusIncarnationSource::Token token) {
+    if(actor_status_incarnation_closed_.load(std::memory_order_acquire)||closing()||!token.can_bind(*this))return false;
+    auto expected=actor_status_incarnation_.load(std::memory_order_acquire);
+    if(expected&&*expected==token)return token.can_bind(*this)&&!actor_status_incarnation_closed_.load(std::memory_order_acquire);
+    if(expected&&expected->live())return false; // Never replace another live private owner.
+    const auto retained=std::make_shared<const TaiwanActorStatusIncarnationSource::Token>(token);
+    if(actor_status_incarnation_closed_.load(std::memory_order_acquire)||closing()||!token.can_bind(*this))return false;
+    if(!actor_status_incarnation_.compare_exchange_strong(expected,retained,std::memory_order_acq_rel))return false;
+    if(actor_status_incarnation_closed_.load(std::memory_order_acquire)||closing()||!token.can_bind(*this)) {
+        auto own=retained;
+        actor_status_incarnation_.compare_exchange_strong(own,{},std::memory_order_acq_rel);
+        token.retire();return false; // Only this private entry, never a successor.
+    }
+    if(expected)expected->retire();
+    return true;
 }
 bool Session::has_actor_status_write_fence() const noexcept {
     return impl_ && bool(impl_->character_handlers.actor_status_write_fence);
@@ -5534,6 +5563,7 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
     });
 }
 void Session::close() {
+    retire_actor_status_incarnation();
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(const auto pair=impl_->native_pk_return.load())fail_native_pk_return_reservation(pair);

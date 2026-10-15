@@ -2,6 +2,7 @@
 #include "cn/world/SharedActorVisibility.h"
 #include "game/SharedNativeWorldTransports.h"
 #include "game/TaiwanWorldEntryIdentity.h"
+#include "game/TaiwanActorStatusIncarnationSource.h"
 #include "protocol/RecoveredWorldEntryView.h"
 
 namespace god2 {
@@ -30,26 +31,32 @@ public:
     static std::shared_ptr<const Session::CommonWorldLifecycle> hooks(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,Entered,
         std::shared_ptr<SharedNativeWorldTransports> = {},
-        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter);
+        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter,
+        std::shared_ptr<TaiwanActorStatusIncarnationSource> = {});
     // Safe to copy into listener handlers: each actual game-owner invocation
     // creates fresh per-Session Binding state. Does not supply data or admission.
     static Session::CommonWorldLifecycleFactory factory(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,Entered,
         std::shared_ptr<SharedNativeWorldTransports> = {},
-        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter);
+        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter,
+        std::shared_ptr<TaiwanActorStatusIncarnationSource> = {});
     static std::shared_ptr<const Session::CommonWorldLifecycle> hooks_async(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,AsyncOwner,
         std::shared_ptr<SharedNativeWorldTransports> = {},
-        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter);
+        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter,
+        std::shared_ptr<TaiwanActorStatusIncarnationSource> = {});
     static Session::CommonWorldLifecycleFactory factory_async(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,AsyncOwner,
         std::shared_ptr<SharedNativeWorldTransports> = {},
-        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter);
+        TaiwanWorldEntryIdentity = TaiwanWorldEntryIdentity::SelectedCharacter,
+        std::shared_ptr<TaiwanActorStatusIncarnationSource> = {});
 private:
     enum class Stage {Fresh,Prepared,Entering,Ready,Released};
     struct Binding {
         std::thread::id thread=std::this_thread::get_id();
         std::shared_ptr<SharedWorldPresence> presence;
+        std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations;
+        std::optional<TaiwanActorStatusIncarnationSource::Token> status_incarnation;
         std::shared_ptr<cn::SharedActorVisibility> visibility;
         std::shared_ptr<SharedNativeWorldTransports> transports;
         std::optional<SharedNativeWorldTransports::Token> transport_token;
@@ -59,6 +66,9 @@ private:
         std::optional<RecoveredWorldEntryView> entry;
         TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter;
         Stage stage=Stage::Fresh;
+        ~Binding();
+        void retire_status_incarnation() noexcept;
+        bool admit_status_incarnation(Session&);
         void owner() const;
         bool current(Session&) const;
         bool prepare(Session&,const RecoveredWorldEntry::Frame&);

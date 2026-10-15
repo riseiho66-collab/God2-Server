@@ -180,5 +180,6 @@ struct SharedWorldHostPlan {
     // Pure revocation holder only; no affine callbacks in network copies.
     // Null explicitly preserves legacy plans. Does not initialize actor status.
     std::function<std::shared_ptr<TaiwanActorStatusWriteFence>(const Context&)> make_taiwan_actor_status_write_fence;
+    std::function<std::shared_ptr<TaiwanActorStatusIncarnationSource>(const Context&)> make_taiwan_actor_status_incarnations;
 };
 }

@@ -2,6 +2,7 @@
 
 #include "protocol/Packet.h"
 #include "game/TaiwanActorStatusWriteFence.h"
+#include "game/TaiwanActorStatusIncarnationSource.h"
 #include "protocol/ProtocolMode.h"
 #include "protocol/RecoveredC2S0002.h"
 #include "protocol/RecoveredCharacterCreate.h"
@@ -559,6 +560,8 @@ public:
     // Recovered logical S2C records, after world-tail acceptance only. Application
     // owns visibility/authorization; queue acceptance does not prove client receipt.
     bool actor_status_write_fence_matches(const std::shared_ptr<TaiwanActorStatusWriteFence>&) const noexcept;
+    // Pure exact private holder equality only; never status/phase permission.
+    bool actor_status_incarnation_matches(const TaiwanActorStatusIncarnationSource::Token&) const noexcept;
     void send_world_records(std::vector<std::uint8_t> logical);
     // Uses the SAME legacy enqueue/encoding/order/budget path. The actual
     // synchronous world-records game callback alone can create/current this
@@ -788,6 +791,11 @@ private:
     static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;
     static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
     void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);
+    friend class SharedTaiwanWorldLifecycle;
+    bool bind_actor_status_incarnation(TaiwanActorStatusIncarnationSource::Token);
+    void retire_actor_status_incarnation() noexcept;
+    std::atomic<bool> actor_status_incarnation_closed_{false};
+    std::atomic<std::shared_ptr<const TaiwanActorStatusIncarnationSource::Token>> actor_status_incarnation_;
     bool has_actor_status_write_fence() const noexcept;
     std::optional<TaiwanActorStatusWriteFence::Writer> begin_actor_status_writer() noexcept;
     template<bool Dispatch,class Executor,class Body>

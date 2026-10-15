@@ -1095,3 +1095,24 @@ PHASE1 no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/
 import/activate/deploy. GoalACTIVE/TW100first/commonCNfourWS/453繁體/client
 formulas/maxHPpoison10分1/907pins/shared64coin99999999999stack99nativelevels/
 saves/fonts/IME/auth/portraits/text preserved.
+
+Round418 connects actual private actor-incarnation lifetime source: samePresence
+Sources/StoredSources/canonicalOwner/getter/Application actualsync+asyncLifecycle
+factories/vault -> exactpreparedLease/privateToken/actualSessionatomicholder.
+Gameowneronly map/weakSession/weakPresence/privateIdentity/monotonicsequence;
+Token pureatomicretirement/no strongaffineowners. Bothreleaseentries/destructor
+revoke beforecallbacks; earliestSessionclose/fail/destructor monotoniclatch before
+legacyclosingpublication blocks latebind. BinderownsToken/capturesexpectedbefore
+allocation/exactCAS/finalown-onlycleanup; caughtreentry neverrevives. PKnormal
+outputretirement/movement/commonentryidentityrelease doNOTreplace sameactor.
+This ispositiveprivateincarnation ONLY, notKnown/None/EA/statusclear/permission/
+ACK/fullwriter membership. ActualstatusSource/initialclear/privatebytepermits/
+finalgameIOcut/nativecachewindow/actions/Drvfifth/nonemptytail/fullTW/CN/fourWS
+acceptance remainOPEN. TenCPP eightexisting/twonew; V54pins139=129same8updated
+2new/canonical754/Git15; no newprojectPY/Lua/CMake/EXE/nativeformula/opcode or
+fullroutes. Wholepercentunknown. All-systemDBscope/actor-specificskills/English
+physicalnames/ChineseTXT/actualrepositories/reload/MySQLbackend remainrequired.
+PHASE1 no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/
+import/activate/deploy. GoalACTIVE/TW100first/sharedCNfourWS/453繁體/clientBIN
+formulas/maxHPpoison10分1/907pins/common64coin99999999999stack99nativelevels/
+saves/fonts/IME/auth/portraits/text preserved.

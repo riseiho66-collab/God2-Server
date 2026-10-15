@@ -1,5 +1,6 @@
 #include "handlers/OwnedGuildSuccessionApplicationDraft.h"
 #include "game/TaiwanActorStatusWriteFence.h"
+#include "game/TaiwanActorStatusIncarnationSource.h"
 #include "handlers/OwnedGuildSuccessionSemanticReceiptDraft.h"
 #include "db/GuildSuccessionSqliteMigrationsDraft.h"
 #include "db/GuildOfficerSqliteMigrations.h"
@@ -751,6 +752,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             SharedTaiwanWorldLifecycle::Entered taiwan_entered;
             SharedTaiwanWorldLifecycle::AsyncOwner taiwan_entered_async;
             std::shared_ptr<TaiwanActorStatusWriteFence> taiwan_actor_status_write_fence;
+            std::shared_ptr<TaiwanActorStatusIncarnationSource> taiwan_actor_status_incarnations;
             SharedTaiwanWorldEntrySource::Entry taiwan_world_entry;
             SharedTaiwanMovementSource::Binding taiwan_movement;
             SharedTaiwanWorldRecordSource::Binding taiwan_records;
@@ -817,6 +819,12 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     if(taiwan_actor_status_write_fence &&
                        !taiwan_actor_status_write_fence->owns_presence(common_world->presence()))
                         throw std::invalid_argument("TW writer monitor does not own the actual common host");
+                }
+                if(world_plan->make_taiwan_actor_status_incarnations) {
+                    taiwan_actor_status_incarnations=world_plan->make_taiwan_actor_status_incarnations(context);
+                    if(taiwan_actor_status_incarnations&&
+                       !taiwan_actor_status_incarnations->owns_presence(common_world->presence()))
+                        throw std::invalid_argument("TW actor incarnation source differs from actual common host");
                 }
                 if((!taiwan_entered && !taiwan_entered_async.entered) || !common_world->owns_repository(database.recovered_characters()))
                     throw std::invalid_argument("Shared world host requires actual Taiwan Entered owner on the same repository");
@@ -7508,10 +7516,10 @@ if(guild_officer_runtime && player_guild(session) &&
                     if(taiwan_entered_async.entered)
                         common_world_lifetime.vault->install(SharedTaiwanWorldLifecycle::factory_async(
                             common_world->presence(),common_world->visibility(),std::move(taiwan_entered_async),common_world->transports(),
-                            taiwan_entry_identity),taiwan_entry_identity);
+                            taiwan_entry_identity,taiwan_actor_status_incarnations),taiwan_entry_identity);
                     else common_world_lifetime.vault->install(SharedTaiwanWorldLifecycle::factory(
                             common_world->presence(),common_world->visibility(),std::move(taiwan_entered),common_world->transports(),
-                            taiwan_entry_identity),taiwan_entry_identity);
+                            taiwan_entry_identity,taiwan_actor_status_incarnations),taiwan_entry_identity);
                     if(taiwan_world_entry) {
                         if(!recovered_movement)throw std::invalid_argument("Full native TW entry requires actual movement bookkeeping");
                         common_world_lifetime.vault->install_entry(std::move(taiwan_world_entry));

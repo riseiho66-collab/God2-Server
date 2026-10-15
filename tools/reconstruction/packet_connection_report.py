@@ -252,6 +252,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_actor_status_write_fence415', {}).get('source_paths', [])) |
                    set(ledger.get('mysql80_dictionary_format416', {}).get('source_paths', [])) |
                    set(ledger.get('tw_actor_status_pending_writer417', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_actor_status_incarnation418', {}).get('source_paths', [])) |
                    set(ledger.get('tw_full_actor_profile411', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_operator402', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_import401', {}).get('source_paths', [])) |
@@ -484,6 +485,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_actor_status_write_fence415': ledger.get('tw_actor_status_write_fence415'),
         'mysql80_dictionary_format416': ledger.get('mysql80_dictionary_format416'),
         'tw_actor_status_pending_writer417': ledger.get('tw_actor_status_pending_writer417'),
+        'tw_actor_status_incarnation418': ledger.get('tw_actor_status_incarnation418'),
         'tw_full_actor_profile411': ledger.get('tw_full_actor_profile411'),
         'tw_installed453_operator402': ledger.get('tw_installed453_operator402'),
         'tw_installed453_import401': ledger.get('tw_installed453_import401'),

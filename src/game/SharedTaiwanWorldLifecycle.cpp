@@ -3,11 +3,36 @@
 #include <utility>
 
 namespace god2 {
+SharedTaiwanWorldLifecycle::Binding::~Binding() { retire_status_incarnation(); }
+void SharedTaiwanWorldLifecycle::Binding::retire_status_incarnation() noexcept {
+    if(status_incarnations&&status_incarnation)status_incarnations->retire(*status_incarnation);
+    status_incarnation.reset(); // No visibility/presence/game callback from destructor.
+}
+bool SharedTaiwanWorldLifecycle::Binding::admit_status_incarnation(Session& session) {
+    if(!status_incarnations)return true;
+    if(stage!=Stage::Prepared||!lease||connection.lock().get()!=&session)return false;
+    const auto expected=*lease;const auto source=status_incarnations;
+    const auto token=source->prepare(session,expected);
+    if(!token)return false;
+    // Keep owning copies across Session's allocation/new_handler boundary.
+    if(stage!=Stage::Prepared||!lease||*lease!=expected||status_incarnations!=source||
+       connection.lock().get()!=&session||!source->retained(*token)) {
+        source->retire(*token);return false;
+    }
+    status_incarnation=*token;
+    if(!session.bind_actor_status_incarnation(*token)||stage!=Stage::Prepared||!lease||
+       *lease!=expected||status_incarnations!=source||!status_incarnation||
+       *status_incarnation!=*token||connection.lock().get()!=&session||!source->current(*token)) {
+        source->retire(*token);return false;
+    }
+    return true;
+}
 void SharedTaiwanWorldLifecycle::Binding::owner() const {
     if(thread!=std::this_thread::get_id())throw std::logic_error("TW common lifecycle game owner mismatch");
 }
 bool SharedTaiwanWorldLifecycle::Binding::current(Session& session) const {
     owner();
+    if(status_incarnations&&(!status_incarnation||!status_incarnations->current(*status_incarnation)))return false;
     if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle) {
         if(!lease || stage==Stage::Fresh || stage==Stage::Released)return false;
         const auto pinned=connection.lock();const auto registry=presence;const auto expected=*lease;const auto phase=stage;
@@ -23,7 +48,7 @@ bool SharedTaiwanWorldLifecycle::Binding::current(Session& session) const {
         session.character_id==lease->character && presence->preparation_current(*lease);
 }
 void SharedTaiwanWorldLifecycle::Binding::release() {
-    owner();if(stage==Stage::Released)return;stage=Stage::Released;
+    owner();retire_status_incarnation();if(stage==Stage::Released)return;stage=Stage::Released;
     if(!lease)return;
     if(transport_token) {transports->release(*transport_token);transport_token.reset();}
     if(const auto session=connection.lock())
@@ -43,10 +68,19 @@ bool SharedTaiwanWorldLifecycle::Binding::prepare(Session& session,const Recover
        (identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle && !qualified_taiwan_scene_handle(full->actor_handle)))return false;
     // Default mode keeps the existing selected-character preparation behavior.
     if(identity==TaiwanWorldEntryIdentity::SelectedCharacter) {
-        const auto prepared=presence->prepare_geometry(session.id(),session.account_id,session.character_id,
+        const auto account=session.account_id,character=session.character_id;
+        const auto registry=presence;
+        const auto prepared=presence->prepare_geometry(session.id(),account,character,
             full->actor_handle,full->area,full->scene,full->x,full->y);
         if(!prepared)return false;
+        // Opt-in only: caught reentrant release must never revive a binding.
+        if(status_incarnations&&(stage!=Stage::Fresh||session.closing()||
+           session.account_id!=account||session.character_id!=character||
+           !registry->retained_preparation_current(*prepared))) {
+            registry->release(*prepared);return false;
+        }
         lease=*prepared;entry=*full;connection=session.shared_from_this();stage=Stage::Prepared;
+        if(!admit_status_incarnation(session)){release();return false;}
         return true;
     }
     const auto pinned=session.shared_from_this();
@@ -65,6 +99,7 @@ bool SharedTaiwanWorldLifecycle::Binding::prepare(Session& session,const Recover
         registry->release(*prepared);return false;
     }
     lease=*prepared;entry=*full;connection=pinned;stage=Stage::Prepared;
+    if(!admit_status_incarnation(session)){release();return false;}
     return true;
 }
 std::optional<std::uint16_t> SharedTaiwanWorldLifecycle::Binding::prepared_actor(
@@ -116,10 +151,13 @@ bool SharedTaiwanWorldLifecycle::Binding::ready(Session& session) {
 }
 std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle::hooks(
     std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,Entered entered,
-    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity) {
+    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
+    std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !entered || !visibility->owns_presence(presence) ||
-       (transports && !transports->owns_presence(presence)))return {};
+       (transports && !transports->owns_presence(presence)) ||
+       (status_incarnations && !status_incarnations->owns_presence(presence)))return {};
     auto binding=std::make_shared<Binding>();binding->presence=std::move(presence);
+    binding->status_incarnations=std::move(status_incarnations);
     binding->visibility=std::move(visibility);binding->entered=std::move(entered);binding->transports=std::move(transports);binding->identity=identity;
     auto result=std::make_shared<Session::CommonWorldLifecycle>();
     result->prepared=[binding](Session& session,const RecoveredWorldEntry::Frame& frame) {
@@ -138,16 +176,18 @@ std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle:
 }
 Session::CommonWorldLifecycleFactory SharedTaiwanWorldLifecycle::factory(
     std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,Entered entered,
-    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity) {
+    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
+    std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !entered || !visibility->owns_presence(presence) ||
-       (transports && !transports->owns_presence(presence)))
+       (transports && !transports->owns_presence(presence)) ||
+       (status_incarnations && !status_incarnations->owns_presence(presence)))
         throw std::invalid_argument("TW common lifecycle factory requires actual presence/visibility/scene owner");
-    return [presence=std::move(presence),visibility=std::move(visibility),entered=std::move(entered),transports=std::move(transports),identity](Session&) {
-        return hooks(presence,visibility,entered,transports,identity); // Fresh Binding on this Session's game owner.
+    return [presence=std::move(presence),visibility=std::move(visibility),entered=std::move(entered),transports=std::move(transports),identity,status_incarnations=std::move(status_incarnations)](Session&) {
+        return hooks(presence,visibility,entered,transports,identity,status_incarnations); // Fresh Binding on this Session's game owner.
     };
 }
 void SharedTaiwanWorldLifecycle::AsyncBinding::release() {
-    base.owner();if(released)return;released=true;
+    base.owner();base.retire_status_incarnation();if(released)return;released=true;
     auto completion=std::move(done);std::exception_ptr failure;
     if(base.lease) {
         if(const auto session=base.connection.lock()) {
@@ -214,10 +254,13 @@ void SharedTaiwanWorldLifecycle::AsyncBinding::ready(Session& session,ReadyCompl
 }
 std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle::hooks_async(
     std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,AsyncOwner scene,
-    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity) {
+    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
+    std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !scene.entered || !scene.cancel || !visibility->owns_presence(presence) ||
-       (transports && !transports->owns_presence(presence)))return {};
+       (transports && !transports->owns_presence(presence)) ||
+       (status_incarnations && !status_incarnations->owns_presence(presence)))return {};
     auto binding=std::make_shared<AsyncBinding>();binding->base.presence=std::move(presence);
+    binding->base.status_incarnations=std::move(status_incarnations);
     binding->base.visibility=std::move(visibility);binding->scene=std::move(scene);binding->base.transports=std::move(transports);binding->base.identity=identity;
     auto result=std::make_shared<Session::CommonWorldLifecycle>();
     result->prepared=[binding](Session& session,const RecoveredWorldEntry::Frame& frame) {
@@ -249,12 +292,14 @@ std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle:
 }
 Session::CommonWorldLifecycleFactory SharedTaiwanWorldLifecycle::factory_async(
     std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,AsyncOwner scene,
-    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity) {
+    std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
+    std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !scene.entered || !scene.cancel || !visibility->owns_presence(presence) ||
-       (transports && !transports->owns_presence(presence)))
+       (transports && !transports->owns_presence(presence)) ||
+       (status_incarnations && !status_incarnations->owns_presence(presence)))
         throw std::invalid_argument("TW asynchronous lifecycle requires actual scene owner and cancellation");
-    return [presence=std::move(presence),visibility=std::move(visibility),scene=std::move(scene),transports=std::move(transports),identity](Session&) {
-        return hooks_async(presence,visibility,scene,transports,identity);
+    return [presence=std::move(presence),visibility=std::move(visibility),scene=std::move(scene),transports=std::move(transports),identity,status_incarnations=std::move(status_incarnations)](Session&) {
+        return hooks_async(presence,visibility,scene,transports,identity,status_incarnations);
     };
 }
 }
