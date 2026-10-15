@@ -6438,3 +6438,22 @@ saves/fonts/IME/auth/text preserved. PHASE1no build/test/product/parser/native/
 VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
 
 Details: docs/research/tw-world-display-readset-source-20261015.md
+
+## Round427 — Initial population activation successor (2026-10-15)
+
+Round427 binds a private initial population to the actual Taiwan entered source.
+It includes ready actors plus the exact prepared joining actor, whole registry
+and issuer/generation. One friend-only activation cut admits only that joining
+active-bit successor; private retirement precedes cleanup callbacks. Existing
+ready/PK/profile APIs, native layouts and held initial publication are preserved.
+Four existing C++ files; V63 has153 pins,149 unchanged/four updated/no additions.
+Full initial saved input/profile/status transport/post-install outward material,
+positive placement coverage, native movement and Main world plan remain OPEN.
+All-system DB by actual rules, English identifiers/Chinese per-table TXT,
+typed C++/Lua consumers, validated reload and MySQL8 backend/export remain required.
+Goal ACTIVE/TW100 first; full routes added0/percentage unknown. Preserve453
+Traditional/client BIN formulas/maxHP poison tenth/907/common64/coin99999999999/
+stack99/native levels/saves/fonts/IME/auth/text/CN/four WS. PHASE1 no build/tests/
+product/parser/native/VM/codec/game DB SQL/schema/migration/import/activation/deploy.
+
+Details: docs/research/tw-initial-population-source-20261015.md

@@ -28,6 +28,10 @@ public:
         // The actual scene supplier receives the original entry's label request,
         // never a new default or permission to construct NPC/2A bytes.
         bool npc_id_label_requested() const noexcept {return entry.npc_id_label_requested();}
+        // LAST: actual entered owner captures the whole ready population plus
+        // this exact prepared joining actor before invoking the scene source.
+        // Only its held publication can consume the private activation step.
+        std::optional<SharedWorldPresence::InitialPopulation> population{};
     };
     enum class Check {AfterSupply,BeforeQueue,BeforePublish,AfterInstall,QueueReleased,LocalPublished,BeforeOutward,OutwardPublish,Completed};
     enum class ReplyDecision {CompleteNativeAggregate,ExplicitNoInitialReply};

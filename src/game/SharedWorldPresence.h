@@ -9,6 +9,8 @@
 #include <vector>
 
 namespace god2 {
+class SharedTaiwanWorldEntered;
+enum class TaiwanWorldEntryIdentity;
 // Serial game-owner lease over actual common character/storage identity.
 // This integration policy does not recover spawn rules or manufacture wire
 // data. The scene owner supplies its already reserved native actor handle.
@@ -94,6 +96,26 @@ public:
     // epoch. Saved root/pose/resource Current is qualified separately.
     // A new actor that appears and disappears also changes this epoch.
     bool retained_population_current(const ReadyPopulation&) const;
+    // Privately issued initial observation: the complete ready set plus the
+    // exact prepared joining root/pose, over the whole registry including other
+    // pending actors. A copied token never grants a caller activation permission.
+    class InitialPopulation final {
+    public:
+        InitialPopulation(const InitialPopulation&)=default;
+        InitialPopulation& operator=(const InitialPopulation&)=default;
+        std::span<const ReadyCharacter> characters() const noexcept;
+        const ReadyCharacter& joining() const noexcept;
+        bool activated() const noexcept;
+    private:
+        friend class SharedWorldPresence;
+        struct Data;
+        explicit InitialPopulation(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
+    };
+    std::optional<InitialPopulation> observe_initial_population(const Lease&) const;
+    // Pure registry/issuer/phase fence only; full saved root/pose/resource
+    // Current and native complete-scene coverage remain with the real source.
+    bool retained_initial_population_current(const InitialPopulation&) const;
     // Actual currently stored owner position. Movement authority remains with
     // the gameplay controller; these methods do not grant walkability/timing.
     std::optional<RecoveredPosition> saved_position(const Lease&) const;
@@ -102,6 +124,11 @@ public:
     // Generation-qualified cleanup: a stale transport cannot evict a successor.
     bool release(const Lease&);
 private:
+    friend class SharedTaiwanWorldEntered;
+    // Only the real Entered owner can consume/revoke the token, at its actual
+    // held install/publication cut. No caller-supplied desired-active flag.
+    bool activate_initial_population(const InitialPopulation&,std::uint16_t,TaiwanWorldEntryIdentity);
+    void retire_initial_population(const InitialPopulation&) noexcept;
     struct Entry {Lease lease;bool active=false;bool operator==(const Entry&) const = default;};
     struct PopulationIdentity {};
     void owner() const;

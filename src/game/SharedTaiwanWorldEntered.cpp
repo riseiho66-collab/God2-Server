@@ -25,6 +25,10 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     Entered::Source source;
     TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter;
     Entered::InitialDeityPublisher deity_publisher=Entered::InitialDeityPublisher::External;
+    // Friend-only bridges are minted by Entered::create from the same Presence;
+    // suppliers never receive activation or retirement callbacks.
+    std::function<bool(const SharedWorldPresence::InitialPopulation&,std::uint16_t)> activate_population;
+    std::function<void(const SharedWorldPresence::InitialPopulation&)> retire_population;
     const std::thread::id thread=std::this_thread::get_id();
     std::map<std::uint64_t,std::shared_ptr<Pending>> pending;
     bool supplying=false,reentered=false;
@@ -35,29 +39,42 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
         if(std::this_thread::get_id()!=thread)std::terminate();
         while(!pending.empty())cancel(pending.begin()->second);
     }
-    bool bound(const std::shared_ptr<Pending>& state,bool active) {
-        owner();if(!state || state->cancelled || !state->native || (supplying && reentered))return false;
+    bool pending_bound(const std::shared_ptr<Pending>& state,bool active) {
+        owner();if(!state || state->cancelled || (supplying && reentered))return false;
         const auto found=pending.find(state->scope.lease.session);
         const auto session=state->connection.lock();const auto& lease=state->scope.lease;
         if(found==pending.end() || found->second!=state || !session || session->closing() ||
            session->id()!=lease.session || session->account_id!=lease.account || session->character_id!=lease.character ||
-           !session->recovered_world_ready() || session->recovered_client_language()!=state->scope.tail_language ||
-           !presence->preparation_current(lease) || presence->ready(lease)!=active)return false;
-        if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle &&
-           (state->cancelled || !state->native || session->closing() || session->id()!=lease.session ||
-            session->account_id!=lease.account || session->character_id!=lease.character ||
-            !session->recovered_world_ready() || session->recovered_client_language()!=state->scope.tail_language ||
-            !pending.contains(lease.session) || pending.at(lease.session)!=state ||
-            (active?!presence->retained_ready_current(lease):!presence->retained_preparation_current(lease))))return false;
+           !session->recovered_world_ready() || session->recovered_client_language()!=state->scope.tail_language)return false;
         if(active)return session->state()==SessionState::InWorld &&
             session->common_world_delivery_current(lease.account,lease.character,lease.generation);
         return (session->state()==SessionState::CharacterSelected || session->state()==SessionState::InWorld) &&
             session->common_world_entry_current(lease.account,lease.character,lease.generation) &&
             !session->common_world_delivery_current(lease.account,lease.character,lease.generation);
     }
+    bool population_bound(const std::shared_ptr<Pending>& state,bool active) {
+        return pending_bound(state,active) && state->scope.population &&
+            state->scope.population->joining().lease==state->scope.lease &&
+            state->scope.population->activated()==active &&
+            presence->retained_initial_population_current(*state->scope.population) && pending_bound(state,active);
+    }
+    bool bound(const std::shared_ptr<Pending>& state,bool active) {
+        owner();if(!state || !state->native || !population_bound(state,active))return false;
+        const auto session=state->connection.lock();const auto& lease=state->scope.lease;
+        if(!presence->preparation_current(lease) || !population_bound(state,active) ||
+           presence->ready(lease)!=active || !population_bound(state,active))return false;
+        if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle &&
+           (state->cancelled || !state->native || session->closing() || session->id()!=lease.session ||
+            session->account_id!=lease.account || session->character_id!=lease.character ||
+            !session->recovered_world_ready() || session->recovered_client_language()!=state->scope.tail_language ||
+            !pending.contains(lease.session) || pending.at(lease.session)!=state ||
+            (active?!presence->retained_ready_current(lease):!presence->retained_preparation_current(lease))))return false;
+        return population_bound(state,active);
+    }
     bool current(const std::shared_ptr<Pending>& state,bool active,Entered::Check check) {
         if(!bound(state,active))return false;
         const auto observe=state->native->current;
+        if(!bound(state,active))return false;
         return observe(check,state->scope) && bound(state,active);
     }
     void cancel(std::shared_ptr<Pending> state) noexcept {
@@ -66,6 +83,9 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
         // cannot retain affine payload or touch a successor generation.
         if(!state || state->cancelled)return;
         state->cancelled=true;
+        if(state->scope.population)retire_population(*state->scope.population);
+        // Keep the exact revoked Scope stable through an in-flight supplier
+        // and its eventual returned-material cleanup; it grants no successor.
         const auto found=pending.find(state->scope.lease.session);
         if(found!=pending.end() && found->second==state)pending.erase(found);
         auto done=std::move(state->done);auto material=std::move(state->native);state->native.reset();
@@ -87,13 +107,14 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
             retained_incoming=state->incoming;
             if(!visibility->taiwan_initial_current(retained_incoming,session,lease,false) ||
                !bound(state,false) || state->incoming!=retained_incoming)return false;
-        }else if(!visibility->taiwan_initial_current(state->incoming,session,lease,false))return false;
+        }else if(!visibility->taiwan_initial_current(state->incoming,session,lease,false) ||
+                 !bound(state,false))return false;
         const auto install=state->native->install;
+        if(!bound(state,false))return false;
         if(!install(*session,state->scope) || state->cancelled ||
            !current(state,false,Entered::Check::AfterInstall) || session->state()!=SessionState::InWorld ||
-           !(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle?
-             presence->activate_qualified_scene(lease,state->scope.entry.actor_handle):
-             presence->activate(lease,state->scope.entry.actor_handle)))return false;
+           !state->scope.population ||
+           !activate_population(*state->scope.population,state->scope.entry.actor_handle))return false;
         session->bind_common_world_delivery_identity(lease.account,lease.character,lease.generation);
         if(!bound(state,true) || !visibility->publish_initial_taiwan(
            identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle?retained_incoming:state->incoming,session,lease))return false;
@@ -138,8 +159,21 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
         try {
             supplying=true;reentered=false;
             struct EndSupply {SceneOwner& owner;~EndSupply(){owner.supplying=false;}} guard{*this};
+            // The pending identity and reentry guard precede allocation and
+            // actual repository observers. A cancelled capture never reaches
+            // the real supplier or gains a later activation opportunity.
+            if(!pending_bound(state,false)) {fail(state);return;}
+            auto population=presence->observe_initial_population(lease);
+            if(!population || !pending_bound(state,false) || population->joining().lease!=lease ||
+               population->activated() || !presence->retained_initial_population_current(*population)) {
+                if(population)retire_population(*population);
+                fail(state);return;
+            }
+            state->scope.population=*population;
+            if(!population_bound(state,false)) {fail(state);return;}
             auto native=source(session,state->scope);
             if(state->cancelled) {
+                retire_population(*population);
                 if(native)try {native->cleanup(state->scope);}catch(...) {}
                 return;
             }
@@ -172,6 +206,7 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
                               record.opcode==0x34 || record.opcode==0x35;
                    })) {fail(state);return;}
             }
+            if(!population_bound(state,false)) {fail(state);return;}
             state->incoming=visibility->prepare_initial_taiwan_recipient(lease,session.shared_from_this(),std::move(material.incoming));
             if(!state->incoming || !current(state,false,Entered::Check::AfterSupply)) {fail(state);return;}
             const auto records=state->incoming->records();const auto supplied=state->incoming->supplied_records();
@@ -235,6 +270,16 @@ SharedTaiwanWorldLifecycle::AsyncOwner SharedTaiwanWorldEntered::create(
     auto state=std::make_shared<SceneOwner>();state->presence=std::move(presence);
     state->visibility=std::move(visibility);state->source=std::move(source);state->identity=identity;
     state->deity_publisher=deity_publisher;
+    // Access is lexical to this friend class, not the anonymous SceneOwner or
+    // any native supplier. Capture only the actual Presence and identity mode.
+    state->activate_population=[presence=state->presence,identity](
+            const SharedWorldPresence::InitialPopulation& population,std::uint16_t handle) {
+        return presence->activate_initial_population(population,handle,identity);
+    };
+    state->retire_population=[presence=state->presence](
+            const SharedWorldPresence::InitialPopulation& population) noexcept {
+        presence->retire_initial_population(population);
+    };
     return {
         [state](Session& session,const Lease& lease,const RecoveredWorldEntryView& entry,
                 SharedTaiwanWorldLifecycle::ReadyCompletion done) {state->enter(session,lease,entry,std::move(done));},
