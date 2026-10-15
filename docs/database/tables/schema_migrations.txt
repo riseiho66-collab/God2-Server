@@ -1,0 +1,28 @@
+schema_migrations
+
+中文名稱：不可變遷移歷史
+用途：保存完整不可變 SQLite 遷移 SQL 與套用歷史；目標 MySQL DDL 必須另存。
+儲存分類：SchemaMetadata
+領域分類：Migration
+來源安裝分類：VersionedMigration
+安裝說明：版本化遷移來源；實際安裝狀態仍須核對原資料庫遷移歷史。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/SqliteMigrationManager.cpp:11 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+applied_at | SQLite 宣告型別：TEXT | 來源宣告：1
+  套用時間：原 SQLite 保存的遷移套用時間文字。
+name | SQLite 宣告型別：TEXT | 來源宣告：1
+  遷移名稱：原編譯遷移名稱。
+sql_text | SQLite 宣告型別：TEXT | 來源宣告：1
+  原始 SQLite 遷移 SQL：保存不可變來源 SQL 原文，不能改寫成 MySQL DDL。
+version | SQLite 宣告型別：INTEGER | 來源宣告：1
+  遷移版本：已套用遷移的連續版本。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

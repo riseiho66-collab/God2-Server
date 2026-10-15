@@ -1,0 +1,35 @@
+native_skill_catalog
+
+中文名稱：原生技能定義列
+用途：保存版本限定的 110 位元組技能原列、定義鍵、實體序號與雜湊；不是可調平衡參數表。
+儲存分類：NativeSource
+領域分類：NativeCatalog
+來源安裝分類：VersionedMigration
+安裝說明：版本化遷移來源；實際安裝狀態仍須核對原資料庫遷移歷史。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/Migration.cpp:89 [CREATE TABLE]
+2. src/db/TaiwanInstalledSkillCatalogImport.cpp:46 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+dataset_id | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  技能資料集：參照原生資料來源的版本識別。
+definition_id | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  技能定義編號：種類內技能定義編號，與實體列序號分開。
+kind | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  技能種類：原生技能種類零至三。
+raw_record | SQLite 宣告型別：BLOB | 來源宣告：1, 2
+  原始技能列：完整 110 位元組原生技能資料，不用描述文字替代。
+record_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  技能原列雜湊：完整技能原列的 SHA-256。
+source_offset | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  來源位移：技能列在固定來源中的實體位元組位移。
+source_record_index | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  實體來源序號：原始來源的實體列順序，不等同技能編號。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

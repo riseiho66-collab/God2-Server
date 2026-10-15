@@ -1,0 +1,28 @@
+character_bank_balances
+
+中文名稱：角色倉庫餘額
+用途：持久保存角色倉庫餘額；原有約束與寫入資格由來源 repository 定義。
+儲存分類：Authoritative
+領域分類：Inventory
+來源安裝分類：ExplicitExtension
+安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/SqliteBankRepository.cpp:22 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+amount | SQLite 宣告型別：INTEGER | 來源宣告：1
+  數額。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+character_id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  角色 ID。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+design_id | SQLite 宣告型別：TEXT | 來源宣告：1
+  設計識別。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  版本／修訂號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

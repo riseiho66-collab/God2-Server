@@ -1,0 +1,21 @@
+# MySQL8 typed format and English-identifier per-table dictionary — Round416
+
+Owner requirements are recorded in AGENTS.md and DATABASE_STRATEGY.md: future direct MySQL8 SQL export and actual core backend, readable typed tables, English physical table/column names with one Chinese TXT explanation per table, data-driven ordinary parameters without recompiling C++, and separate weapon/armor/treasure/general definitions. +N belongs to each equipment instance. Split special-item families only when their structure/lifecycle differs; common bags/warehouse/trade/ownership remain shared. Future parameters need complete versioned validated reload, stable battle/settlement versions and explicit effect timing. No default activation or physical schema change here.
+
+ServerDataDictionary explicitly lists123 distinct CREATE TABLE names from131 source-literal declarations, plus per-table source locations/installation scopes. These include optional, historical and transient definitions, not a measured installed DB inventory. Runtime descriptive column metadata is deliberately limited to123 positively qualified columns across22 tables; unknown find_column returns null.
+
+The123 per-table TXT files inventory1012 distinct declared columns (including source-qualified variants/later ADD fields). Their explanation tiers are123 positively qualified,878 explicitly marked literal English-name translations and11 unresolved opaque fields. Literal translation is not a recovered unit, formula, authority or complete business meaning. All physical identifiers remain original English. Native BLOBs/profiles/packets are labeled and preserved; raw SPI subset is not falsely promoted to a complete general-item catalog. No source declarations, IDs or native evidence were renamed or deleted.
+
+MySql80ExportFormat owns the entire caller image before validation or arbitrary ostream callbacks. Exact typed int64/uint64 decimals, canonical UTF8 text and native BLOB hex are emitted without narrowing or floating-point conversion. English DDL comments refer to each table's TXT. Preflight checks required readable metadata, typed cells, nullability, widths, PK/UNIQUE tuples, folded identifier collisions,16-part keys/1017 columns/64 secondary indexes and explicit16KB target InnoDB capability. Rows are ordered by the full typed PK. The first format profile targets MySQL8.0.17+ no-pad utf8mb4_0900_bin.
+
+The concrete SqliteToMysqlExportTool::write_mysql80_snapshot overload forwards owning values into this formatter. It creates no files and does not certify the caller's reported source version/digest or snapshot, all installed source objects, durable output publication or actual import. The existing Database& export_sql deliberately still refuses until an actual single consistent read snapshot and complete audited schema/constraint mapping are implemented. MySqlDatabase/MySqlMigrationManager and core DB parameter reload remain unsupported/unimplemented.
+
+Only explicit PK/UNIQUE target models are supported here. Current SQLite typeof/GLOB/instr/substr/hex/printf/strftime/CHECK/FK/partial-index/trigger/collation/WITHOUT ROWID/default/autoincrement/high-water semantics cannot be dropped or regex-replaced. Future mapping must positively handle every installed object or refuse. SQLite sql_text stays source history; imported MySQL DDL is not transactionally rolled back by START TRANSACTION. All those source/read/mapping/backend/reload/import branches remain OPEN.
+
+Finite C++20 source review caught and fixed borrowed input references across ostream callbacks and target index/column limits before this freeze. No product/parser/export/DB/SQL/build/tests/native/migration/import/deployment ran. No new project Python, Lua or CMake files. This infrastructure adds zero complete TW gameplay routes, opcodes or native formulas; whole-game percentage stays unknown. Round415's single failed static accounting report remains immutable; Round416 is a genuinely new source increment with its own unique accounting invocation.
+
+Primary target references:
+- https://dev.mysql.com/doc/refman/8.0/en/hexadecimal-literals.html
+- https://dev.mysql.com/doc/refman/8.0/en/charset-binary-collations.html
+- https://dev.mysql.com/doc/refman/8.0/en/innodb-limits.html
+- https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html

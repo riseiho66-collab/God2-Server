@@ -1,0 +1,32 @@
+owned_pk_rooms
+
+中文名稱：PK 房間狀態與檢查點
+用途：持久保存PK 房間狀態與檢查點；原有約束與寫入資格由來源 repository 定義。
+儲存分類：Authoritative
+領域分類：Pk
+來源安裝分類：ExplicitExtension
+安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/SqliteOwnedPkRoomRepository.cpp:223 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+checkpoint | SQLite 宣告型別：TEXT | 來源宣告：1
+  戰鬥檢查點：原房間的持久戰鬥檢查點文件。
+design_id | SQLite 宣告型別：TEXT | 來源宣告：1
+  房間設計合約：原 PK 功能的設計來源識別。
+id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  PK 房間編號：不可隨意重用的房間自增識別。
+readset | SQLite 宣告型別：TEXT | 來源宣告：1
+  完整入場觀測：房間保留的完整來源讀集合文件。
+revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  房間版本：房間狀態與輸出的正整數版本。
+state | SQLite 宣告型別：TEXT | 來源宣告：1
+  房間狀態：reserved、active、finished 或 abandoned 的既有狀態。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

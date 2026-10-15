@@ -1,0 +1,40 @@
+native_raw_item_source_rows
+
+中文名稱：原生道具 SPI 歷史來源列
+用途：保存歷史 SPI 中 PetRoom 6177 至 6200 的來源子集；不是完整一般道具目錄或權威平衡設定。
+儲存分類：NativeSource
+領域分類：Inventory
+來源安裝分類：ExplicitExtension
+安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/NativePetRoomSourceCatalog.cpp:348 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+authority | SQLite 宣告型別：TEXT | 來源宣告：1
+  權威來源註記。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+dataset_id | SQLite 宣告型別：TEXT | 來源宣告：1
+  資料集 ID。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+decoded_offset | SQLite 宣告型別：INTEGER | 來源宣告：1
+  解碼內容位移。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+family | SQLite 宣告型別：TEXT | 來源宣告：1
+  系列分類。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+field_count | SQLite 宣告型別：INTEGER | 來源宣告：1
+  欄位數。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+native_key | SQLite 宣告型別：INTEGER | 來源宣告：1
+  原生鍵。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+normalized_record | SQLite 宣告型別：BLOB | 來源宣告：1
+  正規化原始紀錄（內容用途尚未復原）。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。 原始客戶端資源位元組；內容用途尚未復原。
+record_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  紀錄 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+source_line | SQLite 宣告型別：INTEGER | 來源宣告：1
+  來源行號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+source_record_index | SQLite 宣告型別：INTEGER | 來源宣告：1
+  來源紀錄索引。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

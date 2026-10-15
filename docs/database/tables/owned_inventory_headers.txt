@@ -1,0 +1,40 @@
+owned_inventory_headers
+
+中文名稱：角色背包根身分與版本
+用途：持久保存角色背包根身分與版本；原有約束與寫入資格由來源 repository 定義。
+儲存分類：Authoritative
+領域分類：Inventory
+來源安裝分類：ExplicitExtension
+安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/SqliteOwnedInventoryRepository.cpp:272 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+account_id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  帳號編號：背包根身分所屬帳號。
+character_id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  角色編號：背包根身分所屬完整共用角色。
+revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  背包版本：整份背包比對交換版本。
+root_created_at | SQLite 宣告型別：TEXT | 來源宣告：1
+  根角色建立時間：保留背包觀測時角色根身分。
+root_name_codepage | SQLite 宣告型別：INTEGER | 來源宣告：1
+  根名稱編碼頁：保留背包觀測時名稱編碼。
+root_profile | SQLite 宣告型別：BLOB | 來源宣告：1
+  根角色原始資料：觀測背包時完整 40 位元組角色根資料。
+root_slot | SQLite 宣告型別：INTEGER | 來源宣告：1
+  根角色欄位：觀測背包時的完整角色欄位。
+root_streamer_privilege | SQLite 宣告型別：INTEGER | 來源宣告：1
+  根特殊顯示資格值：背包根身分保存值，不推導新權限。
+source_record | SQLite 宣告型別：TEXT | 來源宣告：1
+  背包來源紀錄：背包來源資格證據紀錄。
+source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  背包來源雜湊：背包來源資格證據雜湊。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

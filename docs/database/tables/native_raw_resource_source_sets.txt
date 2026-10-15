@@ -1,0 +1,68 @@
+native_raw_resource_source_sets
+
+中文名稱：原生資源完整來源集合
+用途：保留原生資源來源的原生資源完整來源集合；完整原始位元組及來源不得改寫，不直接授予玩家權限。
+儲存分類：NativeSource
+領域分類：NativeCatalog
+來源安裝分類：ExplicitExtension
+安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/NativeRomMapSourceCatalog.cpp:183 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+authority | SQLite 宣告型別：TEXT | 來源宣告：1
+  權威來源註記。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+catalog_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  目錄 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+dataset_id | SQLite 宣告型別：TEXT | 來源宣告：1
+  資料集 ID。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+decoded_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  解碼內容 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+encoded_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  編碼內容 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+encoding | SQLite 宣告型別：TEXT | 來源宣告：1
+  編碼。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+first_slot_index | SQLite 宣告型別：INTEGER | 來源宣告：1
+  第一格位索引。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+first_source_line | SQLite 宣告型別：INTEGER | 來源宣告：1
+  第一來源行號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+header_decoded_offset | SQLite 宣告型別：INTEGER | 來源宣告：1
+  標頭解碼位移。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+header_field_count | SQLite 宣告型別：INTEGER | 來源宣告：1
+  標頭欄位數。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+header_record | SQLite 宣告型別：BLOB | 來源宣告：1
+  原始標頭紀錄（內容用途尚未復原）。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。 原始客戶端資源位元組；內容用途尚未復原。
+header_record_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  標頭紀錄 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+header_source_line | SQLite 宣告型別：INTEGER | 來源宣告：1
+  標頭來源行號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+last_slot_index | SQLite 宣告型別：INTEGER | 來源宣告：1
+  最後格位索引。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+last_source_line | SQLite 宣告型別：INTEGER | 來源宣告：1
+  最後來源行號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+line_ending | SQLite 宣告型別：TEXT | 來源宣告：1
+  行尾編碼。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+parser_image_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  解析器映像 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+record_count | SQLite 宣告型別：INTEGER | 來源宣告：1
+  紀錄數。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+section_name | SQLite 宣告型別：TEXT | 來源宣告：1
+  區段名稱。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+source_file | SQLite 宣告型別：TEXT | 來源宣告：1
+  來源檔案。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+version_scope | SQLite 宣告型別：TEXT | 來源宣告：1
+  版本範圍。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+window_end_offset | SQLite 宣告型別：INTEGER | 來源宣告：1
+  觀測範圍結束位移。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+window_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  觀測範圍 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+window_start_offset | SQLite 宣告型別：INTEGER | 來源宣告：1
+  觀測範圍起始位移。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

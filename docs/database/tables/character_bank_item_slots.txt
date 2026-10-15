@@ -1,0 +1,37 @@
+character_bank_item_slots
+
+中文名稱：角色倉庫物品格
+用途：持久保存角色倉庫物品格；原有約束與寫入資格由來源 repository 定義。
+儲存分類：Authoritative
+領域分類：Inventory
+來源安裝分類：VersionedMigration
+安裝說明：版本化遷移來源；實際安裝狀態仍須核對原資料庫遷移歷史。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/Migration.cpp:552 [CREATE TABLE]
+2. src/db/SqliteBankItemsRepository.cpp:81 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+character_id | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  角色 ID。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+count | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  計數。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+design_id | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  設計識別。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+item_design_id | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  道具設計識別。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+item_id | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  道具 ID。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+revision | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  版本／修訂號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+slot | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  欄位／格位。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  來源 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

@@ -1,0 +1,38 @@
+recovered_characters
+
+中文名稱：共用角色身分與原始角色資料
+用途：保存共用角色身分、角色欄位、名稱編碼與完整原始角色資料。
+儲存分類：Authoritative
+領域分類：Character
+來源安裝分類：VersionedMigration
+安裝說明：版本化遷移來源；實際安裝狀態仍須核對原資料庫遷移歷史。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/Migration.cpp:44 [CREATE TABLE]
+2. src/db/Migration.cpp:249 [ALTER TABLE ADD COLUMN]
+3. src/db/Migration.cpp:541 [ALTER TABLE ADD COLUMN]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+account_id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  所屬帳號：參照帳號的角色擁有者。
+created_at | SQLite 宣告型別：TEXT | 來源宣告：1
+  角色建立時間：角色根身分保存的建立時間文字。
+id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  角色編號：完整共用角色主鍵，不截斷成客戶端 handle。
+name_bytes | SQLite 宣告型別：BLOB | 來源宣告：1
+  原始角色名稱：保留既有編碼的名稱位元組，不直接轉成 UTF-8。
+name_codepage | SQLite 宣告型別：INTEGER | 來源宣告：2
+  名稱編碼頁：保存編碼頁識別；不以目前作業系統編碼取代。
+profile | SQLite 宣告型別：BLOB | 來源宣告：1
+  原始角色資料：完整 40 位元組角色資料；未知欄位不拆解或補零。
+slot | SQLite 宣告型別：INTEGER | 來源宣告：1
+  角色欄位：帳號內角色欄位，既有約束為零或一。
+streamer_privilege | SQLite 宣告型別：INTEGER | 來源宣告：3
+  特殊顯示資格值：原保存的零至三資格值；不推導未恢復的玩法權限。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

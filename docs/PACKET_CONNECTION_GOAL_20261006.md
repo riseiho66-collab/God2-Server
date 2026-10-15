@@ -6179,3 +6179,25 @@ saves/fonts/IME/auth/portraits/text preserved. PHASE1 no build/test/product/
 parser/native/VM/codec/gameDBSQL/schema/migrate/activate/deploy.
 
 Details: docs/research/tw-actor-status-write-fence-source-20261015.md
+
+## Round416 — Database portability source and readable table dictionary (2026-10-15)
+
+Round416 adds actual ServerDataDictionary123source-declaredtable names/131
+literaldeclarations,NOTinstalledDBcount, runtime123positivecolumns/22tables;
+Englishphysicalidentifiers and123per-tableChineseTXT1012columnswith123positive/
+878markedliteraltranslations/11unresolvedopaque. Existingnativebytes/saves kept.
+ConcreteownedtypedMySql80ExportFormat+Toolstreamemitter handlesexact64/UTF8/
+BLOBhex/PKUNIQUEpreflight/deterministicorder/EnglishTXTcomments/explicit16KB
+MySQL8.0.17+target. Callerimageformat ONLY; Database&fullSQLiteexport/readsnapshot/
+allconstraints/MySqlbackend/coreparameterreload remainOPEN. NoSQL/DB/schema
+migrations orphysicaltablechanges. OwnerfutureDBdrivenparameters/weaponarmor/
+法寶/generaldefs/perinstance+N/selectivespecialfamilies requirements recorded.
+SixCPP twoexisting/fournew; V52pins137=131oldexact+2existing+4new; canonical748.
+No newprojectPY/Lua/CMake/EXE. Wholepercentunknown/fullTWroutesadded0; TW100
+commonCNfourWS/453繁體/clientformulas/maxHPpoison10分1/907pins/shared64coin
+99999999999stack99nativelevels/saves/fonts/IME/auth/portraits/text retained.
+PHASE1no build/test/product/parser/native/VM/gamecodec/actualDBSQL/schema/
+migrate/import/activate/deploy. Round415failedsingleaccountingpreserved;416
+newsourceincrementaccountinguniqueonce. GoalACTIVE.
+
+Details: docs/research/mysql80-dictionary-format-source-20261015.md

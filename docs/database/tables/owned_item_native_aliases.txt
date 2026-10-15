@@ -1,0 +1,38 @@
+owned_item_native_aliases
+
+中文名稱：道具實例原生別名
+用途：保存共用實例對各客戶端版本的原生道具鍵、欄位及完整原始資料。
+儲存分類：Authoritative
+領域分類：Inventory
+來源安裝分類：ExplicitExtension
+安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/SqliteOwnedInventoryRepository.cpp:304 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+client_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  客戶端版本雜湊：原生別名適用的客戶端版本。
+instance_id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  共用實例編號：原生別名所屬共用道具實例。
+native_key | SQLite 宣告型別：INTEGER | 來源宣告：1
+  原生道具鍵：此版本下的原生道具鍵。
+native_slot | SQLite 宣告型別：INTEGER | 來源宣告：1
+  原生欄位：此版本下的原生欄位值，不推導裝備權限。
+profile | SQLite 宣告型別：TEXT | 來源宣告：1
+  別名設定識別：原生別名設定識別，不是角色 40 位元組資料。
+record | SQLite 宣告型別：BLOB | 來源宣告：1
+  原始道具別名資料：保存完整原生別名資料，不補未知位元組。
+revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  別名版本：此別名持久版本。
+source_record | SQLite 宣告型別：TEXT | 來源宣告：1
+  別名來源紀錄：原生別名的來源紀錄。
+source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  別名來源雜湊：原生別名的完整來源雜湊。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

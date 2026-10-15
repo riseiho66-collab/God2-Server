@@ -1,0 +1,70 @@
+owned_guild_relation_events_0084
+
+中文名稱：公會關係操作事件
+用途：保留已執行操作的公會關係操作事件；保留完整收據與版本，歷史本身不授予新的操作權限。
+儲存分類：AuditHistory
+領域分類：Guild
+來源安裝分類：ConditionalMigration
+安裝說明：條件式／可選遷移來源；宣告存在不表示功能已啟用。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/relations53/schema53.inc:37 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+action | SQLite 宣告型別：TEXT | 來源宣告：1
+  動作。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_account | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者帳號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_battle_generation | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者戰鬥世代。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_character | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者角色。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_codepage | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者編碼頁。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_guild | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者公會。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_position_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者位置版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_session | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者連線。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_slot | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者欄位。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+actor_world_generation | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作者世界世代。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+after_state | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作後狀態。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+before_state | SQLite 宣告型別：INTEGER | 來源宣告：1
+  操作前狀態。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+design_id | SQLite 宣告型別：TEXT | 來源宣告：1
+  設計識別。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+guild_high | SQLite 宣告型別：INTEGER | 來源宣告：1
+  較大公會識別。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+guild_low | SQLite 宣告型別：INTEGER | 來源宣告：1
+  較小公會識別。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+high_guild_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  較大識別方公會版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+high_ownership_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  較大識別方擁有權版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+low_guild_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  較小識別方公會版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+low_ownership_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  較小識別方擁有權版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+origin | SQLite 宣告型別：TEXT | 來源宣告：1
+  來源類型。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+previous_pair_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  前一配對版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+request_name16 | SQLite 宣告型別：BLOB | 來源宣告：1
+  請求名稱原始資料（格式用途尚未復原）。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。 原始二進位資料；內容用途尚未復原。
+request_subtype | SQLite 宣告型別：INTEGER | 來源宣告：1
+  請求子類型。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  版本／修訂號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  來源 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

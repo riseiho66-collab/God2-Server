@@ -1,0 +1,58 @@
+character_native_equipment_snapshots
+
+中文名稱：角色原生裝備交付快照
+用途：保留客戶端交付的角色原生裝備交付快照；快照是交付證據，不是第二份角色、背包或裝備權威。
+儲存分類：NativeDelivery
+領域分類：Character
+來源安裝分類：ExplicitExtension
+安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/SqliteNativeEquipmentSnapshotRepository.cpp:195 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+account_id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  帳號編號：交付快照的完整帳號識別。
+actor_handle | SQLite 宣告型別：INTEGER | 來源宣告：1
+  客戶端 actor handle。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+area | SQLite 宣告型別：INTEGER | 來源宣告：1
+  區域。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+character_id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  角色編號：交付快照的完整角色識別。
+client_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  客戶端版本：快照適用的客戶端版本雜湊。
+position_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  位置版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+record | SQLite 宣告型別：BLOB | 來源宣告：1
+  原始裝備交付快照：完整 1215 位元組快照；不是第二份權威背包或裝備權限。
+record_kind | SQLite 宣告型別：TEXT | 來源宣告：1
+  紀錄格式識別：明確版本化紀錄格式，不猜新的格式。
+revision | SQLite 宣告型別：INTEGER | 來源宣告：1
+  快照版本：已保存原生交付快照版本。
+root_created_at | SQLite 宣告型別：TEXT | 來源宣告：1
+  根資料建立時間。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+root_name_codepage | SQLite 宣告型別：INTEGER | 來源宣告：1
+  根資料名稱編碼頁。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+root_profile | SQLite 宣告型別：BLOB | 來源宣告：1
+  根資料原始內容（內容用途尚未復原）。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。 原始客戶端封包／快照位元組；內容用途尚未復原。
+root_slot | SQLite 宣告型別：INTEGER | 來源宣告：1
+  根資料格位。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+root_streamer_privilege | SQLite 宣告型別：INTEGER | 來源宣告：1
+  根資料特殊顯示資格值。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+scene | SQLite 宣告型別：INTEGER | 來源宣告：1
+  場景。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+source_record | SQLite 宣告型別：TEXT | 來源宣告：1
+  來源紀錄：快照來源證據原文。
+source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
+  來源雜湊：快照來源證據雜湊。
+x | SQLite 宣告型別：INTEGER | 來源宣告：1
+  橫座標。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+y | SQLite 宣告型別：INTEGER | 來源宣告：1
+  縱座標。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

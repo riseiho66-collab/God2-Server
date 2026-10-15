@@ -999,3 +999,49 @@ Ownerresume goalACTIVE/TW100first; shared453Traditional/clientBINformulas/
 currentmaxHPpoison10分1/907pins/common64coin99999999999stack99nativelevels/
 saves/fonts/IME/auth/portraits/text preserved. PHASE1 no build/test/product/
 parser/native/VM/codec/gameDBSQL/schema/migrate/activate/deploy.
+
+Owner database architecture directives (2026-10-15, after resume414):
+Future SQLite exports must target directly importable MySQL8.0 SQL with actual
+backend/core repositories, complete schema/constraint/data fidelity and shared
+TW/CN gameplay storage. Current MySqlDatabase/fullDatabase export are unsupported;
+typed formatting alone is not backend/export/import validation. Preserve saves,
+IDs64, text/nativebinary/sourcehistory/constraints and SQLite until actualmigration.
+Organize human-readable typed domain data; physical table/column identifiers all
+ENGLISH. Chinese field explanations go in ONE TXT PER TABLE, English->Chinese
+(e.g. STR strength/力量), with units/types/ranges/relations when positively known.
+No guessed opaque semantics, duplicate authority, destructive rename/drop or
+arbitrary packet-as-text conversion. The123 literal source table names include
+optional/history/transient definitions, NOT a measured installedDB count.
+Separate WEAPON, ARMOR, TREASURE(法寶), GENERALITEM definitions and typed
+enhancement rules. +N belongs to EACH equipment instance, notthe shared base row;
+keepcommon bag/warehouse/trade/ownership ledgers and qualified instance links.
+Armor subtypes use actualnativecategory/slot evidence. Split specialitems only
+whenfields/rules/instance lifecycle differ; otherwise common readable categories.
+DB-drive ordinary skill/rule parameters, enhancement, monsters/drops/EXP/shop/
+quests so daily numerical changes do NOTrequire core recompilation. C++stable
+core + Lua gameplay + typed common SQLite/MySQL repository and revisioned whole
+validated config snapshot/reload; failures retain oldwholeversion, battle/settlement
+retain chosenversion, no perpacketSQL/halfnewparameters. Hotreload/backend/domain
+promotion still mustbeactuallyimplemented; record effecttiming perparameter.
+Native453/clientformulas remain baseline; explicitcustom overrides retain
+provenance and mustnotoverwrite originalsource. Scope/additiveplan:
+docs/DATABASE_STRATEGY.md. TW100/commonCN/fourWS goalcontinues; PHASE1still
+forbids build/test/product/native/VM/gamecodec/actualDBSQL/schema/migrate/import/
+activate/deploy. No newprojectPY helpers.
+Round416 adds actual ServerDataDictionary123source-declaredtable names/131
+literaldeclarations,NOTinstalledDBcount, runtime123positivecolumns/22tables;
+Englishphysicalidentifiers and123per-tableChineseTXT1012columnswith123positive/
+878markedliteraltranslations/11unresolvedopaque. Existingnativebytes/saves kept.
+ConcreteownedtypedMySql80ExportFormat+Toolstreamemitter handlesexact64/UTF8/
+BLOBhex/PKUNIQUEpreflight/deterministicorder/EnglishTXTcomments/explicit16KB
+MySQL8.0.17+target. Callerimageformat ONLY; Database&fullSQLiteexport/readsnapshot/
+allconstraints/MySqlbackend/coreparameterreload remainOPEN. NoSQL/DB/schema
+migrations orphysicaltablechanges. OwnerfutureDBdrivenparameters/weaponarmor/
+法寶/generaldefs/perinstance+N/selectivespecialfamilies requirements recorded.
+SixCPP twoexisting/fournew; V52pins137=131oldexact+2existing+4new; canonical748.
+No newprojectPY/Lua/CMake/EXE. Wholepercentunknown/fullTWroutesadded0; TW100
+commonCNfourWS/453繁體/clientformulas/maxHPpoison10分1/907pins/shared64coin
+99999999999stack99nativelevels/saves/fonts/IME/auth/portraits/text retained.
+PHASE1no build/test/product/parser/native/VM/gamecodec/actualDBSQL/schema/
+migrate/import/activate/deploy. Round415failedsingleaccountingpreserved;416
+newsourceincrementaccountinguniqueonce. GoalACTIVE.

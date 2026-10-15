@@ -1,0 +1,39 @@
+native_data_sources
+
+中文名稱：原生資料集來源與雜湊
+用途：保存資料集完整來源、解碼與映像雜湊以及原生載入查找註記。
+儲存分類：NativeSource
+領域分類：NativeCatalog
+來源安裝分類：VersionedMigration
+安裝說明：版本化遷移來源；實際安裝狀態仍須核對原資料庫遷移歷史。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/Migration.cpp:65 [CREATE TABLE]
+2. src/db/TaiwanInstalledSkillCatalogImport.cpp:35 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+dataset_id | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  資料集識別：版本限定的原生資料集識別。
+decoded_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  解碼來源雜湊：完整解碼內容的 SHA-256 文字。
+loader_rva | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  載入器相對位址：已保存的原生載入器相對位址文字。
+lookup_rva | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  查找器相對位址：已保存的原生查找器相對位址文字。
+native_image_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  原生映像雜湊：消費者映像證據的 SHA-256，不代表現行 EXE 觀測。
+row_count | SQLite 宣告型別：INTEGER | 來源宣告：1, 2
+  來源列數：此資料集完整來源列數。
+source_path | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  來源路徑：原生來源的保存路徑註記，不代表檔案目前仍相同。
+source_section | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  來源區段：原生來源區段註記。
+source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1, 2
+  原始來源雜湊：完整來源的 SHA-256 文字。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。

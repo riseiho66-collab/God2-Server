@@ -1,0 +1,28 @@
+accounts
+
+中文名稱：帳號與密碼雜湊
+用途：保存登入名稱、密碼雜湊與帳號建立時間。
+儲存分類：Authoritative
+領域分類：Account
+來源安裝分類：VersionedMigration
+安裝說明：版本化遷移來源；實際安裝狀態仍須核對原資料庫遷移歷史。
+
+本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+
+來源宣告：
+1. src/db/Migration.cpp:23 [CREATE TABLE]
+
+欄位（所有不同的原始宣告；版本差異保留）：
+created_at | SQLite 宣告型別：TEXT | 來源宣告：1
+  建立時間：來源保存的建立時間文字，不改時區或格式。
+id | SQLite 宣告型別：INTEGER | 來源宣告：1
+  帳號編號：SQLite 正整數帳號主鍵，不是客戶端 actor handle。
+password_hash | SQLite 宣告型別：TEXT | 來源宣告：1
+  密碼雜湊：既有密碼雜湊原值，不是明文密碼。
+username | SQLite 宣告型別：TEXT | 來源宣告：1
+  登入名稱：帳號登入名稱；保留既有唯一約束。
+
+限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
+本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
+原始客戶端封包、快照、編碼與原列位元組不改寫。
