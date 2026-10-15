@@ -626,6 +626,10 @@ public:
     void bind_common_world_entry_identity(std::uint64_t account,std::uint64_t character,std::uint64_t generation);
     void release_common_world_entry_identity(std::uint64_t account,std::uint64_t character,std::uint64_t generation);
     bool common_world_entry_current(std::uint64_t account,std::uint64_t character,std::uint64_t generation) const;
+    // Explicit initial entry only: complete pinned grammar aggregate is packed
+    // into bounded frames at record boundaries; adjacent6F+EA stays indivisible.
+    // ALL frames are held before one game publication and released as one cohort.
+    // Completion observes whole queue release, never socket/client acceptance.
     void send_common_world_entry_with_publication(std::vector<std::uint8_t> logical,
         std::uint64_t account,std::uint64_t character,std::uint64_t generation,
         std::function<bool()> publish,std::function<void(bool)> queued);

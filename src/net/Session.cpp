@@ -138,12 +138,15 @@ struct Budget {
 struct Reservation {
     std::shared_ptr<Budget> budget;
     std::size_t bytes;
-    Reservation(std::shared_ptr<Budget> budget_, std::size_t bytes_)
-        : budget(std::move(budget_)), bytes(bytes_) {}
+    const std::size_t count;
+    bool charged;
+    Reservation(std::shared_ptr<Budget> budget_, std::size_t bytes_,std::size_t count_=1,bool charged_=true)
+        : budget(std::move(budget_)), bytes(bytes_),count(count_),charged(charged_) {}
     ~Reservation() {
+        if(!charged)return;
         std::lock_guard lock(budget->mutex);
         budget->bytes -= bytes;
-        --budget->count;
+        budget->count -= count;
     }
 };
 } // namespace
@@ -789,6 +792,88 @@ struct Session::Impl {
         ActiveWriteContinuation(std::shared_ptr<NativePkReturnPublication::Work> value,
             std::shared_ptr<std::vector<std::uint8_t>> bytes):work(std::move(value)),frame(std::move(bytes)){}
     };
+    // Pure actual initial-entry cohort bookkeeping. Queue tickets never own
+    // tasks, game callbacks, the cohort or a Session. Task abandonment therefore
+    // cannot form a queue/task cycle; removal revokes pre-release membership.
+    struct InitialEntryIdentity {
+        enum class Phase {Preparing,Installed,Publishing,Published,Released};
+        std::atomic<Phase> phase{Phase::Preparing};
+        std::atomic<bool> revoked{false};
+    };
+    struct InitialEntryMember {
+        const std::shared_ptr<InitialEntryIdentity> identity;
+        const std::size_t ordinal;
+        const std::shared_ptr<std::vector<std::uint8_t>> frame;
+        const std::vector<std::uint8_t> encoded;
+        std::atomic<bool> present{false};
+        InitialEntryMember(std::shared_ptr<InitialEntryIdentity> key,std::size_t index,
+            std::shared_ptr<std::vector<std::uint8_t>> bytes)
+            :identity(std::move(key)),ordinal(index),frame(std::move(bytes)),encoded(*frame){}
+    };
+    struct InitialEntryQueueTicket {
+        const std::shared_ptr<InitialEntryMember> member;
+        explicit InitialEntryQueueTicket(std::shared_ptr<InitialEntryMember> value):member(std::move(value)){}
+        ~InitialEntryQueueTicket(){
+            if(member->present.exchange(false)&&
+               member->identity->phase.load()!=InitialEntryIdentity::Phase::Released)
+                member->identity->revoked.store(true);
+        }
+    };
+    struct InitialEntryCohort {
+        const std::shared_ptr<InitialEntryIdentity> identity;
+        const std::vector<std::shared_ptr<InitialEntryMember>> members;
+        const std::vector<std::shared_ptr<ActiveWriteContinuation>> holders;
+        const std::shared_ptr<Reservation> reservation;
+        const std::size_t charge;
+        InitialEntryCohort(std::shared_ptr<InitialEntryIdentity> key,
+            std::vector<std::shared_ptr<InitialEntryMember>> frames,
+            std::vector<std::shared_ptr<ActiveWriteContinuation>> continuations,
+            std::shared_ptr<Reservation> budget,std::size_t bytes)
+            :identity(std::move(key)),members(std::move(frames)),holders(std::move(continuations)),
+             reservation(std::move(budget)),charge(bytes){}
+        bool held_current(InitialEntryIdentity::Phase expected) const noexcept {
+            if(identity->revoked.load()||identity->phase.load()!=expected||members.empty()||
+               members.size()!=holders.size()||!reservation||!reservation->charged||reservation->count!=members.size()||
+               reservation->bytes!=charge)return false;
+            for(std::size_t i=0;i<members.size();++i){
+                const auto& member=members[i];const auto& holder=holders[i];
+                if(!member||member->identity!=identity||member->ordinal!=i||!member->present.load()||
+                   !member->frame||member->encoded!=*member->frame||!holder||holder->frame!=member->frame||
+                   holder->frame.owner_before(member->frame)||member->frame.owner_before(holder->frame))return false;
+            }
+            return !identity->revoked.load()&&identity->phase.load()==expected;
+        }
+    };
+    // The final queued notification has its OWN task-drop guard. Scheduling
+    // is not delivery: only the actual game callback marks this delivered.
+    // Last-drop closes/revokes without recursively posting another notification;
+    // the existing game-vault teardown owns real affine cancellation callbacks.
+    struct InitialEntryQueuedDelivery {
+        const std::weak_ptr<Session> session;
+        std::atomic<bool> delivered{false};
+        explicit InitialEntryQueuedDelivery(std::weak_ptr<Session> owner):session(std::move(owner)){}
+        ~InitialEntryQueuedDelivery(){
+            if(!delivered.load())if(const auto owner=session.lock())try{owner->close();}catch(...){}
+        }
+    };
+    // The actual posted tasks alone own this guard. Actual callbacks stay in
+    // the game vault; finish contains only its revocable facade and executor.
+    struct InitialEntryAttempt {
+        const std::weak_ptr<Session> session;
+        const std::function<void(bool)> finish;
+        std::atomic<bool> finished{false};
+        InitialEntryAttempt(std::weak_ptr<Session> owner,std::function<void(bool)> completion)
+            :session(std::move(owner)),finish(std::move(completion)){}
+        void complete(bool accepted) noexcept {
+            if(finished.exchange(true))return;
+            try{finish(accepted);}catch(...){if(const auto owner=session.lock())try{owner->close();}catch(...){}}
+        }
+        void abort() noexcept {
+            if(const auto owner=session.lock())try{owner->close();}catch(...){}
+            complete(false);
+        }
+        ~InitialEntryAttempt(){if(!finished.load())abort();}
+    };
     // Weak bookkeeping only: the REAL async operation owns the continuation.
     std::weak_ptr<ActiveWriteContinuation> active_write_continuation;
     // Separate from the pair Data kept by the game owner. Last abandoned post
@@ -965,7 +1050,8 @@ struct Session::Impl {
         std::shared_ptr<NativePkReturnOutputWrite> return_output{}; // Existing private cohort position.
         std::weak_ptr<ActiveWriteContinuation> pending_return_continuation{}; // Existing held-task holder.
         std::optional<TaiwanActorStatusWriteFence::Writer> status_writer{}; // Existing queue lifetime position.
-        std::optional<TaiwanActorStatusPublication::FrameSeal> status_seal{}; // LAST: pure exact frame version.
+        std::optional<TaiwanActorStatusPublication::FrameSeal> status_seal{}; // Existing pure exact frame version.
+        std::shared_ptr<InitialEntryQueueTicket> initial_entry{}; // LAST: exact initial cohort membership.
     };
     std::deque<Write> writes;
     template<class Executor,class Body>
@@ -979,6 +1065,30 @@ struct Session::Impl {
         owner.invalidate_actor_status_writes();
         value.status_writer=owner.begin_actor_status_writer();
         writes.push_back(std::move(value));
+    }
+    // Strand-only full contiguous cohort validation. The game task uses the
+    // corresponding pure ticket-presence proof, never reads this deque.
+    bool initial_entry_queued(const std::shared_ptr<const InitialEntryCohort>& cohort,
+            InitialEntryIdentity::Phase phase,std::size_t& first) const noexcept {
+        if(!cohort||!cohort->held_current(phase))return false;
+        std::size_t seen=0,index=0;bool ended=false;
+        for(const auto& queued:writes){
+            if(queued.initial_entry&&queued.initial_entry->member->identity==cohort->identity){
+                if(ended||seen>=cohort->members.size())return false;
+                const auto& member=cohort->members[seen];
+                const auto holder=queued.pending_return_continuation.lock();
+                if(!queued.held||queued.world_entry||queued.return_output||queued.status_seal||
+                   queued.initial_entry->member!=member||queued.bytes!=member->frame||
+                   queued.bytes.owner_before(member->frame)||member->frame.owner_before(queued.bytes)||
+                   queued.reservation!=cohort->reservation||queued.reservation.owner_before(cohort->reservation)||
+                   cohort->reservation.owner_before(queued.reservation)||holder!=cohort->holders[seen]||
+                   holder.owner_before(cohort->holders[seen])||cohort->holders[seen].owner_before(holder))return false;
+                if(!seen)first=index;
+                ++seen;
+            }else if(seen)ended=true;
+            ++index;
+        }
+        return seen==cohort->members.size()&&cohort->held_current(phase);
     }
     // Network strand only; set by the exact marked Write's success completion,
     // then captured as immutable owned data into the account selection game job.
@@ -4139,26 +4249,25 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
     const auto pending=impl_->common_entry_identity.load();
     if(!publish || !pending || !common_world_entry_current(account,character,generation) ||
        account_id!=account || character_id!=character || logical.empty() ||
-       logical.size()>RecoveredWorldFrame::max_logical_size || !impl_->character_handlers.common_world_publication_owner) {
+       logical.size()>RecoveredTaiwanServerRecords::max_aggregate_logical_size || !impl_->character_handlers.common_world_publication_owner) {
         try {queued(false);}catch(...) {}close();return;
     }
-    // Only this explicit native entry path uses the pinned TW S2C grammar.
-    // Qualify the whole unchanged aggregate before owning publication, charging
-    // transport capacity or encoding. Lengths do not grant phase/gameplay rights.
-    bool complete_native_records=false;
-    try {complete_native_records=bool(RecoveredTaiwanServerRecords::read(logical));}
-    catch(...) {}
-    if(!complete_native_records) {
-        try {queued(false);}catch(...) {}close();return;
-    }
+    // Only this explicit native entry path accepts a larger complete grammar
+    // aggregate. Native record limits and all generic world sends stay unchanged.
+    std::optional<std::vector<RecoveredTaiwanServerRecords::Record>> records;
+    try {records=RecoveredTaiwanServerRecords::read_aggregate(logical);}catch(...) {}
+    if(!records) {try {queued(false);}catch(...) {}close();return;}
     CommonWorldPublication owned;
     try {owned=impl_->character_handlers.common_world_publication_owner(*this,{std::move(publish),std::move(queued)});}
     catch(...) {close();return;}
     if(!owned.publish || !owned.queued){close();return;}
-    // Both functions are revocable facades. Their actual captures stay on game
-    // in the lifecycle owner, including cancellation and startup unwind.
+    // Both functions are revocable facades; actual captures remain on game.
     const auto finish=[self=shared_from_this(),queued=std::move(owned.queued)](bool accepted) {
-        self->impl_->post_status_work(self->impl_->game,[queued,accepted] {try {queued(accepted);}catch(...) {}});
+        const auto delivery=std::make_shared<Impl::InitialEntryQueuedDelivery>(self);
+        self->impl_->post_status_work(self->impl_->game,[queued,accepted,delivery] {
+            delivery->delivered.store(true); // Actual game delivery, never mere post acceptance.
+            try {queued(accepted);}catch(...) {}
+        });
     };
     const auto before=[self=shared_from_this(),pending,account,character,generation] {
         return self->impl_->common_entry_identity.load()==pending &&
@@ -4171,49 +4280,153 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
             self->state()==SessionState::InWorld && self->common_world_delivery_current(account,character,generation);
     };
     if(!before()){close();finish(false);return;}
-    const auto charge=logical.size()+3;auto budget=impl_->budget;std::shared_ptr<Reservation> reservation;
+    std::shared_ptr<Impl::InitialEntryAttempt> attempt;
     try {
-        std::lock_guard lock(budget->mutex);
-        if(charge<=max_buffer-budget->bytes && budget->count<max_writes) {
-            reservation=std::make_shared<Reservation>(budget,charge);budget->bytes+=charge;++budget->count;
+        attempt=std::make_shared<Impl::InitialEntryAttempt>(weak_from_this(),finish);
+        const auto identity=std::make_shared<Impl::InitialEntryIdentity>();
+        std::vector<std::shared_ptr<Impl::InitialEntryMember>> members;
+        std::vector<std::shared_ptr<Impl::ActiveWriteContinuation>> holders;
+        std::vector<std::uint8_t> part;part.reserve(RecoveredWorldFrame::max_logical_size);
+        std::size_t charge=0;
+        const auto flush=[&] {
+            if(part.empty())return;
+            if(members.size()>=max_writes)throw std::length_error("Initial aggregate exceeds frame budget");
+            auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(part));
+            if(bytes->size()>max_buffer-charge)throw std::length_error("Initial aggregate exceeds byte budget");
+            const auto member=std::make_shared<Impl::InitialEntryMember>(identity,members.size(),bytes);
+            const auto holder=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
+            members.push_back(member);holders.push_back(holder);charge+=bytes->size();part.clear();
+        };
+        for(std::size_t i=0;i<records->size();++i){
+            const auto& record=(*records)[i];std::size_t size=record.bytes.size();
+            // Adjacent full6F+EA is one unit. Do not split, skip or reinterpret
+            // opaque bytes; semantic actor/status qualification stays with Source.
+            if(record.opcode==0x6f&&i+1<records->size()&&(*records)[i+1].opcode==0xea)
+                size+=(*records)[++i].bytes.size();
+            if(size>RecoveredWorldFrame::max_logical_size)throw std::length_error("Initial record unit exceeds frame");
+            if(part.size()>RecoveredWorldFrame::max_logical_size-size)flush();
+            part.insert(part.end(),logical.begin()+record.offset,logical.begin()+record.offset+size);
         }
-    }catch(...) {close();finish(false);return;}
-    if(!reservation){close();finish(false);return;}
-    impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,before,after,
-        account,character,publish=std::move(owned.publish),finish]() mutable {
-        auto& s=*self->impl_;
-                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
-        if(s.closing || !before() || s.mode!=ProtocolMode::God2CharacterConnection ||
-           s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
-            s.fail("Stale pending common entry publication");finish(false);return;
-        }
-        try {
-            auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(logical));
-            if(bytes->size()>max_buffer-s.write_bytes || s.writes.size()>=max_writes) {
-                s.fail("Pending common entry queue limit");finish(false);return;
+        flush();
+        if(members.empty()||!before())throw std::logic_error("Initial aggregate source retired during framing");
+        const auto budget=impl_->budget;
+        // Allocate uncharged OUTSIDE the mutex. An allocation/new-handler may
+        // reenter close and release older tickets without deadlocking this lock.
+        auto reservation=std::make_shared<Reservation>(budget,charge,members.size(),false);
+        bool charged=false;
+        {
+            std::lock_guard lock(budget->mutex);
+            if(budget->bytes<=max_buffer&&budget->count<=max_writes&&charge<=max_buffer-budget->bytes&&
+               members.size()<=max_writes-budget->count){
+                budget->bytes+=charge;budget->count+=members.size();
+                reservation->charged=true;charged=true; // No allocation/destruction under lock.
             }
-            if(!s.terminal_write_allowed()){finish(false);return;}
-            const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
-            s.append_write({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
-            s.writes.back().pending_return_continuation=held_continuation;
-            s.post_status_work(s.game,[self,bytes,held_continuation,before,after,account,character,publish=std::move(publish),finish] {
-                bool accepted=false;
-                try {accepted=before() && self->account_id==account && self->character_id==character &&
-                    publish() && after() && self->account_id==account && self->character_id==character;}catch(...) {}
-                self->impl_->post_status_work(self->impl_->strand,[self,bytes,held_continuation,after,accepted,finish] {
-                    auto& s=*self->impl_;
-                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
-                    if(!accepted || s.closing || !after() || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
-                        s.fail("Pending common entry publication refused");finish(false);return;
-                    }
-                    const auto held=std::find_if(s.writes.begin(),s.writes.end(),[&](const auto& entry){return entry.bytes==bytes;});
-                    if(held==s.writes.end() || !held->held){s.fail("Pending common entry held frame missing");finish(false);return;}
-                    held->held=false;if(held==s.writes.begin())s.write(held_continuation->work);
-                    finish(true); // Queue released, never a client/native ACK.
+        }
+        if(!charged)throw std::length_error("Initial aggregate reservation exhausted");
+        // One aggregate reservation refunds its exact byte/count charge once,
+        // conservatively when the LAST frame/task reference is released.
+        const auto cohort=std::make_shared<const Impl::InitialEntryCohort>(identity,std::move(members),
+            std::move(holders),std::move(reservation),charge);
+        std::vector<Impl::Write> prepared;prepared.reserve(cohort->members.size());
+        for(std::size_t i=0;i<cohort->members.size();++i){
+            Impl::Write value{cohort->members[i]->frame,cohort->reservation,false,true};
+            value.pending_return_continuation=cohort->holders[i];
+            value.initial_entry=std::make_shared<Impl::InitialEntryQueueTicket>(cohort->members[i]);
+            prepared.push_back(std::move(value));
+        }
+        impl_->post_status_work(impl_->strand,[self=shared_from_this(),cohort,attempt,prepared=std::move(prepared),before,after,
+                account,character,publish=std::move(owned.publish)]() mutable {
+            auto& s=*self->impl_;
+            [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+            if(s.closing||!before()||s.mode!=ProtocolMode::God2CharacterConnection||
+               s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted){
+                s.fail("Stale pending common entry publication");attempt->abort();return;
+            }
+            try {
+                if(s.write_bytes>max_buffer||s.writes.size()>max_writes||cohort->charge>max_buffer-s.write_bytes||
+                   cohort->members.size()>max_writes-s.writes.size()||prepared.size()!=cohort->members.size())
+                    throw std::length_error("Pending common entry aggregate queue limit");
+                if(!s.terminal_write_allowed()){attempt->abort();return;}
+                // All encoding/tickets/holders are complete before the FIRST
+                // append. A failed append leaves only held bytes; fail() clears
+                // that entire unpublished prefix before any write can start.
+                for(std::size_t i=0;i<prepared.size();++i){
+                    if(!before()||cohort->identity->revoked.load()||
+                       cohort->identity->phase.load()!=Impl::InitialEntryIdentity::Phase::Preparing)
+                        throw std::logic_error("Initial aggregate retired during insertion");
+                    s.append_write(std::move(prepared[i]));s.write_bytes+=cohort->members[i]->frame->size();
+                    cohort->members[i]->present.store(true);
+                }
+                auto preparing=Impl::InitialEntryIdentity::Phase::Preparing;
+                if(!cohort->identity->phase.compare_exchange_strong(preparing,Impl::InitialEntryIdentity::Phase::Installed))
+                    throw std::logic_error("Initial aggregate installed twice");
+                std::size_t first=0;
+                if(!before()||!s.initial_entry_queued(cohort,Impl::InitialEntryIdentity::Phase::Installed,first))
+                    throw std::logic_error("Initial aggregate not wholly held before publication");
+                // Only private queue tickets can revoke/remove membership. The
+                // game task validates ALL their atomic presences without reading
+                // the strand deque. No held frame can be popped by write().
+                s.post_status_work(s.game,[self,cohort,attempt,before,after,account,character,publish=std::move(publish)] {
+                    bool accepted=false;
+                    try {
+                        auto installed=Impl::InitialEntryIdentity::Phase::Installed;
+                        accepted=cohort->held_current(installed)&&before()&&self->account_id==account&&
+                            self->character_id==character&&cohort->identity->phase.compare_exchange_strong(
+                                installed,Impl::InitialEntryIdentity::Phase::Publishing);
+                        if(accepted)accepted=cohort->held_current(Impl::InitialEntryIdentity::Phase::Publishing)&&
+                            before()&&publish()&&after()&&self->account_id==account&&self->character_id==character&&
+                            cohort->held_current(Impl::InitialEntryIdentity::Phase::Publishing);
+                        auto publishing=Impl::InitialEntryIdentity::Phase::Publishing;
+                        accepted=accepted&&cohort->identity->phase.compare_exchange_strong(publishing,
+                            Impl::InitialEntryIdentity::Phase::Published);
+                    }catch(...) {}
+                    try {self->impl_->post_status_work(self->impl_->strand,[self,cohort,attempt,after,accepted] {
+                        auto& s=*self->impl_;
+                        [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+                        try {
+                            std::size_t first=0;
+                            if(!accepted||s.closing||!after()||s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted||
+                               !s.initial_entry_queued(cohort,Impl::InitialEntryIdentity::Phase::Published,first))
+                                throw std::logic_error("Pending common entry whole cohort refused");
+                            // Preserve any real earlier PK task custody. Each
+                            // held frame has its OWN exact-frame holder; queued
+                            // metadata never becomes the strong task owner.
+                            std::shared_ptr<NativePkReturnPublication::Work> carried;
+                            for(const auto& holder:cohort->holders)if(holder->work){
+                                if(carried&&carried!=holder->work)throw std::logic_error("Initial cohort has conflicting PK continuations");
+                                carried=holder->work;
+                            }
+                            if(first&&carried){
+                                const auto active=s.active_write_continuation.lock();
+                                if(active){
+                                    if(active->frame!=s.writes.front().bytes||(active->work&&active->work!=carried))
+                                        throw std::logic_error("Initial cohort older active continuation mismatch");
+                                    active->work=carried;
+                                }else{
+                                    const auto pending=s.writes.front().pending_return_continuation.lock();
+                                    if(!pending||!s.writes.front().held||pending->frame!=s.writes.front().bytes||
+                                       (pending->work&&pending->work!=carried))
+                                        throw std::logic_error("Initial cohort older held continuation mismatch");
+                                    pending->work=carried;
+                                }
+                            }
+                            // Validate the ENTIRE exact contiguous cohort before
+                            // unholding ANY member. The following transition and
+                            // flag writes do not allocate, publish or pump events.
+                            if(!after()||!s.initial_entry_queued(cohort,Impl::InitialEntryIdentity::Phase::Published,first))
+                                throw std::logic_error("Initial cohort retired before whole release");
+                            auto published=Impl::InitialEntryIdentity::Phase::Published;
+                            if(!cohort->identity->phase.compare_exchange_strong(published,Impl::InitialEntryIdentity::Phase::Released))
+                                throw std::logic_error("Initial aggregate released twice");
+                            for(std::size_t i=0;i<cohort->members.size();++i)s.writes[first+i].held=false;
+                            if(!first)s.write(std::move(carried));
+                            attempt->complete(true); // WHOLE queue release only; no socket/native ACK.
+                        }catch(...){s.fail("Pending common entry aggregate release failed");attempt->abort();}
+                    });}catch(...){cohort->identity->revoked.store(true);attempt->abort();}
                 });
-            });
-        }catch(...) {s.fail("Pending common entry encoding failed");finish(false);}
-    });
+            }catch(...){cohort->identity->revoked.store(true);s.fail("Pending common entry aggregate insertion failed");attempt->abort();}
+        });
+    }catch(...){if(attempt)attempt->abort();else{close();finish(false);}}
 }
 void Session::send_common_world_records_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,

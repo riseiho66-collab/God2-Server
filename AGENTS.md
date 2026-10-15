@@ -1239,3 +1239,21 @@ reload/MySQL8backend-export required. GoalACTIVE/TW100first;453繁體/clientBIN/
 maxHPpoison10分1/907/common64coin99999999999stack99nativelevels/saves/fonts/IME/
 auth/text preserved. PHASE1no build/test/product/parser/native/VM/codec/gameDBSQL/
 schema/migrate/import/activate/deploy.
+
+Round425 connects complete initial scene aggregate to actual multi-frame held
+publication. Separate read_aggregate servercap0xA00*256; oldread framecap/native
+lengthtable/individualvariablelimit unchanged. Full6Foffset/equality/textsplice/
+playerdeityoverlap/SourceCurrent/install/cleanup/outward retained. Partitionwhole
+records/adjacent6F+EA; preencodeALL/chargeTOTALencodedbytes+actualFRAMEcount;
+appendALLHELD beforeONErealgamepublish; exactwholecohort+pendingidentity checked
+beforepublishhandoff andANYunhold. Oncegamecompletionqueue-release NOTACK;
+partialfailureclosesheldbatch/no truncation. OlderPKcontinuation/Writerstatus/
+unrelatedsenders preserved. Actualsceneproducer/initialprepared-activeproof/
+completeplacements/nativeMovementAuthority/Main/fullroutes/acceptance OPEN.
+CPP5 ALLexisting;V61pins146=141same5updated/canonical775/Git11=9inverse2newdocs.
+No newprojectPY/Lua/CMake/EXE/opcode/formula/fullroutes;percentageunknown.
+All-systemDBactualgamerules/Englishnames/ChineseTXT/typedC++Luarepositories/
+validatedreload/MySQL8backend-export required. GoalACTIVE/TW100first;453繁體/
+clientBIN/maxHPpoison10分1/907/common64coin99999999999stack99nativelevels/
+saves/fonts/IME/auth/text preserved. PHASE1no build/test/product/parser/native/
+VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.

@@ -36,6 +36,10 @@ public:
     using Cleanup=std::function<void(const Scope&)>;
     struct Native {
         ReplyDecision decision;
+        // Complete ordered scene aggregate, bounded separately from one frame.
+        // Session partitions complete records into native frames and holds the
+        // entire cohort before the single real install/publication callback.
+        // This never permits record truncation or a partial actor population.
         std::vector<std::uint8_t> logical;
         // Exact ordered boundary offsets of every native6F in the aggregate.
         // The pinned TW record grammar supplies all aggregate boundaries; each

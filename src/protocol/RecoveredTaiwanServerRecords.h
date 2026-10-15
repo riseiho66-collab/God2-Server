@@ -29,9 +29,21 @@ struct RecoveredTaiwanServerRecords {
     // variable record's exclusive limit below. No envelope is decoded here.
     static constexpr std::size_t max_logical_size=RecoveredWorldFrame::max_logical_size;
     static constexpr std::size_t variable_record_limit_exclusive=0xA00;
+    // Explicit server allocation cap for a complete ordered initial aggregate,
+    // not a native record-size limit or a guarantee of packed frame count.
+    static constexpr std::size_t max_aggregate_logical_size=max_logical_size*256;
 
     static std::optional<std::vector<Record>> read(std::span<const std::uint8_t> logical) {
-        if(logical.empty() || logical.size()>max_logical_size)return std::nullopt;
+        return read_bounded(logical,max_logical_size);
+    }
+    static std::optional<std::vector<Record>> read_aggregate(std::span<const std::uint8_t> logical) {
+        return read_bounded(logical,max_aggregate_logical_size);
+    }
+
+private:
+    static std::optional<std::vector<Record>> read_bounded(std::span<const std::uint8_t> logical,
+            std::size_t allocation_limit) {
+        if(logical.empty() || logical.size()>allocation_limit)return std::nullopt;
         std::vector<Record> records;
         // The smallest recovered fixed record is two bytes; variable records
         // require all three header bytes. This is only an allocation bound.
@@ -62,7 +74,6 @@ struct RecoveredTaiwanServerRecords {
         return records;
     }
 
-private:
     // Exact 00..FD pointer leaves plus the native >FD unsupported branch.
     // Positive values include opcode; -2 means total WORD; -1 unsupported.
     // No C2S producer grammar or CN length table is used.

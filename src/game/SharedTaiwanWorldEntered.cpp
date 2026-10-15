@@ -146,14 +146,14 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
             if(native)state->native=std::move(*native);
             if(reentered || !native || !current(state,false,Entered::Check::AfterSupply)) {fail(state);return;}
             auto& material=*state->native;
-            if(material.logical.size()>RecoveredWorldFrame::max_logical_size ||
+            if(material.logical.size()>RecoveredTaiwanServerRecords::max_aggregate_logical_size ||
                material.incoming_offsets.size()!=material.incoming.size()) {fail(state);return;}
             if(material.decision==Entered::ReplyDecision::ExplicitNoInitialReply) {
                 if(!material.logical.empty() || !material.incoming.empty() || !material.incoming_offsets.empty()) {fail(state);return;}
             }else if(material.decision!=Entered::ReplyDecision::CompleteNativeAggregate || material.logical.empty()) {fail(state);return;}
             std::optional<std::vector<RecoveredTaiwanServerRecords::Record>> native_records;
             if(material.decision==Entered::ReplyDecision::CompleteNativeAggregate) {
-                native_records=RecoveredTaiwanServerRecords::read(material.logical);
+                native_records=RecoveredTaiwanServerRecords::read_aggregate(material.logical);
                 if(!native_records) {fail(state);return;}
                 // Inspect ALL actual initial boundaries before any queue. Never
                 // drop or rewrite an overlapping native deity publication.
