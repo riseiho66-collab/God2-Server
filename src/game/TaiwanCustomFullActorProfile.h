@@ -59,7 +59,7 @@ public:
     };
     struct ResourceInput {
         enum class Origin {Custom0133Explicit,SavedWorldSelectors};
-        enum class Mode {DrvOnly,HeroComponents};
+        enum class Mode {DrvOnly,HeroComponents,HeroComponentsAndDrv};
         std::shared_ptr<const TaiwanNativeActorResourceBank> bank;
         std::shared_ptr<const TaiwanNativeDrvDoll> drv_doll_bank;
         std::uint64_t epoch;

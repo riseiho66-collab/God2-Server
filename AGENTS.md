@@ -1137,3 +1137,24 @@ no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/import/
 activate/deploy. GoalACTIVE/TW100first/sharedCNfourWS/453繁體/clientBINformulas/
 maxHPpoison10分1/907pins/common64coin99999999999stack99nativelevels/saves/
 fonts/IME/auth/portraits/text preserved.
+
+Round420 connects actual ordinaryDrv FIFTHasset alongsidefourHero. Native
+461416→463640/output+8 distinct46142C→463AD0DrvDolltail/output+A; existing
+257B/85sites463640evidence reused, cachehitdoesnotreopen/newnativecredit0.
+ResourceConfigurationLASToptionalowningDrvRom(context,fullaction), nonempty
+actualDrvfilename requiresnativeprivateRequest/completeSelectedROM/images/
+explicitaction, noActType/preload/HeroContext/cacheword/defaultaction guesses.
+Data/material/privateCarrier/current/WholePhysical includeexactfifthnode and
+fullrequest/selection/sourcebytes; finalArgs.savedEQSQLcutlast/puretail. Profile
+appendsHeroComponentsAndDrv mode;emptyDrvfilename oldHero/null;nonempty true
+privateFamilyDrv/fullordinal/ROM;fourHeroalwaysrequired/DrvOnlyunsupported.
+IndependentnonemptyDrvDolltail/nativecachewindow/actionchoice/statusauthority/
+initialclear/completewriters/privatebytepermits/finalgameIOcut/fullTW/CN/fourWS/
+nativeacceptance OPEN. FourEXISTINGCPP/V56pins141=137same4updated/canonical760/
+Git9; no newCPP/PY/Lua/CMake/EXE/nativeformula/opcode/fullroutes. Percentage
+unknown. All-systemDBscope/actor-specificskills/Englishphysicalnames/ChineseTXT/
+actualDBrepositories/reload/MySQLbackend remainrequired. PHASE1no build/test/
+product/parser/native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
+GoalACTIVE/TW100first/sharedCNfourWS/453繁體/clientBINformulas/maxHPpoison10分1/
+907pins/common64coin99999999999stack99nativelevels/saves/fonts/IME/auth/text
+preserved.

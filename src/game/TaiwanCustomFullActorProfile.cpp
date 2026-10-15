@@ -137,9 +137,16 @@ bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
     }else if(resource.origin!=ResourceInput::Origin::Custom0133Explicit||
              derived.origin()!=TaiwanNativeActorArgumentSource::Origin::Custom0133Selectors)return false;
     const auto* drv=bank_->find_drv(resource.full_drv_ordinal);if(!drv)return false;
-    // Drv0 classification alone NEVER removes the four native component
-    // requests. DrvOnly is an explicit unsupported V1 mode, not a fallback.
-    if(resource.mode!=ResourceInput::Mode::HeroComponents||resource.drv||resource.components.size()!=4)return false;
+    // Four Hero results are independent of the fifth ordinary Drv resolver.
+    // DrvOnly never substitutes for them, including an actual empty Drv0 row.
+    if(resource.components.size()!=4)return false;
+    if(drv->filename.empty()) {
+        if(resource.mode!=ResourceInput::Mode::HeroComponents||resource.drv)return false;
+    }else {
+        if(resource.mode!=ResourceInput::Mode::HeroComponentsAndDrv||
+           !rom_row(bank_,resource.drv,TaiwanNativeActorResourceBank::ResolvedRom::Family::Drv,drv->ordinal)||
+           resource.drv->rom().images().empty())return false;
+    }
     std::array<bool,4> found{};
     for(const auto& component:resource.components){
         const auto slot=static_cast<std::uint8_t>(component.lookup.component);

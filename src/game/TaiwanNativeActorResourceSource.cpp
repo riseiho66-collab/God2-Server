@@ -29,9 +29,9 @@ bool same_selection(const TaiwanNativeResourceSelection& a,const TaiwanNativeRes
 }
 TaiwanNativeActorResourceSource::Configuration::Configuration(std::array<NativeRomContext,4> input_contexts,
     std::array<std::uint32_t,4> actions,std::size_t encoded_bound,std::size_t plain_bound,Scope source_scope,
-    std::optional<TaiwanNativeActorArgumentSource::CustomSelectors> input_selectors)
+    std::optional<TaiwanNativeActorArgumentSource::CustomSelectors> input_selectors,std::optional<DrvRom> input_drv)
     :contexts(std::move(input_contexts)),full_actions(actions),max_encoded_bytes(encoded_bound),
-     max_plain_bytes(plain_bound),scope(source_scope),selectors(std::move(input_selectors)) {
+     max_plain_bytes(plain_bound),scope(source_scope),selectors(std::move(input_selectors)),drv(std::move(input_drv)) {
     if(!encoded_bound||!plain_bound||encoded_bound>=static_cast<std::size_t>(std::numeric_limits<std::streamsize>::max())||
        (scope!=Scope::CurrentServerImmutableAssetGeneration&&scope!=Scope::WholePhysicalSelection))
         throw std::invalid_argument("Actor resource configuration lacks explicit supported bounds/scope");
@@ -46,12 +46,15 @@ struct TaiwanNativeActorResourceSource::Data {
     const Equipment equipment;
     const TaiwanNativeActorArgumentSource::Observation arguments;
     const std::vector<TaiwanCustomFullActorProfile::ComponentRom> components;
+    const std::shared_ptr<const Bank::ResolvedRom> drv;
     const Scope scope;
     Data(const TaiwanNativeActorResourceSource* issuer,std::shared_ptr<const Identity> key,std::size_t index,
         std::uint64_t generation,std::shared_ptr<const SavedInput> saved,std::size_t actor_row,Equipment eq,
         TaiwanNativeActorArgumentSource::Observation args,std::vector<TaiwanCustomFullActorProfile::ComponentRom> resources,
-        Scope source_scope):owner(issuer),identity(std::move(key)),slot(index),epoch(generation),input(std::move(saved)),
-        row(actor_row),equipment(std::move(eq)),arguments(std::move(args)),components(std::move(resources)),scope(source_scope){}
+        std::shared_ptr<const Bank::ResolvedRom> drv_resource,Scope source_scope)
+        :owner(issuer),identity(std::move(key)),slot(index),epoch(generation),input(std::move(saved)),
+        row(actor_row),equipment(std::move(eq)),arguments(std::move(args)),components(std::move(resources)),
+        drv(std::move(drv_resource)),scope(source_scope){}
 };
 struct TaiwanNativeActorResourceSource::CurrentCarrier {
     const std::shared_ptr<const TaiwanNativeActorResourceSource> source;
@@ -111,12 +114,26 @@ bool TaiwanNativeActorResourceSource::retained(const Data& data) const noexcept 
                rom->rom().source()!=rom->selection().actual_source()||
                rom->rom().encoded_bytes()!=rom->selection().encoded_bytes())return false;
         }
-        return true;
+        const auto* drv=data.arguments.bank()->find_drv(data.arguments.full_drv_ordinal());
+        if(!drv)return false;
+        if(drv->filename.empty())return !data.drv;
+        if(!configuration_.drv||!data.drv)return false;
+        const auto& rom=data.drv;const auto& request=rom->native_request();
+        return request && &request->bank()==data.arguments.bank().get() && &rom->bank()==data.arguments.bank().get() &&
+            request->family()==Bank::ResolvedRom::Family::Drv&&rom->family()==Bank::ResolvedRom::Family::Drv&&
+            request->row_ordinal()==data.arguments.full_drv_ordinal()&&rom->row_ordinal()==data.arguments.full_drv_ordinal()&&
+            same_context(request->context(),configuration_.drv->context)&&
+            same_request(request->request(),rom->selection().request())&&
+            rom->full_action_operand()==configuration_.drv->full_action&&
+            rom->rom().find_action(configuration_.drv->full_action)&&!rom->rom().images().empty()&&
+            rom->rom().source()==rom->selection().actual_source()&&
+            rom->rom().encoded_bytes()==rom->selection().encoded_bytes();
     }catch(...){return false;}
 }
 bool TaiwanNativeActorResourceSource::same_material(const ResourceInput& input,const Data& data) const noexcept {
     if(!retained(data)||input.bank!=data.arguments.bank()||input.drv_doll_bank!=data.arguments.drv_doll_bank()||
-       input.epoch!=data.epoch||input.mode!=ResourceInput::Mode::HeroComponents||input.drv||
+       input.epoch!=data.epoch||input.mode!=(data.drv?ResourceInput::Mode::HeroComponentsAndDrv:ResourceInput::Mode::HeroComponents)||
+       input.drv!=data.drv||
        input.first_selector!=data.arguments.first_selector()||input.second_selector!=data.arguments.second_selector()||
        input.full_drv_ordinal!=data.arguments.full_drv_ordinal()||input.arguments_source!=arguments_||
        !input.arguments||*input.arguments!=data.arguments||input.dependency_owner.get()!=&data||
@@ -139,6 +156,11 @@ bool TaiwanNativeActorResourceSource::physical_current(const Data& data) const {
         const auto selected=TaiwanNativeResourceSelection::select(original.request(),configuration_.max_encoded_bytes);
         if(!selected||!same_selection(*selected,original)||!retained(data))return false;
     }
+    if(data.drv){
+        const auto& original=data.drv->selection();
+        const auto selected=TaiwanNativeResourceSelection::select(original.request(),configuration_.max_encoded_bytes);
+        if(!selected||!same_selection(*selected,original)||!retained(data))return false;
+    }
     // Sequential opened-file observations only; not filesystem atomicity.
     return retained(data);
 }
@@ -154,7 +176,8 @@ TaiwanNativeActorResourceSource::ResourceInput TaiwanNativeActorResourceSource::
     result.bank=data->arguments.bank();result.drv_doll_bank=data->arguments.drv_doll_bank();result.epoch=data->epoch;
     result.origin=data->arguments.origin()==TaiwanNativeActorArgumentSource::Origin::CurrentSavedWorldWitness?
         ResourceInput::Origin::SavedWorldSelectors:ResourceInput::Origin::Custom0133Explicit;
-    result.mode=ResourceInput::Mode::HeroComponents;result.first_selector=data->arguments.first_selector();
+    result.mode=data->drv?ResourceInput::Mode::HeroComponentsAndDrv:ResourceInput::Mode::HeroComponents;
+    result.drv=data->drv;result.first_selector=data->arguments.first_selector();
     result.second_selector=data->arguments.second_selector();result.full_drv_ordinal=data->arguments.full_drv_ordinal();
     result.components=data->components;result.arguments_source=arguments_;result.arguments=data->arguments;
     result.dependency_owner=data;result.current=CurrentCarrier{shared_from_this(),data};return result;
@@ -176,6 +199,8 @@ std::optional<TaiwanNativeActorResourceSource::ResourceInput> TaiwanNativeActorR
     if(free_slot==cache_.size()||next_epoch_==std::numeric_limits<std::uint64_t>::max())return {};
     const auto arguments=arguments_->observe(input,row,equipment,configuration.selectors);
     if(!arguments||!arguments->actual_tail_source().filename.empty()||poisoned_)return {};
+    const auto* drv=arguments->bank()->find_drv(arguments->full_drv_ordinal());
+    if(!drv||(!drv->filename.empty()&&!configuration.drv))return {};
     std::vector<TaiwanCustomFullActorProfile::ComponentRom> components;components.reserve(4);
     for(std::size_t i=0;i<4;++i){
         const auto& lookup=arguments->lookups()[i];const auto* hero=arguments->bank()->find_hero(lookup);
@@ -191,9 +216,19 @@ std::optional<TaiwanNativeActorResourceSource::ResourceInput> TaiwanNativeActorR
         }
         components.push_back({lookup,std::move(resolved)});
     }
+    std::shared_ptr<const Bank::ResolvedRom> drv_resource;
+    if(!drv->filename.empty()){
+        const auto request=Bank::native_drv_request(arguments->bank(),arguments->full_drv_ordinal(),configuration.drv->context);
+        if(!request)return {};
+        const auto selected=TaiwanNativeResourceSelection::select(request->request(),configuration.max_encoded_bytes);if(!selected)return {};
+        auto parsed=TaiwanNativeRomAsset::from_selected_resource(selected->actual_source(),selected->encoded_bytes(),configuration.max_plain_bytes);
+        if(!parsed||parsed->images().empty()||!parsed->find_action(configuration.drv->full_action))return {};
+        auto rom=std::make_shared<const TaiwanNativeRomAsset>(std::move(*parsed));
+        drv_resource=Bank::bind_native_rom(request,*selected,std::move(rom),configuration.drv->full_action);if(!drv_resource)return {};
+    }
     const auto epoch=next_epoch_++;
     auto data=std::make_shared<const Data>(this,identity_,free_slot,epoch,input,row,equipment,*arguments,
-        std::move(components),configuration.scope);
+        std::move(components),std::move(drv_resource),configuration.scope);
     cache_[free_slot]=data;auto result=material(data);
     if(!same_material(result,*data)||!qualify_current(*data)||!same_material(result,*data))return {};
     return result;

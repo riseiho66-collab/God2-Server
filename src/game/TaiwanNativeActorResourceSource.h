@@ -6,9 +6,10 @@
 #include <memory>
 #include <optional>
 #include <thread>
+#include <utility>
 
 namespace god2 {
-// Concrete ordinary Hero asset owner. Never a native client cache/window,
+// Concrete ordinary Hero/Drv asset owner. Never a native client cache/window,
 // manager, action-choice, equip permission, status or ACK attestation.
 class TaiwanNativeActorResourceSource final : public std::enable_shared_from_this<TaiwanNativeActorResourceSource> {
     struct Identity {};
@@ -20,17 +21,27 @@ public:
     using ResourceInput=TaiwanCustomFullActorProfile::ResourceInput;
     using NativeRomContext=TaiwanNativeActorResourceBank::NativeRomContext;
     enum class Scope {CurrentServerImmutableAssetGeneration,WholePhysicalSelection};
+    class DrvRom final {
+    public:
+        DrvRom(NativeRomContext input_context,std::uint32_t actual_full_action)
+            :context(std::move(input_context)),full_action(actual_full_action){}
+        const NativeRomContext context;
+        // Explicit CUSTOM host choice; never Drv ActType/preload or Hero action.
+        const std::uint32_t full_action;
+    };
     class Configuration final {
     public:
         Configuration(std::array<NativeRomContext,4>,std::array<std::uint32_t,4> actual_full_actions,
             std::size_t max_encoded_bytes,std::size_t max_plain_bytes,Scope,
-            std::optional<TaiwanNativeActorArgumentSource::CustomSelectors> selectors={});
+            std::optional<TaiwanNativeActorArgumentSource::CustomSelectors> selectors={},
+            std::optional<DrvRom> drv={});
         const std::array<NativeRomContext,4> contexts;
         // Explicit CUSTOM host action choices, not inferred native first actions.
         const std::array<std::uint32_t,4> full_actions;
         const std::size_t max_encoded_bytes,max_plain_bytes;
         const Scope scope;
         const std::optional<TaiwanNativeActorArgumentSource::CustomSelectors> selectors;
+        const std::optional<DrvRom> drv;
     };
     static std::shared_ptr<TaiwanNativeActorResourceSource> create(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<TaiwanNativeActorArgumentSource>,Configuration);
