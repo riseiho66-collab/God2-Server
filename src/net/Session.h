@@ -1,6 +1,7 @@
 #pragma once
 
 #include "protocol/Packet.h"
+#include "game/TaiwanActorStatusWriteFence.h"
 #include "protocol/ProtocolMode.h"
 #include "protocol/RecoveredC2S0002.h"
 #include "protocol/RecoveredCharacterCreate.h"
@@ -787,7 +788,14 @@ private:
     static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;
     static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
     void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);
+    bool has_actor_status_write_fence() const noexcept;
+    std::optional<TaiwanActorStatusWriteFence::Writer> begin_actor_status_writer() noexcept;
+    template<bool Dispatch,class Executor,class Body>
+    static void schedule_actor_status_work(const Executor&,
+        const std::array<std::shared_ptr<Session>,2>&,Body&&);
     void invalidate_actor_status_writes() noexcept;
+    // Declared BEFORE Impl: retains destructor cleanup custody after Impl dies.
+    std::optional<TaiwanActorStatusWriteFence::Writer> destruction_status_writer_;
     std::unique_ptr<Impl> impl_;
     std::atomic<SessionState> state_{SessionState::Connected};
     std::atomic<std::uint64_t> battle_generation_{0};

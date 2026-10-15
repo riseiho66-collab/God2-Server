@@ -13,7 +13,19 @@ class SharedTaiwanNativeWorldHostPlan;
 // No presence observer, game callback or actor material runs on IO threads.
 class TaiwanActorStatusWriteFence final {
     struct Identity;
+    struct WriterData;
 public:
+    // Copies retain ONE pending writer admission. Last private Data release
+    // ends its pending lifetime; neither a permission nor a delivery receipt.
+    class Writer final {
+    public:
+        Writer(const Writer&) noexcept=default;
+        Writer& operator=(const Writer&) noexcept=default;
+    private:
+        friend class TaiwanActorStatusWriteFence;
+        explicit Writer(std::shared_ptr<WriterData> data) noexcept:data_(std::move(data)){}
+        std::shared_ptr<WriterData> data_;
+    };
     class Checkpoint final {
     public:
         Checkpoint(const Checkpoint&)=default;
@@ -46,6 +58,9 @@ private:
     // Concurrent-safe and monotonic. Saturation is permanent poison: no wrap,
     // reset or revival. This performs no game-affine work or allocation.
     void invalidate() noexcept;
+    // Private actual Session handoff/queue lifetime admission only. Failure
+    // poisons the monitor and leaves the caller's legacy send policy intact.
+    std::optional<Writer> begin_writer() noexcept;
     const std::weak_ptr<SharedWorldPresence> presence_;
     const SharedWorldPresence* const presence_address_;
     const std::shared_ptr<Identity> identity_;

@@ -1045,3 +1045,53 @@ commonCNfourWS/453繁體/clientformulas/maxHPpoison10分1/907pins/shared64coin
 PHASE1no build/test/product/parser/native/VM/gamecodec/actualDBSQL/schema/
 migrate/import/activate/deploy. Round415failedsingleaccountingpreserved;416
 newsourceincrementaccountinguniqueonce. GoalACTIVE.
+
+Owner classification clarification (2026-10-15, Round417):
+Classify editable gameplay tables by ACTUAL GAME RULES: actor/owner,
+learning/use eligibility, acquisition, enhancement, consumption and lifecycle.
+PLAYER-learnable skill definitions, prerequisites and learned-state MUST be
+separate from battle-pet and monster skill availability/learning/AI assignments.
+TW/CN share these corresponding authoritative domains; protocol/resource layout
+does not justify separate gameplay DBs. Shared original skill-source datasets
+and common C++/Lua effect/arithmetic implementations may remain common, without
+merging actor learning rights or inventing missing player learned records from
+selected-deity/native menu snapshots. All proposed definition/ownership splits
+still require actual native actor/category/learning evidence and save-preserving
+typed repository/migration integration. No physical DB changes or grants here.
+English physical identifiers, per-table Chinese TXT, per-instance equipment+N,
+weapon/armor/法寶/general definition families, selective special-item splits and
+data-driven no-recompile ordinary parameters remain required.
+
+Owner all-system DB scope clarification (2026-10-15, Round417):
+DB-drive appropriate recovered gameplay configuration across ALL systems, not
+only the owner's named examples. Include skills, role and battle-pet level/EXP
+curves, monsters/spawns/drops, pets/growth/learning, maps/NPCs, quests/activities,
+shops/crafting/enhancement and other actual game systems. Classify by evidenced
+game rules, owner, fields, relationships and lifecycle; avoid a universal opaque
+parameter table or needless tables for cosmetic categories. Keep definitions,
+actor/world state and source/audit evidence distinct. Separate player/pet growth
+or learning where rules differ; shared effects never merge permissions. Each
+promoted domain needs actual typed core/Lua consumers, validated version/reload
+timing, English physical names, one Chinese TXT per table and save-preserving
+MySQL migration/export mappings. Creating tables alone is not DB integration.
+Scope checklist: docs/DATABASE_STRATEGY.md. No actual DB/schema/SQL operation
+or runtime verification is authorized in PHASE1 by this clarification.
+
+Round417 extends the existing optional CUSTOM0133 actor-status revocation
+monitor with private copy-only pending Writer custody. Same mutex protects
+generation/pending; permanent poison/weakPresence/privateIdentity; last Data
+release ends pending. Actual Session78post+1dispatch handoffs,15public entry
+admissions/54selfImpl callback/body guards,29centralqueue producers/LASTWrite
+ticket and soleasync_write retained completion, auth/ready_async provider gaps
+are connected. No-monitor preserves original handler/executor; legacy send
+policy remains. Quiescence ONLY, no Known/None/EA/ACK/permission authority.
+Completehostmembership/actorincarnation/lifecycle/privatebytepermit/finalgame
+cut/nativecachewindow/actions/Drvfifth/nonemptytail/CN/fullTW/fourWS acceptance
+remainOPEN. Four existingCPP/V53pins137=133same4updated/canonical750/Git10;
+no newCPP/PY/Lua/CMake/EXE/nativeformula/opcode/fullroute. Wholepercentunknown.
+Ownerall-systemDBscope/playerpetmonsterskillclassification recorded; actual
+DBrepositories/reload/MySQLbackend/fullsnapshotexport/migration remainOPEN.
+PHASE1 no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/
+import/activate/deploy. GoalACTIVE/TW100first/commonCNfourWS/453繁體/client
+formulas/maxHPpoison10分1/907pins/shared64coin99999999999stack99nativelevels/
+saves/fonts/IME/auth/portraits/text preserved.

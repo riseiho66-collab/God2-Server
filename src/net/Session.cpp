@@ -44,6 +44,7 @@
 #include <fstream>
 #include <limits>
 #include <thread>
+#include <type_traits>
 #include <nlohmann/json.hpp>
 #ifdef _WIN32
 #include <windows.h>
@@ -51,6 +52,21 @@
 
 namespace god2 {
 namespace {
+// Explicit C++20 member order: body cleanup finishes BEFORE writer release.
+// Lambda capture member order alone cannot provide this lifetime guarantee.
+template<class Body>
+struct ActorStatusWriterWork {
+    std::array<std::optional<TaiwanActorStatusWriteFence::Writer>,2> writers;
+    Body body; // LAST: destroys first, including existing cleanup/post owners.
+    template<class... Args>
+    decltype(auto) operator()(Args&&... args) {
+        return body(std::forward<Args>(args)...);
+    }
+};
+template<class Body>
+auto retain_actor_status_writer(std::optional<TaiwanActorStatusWriteFence::Writer> writer,Body body) {
+    return ActorStatusWriterWork<Body>{{std::move(writer),{}},std::move(body)};
+}
 constexpr std::size_t max_buffer = 1024 * 1024;
 constexpr std::size_t max_writes = 256;
 constexpr std::size_t max_batch = 4096;
@@ -502,6 +518,29 @@ const RecoveredSelectionItemRequest::LogicalRecord& Session::NativeWorldSelectio
 std::uint64_t Session::NativeWorldSelectionInput::batch_sequence() const noexcept {return data_->batch;}
 std::size_t Session::NativeWorldSelectionInput::record_index() const noexcept {return data_->index;}
 
+template<bool Dispatch,class Executor,class Body>
+void Session::schedule_actor_status_work(const Executor& executor,
+        const std::array<std::shared_ptr<Session>,2>& sessions,Body&& body) {
+    // Actual call sites use plain lambdas and the same explicit executor.
+    // Preserve the original handler type/path when this monitor is absent.
+    const bool monitored=(sessions[0]&&sessions[0]->has_actor_status_write_fence())||
+        (sessions[1]&&sessions[1]->has_actor_status_write_fence());
+    if(!monitored) {
+        if constexpr(Dispatch)asio::dispatch(executor,std::forward<Body>(body));
+        else asio::post(executor,std::forward<Body>(body));
+        return;
+    }
+    std::array<std::optional<TaiwanActorStatusWriteFence::Writer>,2> writers;
+    for(std::size_t i=0;i<sessions.size();++i)
+        if(sessions[i])writers[i]=sessions[i]->begin_actor_status_writer();
+    // A failed monitor admission poisons its node, not the legacy send.
+    // Fixed ticket holders own no Session, Presence or game-affine callback.
+    ActorStatusWriterWork<std::decay_t<Body>> held{
+        std::move(writers),std::forward<Body>(body)};
+    if constexpr(Dispatch)asio::dispatch(executor,std::move(held));
+    else asio::post(executor,std::move(held));
+}
+
 struct Session::Impl {
     // This marker is DISTINCT from the Data retained by Application. Its last
     // post/Write owner retiring an uncompleted attempt marks Failed even while
@@ -875,13 +914,20 @@ struct Session::Impl {
         std::shared_ptr<WorldResponseAttempt> observed_response{}; // Preserve old aggregate initializers.
         std::shared_ptr<OwnedInputLease> owned_input_lease{}; // Old aggregate positions preserved.
         std::shared_ptr<NativePkReturnOutputWrite> return_output{}; // Existing private cohort position.
-        std::weak_ptr<ActiveWriteContinuation> pending_return_continuation{}; // LAST default: actual held-task holder only.
+        std::weak_ptr<ActiveWriteContinuation> pending_return_continuation{}; // Existing held-task holder.
+        std::optional<TaiwanActorStatusWriteFence::Writer> status_writer{}; // LAST: exact queue lifetime.
     };
     std::deque<Write> writes;
+    template<class Executor,class Body>
+    void post_status_work(const Executor& executor,Body&& body) {
+        Session::schedule_actor_status_work<false>(executor,{owner.shared_from_this(),{}},
+            std::forward<Body>(body));
+    }
     void append_write(Write value) {
         // Before insertion, even if allocation subsequently fails. All actual
         // queue producers use this sink; game owners are never invoked here.
         owner.invalidate_actor_status_writes();
+        value.status_writer=owner.begin_actor_status_writer();
         writes.push_back(std::move(value));
     }
     // Network strand only; set by the exact marked Write's success completion,
@@ -1074,8 +1120,9 @@ struct Session::Impl {
         if(!pending || native_battle_pending.load()!=pending || pending->completing.exchange(true))return;
         // The weak source is locked and released ONLY on game, including the
         // last strong reference. Network copies retain no source callback.
-        try {asio::post(game,[self=owner.shared_from_this(),pending,written] {
-            auto& s=*self->impl_;bool accepted=false;
+        try {post_status_work(game,[self=owner.shared_from_this(),pending,written] {
+            auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();bool accepted=false;
             const auto delivery=pending->delivery;
             {
                 const auto source=pending->source.lock();
@@ -1088,8 +1135,9 @@ struct Session::Impl {
                         self->account_id==delivery->account && self->character_id==delivery->character;
                 }catch(...) {}
             }
-            try {asio::post(s.strand,[self,pending,accepted] {
+            try {s.post_status_work(s.strand,[self,pending,accepted] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 const bool final_current=s.native_battle_current(pending);
                 auto expected=pending;
                 if(!s.native_battle_pending.compare_exchange_strong(expected,{}))return;
@@ -1114,8 +1162,9 @@ struct Session::Impl {
     }
     void release_native_battle(const std::shared_ptr<NativeBattlePending>& pending,
         const std::shared_ptr<std::vector<std::uint8_t>>& bytes) {
-        try {asio::post(game,[self=owner.shared_from_this(),pending,bytes] {
-            auto& s=*self->impl_;bool accepted=false;
+        try {post_status_work(game,[self=owner.shared_from_this(),pending,bytes] {
+            auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();bool accepted=false;
             {
                 const auto source=pending->source.lock();
                 const auto delivery=pending->delivery;
@@ -1126,8 +1175,9 @@ struct Session::Impl {
                         self->character_id==delivery->character;
                 }catch(...) {}
             }
-            try {asio::post(s.strand,[self,pending,bytes,accepted] {
+            try {s.post_status_work(s.strand,[self,pending,bytes,accepted] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 if(s.native_battle_pending.load()!=pending || pending->completing.load())return;
                 if(!accepted || s.closing || !s.native_battle_current(pending)) {
                     s.fail("Native battle source changed before write");return;
@@ -1192,8 +1242,9 @@ struct Session::Impl {
     void complete_native_pk(const std::shared_ptr<NativePkEntryHold::Data>& data,bool written) {
         if(!data || native_pk_pending.load()!=data || data->completing.exchange(true))return;
         if(!written && !data->clean_abort.load())data->phase.store(NativePkEntryHold::Data::Phase::Failed);
-        try {asio::post(game,[self=owner.shared_from_this(),data,written] {
-            auto& s=*self->impl_;bool accepted=false;
+        try {post_status_work(game,[self=owner.shared_from_this(),data,written] {
+            auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();bool accepted=false;
             const bool had_hold=data->held_notified.exchange(true);
             // Strong source reference and callback destruction stay on game.
             if(const auto source=data->source.lock())try {
@@ -1212,8 +1263,9 @@ struct Session::Impl {
             }catch(...) {accepted=false;}
             // Not usable until the exact pending entry is cleared on strand.
             data->written_accepted.store(accepted);
-            try {asio::post(s.strand,[self,data,written,accepted] {
+            try {s.post_status_work(s.strand,[self,data,written,accepted] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 auto expected=data;
                 if(!s.native_pk_pending.compare_exchange_strong(expected,{}))return;
                 s.native_pk_timer.cancel();s.native_pk_reservation.reset();
@@ -1264,7 +1316,7 @@ struct Session::Impl {
         }
         const auto cut=1u<<index;
         if((data->cuts.fetch_or(cut)|cut)!=3u || data->game_posted.exchange(true))return;
-        try {asio::post(data->game,[data,attempt] {
+        try {post_status_work(data->game,[data,attempt] {
             if(data->thread!=std::this_thread::get_id()) {Session::fail_native_pk_return_reservation(data);return;}
             auto pending=NativePkReturnReservation::Data::Phase::Pending;
             if(!data->phase.compare_exchange_strong(pending,NativePkReturnReservation::Data::Phase::Reserved))return;
@@ -1368,7 +1420,7 @@ struct Session::Impl {
             // Prior survivor writes may proceed; a held front cannot start.
             if(was_empty&&!writes.empty())write();
             if(data->cuts.fetch_add(1)+1!=data->recipients.size()||data->game_posted.exchange(true))return;
-            asio::post(data->plan->game,[data,attempt]{
+            post_status_work(data->plan->game,[data,attempt]{
                 if(data->plan->thread!=std::this_thread::get_id()){
                     Session::fail_native_pk_return_output(data);return;
                 }
@@ -1415,7 +1467,7 @@ struct Session::Impl {
         }
         if(data->progress[index]->done.exchange(true))return;
         if(data->cuts.fetch_add(1)+1!=data->progress.size()||data->game_posted.exchange(true))return;
-        try{asio::post(data->plan->game,[data,work]{
+        try{post_status_work(data->plan->game,[data,work]{
             const NativePkReturnPublication token(data);const auto output=data->output.lock();
             if(!output||!Session::native_pk_return_publication_current(token)){
                 if(output)Session::fail_native_pk_return_output(output);return;
@@ -1506,7 +1558,7 @@ struct Session::Impl {
             Session::fail_native_pk_return_finalisation(data);return;
         }
         if(data->ready_cuts.fetch_add(1)+1!=2)return;
-        try{asio::post(data->game,[data,work]{
+        try{post_status_work(data->game,[data,work]{
             if(data->thread!=std::this_thread::get_id()) {Session::fail_native_pk_return_finalisation(data);return;}
             auto checking=NativePkReturnFinalisationStatus::Checking;
             if(!data->phase.compare_exchange_strong(checking,NativePkReturnFinalisationStatus::Ready))return;
@@ -1534,7 +1586,7 @@ struct Session::Impl {
             resume_world_input(); // Existing idle timer + ONE real async read, no fake cut.
             if(!read_inflight||closing||close_requested.load())throw std::logic_error("Return resume did not initiate read");
             if(data->resume_cuts.fetch_add(1)+1!=2)return;
-            asio::post(data->game,[data,work]{
+            post_status_work(data->game,[data,work]{
                 if(data->thread!=std::this_thread::get_id()||data->phase.load()!=NativePkReturnFinalisationStatus::Returned||
                    data->resume_cuts.load()!=2||!data->resume_started[0].load()||!data->resume_started[1].load()){
                     Session::fail_native_pk_return_finalisation(data);return;
@@ -1547,7 +1599,7 @@ struct Session::Impl {
                 if(!notified){Session::fail_native_pk_return_finalisation(data);return;}
                 data->returned_notified.store(true);
                 for(std::size_t index=0;index<2;++index)if(const auto session=data->sessions[index].lock())try{
-                    asio::post(session->impl_->strand,[session,data,index]{
+                    session->impl_->post_status_work(session->impl_->strand,[session,data,index]{
                         auto history=data;session->impl_->native_pk_return_finalisation_history.compare_exchange_strong(history,{});
                         const auto terminal=session->impl_->native_pk_terminal.load();
                         if(!terminal||terminal==data->preparations[index].data_->terminal.data_)
@@ -1565,7 +1617,7 @@ struct Session::Impl {
         data->accepted.store(false);data->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
         native_pk_terminal_timer.cancel();
         // Only game owns the strong callback reference and its destruction.
-        try {asio::post(game,[self=owner.shared_from_this(),data] {
+        try {post_status_work(game,[self=owner.shared_from_this(),data] {
             if(data->failed_notified.exchange(true))return;
             if(const auto source=data->source.lock())try {
                 source->native_pk_terminal_failed(*self,NativePkTerminalBarrier(data));
@@ -1640,7 +1692,7 @@ struct Session::Impl {
         if(!writes.empty() || write_bytes)return; // Real full-write drain hook retries.
         auto draining=NativePkTerminalBarrier::Data::Phase::Draining;
         if(!data->phase.compare_exchange_strong(draining,NativePkTerminalBarrier::Data::Phase::Ready))return;
-        try {asio::post(game,[self=owner.shared_from_this(),data] {
+        try {post_status_work(game,[self=owner.shared_from_this(),data] {
             if(data->ready_notified.exchange(true))return;
             bool accepted=false;
             if(self->native_pk_terminal_barrier_ready_current(NativePkTerminalBarrier(data)))
@@ -1666,6 +1718,7 @@ struct Session::Impl {
         });}catch(...) {fail("Native PK terminal ready handoff failed");}
     }
     void stage_native_pk() {
+        [[maybe_unused]] const auto status_admission=owner.begin_actor_status_writer();
         const auto data=native_pk_pending.load();
         if(!data || data->completing.load() || data->phase.load()!=NativePkEntryHold::Data::Phase::Preparing)return;
         if(closing || !native_pk_transport_current(data,false) || data->source.expired()) {
@@ -1693,7 +1746,7 @@ struct Session::Impl {
             if(!data->phase.compare_exchange_strong(preparing,NativePkEntryHold::Data::Phase::Held)) {
                 write_bytes-=data->frame->size();writes.pop_back();return;
             }
-            asio::post(game,[self=owner.shared_from_this(),data] {
+            post_status_work(game,[self=owner.shared_from_this(),data] {
                 if(data->completing.load())return;
                 if(!self->native_pk_entry_current(NativePkEntryHold(data))) {
                     self->close();return;
@@ -1742,6 +1795,7 @@ struct Session::Impl {
         socket.async_read_some(asio::buffer(read_bytes), asio::bind_cancellation_slot(native_pk_read_cancel.slot(),asio::bind_executor(strand,
             [self = owner.shared_from_this()](const asio::error_code& ec, std::size_t size) {
                 auto& s = *self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 s.read_inflight=false;
                 if(s.native_pk_terminal_cancel_read) {
                     s.native_pk_terminal_cancel_read=false;
@@ -2088,10 +2142,13 @@ struct Session::Impl {
         game_busy=true;
         // Suspend reads until the game-owned account repository has completed.
         // The same acknowledgement discipline as deliver() gates disconnect.
-        asio::post(game,[self=owner.shared_from_this(),request=std::move(request),response]() mutable {
+        post_status_work(game,[self=owner.shared_from_this(),request=std::move(request),response]() mutable {
             auto& s=*self->impl_;
-            auto complete=[self,response,request](std::uint64_t account,std::exception_ptr error) {
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+            auto complete=retain_actor_status_writer(s.owner.begin_actor_status_writer(),
+                [self,response,request](std::uint64_t account,std::exception_ptr error) {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 if(error) logger("session")->error("session_id={} AUTHENTICATION_SERVICE_ERROR",s.id);
                 if(account && !s.close_requested.load()) {
                     s.retire_normal_output();
@@ -2108,8 +2165,9 @@ struct Session::Impl {
                         self->recovered_native_authenticated_input_.compare_exchange_strong(empty,std::move(value));
                     } catch(...) {}
                 }
-                asio::post(s.strand,[self,account,response,error] {
+                s.post_status_work(s.strand,[self,account,response,error] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 s.game_busy=false;
                 if(s.closing) { s.finish();return; }
                 if(s.close_requested.load()) { s.close();return; }
@@ -2140,7 +2198,7 @@ struct Session::Impl {
                     s.arm_timer(idle_timeout);
                 } catch(...) { s.fail("Recovered login response failed"); }
                 });
-            };
+            });
             try {
                 if(s.close_requested.load()) complete(0,{});
                 else if(s.character_handlers.authenticate_async)
@@ -2153,8 +2211,9 @@ struct Session::Impl {
                              std::optional<RecoveredPostServerSelect> selection=std::nullopt,
                              std::shared_ptr<const Session::RecoveredServerAdvertisement> advertisement={}) {
         game_busy=true;
-        asio::post(game,[self=owner.shared_from_this(),request,selection,advertisement=std::move(advertisement)] {
+        post_status_work(game,[self=owner.shared_from_this(),request,selection,advertisement=std::move(advertisement)] {
             auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             std::vector<std::uint8_t> response;
             std::uint64_t created_id=0;
             Session::NativeCharacterList delivery;
@@ -2191,8 +2250,9 @@ struct Session::Impl {
                     succeeded=true;
                 }
             } catch(...) { succeeded=false; }
-            asio::post(s.strand,[self,succeeded,created_id,delivery=std::move(delivery),response=std::move(response)]() mutable {
+            s.post_status_work(s.strand,[self,succeeded,created_id,delivery=std::move(delivery),response=std::move(response)]() mutable {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 if(delivery)s.active_native_list=delivery;
                 if(!delivery)s.game_busy=false;
                 if(s.closing) {if(delivery)s.fail("Native character delivery closed before queue");else s.finish();return;}
@@ -2225,12 +2285,14 @@ struct Session::Impl {
     // Network -> game -> network handoff. No SQLite/source callbacks on strand,
     // nor real game-affine closures in Write. A held frame cannot start early.
     void release_native_list(Session::NativeCharacterList delivery,std::shared_ptr<std::vector<std::uint8_t>> bytes) {
-        asio::post(game,[self=owner.shared_from_this(),delivery,bytes] {
-            auto& s=*self->impl_;bool accepted=false;
+        post_status_work(game,[self=owner.shared_from_this(),delivery,bytes] {
+            auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();bool accepted=false;
             try {accepted=!s.close_requested.load() && s.character_handlers.native_list_current(*self,delivery);}
             catch(...) {}
-            asio::post(s.strand,[self,delivery,bytes,accepted] {
+            s.post_status_work(s.strand,[self,delivery,bytes,accepted] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 if(s.active_native_list!=delivery)return; // Cancellation already owns completion.
                 if(!accepted || s.closing || s.close_requested.load()) {s.fail("Native list source changed before write");return;}
                 const auto found=std::find_if(s.writes.begin(),s.writes.end(),[&](const Write& value){return value.native_list==delivery;});
@@ -2245,16 +2307,18 @@ struct Session::Impl {
     void complete_native_list(Session::NativeCharacterList delivery,bool written) {
         if(!delivery || active_native_list!=delivery)return;
         active_native_list.reset(); // Once before any deferred completion or queue clear.
-        asio::post(game,[self=owner.shared_from_this(),delivery,written] {
-            auto& s=*self->impl_;bool accepted=false;
+        post_status_work(game,[self=owner.shared_from_this(),delivery,written] {
+            auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();bool accepted=false;
             try {
                 accepted=s.character_handlers.native_list_complete(*self,delivery,written);
                 accepted=accepted && written && !self->closing() && self->account_id==delivery->account &&
                     self->id()==delivery->session && self->recovered_server_selection()==delivery->selection;
                 if(accepted)self->recovered_native_character_list_.store(delivery);
             }catch(...) {accepted=false;}
-            asio::post(s.strand,[self,accepted] {
-                auto& s=*self->impl_;s.game_busy=false;
+            s.post_status_work(s.strand,[self,accepted] {
+                auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();s.game_busy=false;
                 if(s.closing) {s.finish();return;}
                 if(!accepted || s.close_requested.load()) {s.fail("Native list delivery source completion rejected");return;}
                 s.arm_timer(idle_timeout);s.read();
@@ -2263,8 +2327,9 @@ struct Session::Impl {
     }
     void delete_character(RecoveredCharacterDelete request) {
         game_busy=true;
-        asio::post(game,[self=owner.shared_from_this(),request] {
+        post_status_work(game,[self=owner.shared_from_this(),request] {
             auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             bool accepted=false;
             try {
                 if(!s.close_requested.load() && self->account_id && !self->character_id &&
@@ -2273,8 +2338,9 @@ struct Session::Impl {
             } catch(const std::exception& error) {
                 logger("session")->warn("session_id={} CHARACTER_DELETE_REJECTED reason={}",s.id,error.what());
             } catch(...) {}
-            asio::post(s.strand,[self,accepted] {
-                auto& s=*self->impl_;s.game_busy=false;
+            s.post_status_work(s.strand,[self,accepted] {
+                auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();s.game_busy=false;
                 if(s.closing) { s.finish();return; }
                 if(s.close_requested.load()) { s.close();return; }
                 auto bytes=std::make_shared<std::vector<std::uint8_t>>(
@@ -2289,15 +2355,17 @@ struct Session::Impl {
     }
     void acknowledge_created_slot() {
         game_busy=true;
-        asio::post(game,[self=owner.shared_from_this()] {
+        post_status_work(game,[self=owner.shared_from_this()] {
             auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             std::optional<std::uint8_t> slot;
             try {
                 if(!s.close_requested.load())
                     slot=s.character_handlers.created_slot(self->account_id,s.pending_created_character);
             } catch(...) {}
-            asio::post(s.strand,[self,slot] {
+            s.post_status_work(s.strand,[self,slot] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 s.game_busy=false;
                 if(s.closing) { s.finish();return; }
                 if(s.close_requested.load()) { s.close();return; }
@@ -2320,8 +2388,9 @@ struct Session::Impl {
                           std::optional<RecoveredPostCreateSelect::Selection> native_input=std::nullopt) {
         retire_normal_output(); // Before any selection callback or game-owned identity write.
         game_busy=true;
-        asio::post(game,[self=owner.shared_from_this(),token,created,native_input=std::move(native_input)] {
+        post_status_work(game,[self=owner.shared_from_this(),token,created,native_input=std::move(native_input)] {
             auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             std::uint64_t selected=0;
             std::optional<RecoveredWorldEntry::Frame> world_frame;
             std::optional<std::uint16_t> prepared_actor;
@@ -2393,8 +2462,9 @@ struct Session::Impl {
                             entry_account,selected,entry_battle,*world_frame,std::move(*logical),prepared_actor.has_value());
                 }
             } catch(...) {}
-            asio::post(s.strand,[self,selected,created,world_frame,prepared_actor,normal_entry=std::move(normal_entry)] {
+            s.post_status_work(s.strand,[self,selected,created,world_frame,prepared_actor,normal_entry=std::move(normal_entry)] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 s.game_busy=false;
                 if(s.closing) { s.finish();return; }
                 if(s.close_requested.load()) { s.close();return; }
@@ -2454,8 +2524,9 @@ struct Session::Impl {
         const auto observable=normal_tail_observable;
         const auto config=world_ready->config_flag();
         const auto context=world_ready->context_payload();
-        asio::post(game,[self=owner.shared_from_this(),entry,tail,tail_size,observable,config,context] {
+        post_status_work(game,[self=owner.shared_from_this(),entry,tail,tail_size,observable,config,context] {
             auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             bool accepted=false;
             std::shared_ptr<const NormalWorldInitialization::Data> initialization;
             try {
@@ -2478,8 +2549,9 @@ struct Session::Impl {
                         s.receiver_selector=selector;
                     }
             } catch(...) {}
-            asio::post(s.strand,[self,accepted,initialization=std::move(initialization)] {
+            s.post_status_work(s.strand,[self,accepted,initialization=std::move(initialization)] {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 s.game_busy=false;
                 if(s.closing) { s.finish();return; }
                 if(s.close_requested.load()) { s.close();return; }
@@ -2495,8 +2567,9 @@ struct Session::Impl {
                         // No new read/dispatch while the common actor is being
                         // activated. The frozen legacy ready hook already ran.
                         s.game_busy=true;
-                        asio::post(s.game,[self] {
-                            auto& s=*self->impl_;bool common_accepted=false;
+                        s.post_status_work(s.game,[self] {
+                            auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();bool common_accepted=false;
                             if(s.character_handlers.common_world_lifecycle->ready_async) {
                                 s.begin_common_ready_async(self);return;
                             }
@@ -2504,8 +2577,9 @@ struct Session::Impl {
                                 if(!s.close_requested.load())
                                     common_accepted=s.character_handlers.common_world_lifecycle->ready(*self);
                             }catch(...) {}
-                            asio::post(s.strand,[self,common_accepted] {
-                                auto& s=*self->impl_;s.game_busy=false;
+                            s.post_status_work(s.strand,[self,common_accepted] {
+                                auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();s.game_busy=false;
                                 if(s.closing){s.finish();return;}
                                 if(s.close_requested.load()){s.close();return;}
                                 if(!common_accepted){s.fail("Common world activation rejected");return;}
@@ -2535,13 +2609,15 @@ struct Session::Impl {
     void begin_common_ready_async(const std::shared_ptr<Session>& self) {
         common_ready_thread=std::this_thread::get_id();
         if(common_ready_completion || common_ready_nonce==std::numeric_limits<std::uint64_t>::max()) {
-            asio::post(strand,[self] {auto& s=*self->impl_;s.game_busy=false;s.fail("Common world async readiness already pending or exhausted");});
+            post_status_work(strand,[self] {auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();s.game_busy=false;s.fail("Common world async readiness already pending or exhausted");});
             return;
         }
         const auto nonce=++common_ready_nonce;
         common_ready_completion=[self](bool accepted) {
-            asio::post(self->impl_->strand,[self,accepted] {
-                auto& s=*self->impl_;s.game_busy=false;
+            self->impl_->post_status_work(self->impl_->strand,[self,accepted] {
+                auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();s.game_busy=false;
                 if(s.closing){s.finish();return;}
                 if(s.close_requested.load()){s.close();return;}
                 if(!accepted){s.fail("Common world async activation rejected");return;}
@@ -2553,10 +2629,11 @@ struct Session::Impl {
         };
         common_ready_waiting.store(true);
         if(close_requested.load()) {finish_common_ready(nonce,false);return;}
-        auto done=[weak=std::weak_ptr<Session>(self),nonce,thread=common_ready_thread](bool accepted) {
+        auto done=retain_actor_status_writer(owner.begin_actor_status_writer(),
+            [weak=std::weak_ptr<Session>(self),nonce,thread=common_ready_thread](bool accepted) {
             if(thread!=std::this_thread::get_id())throw std::logic_error("Common world readiness completion game owner mismatch");
             if(const auto current=weak.lock())current->impl_->finish_common_ready(nonce,accepted);
-        };
+        });
         try {character_handlers.common_world_lifecycle->ready_async(*self,std::move(done));}
         catch(...) {
             if(!common_ready_completion)return; // An inline completion already consumed its result.
@@ -2568,8 +2645,9 @@ struct Session::Impl {
         common_entry_identity.store({}); // Invalidate held publications immediately.
         if(common_ready_cancel_posted || !common_ready_waiting.load())return;
         common_ready_cancel_posted=true;
-        asio::post(game,[self=owner.shared_from_this()] {
-            auto& s=*self->impl_;const auto nonce=s.common_ready_nonce;
+        post_status_work(game,[self=owner.shared_from_this()] {
+            auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();const auto nonce=s.common_ready_nonce;
             try {
                 if(s.common_ready_completion && s.character_handlers.common_world_lifecycle &&
                    s.character_handlers.common_world_lifecycle->cancel)
@@ -2683,7 +2761,7 @@ struct Session::Impl {
             const auto length=static_cast<std::size_t>(world_input[0])+256u*world_input[1];
             if(length<5 || length>RecoveredWorldRecords::max_logical_size+3 ||
                world_input.size()>=length) {
-                asio::post(strand,[self=owner.shared_from_this()] { self->impl_->feed_world({}); });
+                post_status_work(strand,[self=owner.shared_from_this()] { self->impl_->feed_world({}); });
                 return;
             }
         }
@@ -2898,16 +2976,18 @@ struct Session::Impl {
             resume_world_input();return;
         }
         game_busy=true;
-        asio::post(game,[self=owner.shared_from_this(),records=std::move(records),requests=std::move(requests),native_batch_generation] {
+        post_status_work(game,[self=owner.shared_from_this(),records=std::move(records),requests=std::move(requests),native_batch_generation] {
             auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             // A batch parsed/posted BEFORE arm cannot be rolled back into raw
             // input. Reject it before ANY callback/capture/owner mutation; no
             // splitting, redispatch, or reclassification of those records.
             if(const auto held=s.owned_response_input_hold.load();held || s.owned_input_retired.load()) {
                 if(held)held->fail();
                 s.owned_input_retired.store(true);s.close_requested.store(true);
-                try {asio::post(s.strand,[self] {
-                    auto& s=*self->impl_;s.game_busy=false;
+                try {s.post_status_work(s.strand,[self] {
+                    auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();s.game_busy=false;
                     s.fail_owned_input("Pre-arm world batch reached game during owned input hold");
                 });}catch(...) {} // No executor-abort convergence claim.
                 return;
@@ -3013,9 +3093,10 @@ struct Session::Impl {
                 if(response_write)response_write->fail();
             }
             if(admission && !accepted)admission->fail(); // Existing response-prefix checks apply symmetrically.
-            try {asio::post(s.strand,[self,accepted,terminal_ack,response_write,input_lease,normal_response,admission,response=std::move(response),
+            try {s.post_status_work(s.strand,[self,accepted,terminal_ack,response_write,input_lease,normal_response,admission,response=std::move(response),
                                  count=records.size(),movement_count=requests.size()]() mutable {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 const bool owned_handoff=bool(input_lease) || bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
                 try {
                 s.game_busy=false;
@@ -3104,8 +3185,9 @@ struct Session::Impl {
             });}catch(...) {
                 if(input_lease) {
                     input_lease->attempt->fail(); // Atomic retirement before preserving old rethrow.
-                    try {asio::post(s.strand,[self] {
-                        auto& s=*self->impl_;s.game_busy=false;s.fail_owned_input("Owned bootstrap response handoff failed");
+                    try {s.post_status_work(s.strand,[self] {
+                        auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();s.game_busy=false;s.fail_owned_input("Owned bootstrap response handoff failed");
                     });}catch(...) {} // Undestroyed/unrun executor convergence remains OPEN.
                 }
                 if(admission)admission->fail(); // Post/drop never leaves retained Data Pending.
@@ -3116,8 +3198,9 @@ struct Session::Impl {
                 terminal_ack->accepted.store(false);
                 terminal_ack->phase.store(NativePkTerminalBarrier::Data::Phase::Failed);
                 s.close_requested.store(true);
-                try {asio::post(s.strand,[self,terminal_ack] {
+                try {s.post_status_work(s.strand,[self,terminal_ack] {
                     auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                     // No next input job can start before this callback's ACK.
                     // Cleanup must still finish if deadline retired its token.
                     s.game_busy=false;s.fail("Native PK terminal exact ACK handoff failed");
@@ -3130,15 +3213,17 @@ struct Session::Impl {
         game_busy = true;
         // Exactly one batch per session is outstanding. The acknowledgement
         // resumes reads and gates disconnect, even if close races this callback.
-        asio::post(game, [self = owner.shared_from_this(), packets = std::move(packets)]() mutable {
+        post_status_work(game, [self = owner.shared_from_this(), packets = std::move(packets)]() mutable {
             auto& s = *self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             bool failed = false;
             for (auto& packet : packets) {
                 try { if (s.on_packet) s.on_packet(self, std::move(packet)); }
                 catch (...) { failed = true; }
             }
-            asio::post(s.strand, [self, failed] {
+            s.post_status_work(s.strand, [self, failed] {
                 auto& s = *self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 s.game_busy = false;
                 if (failed) s.fail("game packet callback failed");
                 else if (s.closing) s.finish();
@@ -3190,6 +3275,7 @@ struct Session::Impl {
             }
         }
         auto bytes = writes.front().bytes;
+        const auto status_writer=writes.front().status_writer;
         // The completion owns the active buffer even when fail() clears the queue.
         const bool owned_initiation=bool(owned_response_input_hold.load()) || owned_input_retired.load();
         std::shared_ptr<ActiveWriteContinuation> continuation;
@@ -3197,9 +3283,10 @@ struct Session::Impl {
         continuation=std::make_shared<ActiveWriteContinuation>(carried,bytes);
         active_write_continuation=continuation;
         owner.invalidate_actor_status_writes(); // Final exhaustive socket sink.
-        asio::async_write(socket, asio::buffer(*bytes), asio::bind_executor(strand,
+        auto completion=
             [self = owner.shared_from_this(), bytes,marked,continuation](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 const bool owned_completion=bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
                 try {
                 if (s.finished || s.writes.empty()) return;
@@ -3355,7 +3442,13 @@ struct Session::Impl {
                     if(owned_completion || s.owned_response_input_hold.load() || s.owned_input_retired.load()) {s.fail_owned_input("Owned bootstrap FIFO completion failed");return;}
                     throw; // Preserve the original unobserved completion path.
                 }
-            }));
+            };
+        auto initiate=[&](auto handler) {
+            asio::async_write(socket,asio::buffer(*bytes),
+                asio::bind_executor(strand,std::move(handler)));
+        };
+        if(status_writer)initiate(retain_actor_status_writer(status_writer,std::move(completion)));
+        else initiate(std::move(completion)); // Exact original plain handler without a ticket.
         }catch(...) {
             if(continuation&&continuation->work){if(const auto output=continuation->work->data->output.lock())
                 Session::fail_native_pk_return_output(output);return;}
@@ -3388,6 +3481,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        [[maybe_unused]] const auto status_admission=owner.begin_actor_status_writer();
         owner.invalidate_actor_status_writes();
         if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
             Session::fail_native_pk_return_finalisation(final);
@@ -3426,8 +3520,9 @@ struct Session::Impl {
         timer.cancel();
         socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored);
         socket.close(ignored);
-        asio::post(game, [self = owner.shared_from_this()] {
+        post_status_work(game, [self = owner.shared_from_this()] {
             auto& s = *self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             logger("session")->info("session_id={} DISCONNECT_GAME_ENTER",s.id);
             try {if(auto cleanup=std::exchange(s.common_world_cleanup,{}))cleanup();}
             catch(...) {
@@ -3466,7 +3561,17 @@ Session::Session(asio::ip::tcp::socket socket, asio::any_io_executor game_execut
         } catch(...) {}
     }
 }
-Session::~Session() { invalidate_actor_status_writes(); }
+Session::~Session() {
+    destruction_status_writer_=begin_actor_status_writer();
+    invalidate_actor_status_writes();
+}
+bool Session::has_actor_status_write_fence() const noexcept {
+    return impl_ && bool(impl_->character_handlers.actor_status_write_fence);
+}
+std::optional<TaiwanActorStatusWriteFence::Writer> Session::begin_actor_status_writer() noexcept {
+    if(!has_actor_status_write_fence())return {};
+    return impl_->character_handlers.actor_status_write_fence->begin_writer();
+}
 void Session::invalidate_actor_status_writes() noexcept {
     if(impl_ && impl_->character_handlers.actor_status_write_fence)
         impl_->character_handlers.actor_status_write_fence->invalidate();
@@ -3476,9 +3581,11 @@ bool Session::actor_status_write_fence_matches(
     return fence && impl_->character_handlers.actor_status_write_fence==fence;
 }
 void Session::start() {
-    asio::dispatch(impl_->strand, [self = shared_from_this()] { self->impl_->start(); });
+    Session::schedule_actor_status_work<true>(impl_->strand,{shared_from_this(),{}},
+        [self = shared_from_this()] { self->impl_->start(); });
 }
 void Session::send(Packet packet) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if (impl_->close_requested.load()) return;
     const auto charge = packet.payload.size();
@@ -3494,15 +3601,17 @@ void Session::send(Packet packet) {
         }
     }
     if (!reservation) { close(); return; }
-    asio::post(impl_->strand, [self = shared_from_this(), packet = std::move(packet), reservation]() mutable {
+    impl_->post_status_work(impl_->strand, [self = shared_from_this(), packet = std::move(packet), reservation]() mutable {
         self->impl_->enqueue(std::move(packet), std::move(reservation));
     });
 }
 void Session::send_world_records(std::vector<std::uint8_t> logical) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     send_world_records_impl(std::move(logical),{});
 }
 Session::WorldRecordsWrite Session::send_world_records_observed(std::vector<std::uint8_t> logical) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(observed_world_callback!=this)
         throw std::logic_error("Observed world sender requires actual world-records game callback");
@@ -3643,6 +3752,7 @@ bool Session::normal_world_output_current_on_game(const NormalWorldOutputHandle&
 }
 Session::NormalWorldOutputAttempt Session::send_normal_world_records(
         const NormalWorldOutputHandle& handle,std::vector<std::uint8_t> logical) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     auto data=std::make_shared<NormalWorldOutputAttempt::Data>();
     const NormalWorldOutputAttempt result(data);
@@ -3662,8 +3772,9 @@ Session::NormalWorldOutputAttempt Session::send_normal_world_records(
     // All game-owned capture is complete before post. Strand never reads bare
     // public account_id/character_id or invokes a game Current/source callback.
     const auto recipient=handle.data_;
-    asio::post(impl_->strand,[self=shared_from_this(),recipient,logical=std::move(logical),reservation,pending]() mutable {
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),recipient,logical=std::move(logical),reservation,pending]() mutable {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.closing || s.close_requested.load())return;
         if(s.mode!=ProtocolMode::God2CharacterConnection || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted)return;
         try {
@@ -3779,6 +3890,7 @@ bool Session::normal_world_response_callback_current(const NormalWorldResponseAt
 }
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         std::shared_ptr<WorldRecordsWrite::Data> observed) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     const auto attempt=observed?std::make_shared<Impl::WorldWriteAttempt>(std::move(observed)):
         std::shared_ptr<Impl::WorldWriteAttempt>{};
@@ -3796,8 +3908,9 @@ void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         }
     }
     if(!reservation) { close();return; }
-    asio::post(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,attempt]() mutable {
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,attempt]() mutable {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.closing || s.close_requested.load()) return;
         if(!is_recovered(s.mode) || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
             s.fail("Recovered world push before accepted world tail");return;
@@ -3868,6 +3981,7 @@ void Session::bind_common_world_delivery_identity(std::uint64_t account,std::uin
         throw std::logic_error("Common world delivery identity already bound");
 }
 void Session::release_common_world_delivery_identity(std::uint64_t account,std::uint64_t character,std::uint64_t generation) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     auto current=impl_->common_world_identity.load();
     if(current && current->account==account && current->character==character && current->generation==generation)
@@ -3895,6 +4009,7 @@ void Session::bind_common_world_entry_identity(std::uint64_t account,std::uint64
         throw std::invalid_argument("Pending common entry already bound");
 }
 void Session::release_common_world_entry_identity(std::uint64_t account,std::uint64_t character,std::uint64_t generation) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     auto current=impl_->common_entry_identity.load();
     if(current && current->account==account && current->character==character && current->generation==generation)
@@ -3908,6 +4023,7 @@ bool Session::common_world_entry_current(std::uint64_t account,std::uint64_t cha
 void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
     std::function<bool()> publish,std::function<void(bool)> queued) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(impl_->common_ready_thread!=std::this_thread::get_id())
         throw std::logic_error("Pending common publication game owner mismatch");
@@ -3934,7 +4050,7 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
     // Both functions are revocable facades. Their actual captures stay on game
     // in the lifecycle owner, including cancellation and startup unwind.
     const auto finish=[self=shared_from_this(),queued=std::move(owned.queued)](bool accepted) {
-        asio::post(self->impl_->game,[queued,accepted] {try {queued(accepted);}catch(...) {}});
+        self->impl_->post_status_work(self->impl_->game,[queued,accepted] {try {queued(accepted);}catch(...) {}});
     };
     const auto before=[self=shared_from_this(),pending,account,character,generation] {
         return self->impl_->common_entry_identity.load()==pending &&
@@ -3955,9 +4071,10 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
         }
     }catch(...) {close();finish(false);return;}
     if(!reservation){close();finish(false);return;}
-    asio::post(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,before,after,
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,before,after,
         account,character,publish=std::move(owned.publish),finish]() mutable {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.closing || !before() || s.mode!=ProtocolMode::God2CharacterConnection ||
            s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
             s.fail("Stale pending common entry publication");finish(false);return;
@@ -3971,12 +4088,13 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
             const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
             s.append_write({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
             s.writes.back().pending_return_continuation=held_continuation;
-            asio::post(s.game,[self,bytes,held_continuation,before,after,account,character,publish=std::move(publish),finish] {
+            s.post_status_work(s.game,[self,bytes,held_continuation,before,after,account,character,publish=std::move(publish),finish] {
                 bool accepted=false;
                 try {accepted=before() && self->account_id==account && self->character_id==character &&
                     publish() && after() && self->account_id==account && self->character_id==character;}catch(...) {}
-                asio::post(self->impl_->strand,[self,bytes,held_continuation,after,accepted,finish] {
+                self->impl_->post_status_work(self->impl_->strand,[self,bytes,held_continuation,after,accepted,finish] {
                     auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                     if(!accepted || s.closing || !after() || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
                         s.fail("Pending common entry publication refused");finish(false);return;
                     }
@@ -3992,11 +4110,12 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
 void Session::send_common_world_records_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
     std::function<bool()> publish,std::function<void(bool)> queued) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(!queued)throw std::invalid_argument("Common world publication completion required");
     auto completion=std::make_shared<std::function<void(bool)>>(std::move(queued));
     const auto finish=[self=shared_from_this(),completion](bool accepted) {
-        asio::post(self->impl_->game,[completion,accepted] {
+        self->impl_->post_status_work(self->impl_->game,[completion,accepted] {
             auto callback=std::move(*completion);
             if(callback)try {callback(accepted);}catch(...) {}
         });
@@ -4018,9 +4137,10 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
         }
     }catch(...) {close();finish(false);return;}
     if(!reservation){close();finish(false);return;}
-    asio::post(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,
         account,character,common,publish=std::move(publish),finish]() mutable {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.closing || !common() || s.mode!=ProtocolMode::God2CharacterConnection ||
            s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
             s.fail("Stale common world publication");finish(false);return;
@@ -4036,14 +4156,15 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
             const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
             s.append_write({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
             s.writes.back().pending_return_continuation=held_continuation;
-            asio::post(s.game,[self,bytes,held_continuation,account,character,common,publish=std::move(publish),finish]() mutable {
+            s.post_status_work(s.game,[self,bytes,held_continuation,account,character,common,publish=std::move(publish),finish]() mutable {
                 bool accepted=false;
                 try {
                     accepted=common() && self->account_id==account && self->character_id==character &&
                         publish() && common() && self->account_id==account && self->character_id==character;
                 }catch(...) {}
-                asio::post(self->impl_->strand,[self,bytes,held_continuation,common,accepted,finish] {
+                self->impl_->post_status_work(self->impl_->strand,[self,bytes,held_continuation,common,accepted,finish] {
                     auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                     if(!accepted || s.closing || !common() || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
                         s.fail("Common world publication refused");finish(false);return;
                     }
@@ -4061,6 +4182,7 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
 }
 void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     std::weak_ptr<NativeBattleSkillPublicationOwner> source) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     // Game-owner-only entry. All game-owned fields are checked here or in the
     // posted game hooks, never by the strand. No default/frozen sender changes.
@@ -4102,8 +4224,9 @@ void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     if(!impl_->native_battle_pending.compare_exchange_strong(absent,pending))
         throw std::logic_error("Native battle publication already pending");
     try {
-        asio::post(impl_->strand,[self,pending,reservation=std::move(reservation)]() mutable {
+        impl_->post_status_work(impl_->strand,[self,pending,reservation=std::move(reservation)]() mutable {
             auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             if(s.native_battle_pending.load()!=pending || pending->completing.load())return;
             if(s.closing || !s.native_battle_current(pending) ||
                s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
@@ -4244,14 +4367,16 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     impl_->retire_normal_output(); // Before actual publication/PK hold is installed.
     if(!impl_->native_pk_pending.compare_exchange_strong(absent,pending))
         throw std::logic_error("Native PK entry already pending");
-    try {asio::post(impl_->strand,[self=shared_from_this(),pending,reservation=std::move(reservation)]()mutable {
+    try {impl_->post_status_work(impl_->strand,[self=shared_from_this(),pending,reservation=std::move(reservation)]()mutable {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.native_pk_pending.load()!=pending || pending->completing.load())return;
         try {
             s.native_pk_read_paused=true;s.native_pk_reservation=std::move(reservation);
             s.native_pk_timer.expires_after(close_timeout);
             s.native_pk_timer.async_wait([self,pending](const asio::error_code& ec) {
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 if(ec || s.native_pk_pending.load()!=pending)return;
                 // A game->strand completion post can itself fail allocation.
                 // Game completion may be queued, or its final strand post may
@@ -4342,8 +4467,9 @@ Session::NativePkTerminalBarrier Session::prepare_native_pk_terminal_barrier(
     if(!impl_->native_pk_terminal.compare_exchange_strong(absent,data))
         throw std::logic_error("Native PK terminal barrier already pending");
     impl_->native_pk_terminal_callback_capture=data;
-    try {asio::post(impl_->strand,[self=shared_from_this(),data] {
-        auto& s=*self->impl_;if(s.native_pk_terminal.load()!=data)return;
+    try {impl_->post_status_work(impl_->strand,[self=shared_from_this(),data] {
+        auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();if(s.native_pk_terminal.load()!=data)return;
         try {
             s.native_pk_terminal_timer.expires_after(close_timeout);
             s.native_pk_terminal_timer.async_wait([self,data](const asio::error_code& ec) {
@@ -4488,7 +4614,8 @@ void Session::fail_native_pk_return_reservation(
     // The ENTIRE pair is poisoned before callbacks/close posts; no peer IDs read.
     for(const auto& weak:data->sessions)if(const auto session=weak.lock())
         try {session->close();}catch(...) {session->impl_->close_requested.store(true);}
-    try {asio::post(data->game,[data] {
+    try {Session::schedule_actor_status_work<false>(data->game,
+        {data->sessions[0].lock(),data->sessions[1].lock()},[data] {
         if(data->failed_notified.exchange(true))return;
         if(data->thread!=std::this_thread::get_id())return;
         if(const auto source=data->source.lock())try {
@@ -4541,7 +4668,7 @@ Session::NativePkReturnReservation Session::reserve_native_pk_return_pair(
            !sessions[1]->native_pk_return_preparation_current(data->preparations[1]))
             throw std::logic_error("PK return pair retired during slot installation");
         for(std::size_t i=0;i<2;++i)
-            asio::post(sessions[i]->impl_->strand,[self=sessions[i],data,attempt,i] {
+            sessions[i]->impl_->post_status_work(sessions[i]->impl_->strand,[self=sessions[i],data,attempt,i] {
                 self->impl_->stage_native_pk_return(data,i,attempt);
             });
         return NativePkReturnReservation(data);
@@ -4706,7 +4833,7 @@ void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnO
         // This flag records one scheduling attempt, not successful execution.
         // Repeated failure must still close each newly-owned late receiver once.
         if(!recipient->close_posted.exchange(true))try{
-            asio::post(recipient->session->impl_->strand,[session=recipient->session]{session->impl_->close();});
+            recipient->session->impl_->post_status_work(recipient->session->impl_->strand,[session=recipient->session]{session->impl_->close();});
         }catch(...){recipient->session->impl_->close_requested.store(true);}
     }
     if(finalisation){
@@ -4714,25 +4841,26 @@ void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnO
             auto expected=finalisation;session->impl_->native_pk_return_finalisation.compare_exchange_strong(expected,{});
             auto history=finalisation;session->impl_->native_pk_return_finalisation_history.compare_exchange_strong(history,{});
         }
-        try{asio::post(finalisation->game,[finalisation]{
+        try{Session::schedule_actor_status_work<false>(finalisation->game,
+            {finalisation->sessions[0].lock(),finalisation->sessions[1].lock()},[finalisation]{
             if(finalisation->failed_notified.exchange(true)||finalisation->thread!=std::this_thread::get_id())return;
             if(const auto source=finalisation->source.lock())try{
                 source->native_pk_return_finalisation_failed(NativePkReturnFinalisation(finalisation));
             }catch(...){}
         });}catch(...){}
     }
-    if(publication)try{asio::post(data->plan->game,[publication]{
+    if(publication)try{Session::schedule_actor_status_work<false>(data->plan->game,data->plan->sessions,[publication]{
         if(publication->failed_notified.exchange(true)||publication->plan->thread!=std::this_thread::get_id())return;
         if(const auto owner=publication->source.lock())try{
             owner->native_pk_return_publication_failed(NativePkReturnPublication(publication));
         }catch(...){}
     });}catch(...){}
     if(!first)return;
-    try{asio::post(data->plan->game,[data]{
+    try{Session::schedule_actor_status_work<false>(data->plan->game,data->plan->sessions,[data]{
         if(data->failed_notified.exchange(true)||data->plan->thread!=std::this_thread::get_id())return;
         if(const auto source=data->source.lock())try{source->native_pk_return_output_failed(NativePkReturnOutputHold(data));}catch(...){}
     });}catch(...){} // No retry, synthetic notification, rollback or deadline renewal.
-    if(successor)try{asio::post(data->plan->game,[successor]{
+    if(successor)try{Session::schedule_actor_status_work<false>(data->plan->game,data->plan->sessions,[successor]{
         if(successor->failed_notified.exchange(true)||successor->plan->thread!=std::this_thread::get_id())return;
         if(const auto source=successor->source.lock())try{
             source->native_pk_return_consumption_failed(NativePkReturnConsumption(successor));
@@ -4804,7 +4932,7 @@ Session::NativePkReturnOutputHold Session::hold_native_pk_return_output(
         for(std::size_t index=0;index<data->recipients.size();++index){
             const auto session=data->recipients[index]->session;
             session->invalidate_actor_status_writes(); // Before held return-group handoff.
-            asio::post(session->impl_->strand,[session,data,index,owned=std::move(markers[index]),attempt]()mutable{
+            session->impl_->post_status_work(session->impl_->strand,[session,data,index,owned=std::move(markers[index]),attempt]()mutable{
                 session->impl_->stage_native_pk_return_output(data,index,std::move(owned),attempt);
             });
         }
@@ -5034,7 +5162,7 @@ bool Session::release_native_pk_return_publication(const NativePkReturnPublicati
         for(std::size_t index=0;index<output->recipients.size();++index){
             if(data->phase.load()!=NativePkReturnPublicationStatus::Released)throw std::logic_error("Return release failed midpost");
             const auto session=output->recipients[index]->session;
-            asio::post(session->impl_->strand,[session,work,index]{session->impl_->release_native_pk_return_publication_recipient(work,index);});
+            session->impl_->post_status_work(session->impl_->strand,[session,work,index]{session->impl_->release_native_pk_return_publication_recipient(work,index);});
         }
         return true;
     }catch(...){fail_native_pk_return_output(output);return false;}
@@ -5125,9 +5253,10 @@ void Session::fail_native_pk_return_finalisation(const std::shared_ptr<NativePkR
         auto history=data;session->impl_->native_pk_return_finalisation_history.compare_exchange_strong(history,{});
     }
     for(const auto& weak:data->sessions)if(const auto session=weak.lock())try{
-        asio::post(session->impl_->strand,[session]{session->impl_->close();});
+        session->impl_->post_status_work(session->impl_->strand,[session]{session->impl_->close();});
     }catch(...){}
-    try{asio::post(data->game,[data]{
+    try{Session::schedule_actor_status_work<false>(data->game,
+        {data->sessions[0].lock(),data->sessions[1].lock()},[data]{
         if(data->failed_notified.exchange(true)||data->thread!=std::this_thread::get_id())return;
         if(const auto source=data->source.lock())try{source->native_pk_return_finalisation_failed(NativePkReturnFinalisation(data));}catch(...){}
     });}catch(...){}
@@ -5145,7 +5274,7 @@ bool Session::acquire_native_pk_return_finalisation(const NativePkReturnFinalisa
         const auto work=std::move(custody->prepared_work);
         for(std::size_t index=0;index<2;++index){
             const auto session=data->sessions[index].lock();if(!session)throw std::logic_error("Finalisation Session lost");
-            asio::post(session->impl_->strand,[session,work,index]{session->impl_->stage_native_pk_return_finalisation(work,index);});
+            session->impl_->post_status_work(session->impl_->strand,[session,work,index]{session->impl_->stage_native_pk_return_finalisation(work,index);});
         }
         return true;
     }catch(...){fail_native_pk_return_finalisation(data);return false;}
@@ -5192,13 +5321,14 @@ bool Session::complete_native_pk_return_finalisation(const NativePkReturnFinalis
         if(!applied){fail_native_pk_return_finalisation(data);return false;}
         for(std::size_t index=0;index<2;++index){
             const auto session=data->sessions[index].lock();if(!session)throw std::logic_error("Returned Session lost");
-            asio::post(session->impl_->strand,[session,work,index]{session->impl_->resume_native_pk_return_finalisation(work,index);});
+            session->impl_->post_status_work(session->impl_->strand,[session,work,index]{session->impl_->resume_native_pk_return_finalisation(work,index);});
         }
         return true;
     }catch(...){fail_native_pk_return_finalisation(data);return false;} // Durable prefix never rolled back.
 }
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     // CUSTOM-0115 explicit exact accepted entry. Raw output is never room,
     // grant/skill or current checkpoint authority; its game owner must prove it.
@@ -5265,13 +5395,15 @@ void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSk
     impl_->retire_normal_output(); // Before actual publication/PK hold is installed.
     if(!impl_->native_battle_pending.compare_exchange_strong(absent,pending))
         throw std::logic_error("Native battle publication already pending");
-    try {asio::post(impl_->strand,[self=shared_from_this(),pending,reservation=std::move(reservation)]()mutable{
+    try {impl_->post_status_work(impl_->strand,[self=shared_from_this(),pending,reservation=std::move(reservation)]()mutable{
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.native_battle_pending.load()!=pending || pending->completing.load())return;
         try{
             s.native_pk_timer.expires_after(close_timeout);
             s.native_pk_timer.async_wait([self,pending](const asio::error_code& ec){
                 auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 if(ec || s.native_battle_pending.load()!=pending)return;
                 // Schedule at most one failure completion if the game executor
                 // can accept it. Never wait forever for a delayed final post.
@@ -5303,6 +5435,7 @@ bool Session::commit_native_pk_entry(const NativePkEntryHold& hold)noexcept {
         battle_generation()==data->request.prebattle_generation+1;
 }
 void Session::release_native_pk_entry(const NativePkEntryHold& hold) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     const auto data=hold.data_;
     if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
@@ -5312,8 +5445,9 @@ void Session::release_native_pk_entry(const NativePkEntryHold& hold) {
         throw std::logic_error("Native PK release lacks exact committed transport hold");
     // This post can allocate/throw AFTER durable activation; caller must close
     // both peers and retain durable recovery, never pretend rollback succeeded.
-    asio::post(impl_->strand,[self=shared_from_this(),data] {
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),data] {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(data->completing.load())return;
         if(!s.native_pk_transport_current(data,true) ||
            data->phase.load()!=NativePkEntryHold::Data::Phase::Committed) {
@@ -5328,6 +5462,7 @@ void Session::release_native_pk_entry(const NativePkEntryHold& hold) {
     });
 }
 void Session::abort_native_pk_entry(const NativePkEntryHold& hold) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     const auto data=hold.data_;
     if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
@@ -5341,8 +5476,9 @@ void Session::abort_native_pk_entry(const NativePkEntryHold& hold) {
         if(data->phase.compare_exchange_weak(phase,NativePkEntryHold::Data::Phase::Aborted))break;
     }
     data->clean_abort.store(true);
-    asio::post(impl_->strand,[self=shared_from_this(),data] {
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),data] {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.native_pk_pending.load()!=data || data->completing.load())return;
         const auto found=std::find_if(s.writes.begin(),s.writes.end(),[&](const Impl::Write& w){return w.native_pk==data;});
         if(found!=s.writes.end()) {
@@ -5356,6 +5492,7 @@ void Session::abort_native_pk_entry(const NativePkEntryHold& hold) {
 }
 void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logical,
     std::uint64_t expected_account,std::uint64_t expected_character,std::uint64_t expected_world_generation,std::uint64_t expected_battle_generation,std::function<void(bool)> acceptance) {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     auto complete=[callback=std::move(acceptance)](bool enqueued) mutable {if(callback){auto once=std::move(callback);try{once(enqueued);}catch(...){}}};
     if(impl_->close_requested.load()) {complete(false);return;}
@@ -5372,8 +5509,9 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
         }
     }
     if(!reservation) {complete(false);close();return; }
-    asio::post(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,expected_account,expected_character,expected_world_generation,expected_battle_generation,complete=std::move(complete)]() mutable {
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,expected_account,expected_character,expected_world_generation,expected_battle_generation,complete=std::move(complete)]() mutable {
         auto& s=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.closing || s.close_requested.load()) {complete(false);return;}
         const auto delivery=s.world_delivery_identity.load();
         if(!is_recovered(s.mode) || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted || !delivery ||
@@ -5396,16 +5534,18 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
     });
 }
 void Session::close() {
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(const auto pair=impl_->native_pk_return.load())fail_native_pk_return_reservation(pair);
     impl_->retire_normal_output(); // Synchronized retirement before close publication/post.
     if (impl_->close_requested.exchange(true)) return;
-    asio::post(impl_->strand, [self = shared_from_this()] { self->impl_->close(); });
+    impl_->post_status_work(impl_->strand, [self = shared_from_this()] { self->impl_->close(); });
 }
 void Session::notify_authenticated() {
     if (impl_->close_requested.load() || impl_->auth_requested.exchange(true)) return;
-    asio::post(impl_->strand, [self = shared_from_this()] {
+    impl_->post_status_work(impl_->strand, [self = shared_from_this()] {
         auto& s = *self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if (s.closing) return;
         try { s.protocol.on_session_authenticated(*self); }
         catch (const std::exception& e) { s.fail(e.what()); }

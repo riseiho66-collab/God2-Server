@@ -59,3 +59,32 @@ Primary references:
 Preserve accounts, saves, ownership, transactional histories and all frozen features. No destructive schema cleanup is implied. Keep C++/Lua ownership, original native source hashes, shared64 domains, the exact coin cap99999999999/stack99/native levels, 453 Traditional primary skill names/client formulas/current-maximum-HP poison10th and common TW/CN/four browser support.
 
 PHASE1 is source integration only: no product/database/export execution, SQL reads/writes against an actual database, builds/tests, runtime migration, import, activation or deployment. A completed formatter/dictionary is not a completed MySQL backend, data-driven gameplay integration or TW100%.
+## Actor-specific skill classification (owner clarification, 2026-10-15)
+
+Use the actual game's owner and learning/use rules, not file-format convenience, to classify editable data. Player-learnable definitions, prerequisites and player learned-state are independent of battle-pet skill learning/ownership and monster skill/AI assignments. These corresponding authoritative domains remain common across TW/CN.
+
+Original skill source datasets and common C++/Lua formula/effect implementations may be shared. This never merges learning permissions, actor identity, acquired skills or monster AI. Existing selected-deity/menu/native snapshot evidence must not be fabricated into a separate player learned list. Proposed physical tables need recovered actor/category evidence, typed repositories and reversible save-preserving migrations before activation.
+
+Classify equipment/items by the same actual acquisition, ownership, enhancement, consumption and lifecycle rules. Distinct rules/fields justify distinct definition families; a display name/appearance difference alone uses a category. English physical names and one Chinese TXT per table remain mandatory. This is a classification requirement, not an executed schema split or newly granted skill.
+
+## All-system configuration scope (owner clarification, 2026-10-15)
+
+DB-driven configuration applies to every recovered gameplay system that benefits from editable data, including systems the owner has not individually named. The following is a domain checklist, not new physical table declarations or a claim that the core already reads these domains from SQL. Confirm the actual client/server rules before choosing table boundaries and fields.
+
+| Gameplay domain | Editable definitions and rules | Separate authoritative state |
+| --- | --- | --- |
+| Characters and progression | Role-specific level/EXP curves, recovered growth and eligibility rules | Each character's level, exact EXP, attributes and progression |
+| Player skills | Player-learnable skill definitions, prerequisites, costs and recovered formula parameters | Each character's learned skills, skill levels and cooldown/state |
+| Battle pets | Pet species, pet growth/EXP, acquisition and pet-only skill learning rules | Each owned pet's identity, owner, attributes, growth and learned skills |
+| Monsters | Monster templates, spawn rules, skill/AI assignments and drop/reward rules | Actual spawned monster identity, current state and settlement |
+| Equipment and items | Weapon/armor/treasure/general definitions, recovered use/enhancement rules | Owned quantities, equipment instances, per-instance +N and binding |
+| Maps and NPCs | Maps, portals, NPC services and positively recovered placement/interaction rules | World instances and character interaction/quest state |
+| Quests and activities | Prerequisites, objectives, schedules and rewards | Each actor's progress, completion, claims and resets |
+| Shops, crafting and enhancement | Offers, prices, recipes, materials, eligibility and recovered probability rules | Purchases, consumption, resulting instances and transaction history |
+| Other recovered systems | Domain-specific editable rules, such as social/guild or battle reward configuration where actually present | Membership, battle results and other owner-specific state |
+
+Use separate player and pet progression curves when their actual rules differ. Share a recovered effect/formula implementation where semantics match; never let that merge player skill learning, pet skill learning or monster AI permissions. Shared TW/CN gameplay definitions do not require duplicate regional balance tables. Protocol-specific opaque records retain their evidenced scope.
+
+Keep configuration definitions, player/world state and audit/source evidence distinct. A gameplay category becomes a separate table family only when its fields, relationships, owner or lifecycle warrant it; ordinary subtypes can use validated categories and relation tables. Do not create one universal parameter/blob table or a table for every cosmetic label.
+
+For each promoted domain, record the recovered rule source, English identifiers, Chinese per-table TXT, units/ranges and relations, typed C++/Lua repository consumers, version/reload timing and save-preserving migration/export mapping. A table alone does not satisfy DB-driven behavior: trace each relevant consumer to the authoritative configuration snapshot and remove competing hardcoded numerical authority only after the recovered rule is preserved. Unknown rules remain explicitly unresolved. Actual SQL/schema changes and runtime verification remain deferred under PHASE1.

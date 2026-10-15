@@ -6201,3 +6201,26 @@ migrate/import/activate/deploy. Round415failedsingleaccountingpreserved;416
 newsourceincrementaccountinguniqueonce. GoalACTIVE.
 
 Details: docs/research/mysql80-dictionary-format-source-20261015.md
+
+## Round417 — Actual Session pending writer custody (2026-10-15)
+
+Round417 extends the existing optional CUSTOM0133 actor-status revocation
+monitor with private copy-only pending Writer custody. Same mutex protects
+generation/pending; permanent poison/weakPresence/privateIdentity; last Data
+release ends pending. Actual Session78post+1dispatch handoffs,15public entry
+admissions/54selfImpl callback/body guards,29centralqueue producers/LASTWrite
+ticket and soleasync_write retained completion, auth/ready_async provider gaps
+are connected. No-monitor preserves original handler/executor; legacy send
+policy remains. Quiescence ONLY, no Known/None/EA/ACK/permission authority.
+Completehostmembership/actorincarnation/lifecycle/privatebytepermit/finalgame
+cut/nativecachewindow/actions/Drvfifth/nonemptytail/CN/fullTW/fourWS acceptance
+remainOPEN. Four existingCPP/V53pins137=133same4updated/canonical750/Git10;
+no newCPP/PY/Lua/CMake/EXE/nativeformula/opcode/fullroute. Wholepercentunknown.
+Ownerall-systemDBscope/playerpetmonsterskillclassification recorded; actual
+DBrepositories/reload/MySQLbackend/fullsnapshotexport/migration remainOPEN.
+PHASE1 no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/
+import/activate/deploy. GoalACTIVE/TW100first/commonCNfourWS/453繁體/client
+formulas/maxHPpoison10分1/907pins/shared64coin99999999999stack99nativelevels/
+saves/fonts/IME/auth/portraits/text preserved.
+
+Details: docs/research/tw-actor-status-pending-writer-source-20261015.md
