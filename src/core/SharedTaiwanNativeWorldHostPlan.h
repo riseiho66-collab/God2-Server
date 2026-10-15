@@ -237,6 +237,9 @@ public:
             OwnedTaiwanPkReturnSceneSource::Selection,OwnedTaiwanPkReturnSceneSource::MaterialSources,
             OwnedPkProfileRecipe,StoredSources);
         struct ActualStatusSources {
+            // with_owned_pk_return_resources also requires this StoredSources'
+            // actual actor_status_incarnations. It stamps private profile scope;
+            // callback returns real status with both scope fields initially empty.
             // Actual status writer/lifecycle ownership is still mandatory.
             // No packet absence or immutable resource pin proves ordinary status.
             std::shared_ptr<const void> dependency_owner;

@@ -3,6 +3,7 @@
 #include "game/TaiwanNativeActorResourceBank.h"
 #include "game/TaiwanNativeActorArgumentSource.h"
 #include "game/TaiwanNativeDrvDoll.h"
+#include "game/TaiwanActorStatusProfileScope.h"
 #include "cn/world/SharedActorVisibility.h"
 #include <functional>
 #include <memory>
@@ -86,6 +87,10 @@ public:
         std::shared_ptr<const cn::SharedActorVisibility::TaiwanReturnActorOverride> actor_override;
         std::shared_ptr<const void> dependency_owner;
         std::function<bool(Check,const StatusInput&)> current;
+        // LAST: private same saved-input/row/EQ and BOTH actor incarnations.
+        // Lifetime/input scope only; does not establish the status values.
+        std::shared_ptr<TaiwanActorStatusProfileScope> profile_scope_source{};
+        std::optional<TaiwanActorStatusProfileScope::Observation> profile_scope{};
     };
     class Profile final {
     public:

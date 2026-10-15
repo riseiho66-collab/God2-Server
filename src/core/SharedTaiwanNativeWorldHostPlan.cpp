@@ -578,18 +578,21 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_resources(
        sources.return_profiles_installed_||!bank||sources.scene_actor_bank_!=bank||
        static_cast<NativeEquipmentSnapshotRepository*>(context.native_equipment_snapshot_writer)!=context.native_equipment_snapshots||
        static_cast<OwnedInventoryRepository*>(context.owned_inventory_writer)!=context.owned_inventory||
-       !status.dependency_owner||!status.status)
-        throw std::invalid_argument("TW return resources require the same installed Context and actual status owner");
+       !status.dependency_owner||!status.status||!sources.actor_status_incarnations)
+        throw std::invalid_argument("TW return resources require the same installed Context, actor incarnations and actual status owner");
     sources.require_profile_entry_binding();
     const auto presence=context.common_world->presence();
+    auto profile_scope=TaiwanActorStatusProfileScope::create(presence,sources.actor_status_incarnations);
+    if(!profile_scope)throw std::invalid_argument("TW profile status scope requires the actual host incarnation source");
     auto arguments=TaiwanNativeActorArgumentSource::create(presence,bank,sources.scene_drv_doll_bank_);
     auto resources=TaiwanNativeActorResourceSource::create(presence,std::move(arguments),std::move(configuration));
     if(!resources)throw std::invalid_argument("TW return resource owner could not retain the actual argument source");
     struct Dependencies {
         std::shared_ptr<TaiwanNativeActorResourceSource> resources;
+        std::shared_ptr<TaiwanActorStatusProfileScope> profile_scope;
         std::shared_ptr<const void> status;
     };
-    auto retained=std::make_shared<const Dependencies>(Dependencies{resources,std::move(status.dependency_owner)});
+    auto retained=std::make_shared<const Dependencies>(Dependencies{resources,profile_scope,std::move(status.dependency_owner)});
     OwnedTaiwanPkReturnSceneSource::MaterialSources material{
         std::move(retained),
         [resources](std::shared_ptr<const OwnedTaiwanPkReturnSceneSource::Input> input,std::size_t row,
@@ -597,7 +600,23 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_resources(
             // Asset validity is independent of the receiver's Prepare/Consumed
             // phase; Profile and Scene own those private endpoint fences.
             return resources->observe(std::move(input),row,equipment);
-        },std::move(status.status)};
+        },[profile_scope,actual_status=std::move(status.status)](
+                std::shared_ptr<const OwnedTaiwanPkReturnSceneSource::Input> input,std::size_t row,
+                const OwnedTaiwanPkReturnSceneSource::Equipment& equipment,const SharedWorldPresence::Lease& recipient)
+                ->std::optional<TaiwanCustomFullActorProfile::StatusInput> {
+            // Own exact values across the real status provider; scope qualifies
+            // actor/input lifetime only and never substitutes status authority.
+            const auto own_input=std::move(input);const auto own_equipment=equipment;const auto own_recipient=recipient;
+            const auto scope=profile_scope->observe(own_input,row,own_equipment,own_recipient);
+            if(!scope)return {};
+            auto value=actual_status(own_input,row,own_equipment,own_recipient);
+            if(!value||value->profile_scope_source||value->profile_scope||
+               !profile_scope->current(*scope)||
+               !profile_scope->matches_inputs(*scope,own_input,row,own_equipment,own_recipient))return {};
+            // Never overwrite epoch/domain/override/current from actual status.
+            value->profile_scope_source=profile_scope;value->profile_scope=*scope;
+            return value;
+        }};
     return with_owned_pk_return_profiles(context,std::move(bank),std::move(policy),selection,
         std::move(material),std::move(recipe),std::move(sources));
 }

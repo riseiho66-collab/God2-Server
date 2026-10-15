@@ -99,7 +99,12 @@ bool TaiwanCustomFullActorProfile::retained(const Data& data) const noexcept {
        !data.saved||!data.saved->source()||!data.saved->role_text_source()||!data.revision||
        !data.saved->source()->owns_presence(presence_)||!data.saved->source()->owns_readset(data.saved->readset())||
        !data.saved->source()->profile_equipment_matches(data.equipment,data.saved->readset(),data.row)||
-       !data.saved->readset().matches_population(data.saved->population().characters()))return false;
+       !data.saved->readset().matches_population(data.saved->population().characters())||
+       !data.status.profile_scope_source||!data.status.profile_scope||
+       !data.status.profile_scope_source->owns_presence(presence_)||
+       !data.status.profile_scope_source->matches_inputs(*data.status.profile_scope,data.saved,data.row,data.equipment,data.recipient)||
+       data.status.profile_scope->source()!=data.source||data.status.profile_scope->recipient()!=data.recipient||
+       !data.status.profile_scope_source->retained(*data.status.profile_scope))return false;
     return presence_->retained_population_current(data.saved->population());
 }
 bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
@@ -161,7 +166,12 @@ bool TaiwanCustomFullActorProfile::observers_current(const Data& data,Check chec
     if(!data.source_input.current(check,data.source,*data.source_input.session)||!local())return false;
     if(!data.receiver.current(check,*data.receiver.session,data.receiver.selector)||!local())return false;
     if(!data.resources.current(check,data.resources)||!local())return false;
+    // Keep the exact private scope alive across the real status observer.
+    const auto scope_source=data.status.profile_scope_source;
+    const auto scope=*data.status.profile_scope;
+    if(!scope_source->current(scope)||!local())return false;
     if(!data.status.current(check,data.status)||!local())return false;
+    if(!scope_source->current(scope)||!local())return false;
     return true;
 }
 bool TaiwanCustomFullActorProfile::joint_current(const Data& data) const {
@@ -189,6 +199,11 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
            !source_state.phase_owner||!source_state.current||!receiver.phase_owner||!receiver.current||
            !resources.dependency_owner||!resources.current||!status.dependency_owner||!status.current||
            !status.actor_override||!status.epoch||status.unsupported_domains||material.actor.character.streamer_privilege)return {};
+        if(!status.profile_scope_source||!status.profile_scope||
+           !status.profile_scope_source->owns_presence(presence_)||
+           !status.profile_scope_source->matches_inputs(*status.profile_scope,saved,index,equipment,recipient)||
+           status.profile_scope->source()!=source||status.profile_scope->recipient()!=recipient||
+           !status.profile_scope_source->current(*status.profile_scope))return {};
         const auto da=equipment.equipment().appearance();if(!da)return {};
         if(da->transform_key()!=0||material.actor.position.x>0x7ff||material.actor.position.y>0x7ff)return {};
         const auto& replay=status.actor_override->replay();

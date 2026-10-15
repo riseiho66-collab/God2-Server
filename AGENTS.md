@@ -1116,3 +1116,24 @@ PHASE1 no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/
 import/activate/deploy. GoalACTIVE/TW100first/sharedCNfourWS/453繁體/clientBIN
 formulas/maxHPpoison10分1/907pins/common64coin99999999999stack99nativelevels/
 saves/fonts/IME/auth/portraits/text preserved.
+
+Round419 connects actual private profile status scope: SAMEPopulationInput
+sharednode/controlblock/readset/row/privateEQ/source+recipientfullleases and
+BOTHactualLifecycleincarnations. NewScope weakPresence/strongpureIncSource/
+privateData/issuer/owninginputs/gameownerguards/noSQL/providers/statusvalues.
+ActualProfile requiresLASTscopefields, exactmatches/retained, scopeCurrent
+beforeANDafterrealstatuscallback; finaljointSavedRoleEQSQLcut onlypuretail.
+ActualHostwithresources requiresexactSourcesincarnations/createsScopeinContext/
+retainsrealstatusowner, ownsvaluesacrossprovider/refusesprefilledscope/stamps
+ONLYscopefields, preservingdomain/epoch/override/current. No inventedNone/EA/
+clear/permission/ACK. Actualstatusstate/qualifiedinitialclear/completewriters/
+privatebytepermits/finalgameIOcut/assets/nativecachewindow/actions/Drvfifth/
+nonemptytail/fullTW/CN/fourWS/nativeacceptance remainOPEN. SixCPP fourexisting
+twonew; V55pins141=135same4updated2new/canonical758/Git11; no newprojectPY/
+Lua/CMake/EXE/nativeformula/opcode/fullroutes. Wholepercentageunknown.
+All-systemDBscope/playerpetmonsterskillclassification/Englishphysicalnames/
+ChineseTXT/actualDBrepositories/reload/MySQLbackend remainrequired. PHASE1
+no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/import/
+activate/deploy. GoalACTIVE/TW100first/sharedCNfourWS/453繁體/clientBINformulas/
+maxHPpoison10分1/907pins/common64coin99999999999stack99nativelevels/saves/
+fonts/IME/auth/portraits/text preserved.
