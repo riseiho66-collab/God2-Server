@@ -649,7 +649,8 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_owned_statu
             const auto state=std::make_shared<InitialScene>(session,scope);
             const auto matches=[state](Session& candidate,const SharedTaiwanWorldEntered::Scope& value) {
                 return state->connection.lock().get()==&candidate&&value.lease==state->scope.lease&&
-                    value.entry.wire==state->scope.entry.wire&&value.tail_language==state->scope.tail_language;
+                    value.entry.wire==state->scope.entry.wire&&value.tail_language==state->scope.tail_language&&
+                    value.population==state->scope.population;
             };
             // Preallocate both owning function wrappers before replacing either
             // original callback. A failed construction still owns real cleanup.

@@ -5,19 +5,22 @@
 #include <map>
 #include <stdexcept>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 namespace god2 {
 namespace {
 using Entered=SharedTaiwanWorldEntered;
 using Visibility=cn::SharedActorVisibility;
+static_assert(std::is_nothrow_move_constructible_v<Entered::Native>);
 struct Pending {
     Entered::Scope scope;
     std::weak_ptr<Session> connection;
-    std::optional<Entered::Native> native;
+    std::shared_ptr<Entered::Native> native;
     std::shared_ptr<Visibility::TaiwanInitialPublication> incoming;
     SharedTaiwanWorldLifecycle::ReadyCompletion done;
     bool cancelled=false,published=false,completed=false;
+    bool outward_started=false,outward_poisoned=false;
 };
 struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     std::shared_ptr<SharedWorldPresence> presence;
@@ -32,6 +35,7 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     const std::thread::id thread=std::this_thread::get_id();
     std::map<std::uint64_t,std::shared_ptr<Pending>> pending;
     bool supplying=false,reentered=false;
+    bool materializing=false,materialization_reentered=false;
     void owner() const {
         if(std::this_thread::get_id()!=thread)throw std::logic_error("TW scene publication game owner mismatch");
     }
@@ -40,7 +44,8 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
         while(!pending.empty())cancel(pending.begin()->second);
     }
     bool pending_bound(const std::shared_ptr<Pending>& state,bool active) {
-        owner();if(!state || state->cancelled || (supplying && reentered))return false;
+        owner();if(!state || state->cancelled || state->outward_poisoned ||
+            (supplying && reentered) || (materializing && materialization_reentered))return false;
         const auto found=pending.find(state->scope.lease.session);
         const auto session=state->connection.lock();const auto& lease=state->scope.lease;
         if(found==pending.end() || found->second!=state || !session || session->closing() ||
@@ -73,16 +78,26 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     }
     bool current(const std::shared_ptr<Pending>& state,bool active,Entered::Check check) {
         if(!bound(state,active))return false;
-        const auto observe=state->native->current;
-        if(!bound(state,active))return false;
-        return observe(check,state->scope) && bound(state,active);
+        const auto material=state->native;
+        bool observed=false;
+        {
+            const auto observe=material->current;
+            if(!bound(state,active) || state->native!=material)return false;
+            observed=observe(check,state->scope);
+        } // A copied callback's destructor may cancel before the final fence.
+        return observed && bound(state,active) && state->native==material;
     }
-    void cancel(std::shared_ptr<Pending> state) noexcept {
+    void cancel(std::shared_ptr<Pending> state,Entered::Native* unpublished=nullptr) noexcept {
         if(std::this_thread::get_id()!=thread)std::terminate();
         // Erase/revoke before actual callbacks: late IO and nested completion
         // cannot retain affine payload or touch a successor generation.
-        if(!state || state->cancelled)return;
+        if(!state)return;
+        if(state->cancelled) {
+            if(unpublished)try {unpublished->cleanup(state->scope);}catch(...) {}
+            return;
+        }
         state->cancelled=true;
+        state->outward_poisoned=true;
         if(state->scope.population)retire_population(*state->scope.population);
         // Keep the exact revoked Scope stable through an in-flight supplier
         // and its eventual returned-material cleanup; it grants no successor.
@@ -94,13 +109,15 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
         // receive only our already-revoked weak Current, never native payload.
         try {visibility->release(state->scope.lease);}catch(...) {}
         if(material)try {material->cleanup(state->scope);}catch(...) {}
+        if(unpublished && unpublished!=material.get())try {unpublished->cleanup(state->scope);}catch(...) {}
         if(done)try {done(false);}catch(...) {}
     }
-    void fail(const std::shared_ptr<Pending>& state) {
-        owner();cancel(state);
+    void fail(const std::shared_ptr<Pending>& state,Entered::Native* unpublished=nullptr) {
+        owner();cancel(state,unpublished);
     }
     bool publish(const std::shared_ptr<Pending>& state) {
         owner();if(!state || state->published || !current(state,false,Entered::Check::BeforePublish))return false;
+        const auto material=state->native;
         const auto session=state->connection.lock();const auto& lease=state->scope.lease;
         std::shared_ptr<Visibility::TaiwanInitialPublication> retained_incoming;
         if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle) {
@@ -109,9 +126,13 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
                !bound(state,false) || state->incoming!=retained_incoming)return false;
         }else if(!visibility->taiwan_initial_current(state->incoming,session,lease,false) ||
                  !bound(state,false))return false;
-        const auto install=state->native->install;
-        if(!bound(state,false))return false;
-        if(!install(*session,state->scope) || state->cancelled ||
+        bool installed=false;
+        {
+            const auto install=material->install;
+            if(!bound(state,false) || state->native!=material)return false;
+            installed=install(*session,state->scope);
+        }
+        if(!installed || state->cancelled || state->native!=material ||
            !current(state,false,Entered::Check::AfterInstall) || session->state()!=SessionState::InWorld ||
            !state->scope.population ||
            !activate_population(*state->scope.population,state->scope.entry.actor_handle))return false;
@@ -122,19 +143,44 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
            (!bound(state,true) || state->incoming!=retained_incoming))return false;
         state->published=true;return bound(state,true);
     }
+    bool outward_mode(const Entered::Native& material) const noexcept {
+        if(material.outward_decision==Entered::OutwardDecision::Supplied)return !material.outward_provider;
+        return material.outward_decision==Entered::OutwardDecision::AfterInitialPublication &&
+            material.outward.empty() && material.outward_provider && bool(*material.outward_provider);
+    }
     void queued(const std::shared_ptr<Pending>& state,bool accepted) {
-        owner();if(!state || state->cancelled || state->completed)return;
+        owner();
+        if(materializing) {
+            materialization_reentered=true;
+            if(state && !state->completed)fail(state);
+            return;
+        }
+        if(!state || state->cancelled || state->completed)return;
+        // Queue completion and every Current/copy/allocation below may reenter.
+        // A second attempt is terminal, including while the provider is active.
+        if(std::exchange(state->outward_started,true)) {fail(state);return;}
         try {
-        const auto released=state->native->decision==Entered::ReplyDecision::ExplicitNoInitialReply ?
-            Entered::Check::LocalPublished:Entered::Check::QueueReleased;
-        if(!accepted || !state->published || !current(state,true,released) ||
-           !current(state,true,Entered::Check::BeforeOutward)) {fail(state);return;}
-        const std::weak_ptr<SceneOwner> weak_owner=shared_from_this();const std::weak_ptr<Pending> weak_state=state;
-        visibility->publish_outward_initial(state->scope.lease,std::move(state->native->outward),
-            [weak_owner,weak_state](Visibility::OutwardCheck) {
+        const auto material=state->native;
+        const auto session=state->connection.lock();
+        if(!material || !session || !outward_mode(*material)) {fail(state);return;}
+        const bool deferred=material->outward_decision==Entered::OutwardDecision::AfterInitialPublication;
+        std::vector<Visibility::OutwardRecipient> outward;
+        std::function<bool(Visibility::OutwardCheck)> outward_current;
+        std::function<void(std::optional<std::vector<Visibility::Binding>>)> outward_done;
+        const auto prepare=[&] {
+            if(deferred) {materializing=true;materialization_reentered=false;}
+            struct EndMaterializing {
+                SceneOwner& owner;bool active;
+                ~EndMaterializing(){if(active)owner.materializing=false;}
+            } guard{*this,deferred};
+            const std::weak_ptr<SceneOwner> weak_owner=shared_from_this();const std::weak_ptr<Pending> weak_state=state;
+            // Allocate the sink callbacks before the last actual Current cuts.
+            // They retain only revocable weak scene identities, never material.
+            outward_current=[weak_owner,weak_state](Visibility::OutwardCheck) {
                 const auto owner=weak_owner.lock();const auto pending=weak_state.lock();
                 return owner && pending && owner->current(pending,true,Entered::Check::OutwardPublish);
-            },[weak_owner,weak_state](std::optional<std::vector<Visibility::Binding>> bindings) {
+            };
+            outward_done=[weak_owner,weak_state](std::optional<std::vector<Visibility::Binding>> bindings) {
                 const auto owner=weak_owner.lock();const auto pending=weak_state.lock();
                 if(!owner || !pending || pending->cancelled || pending->completed)return;
                 owner->owner();
@@ -142,13 +188,44 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
                 if(!bindings || !owner->current(pending,true,Entered::Check::Completed)) {owner->fail(pending);return;}
                 pending->completed=true;auto done=std::move(pending->done);if(done)done(true);
                 }catch(...) {owner->fail(pending);}
-            });
+            };
+            const auto released=material->decision==Entered::ReplyDecision::ExplicitNoInitialReply ?
+                Entered::Check::LocalPublished:Entered::Check::QueueReleased;
+            if(!accepted || !state->published || !current(state,true,released) ||
+               !current(state,true,Entered::Check::BeforeOutward) || state->native!=material ||
+               !outward_mode(*material))return false;
+            if(deferred) {
+                if(!current(state,true,Entered::Check::BeforeDeferredOutward) || state->native!=material ||
+                   !outward_mode(*material))return false;
+                {
+                    // Shared immutable callback ownership survives cancellation
+                    // of Native while the actual game-only provider is inside.
+                    const auto provider=material->outward_provider;
+                    if(!bound(state,true) || state->native!=material)return false;
+                    auto observed=(*provider)(*session,state->scope);
+                    if(!observed || observed->size()>256 || !bound(state,true) ||
+                       state->native!=material || material->outward_provider!=provider ||
+                       !outward_mode(*material))return false;
+                    outward=std::move(*observed);
+                } // Drop provider/result temporaries before final actual Current.
+                if(!current(state,true,Entered::Check::AfterDeferredOutward) ||
+                   state->native!=material || !outward_mode(*material))return false;
+            }else outward=std::move(material->outward);
+            return bound(state,true) && state->native==material;
+        };
+        if(!prepare() || !bound(state,true) || state->native!=material) {fail(state);return;}
+        visibility->publish_outward_initial(state->scope.lease,std::move(outward),
+            std::move(outward_current),std::move(outward_done));
         }catch(...) {fail(state);}
     }
     void enter(Session& session,const SharedWorldPresence::Lease& lease,
                const RecoveredWorldEntryView& entry,SharedTaiwanWorldLifecycle::ReadyCompletion done) {
         owner();if(!done)throw std::invalid_argument("TW entered completion required");
-        if(supplying) {reentered=true;done(false);return;}
+        if(supplying || materializing) {
+            if(supplying)reentered=true;
+            if(materializing)materialization_reentered=true;
+            done(false);return;
+        }
         if(pending.contains(lease.session) || session.id()!=lease.session || session.account_id!=lease.account ||
            session.character_id!=lease.character || entry.actor_handle!=lease.actor_handle ||
            entry.area!=lease.position.area || entry.scene!=lease.position.scene || entry.x!=lease.position.x ||
@@ -174,12 +251,26 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
             auto native=source(session,state->scope);
             if(state->cancelled) {
                 retire_population(*population);
-                if(native)try {native->cleanup(state->scope);}catch(...) {}
+                if(native)fail(state,&*native);
                 return;
             }
-            if(native)state->native=std::move(*native);
-            if(reentered || !native || !current(state,false,Entered::Check::AfterSupply)) {fail(state);return;}
-            auto& material=*state->native;
+            if(!native) {fail(state);return;}
+            if(reentered || !population_bound(state,false) || !outward_mode(*native)) {fail(state,&*native);return;}
+            std::shared_ptr<Entered::Native> retained_material;
+            try {
+                // Allocation precedes the noexcept Native move. Until it
+                // succeeds the local optional still owns exact real cleanup.
+                retained_material=std::make_shared<Entered::Native>(std::move(*native));
+            }catch(...) {fail(state,&*native);throw;}
+            native.reset(); // Drop moved-from callback values before adoption/current.
+            if(reentered || !population_bound(state,false) || state->native) {
+                fail(state,retained_material.get());return;
+            }
+            state->native=retained_material;
+            if(!current(state,false,Entered::Check::AfterSupply) || state->native!=retained_material) {fail(state);return;}
+            // Keep actual material alive through parser/vector allocations and
+            // Visibility observers, even when cancellation clears Pending.
+            auto& material=*retained_material;
             if(material.logical.size()>RecoveredTaiwanServerRecords::max_aggregate_logical_size ||
                material.incoming_offsets.size()!=material.incoming.size()) {fail(state);return;}
             if(material.decision==Entered::ReplyDecision::ExplicitNoInitialReply) {
@@ -259,6 +350,16 @@ SharedTaiwanWorldEntered::Native::Native(ReplyDecision selected,std::vector<std:
     :decision(selected),logical(std::move(bytes)),incoming_offsets(std::move(offsets)),incoming(std::move(actors)),
      outward(std::move(observers)),current(std::move(observe)),install(std::move(commit)),cleanup(std::move(release)) {
     if(!current || !install || !cleanup)throw std::invalid_argument("TW entered requires actual Current/scene install/cleanup");
+}
+SharedTaiwanWorldEntered::Native::Native(ReplyDecision selected,std::vector<std::uint8_t> bytes,
+    std::vector<std::size_t> offsets,std::vector<Visibility::InitialTaiwanActor> actors,
+    OutwardDecision outward_selected,OutwardProvider provider,Current observe,Install commit,Cleanup release)
+    :decision(selected),logical(std::move(bytes)),incoming_offsets(std::move(offsets)),incoming(std::move(actors)),
+     current(std::move(observe)),install(std::move(commit)),cleanup(std::move(release)),
+     outward_decision(outward_selected),outward_provider(std::make_shared<const OutwardProvider>(std::move(provider))) {
+    if(outward_decision!=OutwardDecision::AfterInitialPublication || !*outward_provider ||
+       !current || !install || !cleanup)
+        throw std::invalid_argument("TW deferred outward requires explicit post-publication provider and actual scene owners");
 }
 SharedTaiwanWorldLifecycle::AsyncOwner SharedTaiwanWorldEntered::create(
     std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<Visibility> visibility,Source source,

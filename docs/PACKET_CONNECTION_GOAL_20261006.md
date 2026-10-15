@@ -6457,3 +6457,24 @@ stack99/native levels/saves/fonts/IME/auth/text/CN/four WS. PHASE1 no build/test
 product/parser/native/VM/codec/game DB SQL/schema/migration/import/activation/deploy.
 
 Details: docs/research/tw-initial-population-source-20261015.md
+
+## Round428 — Post-install outward materialization (2026-10-15)
+
+Round428 connects explicit post-install outward materialization to actual Taiwan
+entered queue-release publication. Original eager constructor remains; deferred
+provider is mandatory, owned and once-only after real install/private activation.
+Current/population fences and stable revoked Scope bracket callbacks/cleanup.
+Native holder owns callbacks across cancellation/allocation. Visibility uses a
+local preallocated registry node, fresh lookup and captured generation; no stale
+iterator, successor overwrite, rebasing or wrap. Owned initial install matches
+exact private population observation. Five existing C++ files; V64 pins153,
+148 unchanged/five updated/no additions. Initial full Profile/DB issuer/status
+ActorUnit/FrameSeal/generic affine IO/atomic fanout/native ACK/coverage/Main OPEN.
+Goal ACTIVE/TW100 first; full routes added0/percentage unknown. All-system DB
+by actual rules/English names/Chinese per-table TXT/typed C++Lua/validated reload/
+MySQL8 backend/export required. Preserve453 Traditional/client BIN/maxHP poison
+10th/907/common64/coin99999999999/stack99/native levels/saves/fonts/IME/auth/text/
+CN/four WS. PHASE1 no build/tests/product/parser/native/VM/codec/game DB SQL/
+schema/migration/import/activation/deployment.
+
+Details: docs/research/tw-post-install-outward-source-20261015.md

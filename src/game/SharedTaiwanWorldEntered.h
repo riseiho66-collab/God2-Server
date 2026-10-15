@@ -33,11 +33,15 @@ public:
         // Only its held publication can consume the private activation step.
         std::optional<SharedWorldPresence::InitialPopulation> population{};
     };
-    enum class Check {AfterSupply,BeforeQueue,BeforePublish,AfterInstall,QueueReleased,LocalPublished,BeforeOutward,OutwardPublish,Completed};
+    enum class Check {AfterSupply,BeforeQueue,BeforePublish,AfterInstall,QueueReleased,LocalPublished,BeforeOutward,OutwardPublish,Completed,
+        BeforeDeferredOutward,AfterDeferredOutward};
     enum class ReplyDecision {CompleteNativeAggregate,ExplicitNoInitialReply};
+    enum class OutwardDecision {Supplied,AfterInitialPublication};
     using Current=std::function<bool(Check,const Scope&)>;
     using Install=std::function<bool(Session&,const Scope&)>;
     using Cleanup=std::function<void(const Scope&)>;
+    using OutwardProvider=std::function<std::optional<std::vector<cn::SharedActorVisibility::OutwardRecipient>>(
+        Session&,const Scope&)>;
     struct Native {
         ReplyDecision decision;
         // Complete ordered scene aggregate, bounded separately from one frame.
@@ -58,9 +62,17 @@ public:
         // without yield/send/DB writes, inside the held publication boundary.
         Install install;
         Cleanup cleanup;
+        // LAST: the explicit deferred mode owns its immutable callback box.
+        // Its vector is produced once after actual install/activation/delivery
+        // and initial queue release; nullopt fails, an empty vector is explicit.
+        OutwardDecision outward_decision=OutwardDecision::Supplied;
+        std::shared_ptr<const OutwardProvider> outward_provider{};
         Native(ReplyDecision,std::vector<std::uint8_t>,std::vector<std::size_t>,
             std::vector<cn::SharedActorVisibility::InitialTaiwanActor>,
             std::vector<cn::SharedActorVisibility::OutwardRecipient>,Current,Install,Cleanup);
+        Native(ReplyDecision,std::vector<std::uint8_t>,std::vector<std::size_t>,
+            std::vector<cn::SharedActorVisibility::InitialTaiwanActor>,
+            OutwardDecision,OutwardProvider,Current,Install,Cleanup);
     };
     using Source=std::function<std::optional<Native>(Session&,const Scope&)>;
     // All construction, use, cancellation and destruction run on the serial

@@ -103,6 +103,8 @@ public:
     public:
         InitialPopulation(const InitialPopulation&)=default;
         InitialPopulation& operator=(const InitialPopulation&)=default;
+        // Exact private observation identity; no phase or activation permission.
+        bool operator==(const InitialPopulation& other) const noexcept {return data_==other.data_;}
         std::span<const ReadyCharacter> characters() const noexcept;
         const ReadyCharacter& joining() const noexcept;
         bool activated() const noexcept;

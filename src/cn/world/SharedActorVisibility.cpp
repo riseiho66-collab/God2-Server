@@ -1329,10 +1329,16 @@ void SharedActorVisibility::publish_outward_initial(const Lease& original_source
     try {
         const auto self=shared_from_this();
         const auto position=presence_->saved_position(source);
-        const auto old=outward_.find(source.session);
-    if(!state->current || !position || taiwan_pk_departed(source) || source.actor_handle>0xfff ||
-           recipients.size()>256 || recipients.size()>std::numeric_limits<std::uint64_t>::max()-generation_ ||
-           (old!=outward_.end() && !old->second.expired())){finish_outward(state,false);return;}
+        const auto original_generation=generation_;
+        // Never retain an actual registry iterator across name/Presence readers
+        // or allocation callbacks while building this independent candidate.
+        const bool already_pending=[&] {
+            const auto found=outward_.find(source.session);
+            return found!=outward_.end()&&!found->second.expired();
+        }();
+        if(!state->current || !position || taiwan_pk_departed(source) || source.actor_handle>0xfff ||
+           recipients.size()>256 || recipients.size()>std::numeric_limits<std::uint64_t>::max()-original_generation ||
+           already_pending){finish_outward(state,false);return;}
         // Joining-source only: replacements/later visibility changes have a
         // separate native lifecycle. Never overwrite prior expected actors.
         for(const auto& [key,entry]:entries_)if(entry.binding.source().session==source.session) {
@@ -1370,15 +1376,42 @@ void SharedActorVisibility::publish_outward_initial(const Lease& original_source
             },native);
             if(!bytes){finish_outward(state,false);return;}
             const Key key{source.session,recipient.lease.session};
-            Binding binding(identity_,source,recipient.lease,generation_+state->bindings.size()+1);
+            Binding binding(identity_,source,recipient.lease,original_generation+state->bindings.size()+1);
             if(!state->staged.emplace(key,Entry{binding,*position,native}).second){finish_outward(state,false);return;}
             std::vector<god2cn::Bytes> records;records.push_back(std::move(*bytes));
             state->bindings.push_back(binding);
             state->deliveries.push_back({key,std::move(recipient.native),std::move(records)});
         }
-        // All model nodes/bindings/complete81-byte records allocate before IO.
-        if(old!=outward_.end())outward_.erase(old);
-        outward_.emplace(source.session,state);generation_+=state->bindings.size();
+        // Allocate the actual registry node in a LOCAL map. Allocation/reentry
+        // precedes the final fresh registry/generation/quota qualification.
+        std::map<std::uint64_t,std::weak_ptr<OutwardState>> candidate_registry;
+        candidate_registry.emplace(source.session,state);
+        auto candidate_node=candidate_registry.extract(source.session);
+        bool quota_current=true,source_present=false;
+        for(const auto& [key,entry]:entries_)
+            if(entry.binding.source().session==source.session)source_present=true;
+        for(const auto& delivery:state->deliveries){
+            std::size_t occupied=0;
+            for(const auto& [key,entry]:entries_)if(key.second==delivery.key.second)++occupied;
+            if(occupied>=128)quota_current=false;
+        }
+        if(generation_!=original_generation||source_present||!quota_current||taiwan_pk_departed(source)){
+            finish_outward(state,false);return;
+        }
+        bool live_successor=false;
+        {
+            // This iterator is acquired AFTER every observer/allocation. Only
+            // this exact expired entry may be erased; never a live successor.
+            const auto fresh=outward_.find(source.session);
+            live_successor=fresh!=outward_.end()&&!fresh->second.expired();
+            if(!live_successor&&fresh!=outward_.end())outward_.erase(fresh);
+        }
+        if(live_successor){finish_outward(state,false);return;}
+        const auto inserted=outward_.insert(std::move(candidate_node));
+        if(!inserted.inserted){finish_outward(state,false);return;}
+        // Existing generation and all binding additions were checked before
+        // construction, then required unchanged; never rebase or wrap them.
+        generation_+=state->bindings.size();
         const auto source_current=[self,state] {
             const auto saved=self->presence_->saved_position(state->source);
             const auto found=self->outward_.find(state->source.session);
