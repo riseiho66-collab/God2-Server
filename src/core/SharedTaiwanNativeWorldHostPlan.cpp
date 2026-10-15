@@ -620,6 +620,100 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_resources(
     return with_owned_pk_return_profiles(context,std::move(bank),std::move(policy),selection,
         std::move(material),std::move(recipe),std::move(sources));
 }
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_owned_status(
+        const Context& context,std::shared_ptr<const TaiwanNativeActorResourceBank> bank,
+        TaiwanCustomFullActorProfile::Policy policy,OwnedTaiwanPkReturnSceneSource::Selection selection,
+        TaiwanNativeActorResourceSource::Configuration configuration,TaiwanActorStatusOwnedSource::Policy status_policy,
+        OwnedPkProfileRecipe recipe,StoredSources sources) {
+    if(!context.common_world||!sources.entered||!sources.actor_status_incarnations)
+        throw std::invalid_argument("TW owned status requires actual initial scene and host incarnations");
+    auto status=TaiwanActorStatusOwnedSource::create(context.common_world->presence(),
+        sources.actor_status_incarnations,std::move(status_policy));
+    if(!status)throw std::invalid_argument("TW owned status cannot retain the actual host incarnation source");
+    auto real_source=std::move(sources.entered);
+    sources.entered=[status,real_source=std::move(real_source)](
+            Session& session,const SharedTaiwanWorldEntered::Scope& scope)
+            ->std::optional<SharedTaiwanWorldEntered::Native> {
+        auto native=real_source(session,scope);
+        if(!native)return {};
+        try {
+            struct InitialScene {
+                const std::weak_ptr<Session> connection;
+                const SharedTaiwanWorldEntered::Scope scope;
+                std::optional<TaiwanActorStatusOwnedSource::InitialInstall> ticket;
+                bool started=false,cancelled=false;
+                InitialScene(Session& session,const SharedTaiwanWorldEntered::Scope& value)
+                    :connection(session.weak_from_this()),scope(value){}
+            };
+            const auto state=std::make_shared<InitialScene>(session,scope);
+            const auto matches=[state](Session& candidate,const SharedTaiwanWorldEntered::Scope& value) {
+                return state->connection.lock().get()==&candidate&&value.lease==state->scope.lease&&
+                    value.entry.wire==state->scope.entry.wire&&value.tail_language==state->scope.tail_language;
+            };
+            // Preallocate both owning function wrappers before replacing either
+            // original callback. A failed construction still owns real cleanup.
+            SharedTaiwanWorldEntered::Install install=[status,state,matches,real=native->install](
+                    Session& actual,const SharedTaiwanWorldEntered::Scope& value) {
+                const auto revoke=[&] {
+                    state->cancelled=true;
+                    if(state->ticket)status->retire_initial_install(*state->ticket);
+                };
+                if(state->cancelled||state->started||!matches(actual,value)) {revoke();return false;}
+                state->started=true;
+                const auto ticket=status->begin_initial_install(actual,value.lease);
+                if(!ticket){revoke();return false;}
+                state->ticket=*ticket; // Exact entry retained before the real provider.
+                // begin allocation can reenter cleanup before the ticket is stored.
+                // Never invoke a real install after that scene has been cancelled.
+                if(state->cancelled||!matches(actual,value)) {revoke();return false;}
+                try {
+                    if(!real(actual,value)||state->cancelled||!matches(actual,value)||
+                       !status->commit_initial_clear(*ticket)) {revoke();return false;}
+                    return true;
+                }catch(...) {revoke();throw;}
+            };
+            SharedTaiwanWorldEntered::Cleanup cleanup=[status,state,real=native->cleanup](
+                    const SharedTaiwanWorldEntered::Scope& value) {
+                // Retire the exact earlier entry before any real cleanup callback;
+                // a stale same-scalar lease never retires a successor incarnation.
+                state->cancelled=true;
+                if(state->ticket)status->retire_initial_install(*state->ticket);
+                real(value);
+            };
+            native->install=std::move(install);native->cleanup=std::move(cleanup);
+            return native;
+        }catch(...) {
+            try {native->cleanup(scope);}catch(...) {}
+            throw;
+        }
+    };
+    ActualStatusSources actual{status,[status](
+            std::shared_ptr<const OwnedTaiwanPkReturnSceneSource::Input> input,std::size_t row,
+            const OwnedTaiwanPkReturnSceneSource::Equipment& equipment,const SharedWorldPresence::Lease& recipient)
+            ->std::optional<TaiwanCustomFullActorProfile::StatusInput> {
+        const auto observation=status->observe(std::move(input),row,equipment,recipient);
+        if(!observation)return {};
+        TaiwanCustomFullActorProfile::StatusInput result{
+            TaiwanCustomFullActorProfile::StatusInput::Domain::OrdinaryExplicitClear,
+            observation->revision(),0,observation->actor_override(),status,
+            [status,observation=*observation](TaiwanCustomFullActorProfile::Check,
+                    const TaiwanCustomFullActorProfile::StatusInput& material) {
+                return material.owned_status_source.get()==status.get()&&
+                    !material.owned_status_source.owner_before(status)&&!status.owner_before(material.owned_status_source)&&
+                    material.owned_status&&*material.owned_status==observation&&
+                    material.domain==TaiwanCustomFullActorProfile::StatusInput::Domain::OrdinaryExplicitClear&&
+                    material.epoch==observation.revision()&&!material.unsupported_domains&&
+                    material.actor_override==observation.actor_override()&&material.dependency_owner.get()==status.get()&&
+                    !material.dependency_owner.owner_before(status)&&!status.owner_before(material.dependency_owner)&&
+                    status->current(observation);
+            }};
+        result.owned_status_source=status;result.owned_status=*observation;
+        return result;
+    }};
+    return with_owned_pk_return_resources(context,std::move(bank),std::move(policy),selection,
+        std::move(configuration),std::move(actual),std::move(recipe),std::move(sources));
+}
 SharedTaiwanNativeWorldHostPlan::StoredSources::EquipmentPublicationFactory
 SharedTaiwanNativeWorldHostPlan::StoredSources::equipment_publication_factory(const Context& context) {
     if(!context.common_world || !context.common_world->owns_repository(context.characters) ||

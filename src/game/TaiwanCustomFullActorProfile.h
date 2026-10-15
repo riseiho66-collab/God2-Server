@@ -4,6 +4,7 @@
 #include "game/TaiwanNativeActorArgumentSource.h"
 #include "game/TaiwanNativeDrvDoll.h"
 #include "game/TaiwanActorStatusProfileScope.h"
+#include "game/TaiwanActorStatusOwnedSource.h"
 #include "cn/world/SharedActorVisibility.h"
 #include <functional>
 #include <memory>
@@ -91,6 +92,10 @@ public:
         // Lifetime/input scope only; does not establish the status values.
         std::shared_ptr<TaiwanActorStatusProfileScope> profile_scope_source{};
         std::optional<TaiwanActorStatusProfileScope::Observation> profile_scope{};
+        // LAST: optional typed CUSTOM initial-install policy owner. Both fields
+        // are mandatory together; the external provider path remains supported.
+        std::shared_ptr<TaiwanActorStatusOwnedSource> owned_status_source{};
+        std::optional<TaiwanActorStatusOwnedSource::Observation> owned_status{};
     };
     class Profile final {
     public:
@@ -146,6 +151,8 @@ private:
     mutable bool busy_=false,poisoned_=false,stopped_=false;
     std::uint64_t next_revision_=1;
     bool retained(const Data&) const noexcept;
+    bool owned_status_qualified(const StatusInput&,const std::shared_ptr<const SavedInput>&,
+        std::size_t,const Equipment&,const Lease&,bool live) const noexcept;
     bool resources_qualified(const Data&) const;
     bool observers_current(const Data&,Check) const;
     bool joint_current(const Data&) const;

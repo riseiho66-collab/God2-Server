@@ -94,6 +94,24 @@ std::shared_ptr<TaiwanCustomFullActorProfile> TaiwanCustomFullActorProfile::crea
 TaiwanCustomFullActorProfile::~TaiwanCustomFullActorProfile() {
     if(thread_!=std::this_thread::get_id())std::terminate();stopped_=true;
 }
+bool TaiwanCustomFullActorProfile::owned_status_qualified(const StatusInput& status,
+        const std::shared_ptr<const SavedInput>& saved,std::size_t row,const Equipment& equipment,
+        const Lease& recipient,bool live) const noexcept {
+    if(bool(status.owned_status_source)!=bool(status.owned_status))return false;
+    if(!status.owned_status_source)return true; // Existing external provider path.
+    const auto& owner=status.owned_status_source;const auto& value=*status.owned_status;
+    if(status.domain!=StatusInput::Domain::OrdinaryExplicitClear||status.unsupported_domains||
+       status.epoch!=value.revision()||status.actor_override!=value.actor_override()||
+       status.dependency_owner.get()!=owner.get()||status.dependency_owner.owner_before(owner)||
+       owner.owner_before(status.dependency_owner)||!owner->owns_presence(presence_)||
+       !owner->matches_inputs(value,saved,row,equipment,recipient)||
+       !status.profile_scope||status.profile_scope->source()!=value.source()||
+       status.profile_scope->recipient()!=value.recipient()||
+       status.profile_scope->source_incarnation()!=value.source_incarnation()||
+       status.profile_scope->recipient_incarnation()!=value.recipient_incarnation()||
+       !owner->retained(value))return false;
+    return !live||owner->current(value);
+}
 bool TaiwanCustomFullActorProfile::retained(const Data& data) const noexcept {
     if(thread_!=std::this_thread::get_id()||stopped_||poisoned_||data.owner!=this||data.identity!=identity_||
        !data.saved||!data.saved->source()||!data.saved->role_text_source()||!data.revision||
@@ -104,7 +122,8 @@ bool TaiwanCustomFullActorProfile::retained(const Data& data) const noexcept {
        !data.status.profile_scope_source->owns_presence(presence_)||
        !data.status.profile_scope_source->matches_inputs(*data.status.profile_scope,data.saved,data.row,data.equipment,data.recipient)||
        data.status.profile_scope->source()!=data.source||data.status.profile_scope->recipient()!=data.recipient||
-       !data.status.profile_scope_source->retained(*data.status.profile_scope))return false;
+       !data.status.profile_scope_source->retained(*data.status.profile_scope)||
+       !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,false))return false;
     return presence_->retained_population_current(data.saved->population());
 }
 bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
@@ -176,9 +195,11 @@ bool TaiwanCustomFullActorProfile::observers_current(const Data& data,Check chec
     // Keep the exact private scope alive across the real status observer.
     const auto scope_source=data.status.profile_scope_source;
     const auto scope=*data.status.profile_scope;
-    if(!scope_source->current(scope)||!local())return false;
+    if(!scope_source->current(scope)||
+       !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,true)||!local())return false;
     if(!data.status.current(check,data.status)||!local())return false;
-    if(!scope_source->current(scope)||!local())return false;
+    if(!scope_source->current(scope)||
+       !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,true)||!local())return false;
     return true;
 }
 bool TaiwanCustomFullActorProfile::joint_current(const Data& data) const {
@@ -210,7 +231,8 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
            !status.profile_scope_source->owns_presence(presence_)||
            !status.profile_scope_source->matches_inputs(*status.profile_scope,saved,index,equipment,recipient)||
            status.profile_scope->source()!=source||status.profile_scope->recipient()!=recipient||
-           !status.profile_scope_source->current(*status.profile_scope))return {};
+           !status.profile_scope_source->current(*status.profile_scope)||
+           !owned_status_qualified(status,saved,index,equipment,recipient,true))return {};
         const auto da=equipment.equipment().appearance();if(!da)return {};
         if(da->transform_key()!=0||material.actor.position.x>0x7ff||material.actor.position.y>0x7ff)return {};
         const auto& replay=status.actor_override->replay();

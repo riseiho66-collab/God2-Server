@@ -1158,3 +1158,25 @@ product/parser/native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
 GoalACTIVE/TW100first/sharedCNfourWS/453繁體/clientBINformulas/maxHPpoison10分1/
 907pins/common64coin99999999999stack99nativelevels/saves/fonts/IME/auth/text
 preserved.
+
+Round421 connects actual owned CUSTOM0133 ordinaryinitialclear state at real
+scene Native.install boundary. Private preallocatedUnknownEntry/InitialInstall
+ticket before realinstall; explicitPolicy/rawindex<=255; commitonlyaftertrue/
+exactactualIncToken/currentSession/fulllease/mapentry. SameIncTokenattemptnever
+reinitializes,failedattemptsremembered; onlydeadactualincarnationentriespruned.
+RootwrapperownsweakSession/fullScope/wire/tail/ticket/started/cancelled; checks
+allocation-timecancelBEFORErealinstall; cleanupretiresEXACTentryBEFOREcallback.
+Source.observeonlyreadscommittedstate; exactinputnode/controlblock/row/EQ/
+bothrealIncTokens/revision/privateoverride. ProfileLASTownedpair/exactfields/
+ScopeTokenjoin/livebeforeafterprovider/finalSQLpureownedretainedtail. Actual
+sameContextHosttypedfactoryinternalprovider, oldgenericproviderpreserved.
+NoFencequiescenceKnownNoneinference; custominitialclearNOTnativeauthority/
+completewriters/privatebytepermit. Laterstatuswriters/finalgameIOcuts/other
+statusdomains/nonemptytail/nativecacheaction/Main/fullTW/CN/fourWS/acceptance
+OPEN. CPP6=4existing2new161879B;V57pins143=137same4updated2added;canonical764/
+Git12. No newprojectPY/Lua/CMake/EXE/opcode/formula/fullroutes;wholepercentage
+unknown. All-systemDB/actualtypedrepositories/validatedreload/MySQL8export
+backend/Englishnames/ChineseTXT remainrequired. GoalACTIVE/TW100first;453繁體/
+clientBINformulas/maxHPpoison10分1/907/common64coin99999999999stack99nativelevels/
+saves/fonts/IME/auth/text preserved. PHASE1no build/test/product/parser/native/
+VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.

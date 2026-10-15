@@ -17,6 +17,7 @@
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "game/OwnedTaiwanPkReturnSceneSource.h"
 #include "game/TaiwanNativeActorResourceSource.h"
+#include "game/TaiwanActorStatusOwnedSource.h"
 #include <utility>
 #include <optional>
 #include <string>
@@ -255,6 +256,14 @@ public:
             std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
             OwnedTaiwanPkReturnSceneSource::Selection,TaiwanNativeActorResourceSource::Configuration,
             ActualStatusSources,OwnedPkProfileRecipe,StoredSources);
+        // Explicit CUSTOM-0133 initial scene install owns the ordinary clear
+        // state. No caller-supplied status callback or lazy observation mint.
+        // The actual install/cleanup and incarnation remain mandatory; complete
+        // writer exclusion/private byte permits are separate unfinished work.
+        static StoredSources with_owned_pk_return_owned_status(const SharedWorldHostPlan::Context&,
+            std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
+            OwnedTaiwanPkReturnSceneSource::Selection,TaiwanNativeActorResourceSource::Configuration,
+            TaiwanActorStatusOwnedSource::Policy,OwnedPkProfileRecipe,StoredSources);
         // Construct on startup's game owner without writes. The returned
         // game-only closure accepts a future real post-COMMIT token; retain it
         // in the later request owner, never retain this borrowed Context.

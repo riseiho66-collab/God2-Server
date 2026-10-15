@@ -5107,6 +5107,17 @@
         "src/handlers/OwnedTaiwanPkRoomBackend.h"
       ],
       "native_gap": "Actual full-current actor/resource/text/complete-selection issuer, final strand consume/visibility publication and durable release/recovery remain incomplete.",
+      "actor_status_owned_source421": {
+        "classification": "CUSTOM_DESIGNED_EXPLICIT_INITIAL_SCENE_INSTALL_CLEAR_NOT_NATIVE_STATUS",
+        "policy": "Custom0133OrdinaryInitialClearV1 requires explicit raw byte index<=255; Unknown until actual real scene install returns true; no default, absence or normalized-index inference.",
+        "ownership": "Private exact initial ticket/incarnation/map Entry; attempted same incarnation never reinitializes; cancellation before real callback and cleanup retires exact Entry before original callback; no save mutation.",
+        "profile": "Immutable actual input/controlblock/row/EQ/both IncTokens/revision/override; typed Current around real provider and pure retained after final saved-role-EQ SQL cut; same Context Host factory supplies actual state.",
+        "remaining": "Later state writers/complete writer membership/private exact-byte permits/final game-IO cuts/other domains/Main/native acceptance remain OPEN; not whole-route completion.",
+        "implementation": ["src/game/TaiwanActorStatusOwnedSource.h", "src/game/TaiwanActorStatusOwnedSource.cpp", "src/game/TaiwanCustomFullActorProfile.h", "src/game/TaiwanCustomFullActorProfile.cpp", "src/core/SharedTaiwanNativeWorldHostPlan.h", "src/core/SharedTaiwanNativeWorldHostPlan.cpp"],
+        "source_connected": true,
+        "default_activated": false,
+        "build_tests_runtime_SQL_activation_deployment": false
+      },
       "rules": {
         "trigger": "Actual second accepted-terminal callback after295 private pair; optional same-instance ReturnSceneSource threaded DB factory→Backend→Driver→LuaOwner→Publication. Absence preserves295; configured missing or invalid complete material fails.",
         "scene": "Mandatory current ordered incoming/outgoing sets for both participants, explicit empties only by supplier; genuine original departure/leases/savedposes/Sessions/entry holds/returnpreparations. Full81B6F/13B5E/5B73 with exact12bit identity/position/state and current all-three-text/resource/selection provenance.",
