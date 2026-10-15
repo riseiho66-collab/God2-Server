@@ -221,7 +221,7 @@ std::optional<TaiwanNativeResourceSelection::Request> wrapped_request(
     const auto printable=[](const auto& bytes){return std::all_of(bytes.begin(),bytes.end(),
         [](auto c){return c>=0x20 && c<0x7f;});};
     if(context.actual_52f550_root.empty() || filename.empty() || !printable(context.actual_52f550_root) ||
-       !printable(context.actual_model_prefix) || !printable(filename) ||
+       !context.actual_model_prefix.empty() || !printable(filename) ||
        !context.actual_working_directory.is_absolute() || context.actual_manager_bank_operand>=512)return std::nullopt;
     std::wstring root;for(const auto c:context.actual_52f550_root)root.push_back(static_cast<wchar_t>(c));
     const std::filesystem::path root_path(root);
@@ -231,9 +231,12 @@ std::optional<TaiwanNativeResourceSelection::Request> wrapped_request(
     auto reference=context.actual_52f550_root;
     reference.insert(reference.end(),directory.begin(),directory.end());
     reference.insert(reference.end(),filename.begin(),filename.end());
-    if(reference.size()>=256 || context.actual_model_prefix.size()>=256-reference.size())return std::nullopt;
+    if(reference.size()>=256)return std::nullopt;
+    // Hero463E8D and actual fifth-Drv4636F5 (also preload4635EF) call429820
+    // directly with this complete filename. No44D520/model+1C concatenation
+    // occurs here. Reject the legacy nonempty field above, never silently drop.
     return TaiwanNativeResourceSelection::Request{TaiwanNativeResourceSelection::Kind::RomBinary,
-        std::move(reference),context.actual_model_prefix,context.actual_working_directory,context.actual_manager_bank_operand};
+        std::move(reference),{},context.actual_working_directory,context.actual_manager_bank_operand};
 }
 bool same_request(const TaiwanNativeResourceSelection::Request& a,const TaiwanNativeResourceSelection::Request& b) {
     return a.kind==b.kind && a.original_reference==b.original_reference && a.native_prefix==b.native_prefix &&

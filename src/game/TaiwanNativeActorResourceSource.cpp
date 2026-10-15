@@ -42,6 +42,14 @@ TaiwanNativeActorResourceSource::Configuration::Configuration(std::array<NativeR
     if(!encoded_bound||!plain_bound||encoded_bound>=static_cast<std::size_t>(std::numeric_limits<std::streamsize>::max())||
        (scope!=Scope::CurrentServerImmutableAssetGeneration&&scope!=Scope::WholePhysicalSelection))
         throw std::invalid_argument("Actor resource configuration lacks explicit supported bounds/scope");
+    // Native4635xx/463Exx wrappers pass their complete path directly to429820.
+    // Preserve the old context field position, but never select the unrelated
+    // 44D520 model-prefix branch or silently discard a supplied prefix.
+    for(const auto& context:contexts)
+        if(!context.actual_model_prefix.empty())
+            throw std::invalid_argument("Direct actor ROM wrapper requires an empty model prefix");
+    if(drv&&!drv->context.actual_model_prefix.empty())
+        throw std::invalid_argument("Direct Drv ROM wrapper requires an empty model prefix");
 }
 struct TaiwanNativeActorResourceSource::Data {
     const TaiwanNativeActorResourceSource* const owner;

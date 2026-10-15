@@ -1222,3 +1222,20 @@ GoalACTIVE/TW100first;453繁體/clientBIN/maxHPpoison10分1/907/common64/
 coin99999999999stack99nativelevels/saves/fonts/IME/auth/text preserved.
 PHASE1no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/
 import/activate/deploy.
+
+Round424 corrects ordinaryHero/Drv directROM wrapper path: actual463640 fifth
+separate463530preload/463DE0Hero call52F550 thenDIRECT429820, no44D520modelprefix.
+NativeRomContext preservesmemberpositions butlegacyactual_model_prefix MUSTempty;
+explicitnonemptyreject inprivatefactory andall4Hero/optionalDrvConfiguration.
+ValidRequest.native_prefix empty; exactroot/directory/rawfilename/CWD/operand/
+privatebank/family/ordinal/immutableROM/action retained. GenericSelectionprefix
+andTail423/fourHero/ordinaryfifth/oldModes/status422/finalSQLordering preserved.
+Knowncode1622B/newnativeuniquecredit0. Mainaudit actualnormalrun_server hasno
+worldplan; realinitialscene/movementAuthority/mixedOther/Current absent, OPEN.
+CPP3 ALLexisting;V60pins146=143same3updated/canonical773/Git9=7inverse2newdocs.
+No newprojectPY/Lua/CMake/EXE/opcode/formula/fullroutes;percentageunknown.
+All-systemDBbyactualgamerules/Englishnames/ChineseTXT/typedrepositories/validated
+reload/MySQL8backend-export required. GoalACTIVE/TW100first;453繁體/clientBIN/
+maxHPpoison10分1/907/common64coin99999999999stack99nativelevels/saves/fonts/IME/
+auth/text preserved. PHASE1no build/test/product/parser/native/VM/codec/gameDBSQL/
+schema/migrate/import/activate/deploy.

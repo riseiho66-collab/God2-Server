@@ -107,8 +107,9 @@ public:
     struct NativeRomContext {
         // Actual cached52F550 root bytes, not an inferred current working dir.
         std::vector<std::uint8_t> actual_52f550_root;
-        // Separate actual ROM manager/model+1C bytes. Never use the wrapper's
-        // RoleDoll/Drv directory as a substitute for this native model field.
+        // Legacy compatibility member/position: MUST be empty for these direct
+        //463E8D/4636F5 loader callers. Model+1C prefix belongs to the distinct
+        //44D520 ROMFILE path; it is not appended to ordinary Hero/Drv requests.
         std::vector<std::uint8_t> actual_model_prefix;
         std::filesystem::path actual_working_directory;
         std::uint32_t actual_manager_bank_operand;
