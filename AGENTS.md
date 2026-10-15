@@ -1323,3 +1323,23 @@ instance+N. Preserve453 Traditional/clientBIN/maxHP poison10th/907/common64/
 coin99999999999/stack99/native levels/saves/fonts/IME/auth/text/CN/fourWS.
 PHASE1 no build/tests/product/parser/native/VM/codec/gameDBSQL/schema/migration/
 import/activation/deployment; no newprojectPY.
+
+Round430 connects actual initial Source/Receiver endpoint proofs inside the
+genuine429 augmented Scope. Joining uses real weak Session/privateInitialInput/
+Written selector and private prepared->activated entry/delivery proof; no ready
+transport registration. Selected peers use actual transport lookup then retain
+privateToken/weakSession/selector/InWorld/battlegeneration, not cached strong
+Snapshot. Initial Prepare/Retained only, no PK Consumed. Actual Session executor
+predicate preserves old PK/Normal APIs. Cleanup retires endpoints before real
+cleanup; held install stays pure. Six existing C++ files; V66 pins153=147same6
+updated/noadds. Shared Profile/material fullproducer/ActorUnit-EA/FrameSeal/
+initial-outward transport/affineIO/fanoutACK/coverage/movement/Main OPEN.
+Private typed endpoint receipts are mandatory in initial Profile consumers;
+live checks call private leaf Current directly and reject Consumed even when
+public callbacks are replaced. Ready PK path/aggregate defaults remain.
+Goal ACTIVE/TW100 first/fullroutes0/percentunknown. All recovered DB systems by
+actual game rules/English identifiers/per-table ChineseTXT/typedC++Lua/validated
+reload/MySQL8 backend-losslessexport remain required. Preserve453Traditional/
+clientBIN/maxHPpoison10th/907/common64coin99999999999stack99nativelevels/saves/
+fonts/IME/auth/text/CNfourWS. PHASE1 no build/tests/product/parser/native/VM/
+codec/gameDBSQL/schema/migrate/import/activate/deploy; no newprojectPY.

@@ -5,6 +5,7 @@
 #include <optional>
 
 namespace god2 {
+class TaiwanInitialActorEndpoints;
 // Explicit actual scene supplier. This does not construct native scene replies,
 // choose peers/resources, replace frozen TW handlers, or grant gameplay rules.
 class SharedTaiwanWorldEntered {
@@ -36,6 +37,9 @@ public:
         // LAST: only the same-Database initial issuer attaches this owned input
         // to the genuine supplier/callback Scope; the Entered base stays empty.
         std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput> actor_input{};
+        // LAST: actual initial-only Source/Receiver endpoint proofs. They use
+        // this same input and never pre-register the prepared joining actor.
+        std::shared_ptr<TaiwanInitialActorEndpoints> actor_endpoints{};
     };
     enum class Check {AfterSupply,BeforeQueue,BeforePublish,AfterInstall,QueueReleased,LocalPublished,BeforeOutward,OutwardPublish,Completed,
         BeforeDeferredOutward,AfterDeferredOutward};

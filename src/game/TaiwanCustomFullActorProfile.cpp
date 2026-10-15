@@ -1,9 +1,11 @@
 #include "game/TaiwanCustomFullActorProfile.h"
+#include "game/SharedNativeWorldTransports.h"
 #include "protocol/RecoveredWorldEntryView.h"
 #include "text/OwnedCharacterNameText.h"
 #include "text/LegacyChineseCodec.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -138,6 +140,9 @@ bool TaiwanCustomFullActorProfile::retained(const Data& data) const noexcept {
        data.status.profile_scope->source()!=data.source||data.status.profile_scope->recipient()!=data.recipient||
        !data.status.profile_scope_source->retained(*data.status.profile_scope)||
        !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,false))return false;
+    if(data.saved->initial_population()&&
+       (!TaiwanInitialActorEndpoints::qualify_source(data.saved,data.source,data.source_input,false)||
+        !TaiwanInitialActorEndpoints::qualify_receiver(data.saved,data.recipient,data.receiver,false)))return false;
     return data.saved->population_current(presence_);
 }
 bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
@@ -199,22 +204,28 @@ bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
     return true;
 }
 bool TaiwanCustomFullActorProfile::observers_current(const Data& data,Check check) const {
+    const bool initial=data.saved&&data.saved->initial_population();
+    if(initial&&check!=Check::Prepare&&check!=Check::Retained)return false;
     const auto local=[&]{return retained(data)&&session_tuple(data.source_input.session,data.source)&&
         session_tuple(data.receiver.session,data.recipient)&&data.source.session!=data.recipient.session;};
+    const auto endpoints=[&]{return !initial||
+        (TaiwanInitialActorEndpoints::qualify_source(data.saved,data.source,data.source_input,true)&&
+         TaiwanInitialActorEndpoints::qualify_receiver(data.saved,data.recipient,data.receiver,true)&&local());};
     if(!local()||!data.source_input.phase_owner||!data.source_input.current||!data.receiver.phase_owner||
        !data.receiver.current||!data.status.dependency_owner||!data.status.current||!data.status.epoch||
        data.status.unsupported_domains||!data.status.actor_override||!resources_qualified(data))return false;
-    if(!data.source_input.current(check,data.source,*data.source_input.session)||!local())return false;
-    if(!data.receiver.current(check,*data.receiver.session,data.receiver.selector)||!local())return false;
-    if(!data.resources.current(check,data.resources)||!local())return false;
+    if(!endpoints())return false;
+    if(!data.source_input.current(check,data.source,*data.source_input.session)||!local()||!endpoints())return false;
+    if(!data.receiver.current(check,*data.receiver.session,data.receiver.selector)||!local()||!endpoints())return false;
+    if(!data.resources.current(check,data.resources)||!local()||!endpoints())return false;
     // Keep the exact private scope alive across the real status observer.
     const auto scope_source=data.status.profile_scope_source;
     const auto scope=*data.status.profile_scope;
     if(!scope_source->current(scope)||
-       !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,true)||!local())return false;
-    if(!data.status.current(check,data.status)||!local())return false;
+       !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,true)||!local()||!endpoints())return false;
+    if(!data.status.current(check,data.status)||!local()||!endpoints())return false;
     if(!scope_source->current(scope)||
-       !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,true)||!local())return false;
+       !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,true)||!local()||!endpoints())return false;
     return true;
 }
 bool TaiwanCustomFullActorProfile::joint_current(const Data& data) const {
@@ -235,6 +246,11 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
            !saved->readset().matches_population(saved->characters())||
            !saved->population_current(presence_))return {};
         const auto& material=saved->readset().materials()[index];const Lease source=material.actor.lease;
+        const auto endpoints=[&](bool live){return !saved->initial_population()||
+            (TaiwanInitialActorEndpoints::qualify_source(saved,source,source_state,live)&&
+             TaiwanInitialActorEndpoints::qualify_receiver(saved,recipient,receiver,live)&&
+             saved->population_current(presence_));};
+        if(!endpoints(true))return {};
         bool recipient_found=false;
         for(const auto& row:saved->characters())if(row.lease==recipient){if(recipient_found)return {};recipient_found=true;}
         if(!recipient_found||!source.actor_handle||source.actor_handle>0xfff||source.session==recipient.session||
@@ -247,7 +263,7 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
            !status.profile_scope_source->matches_inputs(*status.profile_scope,saved,index,equipment,recipient)||
            status.profile_scope->source()!=source||status.profile_scope->recipient()!=recipient||
            !status.profile_scope_source->current(*status.profile_scope)||
-           !owned_status_qualified(status,saved,index,equipment,recipient,true))return {};
+           !owned_status_qualified(status,saved,index,equipment,recipient,true)||!endpoints(true))return {};
         const auto da=equipment.equipment().appearance();if(!da)return {};
         if(da->transform_key()!=0||material.actor.position.x>0x7ff||material.actor.position.y>0x7ff)return {};
         const auto& replay=status.actor_override->replay();
@@ -256,9 +272,10 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
             if(!replay||replay->identity()!=source.actor_handle||replay->type()!=0)return {};
         }else return {};
         const auto page=receiver.selector.wire_codepage();if(page!=936&&page!=950)return {};
-        if(!source_state.current(Check::Prepare,source,*source_state.session)||poisoned_||
-           !receiver.current(Check::Prepare,*receiver.session,receiver.selector)||poisoned_)return {};
-        const auto role=saved->role_text_source()->observe(source);if(!role||poisoned_)return {};
+        if(!endpoints(true)||!source_state.current(Check::Prepare,source,*source_state.session)||poisoned_||
+           !endpoints(true)||!receiver.current(Check::Prepare,*receiver.session,receiver.selector)||poisoned_||
+           !endpoints(true))return {};
+        const auto role=saved->role_text_source()->observe(source);if(!role||poisoned_||!endpoints(false))return {};
         const auto& root=material.actor.character;
         const auto end=std::find(root.profile.begin(),root.profile.begin()+15,0);
         if(end==root.profile.begin()||end==root.profile.begin()+15)return {};
@@ -346,4 +363,253 @@ const TaiwanCustomFullActorProfile::ResourceInput& TaiwanCustomFullActorProfile:
 const TaiwanCustomFullActorProfile::StatusInput& TaiwanCustomFullActorProfile::Profile::status()const noexcept{return data_->status;}
 const std::shared_ptr<const cn::SharedActorVisibility::TaiwanReturnActorOverride>& TaiwanCustomFullActorProfile::Profile::actor_override()const noexcept{return data_->status.actor_override;}
 std::uint64_t TaiwanCustomFullActorProfile::Profile::revision()const noexcept{return data_->revision;}
+}
+
+namespace god2 {
+struct TaiwanInitialActorEndpoints::Identity {
+    const std::thread::id thread=std::this_thread::get_id();
+    std::atomic<bool> stopped{false};
+    bool busy=false;
+};
+struct TaiwanInitialActorEndpoints::Data {
+    const std::shared_ptr<Identity> identity;
+    const std::shared_ptr<SharedWorldPresence> presence;
+    const std::shared_ptr<SharedNativeWorldTransports> transports;
+    const std::weak_ptr<Session> joining;
+    const std::shared_ptr<const SavedInput> input;
+    const SharedWorldPresence::InitialPopulation population;
+    const Session::NativeTaiwanReceiverSelector selector;
+    const asio::any_io_executor game;
+    const std::uint64_t battle;
+    Data(std::shared_ptr<Identity> owner,std::shared_ptr<SharedWorldPresence> actual_presence,
+         std::shared_ptr<SharedNativeWorldTransports> actual_transports,std::weak_ptr<Session> session,
+         std::shared_ptr<const SavedInput> saved,SharedWorldPresence::InitialPopulation initial,
+         Session::NativeTaiwanReceiverSelector report,asio::any_io_executor executor,std::uint64_t generation)
+        :identity(std::move(owner)),presence(std::move(actual_presence)),transports(std::move(actual_transports)),
+         joining(std::move(session)),input(std::move(saved)),population(std::move(initial)),
+         selector(std::move(report)),game(std::move(executor)),battle(generation){}
+};
+struct TaiwanInitialActorEndpoints::Leaf {
+    const std::shared_ptr<const Data> data;
+    const Lease lease;
+    const Purpose purpose;
+    const std::weak_ptr<Session> session;
+    const Session::NativeTaiwanReceiverSelector selector;
+    // A Snapshot owns StrongTransport. Keep only its exact private registration
+    // and frozen normal phase/battle, so no Scope->peer Session cycle is cached.
+    const std::optional<SharedNativeWorldTransports::Token> transport;
+    const std::uint64_t battle;
+    Leaf(std::shared_ptr<const Data> owner,Lease endpoint,Purpose use,std::weak_ptr<Session> actual,
+         Session::NativeTaiwanReceiverSelector report,
+         std::optional<SharedNativeWorldTransports::Token> registration,std::uint64_t generation)
+        :data(std::move(owner)),lease(std::move(endpoint)),purpose(use),session(std::move(actual)),
+         selector(std::move(report)),transport(std::move(registration)),battle(generation){}
+};
+struct TaiwanInitialActorEndpointProof::Data {
+    const std::shared_ptr<const TaiwanInitialActorEndpoints::Leaf> leaf;
+    explicit Data(std::shared_ptr<const TaiwanInitialActorEndpoints::Leaf> value):leaf(std::move(value)){}
+};
+struct TaiwanInitialActorEndpoints::Operation {
+    const std::shared_ptr<Identity> identity;
+    bool entered=false;
+    explicit Operation(const Data& data):identity(data.identity) {
+        if(identity->thread!=std::this_thread::get_id()||identity->stopped.load(std::memory_order_acquire))return;
+        if(identity->busy){identity->stopped.store(true,std::memory_order_release);return;}
+        identity->busy=true;entered=true;
+    }
+    ~Operation(){if(entered)identity->busy=false;}
+    explicit operator bool()const noexcept{return entered;}
+};
+bool TaiwanInitialActorEndpoints::retained_data(const Data& data) noexcept {
+    try {
+        if(data.identity->thread!=std::this_thread::get_id()||data.identity->stopped.load(std::memory_order_acquire)||
+           !data.presence||!data.transports||!data.input||!data.input->initial_population()||
+           *data.input->initial_population()!=data.population||!data.input->population_current(data.presence)||
+           !data.transports->owns_presence(data.presence))return false;
+        const auto session=data.joining.lock();const auto& lease=data.population.joining().lease;
+        if(!session||session->closing()||session->id()!=lease.session||session->account_id!=lease.account||
+           session->character_id!=lease.character||!session->recovered_world_ready()||
+           session->battle_generation()!=data.battle||
+           !session->native_taiwan_initial_game_executor_matches(data.selector,data.game))return false;
+        const bool activated=data.population.activated();
+        if(activated) {
+            if(session->state()!=SessionState::InWorld||
+               !session->common_world_delivery_current(lease.account,lease.character,lease.generation)||
+               !data.presence->retained_ready_current(lease))return false;
+        }else if((session->state()!=SessionState::CharacterSelected&&session->state()!=SessionState::InWorld)||
+                 !session->common_world_entry_current(lease.account,lease.character,lease.generation)||
+                 session->common_world_delivery_current(lease.account,lease.character,lease.generation)||
+                 !data.presence->retained_preparation_current(lease))return false;
+        return data.population.activated()==activated&&data.input->population_current(data.presence)&&
+            !data.identity->stopped.load(std::memory_order_acquire);
+    }catch(...){return false;}
+}
+bool TaiwanInitialActorEndpoints::retained_leaf(const Leaf& leaf) noexcept {
+    try {
+        const auto& data=*leaf.data;
+        if(!retained_data(data))return false;
+        // The private initial input is in registry session order; this is only
+        // exact requested membership, never an automatically chosen audience.
+        const auto rows=data.input->characters();
+        const auto at=std::lower_bound(rows.begin(),rows.end(),leaf.lease.session,
+            [](const auto& row,std::uint64_t session){return row.lease.session<session;});
+        if(at==rows.end()||at->lease!=leaf.lease)return false;
+        const auto session=leaf.session.lock();
+        if(!session||session->closing()||session->id()!=leaf.lease.session||
+           session->account_id!=leaf.lease.account||session->character_id!=leaf.lease.character||
+           session->battle_generation()!=leaf.battle||
+           !session->native_taiwan_initial_game_executor_matches(leaf.selector,data.game))return false;
+        const auto& joining=data.population.joining().lease;
+        if(leaf.transport) {
+            if(leaf.lease==joining||session->state()!=SessionState::InWorld||
+               !data.transports->registry_current(*leaf.transport))return false;
+        }else {
+            const auto actual=data.joining.lock();
+            if(leaf.lease!=joining||actual!=session||leaf.selector!=data.selector||
+               (leaf.purpose==Purpose::Source&&!data.population.activated()))return false;
+        }
+        return retained_data(data)&&!data.identity->stopped.load(std::memory_order_acquire);
+    }catch(...){return false;}
+}
+bool TaiwanInitialActorEndpoints::current_leaf_body(const Leaf& leaf,ProfileOwner::Check check) noexcept {
+    try {
+        if((check!=ProfileOwner::Check::Prepare&&check!=ProfileOwner::Check::Retained)||!retained_leaf(leaf))return false;
+        const auto& data=*leaf.data;
+        // Own actual endpoints across the callbackful repository observations.
+        const auto session=leaf.session.lock(),joining=data.joining.lock();
+        if(!session||!joining)return false;
+        if(leaf.transport&&(!data.transports->current(*leaf.transport)||!retained_leaf(leaf)))return false;
+        const bool activated=data.population.activated();const auto& lease=data.population.joining().lease;
+        if(!(activated?data.presence->ready(lease):data.presence->preparation_current(lease))||
+           data.population.activated()!=activated||!retained_leaf(leaf))return false;
+        if(leaf.transport&&(!data.transports->current(*leaf.transport)||!retained_leaf(leaf)))return false;
+        return retained_leaf(leaf);
+    }catch(...){return false;}
+}
+bool TaiwanInitialActorEndpoints::current_leaf(const std::shared_ptr<const Leaf>& leaf,ProfileOwner::Check check) noexcept {
+    const auto retained=leaf;if(!retained)return false;
+    Operation operation(*retained->data);if(!operation)return false;
+    const bool okay=current_leaf_body(*retained,check);
+    return okay&&retained_leaf(*retained);
+}
+std::shared_ptr<TaiwanInitialActorEndpoints> TaiwanInitialActorEndpoints::create(
+        std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<SharedNativeWorldTransports> transports,
+        Session& joining,std::shared_ptr<const SavedInput> input,asio::any_io_executor game) {
+    try {
+        if(!presence||!transports||!transports->owns_presence(presence)||!input||!input->initial_population()||
+           !input->population_current(presence)||joining.weak_from_this().expired())return {};
+        const auto population=*input->initial_population();const auto& lease=population.joining().lease;
+        if(joining.id()!=lease.session||joining.account_id!=lease.account||joining.character_id!=lease.character)return {};
+        const auto selector=joining.native_taiwan_receiver_selector_on_game();
+        if(!selector||!joining.native_taiwan_initial_game_executor_matches(*selector,game))return {};
+        const auto battle=joining.battle_generation();
+        auto identity=std::make_shared<Identity>();
+        auto data=std::make_shared<const Data>(identity,presence,transports,joining.weak_from_this(),input,
+            population,*selector,std::move(game),battle);
+        auto result=std::shared_ptr<TaiwanInitialActorEndpoints>(new TaiwanInitialActorEndpoints(data));
+        // All factory/control-block allocations precede the final pure cut.
+        if(!retained_data(*data))return {};
+        return result;
+    }catch(...){return {};}
+}
+TaiwanInitialActorEndpoints::~TaiwanInitialActorEndpoints() noexcept {retire();}
+void TaiwanInitialActorEndpoints::retire() noexcept {
+    if(data_->identity->thread!=std::this_thread::get_id())std::terminate();
+    data_->identity->stopped.store(true,std::memory_order_release);
+}
+bool TaiwanInitialActorEndpoints::retained() const noexcept {
+    const auto data=data_;return retained_data(*data)&&!data->identity->stopped.load(std::memory_order_acquire);
+}
+bool TaiwanInitialActorEndpoints::matches_input(const std::shared_ptr<const SavedInput>& input) const noexcept {
+    const auto data=data_;const auto saved=input;
+    return retained_data(*data)&&saved.get()==data->input.get()&&
+        !saved.owner_before(data->input)&&!data->input.owner_before(saved)&&
+        !data->identity->stopped.load(std::memory_order_acquire);
+}
+std::shared_ptr<const TaiwanInitialActorEndpoints::Leaf> TaiwanInitialActorEndpoints::select(
+        std::shared_ptr<const Data> data,Lease lease,Purpose purpose) {
+    if(!retained_data(*data))return {};
+    const auto rows=data->input->characters();
+    const auto at=std::lower_bound(rows.begin(),rows.end(),lease.session,
+        [](const auto& row,std::uint64_t session){return row.lease.session<session;});
+    if(at==rows.end()||at->lease!=lease)return {};
+    const auto& joining=data->population.joining().lease;
+    if(lease==joining) {
+        if(purpose==Purpose::Source&&!data->population.activated())return {};
+        auto leaf=std::make_shared<const Leaf>(data,lease,purpose,data->joining,data->selector,std::nullopt,data->battle);
+        return retained_leaf(*leaf)?std::move(leaf):nullptr;
+    }
+    std::shared_ptr<const Leaf> leaf;
+    {
+        const auto snapshot=data->transports->lookup(lease);
+        if(!snapshot||!retained_data(*data))return {};
+        const auto* tw=std::get_if<std::shared_ptr<Session>>(&snapshot->transport());
+        if(!tw||!*tw||(*tw)->state()!=SessionState::InWorld)return {};
+        const auto session=*tw;const auto battle=session->battle_generation();
+        const auto selector=session->native_taiwan_receiver_selector_on_game();
+        if(!selector||!session->native_taiwan_initial_game_executor_matches(*selector,data->game)||
+           !data->transports->current(*snapshot)||!retained_data(*data))return {};
+        leaf=std::make_shared<const Leaf>(data,lease,purpose,session,*selector,snapshot->token(),battle);
+        if(!data->transports->current(*snapshot)||!retained_leaf(*leaf))return {};
+    } // Drop StrongTransport/Session Snapshot custody BEFORE final pure fence.
+    return retained_leaf(*leaf)?std::move(leaf):nullptr;
+}
+bool TaiwanInitialActorEndpoints::qualify_source(const std::shared_ptr<const SavedInput>& input,
+        const Lease& lease,const ProfileOwner::SourceInput& material,bool live) noexcept {
+    try {
+        if(!input||!input->initial_population()||!material.initial_endpoint||!material.initial_endpoint->data_)return false;
+        const auto leaf=material.initial_endpoint->data_->leaf;
+        if(!leaf||leaf->purpose!=Purpose::Source||leaf->lease!=lease||
+           input.get()!=leaf->data->input.get()||input.owner_before(leaf->data->input)||leaf->data->input.owner_before(input)||
+           material.phase_owner.get()!=leaf.get()||material.phase_owner.owner_before(leaf)||leaf.owner_before(material.phase_owner)||
+           !material.session||leaf->session.lock().get()!=material.session.get()||
+           leaf->session.owner_before(material.session)||material.session.owner_before(leaf->session)||
+           !retained_leaf(*leaf))return false;
+        return !live||current_leaf(leaf,ProfileOwner::Check::Retained);
+    }catch(...){return false;}
+}
+bool TaiwanInitialActorEndpoints::qualify_receiver(const std::shared_ptr<const SavedInput>& input,
+        const Lease& lease,const ProfileOwner::ReceiverInput& material,bool live) noexcept {
+    try {
+        if(!input||!input->initial_population()||!material.initial_endpoint||!material.initial_endpoint->data_)return false;
+        const auto leaf=material.initial_endpoint->data_->leaf;
+        if(!leaf||leaf->purpose!=Purpose::Receiver||leaf->lease!=lease||
+           input.get()!=leaf->data->input.get()||input.owner_before(leaf->data->input)||leaf->data->input.owner_before(input)||
+           material.phase_owner.get()!=leaf.get()||material.phase_owner.owner_before(leaf)||leaf.owner_before(material.phase_owner)||
+           !material.session||leaf->session.lock().get()!=material.session.get()||
+           leaf->session.owner_before(material.session)||material.session.owner_before(leaf->session)||
+           material.selector!=leaf->selector||!retained_leaf(*leaf))return false;
+        return !live||current_leaf(leaf,ProfileOwner::Check::Retained);
+    }catch(...){return false;}
+}
+std::optional<TaiwanInitialActorEndpoints::ProfileOwner::SourceInput> TaiwanInitialActorEndpoints::source(const Lease& lease) const {
+    const auto data=data_;const Lease actual=lease;
+    Operation operation(*data);if(!operation)return {};
+    try {
+        const auto leaf=select(data,actual,Purpose::Source);if(!leaf)return {};
+        const auto session=leaf->session.lock();if(!session)return {};
+        const TaiwanInitialActorEndpointProof proof(std::make_shared<const TaiwanInitialActorEndpointProof::Data>(leaf));
+        std::optional<ProfileOwner::SourceInput> result{ProfileOwner::SourceInput{session,leaf,
+            [leaf](ProfileOwner::Check check,const Lease& actual,Session& session) {
+                return actual==leaf->lease&&leaf->session.lock().get()==&session&&current_leaf(leaf,check);
+            },proof}};
+        if(!current_leaf_body(*leaf,ProfileOwner::Check::Prepare)||!retained_leaf(*leaf))return {};
+        return result;
+    }catch(...){return {};}
+}
+std::optional<TaiwanInitialActorEndpoints::ProfileOwner::ReceiverInput> TaiwanInitialActorEndpoints::receiver(const Lease& lease) const {
+    const auto data=data_;const Lease actual=lease;
+    Operation operation(*data);if(!operation)return {};
+    try {
+        const auto leaf=select(data,actual,Purpose::Receiver);if(!leaf)return {};
+        const auto session=leaf->session.lock();if(!session)return {};
+        const TaiwanInitialActorEndpointProof proof(std::make_shared<const TaiwanInitialActorEndpointProof::Data>(leaf));
+        std::optional<ProfileOwner::ReceiverInput> result{ProfileOwner::ReceiverInput{session,leaf->selector,leaf,
+            [leaf](ProfileOwner::Check check,Session& session,const Session::NativeTaiwanReceiverSelector& selector) {
+                return leaf->selector==selector&&leaf->session.lock().get()==&session&&current_leaf(leaf,check);
+            },proof}};
+        if(!current_leaf_body(*leaf,ProfileOwner::Check::Prepare)||!retained_leaf(*leaf))return {};
+        return result;
+    }catch(...){return {};}
+}
 }

@@ -7,6 +7,7 @@
 #include "game/TaiwanActorStatusOwnedSource.h"
 #include "cn/world/SharedActorVisibility.h"
 #include <functional>
+#include <asio/any_io_executor.hpp>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -14,6 +15,19 @@
 #include <vector>
 
 namespace god2 {
+class TaiwanInitialActorEndpoints;
+// A private direction/input/phase leaf issued only by the actual initial
+// endpoint owner. Public callbacks cannot replace this receipt.
+class TaiwanInitialActorEndpointProof final {
+    struct Data;
+public:
+    TaiwanInitialActorEndpointProof(const TaiwanInitialActorEndpointProof&)=default;
+    TaiwanInitialActorEndpointProof& operator=(const TaiwanInitialActorEndpointProof&)=default;
+private:
+    friend class TaiwanInitialActorEndpoints;
+    explicit TaiwanInitialActorEndpointProof(std::shared_ptr<const Data> data):data_(std::move(data)){}
+    std::shared_ptr<const Data> data_;
+};
 // Explicit CUSTOM-0133 fresh full records, not a recovered native producer,
 // equipment permission, canonical-slot mapping or default emission switch.
 class TaiwanCustomFullActorProfile final {
@@ -44,6 +58,8 @@ public:
         // the SceneOwner which itself retains this Profile (ownership cycle).
         std::shared_ptr<const void> phase_owner;
         std::function<bool(Check,const Lease&,Session&)> current;
+        // LAST: required only for a private initial PopulationInput.
+        std::optional<TaiwanInitialActorEndpointProof> initial_endpoint{};
     };
     struct ReceiverInput {
         std::shared_ptr<Session> session;
@@ -52,6 +68,8 @@ public:
         // Exact private report/phase proof, including the consumed successor.
         // Never qualify Consumed by old prebattle NormalINIT/Appearance Current.
         std::function<bool(Check,Session&,const Session::NativeTaiwanReceiverSelector&)> current;
+        // LAST: a receiver receipt cannot be substituted by a source receipt.
+        std::optional<TaiwanInitialActorEndpointProof> initial_endpoint{};
     };
     struct ComponentRom {
         TaiwanNativeActorResourceBank::HeroLookup lookup;
@@ -137,7 +155,8 @@ public:
         Equipment,SourceInput,Lease recipient,ReceiverInput,ResourceInput,StatusInput);
     bool current(const Profile&,Check) const;
     // Pure private identity/population/immutable input fence; no allocation,
-    // SQL, encoding, provider, Session phase or resource callbacks.
+    // SQL, encoding, provider or resource callbacks; initial endpoint phases
+    // are checked through their private pure receipts.
     bool owns_profile(const Profile&) const noexcept;
     bool owns_presence(const std::shared_ptr<SharedWorldPresence>&) const noexcept;
     bool owns_resource_bank(const std::shared_ptr<const TaiwanNativeActorResourceBank>&) const noexcept;
@@ -159,5 +178,47 @@ private:
     bool resources_qualified(const Data&) const;
     bool observers_current(const Data&,Check) const;
     bool joint_current(const Data&) const;
+};
+}
+
+namespace god2 {
+class SharedNativeWorldTransports;
+// Actual initial-entry endpoint phases only. No audience selection, actor
+// material, status initialization, transport registration or publication.
+class TaiwanInitialActorEndpoints final {
+    friend class TaiwanInitialActorEndpointProof;
+    struct Identity;
+    struct Data;
+    struct Leaf;
+    struct Operation;
+    enum class Purpose {Source,Receiver};
+public:
+    using ProfileOwner=TaiwanCustomFullActorProfile;
+    using SavedInput=ProfileOwner::SavedInput;
+    using Lease=ProfileOwner::Lease;
+    static std::shared_ptr<TaiwanInitialActorEndpoints> create(
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<SharedNativeWorldTransports>,
+        Session& joining,std::shared_ptr<const SavedInput>,asio::any_io_executor);
+    ~TaiwanInitialActorEndpoints() noexcept;
+    TaiwanInitialActorEndpoints(const TaiwanInitialActorEndpoints&)=delete;
+    TaiwanInitialActorEndpoints& operator=(const TaiwanInitialActorEndpoints&)=delete;
+    std::optional<ProfileOwner::SourceInput> source(const Lease&) const;
+    std::optional<ProfileOwner::ReceiverInput> receiver(const Lease&) const;
+    bool matches_input(const std::shared_ptr<const SavedInput>&) const noexcept;
+    static bool qualify_source(const std::shared_ptr<const SavedInput>&,const Lease&,
+        const ProfileOwner::SourceInput&,bool live) noexcept;
+    static bool qualify_receiver(const std::shared_ptr<const SavedInput>&,const Lease&,
+        const ProfileOwner::ReceiverInput&,bool live) noexcept;
+    // Pure identity/input/registry/Session cuts, with no SQL or observers.
+    bool retained() const noexcept;
+    void retire() noexcept;
+private:
+    explicit TaiwanInitialActorEndpoints(std::shared_ptr<const Data> data):data_(std::move(data)){}
+    const std::shared_ptr<const Data> data_;
+    static std::shared_ptr<const Leaf> select(std::shared_ptr<const Data>,Lease,Purpose);
+    static bool retained_data(const Data&) noexcept;
+    static bool retained_leaf(const Leaf&) noexcept;
+    static bool current_leaf_body(const Leaf&,ProfileOwner::Check) noexcept;
+    static bool current_leaf(const std::shared_ptr<const Leaf>&,ProfileOwner::Check) noexcept;
 };
 }

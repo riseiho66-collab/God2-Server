@@ -58,9 +58,10 @@ void require_owned_pk_sources(const Context& context,const std::optional<OwnedPk
 SharedTaiwanWorldEntered::Source with_initial_saved_actor_input(
         std::shared_ptr<SharedWorldPresence> presence,
         std::shared_ptr<OwnedTaiwanReturnActorSavedSource::InitialIssuer> issuer,
+        std::shared_ptr<SharedNativeWorldTransports> transports,asio::any_io_executor game,
         SharedTaiwanWorldEntered::Source source) {
     using Entered=SharedTaiwanWorldEntered;
-    if(!presence||!issuer||!issuer->owns_presence(presence)||!source)
+    if(!presence||!issuer||!issuer->owns_presence(presence)||!transports||!transports->owns_presence(presence)||!source)
         throw std::invalid_argument("TW initial saved input requires exact private owners and real Source");
     struct OwnerState {
         const std::thread::id thread=std::this_thread::get_id();
@@ -74,16 +75,18 @@ SharedTaiwanWorldEntered::Source with_initial_saved_actor_input(
         bool cancelled=false,cleaned=false,running=false,installed=false;
         SceneState(Session& session,const Entered::Scope& original,
                 std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput> input,
+                std::shared_ptr<TaiwanInitialActorEndpoints> endpoints,
                 std::shared_ptr<SharedWorldPresence> actual)
             :connection(session.weak_from_this()),base(original),augmented([&]{auto value=original;
-                value.actor_input=std::move(input);return value;}()),presence(std::move(actual)){}
+                value.actor_input=std::move(input);value.actor_endpoints=std::move(endpoints);
+                return value;}()),presence(std::move(actual)){}
         bool matches(const Entered::Scope& value) const noexcept {
             return value.lease==base.lease&&value.entry.wire==base.entry.wire&&
                 value.entry.logical==base.entry.logical&&value.entry.actor_handle==base.entry.actor_handle&&
                 value.entry.area==base.entry.area&&value.entry.scene==base.entry.scene&&
                 value.entry.x==base.entry.x&&value.entry.y==base.entry.y&&value.entry.kind==base.entry.kind&&
                 value.tail_language==base.tail_language&&value.population==base.population&&
-                value.actor_input==base.actor_input;
+                value.actor_input==base.actor_input&&value.actor_endpoints==base.actor_endpoints;
         }
         bool pure_current() const {
             const auto session=connection.lock();
@@ -93,13 +96,15 @@ SharedTaiwanWorldEntered::Source with_initial_saved_actor_input(
                 base.population->joining().lease==base.lease&&augmented.actor_input&&
                 augmented.actor_input->initial_population()&&
                 *augmented.actor_input->initial_population()==*base.population&&
-                augmented.actor_input->population_current(presence);
+                augmented.actor_input->population_current(presence)&&augmented.actor_endpoints&&
+                augmented.actor_endpoints->matches_input(augmented.actor_input)&&augmented.actor_endpoints->retained();
         }
         bool saved_current() const {
             return pure_current()&&augmented.actor_input->source()->current(augmented.actor_input->readset())&&pure_current();
         }
         void cleanup() {
             cancelled=true;
+            if(augmented.actor_endpoints)augmented.actor_endpoints->retire();
             if(cleaned)return;
             cleaned=true;
             // Revocation never prevents genuine cleanup with its exact input.
@@ -115,7 +120,7 @@ SharedTaiwanWorldEntered::Source with_initial_saved_actor_input(
         ~Call(){if(entered)state.running=false;}
     };
     const auto owner=std::make_shared<OwnerState>();
-    return [owner,presence=std::move(presence),issuer=std::move(issuer),source=std::move(source)](
+    return [owner,presence=std::move(presence),issuer=std::move(issuer),transports=std::move(transports),game=std::move(game),source=std::move(source)](
             Session& session,const Entered::Scope& original)->std::optional<Entered::Native> {
         if(owner->thread!=std::this_thread::get_id())throw std::logic_error("TW initial input game owner mismatch");
         if(owner->supplying){owner->poisoned=true;return {};}
@@ -123,12 +128,14 @@ SharedTaiwanWorldEntered::Source with_initial_saved_actor_input(
         struct Supplying {OwnerState& value;explicit Supplying(OwnerState& v):value(v){value.supplying=true;}
             ~Supplying(){value.supplying=false;}} supplying(*owner);
         const auto base=original;
-        if(base.actor_input||!base.population||base.population->activated()||
+        if(base.actor_input||base.actor_endpoints||!base.population||base.population->activated()||
            base.population->joining().lease!=base.lease||!issuer->owns_presence(presence)||
            !presence->retained_initial_population_current(*base.population))return {};
         const auto input=issuer->observe(*base.population);
         if(!input)return {};
-        const auto state=std::make_shared<SceneState>(session,base,input,presence);
+        const auto endpoints=TaiwanInitialActorEndpoints::create(presence,transports,session,input,game);
+        if(!endpoints)return {};
+        const auto state=std::make_shared<SceneState>(session,base,input,endpoints,presence);
         if(owner->poisoned||!state->saved_current())return {};
         auto native=source(session,state->augmented);
         if(!native)return {};
@@ -761,7 +768,7 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_owned_statu
         sources.actor_status_incarnations,std::move(status_policy));
     if(!status)throw std::invalid_argument("TW owned status cannot retain the actual host incarnation source");
     auto real_source=with_initial_saved_actor_input(context.common_world->presence(),
-        context.initial_actor_inputs,std::move(sources.entered));
+        context.initial_actor_inputs,context.common_world->transports(),context.game,std::move(sources.entered));
     sources.entered=[status,real_source=std::move(real_source)](
             Session& session,const SharedTaiwanWorldEntered::Scope& scope)
             ->std::optional<SharedTaiwanWorldEntered::Native> {

@@ -677,6 +677,10 @@ public:
     // Own game only, genuine current Written INIT/latest accepted C1C.
     // Return factory uses exact accepted private preparation, not old config.
     std::optional<NativeTaiwanReceiverSelector> native_taiwan_receiver_selector_on_game()const;
+    // Exact initial game owner over a genuine Written/current normal entry.
+    // Prepared CharacterSelected is valid; no PK or delivery-state inference.
+    bool native_taiwan_initial_game_executor_matches(const NativeTaiwanReceiverSelector&,
+        const asio::any_io_executor&) const noexcept;
     std::optional<NativeTaiwanReceiverSelector> native_taiwan_return_receiver_selector(
         const NativePkReturnPreparation&)const;
     bool native_taiwan_receiver_selector_current(const NativeTaiwanReceiverSelector&)const noexcept;

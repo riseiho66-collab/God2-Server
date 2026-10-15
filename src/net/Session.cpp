@@ -4906,6 +4906,22 @@ bool Session::native_taiwan_receiver_selector_current(const NativeTaiwanReceiver
     return terminal&&terminal->receiver_selector==source&&
         native_pk_terminal_barrier_accepted_current(NativePkTerminalBarrier(terminal));
 }
+bool Session::native_taiwan_initial_game_executor_matches(const NativeTaiwanReceiverSelector& selector,
+        const asio::any_io_executor& executor) const noexcept {
+    if(!native_taiwan_receiver_selector_current(selector))return false;
+    const auto source=selector.data_;const auto entry=source->entry;
+    const auto normal=impl_->normal_initialization.load();
+    if(!normal||normal->entry!=entry||entry->game_thread!=std::this_thread::get_id()||
+       entry->session.lock().get()!=this||!entry->written.load()||entry->retired.load()||
+       impl_->game!=executor||!normal_world_initialization_current_on_game(NormalWorldInitialization(normal)))return false;
+    // Retain the original private observations through executor equality and
+    // repeat Current; a terminal-only PK selector cannot supply this NormalINIT.
+    return native_taiwan_receiver_selector_current(selector)&&impl_->receiver_selector==source&&
+        impl_->normal_entry.load()==entry&&impl_->normal_initialization.load()==normal&&
+        entry->game_thread==std::this_thread::get_id()&&entry->session.lock().get()==this&&
+        entry->written.load()&&!entry->retired.load()&&
+        normal_world_initialization_current_on_game(NormalWorldInitialization(normal));
+}
 void Session::fail_native_pk_return_reservation(
         const std::shared_ptr<NativePkReturnReservation::Data>& data) noexcept {
     if(!data||data->phase.load()==NativePkReturnReservation::Data::Phase::Returned)return;
