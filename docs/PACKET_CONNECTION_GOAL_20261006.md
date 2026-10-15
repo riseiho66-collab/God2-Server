@@ -6325,3 +6325,31 @@ saves/fonts/IME/auth/text preserved. PHASE1no build/test/product/parser/native/
 VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
 
 Details: docs/research/tw-actor-status-owned-source-20261015.md
+
+## Round422 — Actual owned status return publication bytes (2026-10-15)
+
+Round422 connects actualownedstatus pureActorUnit/full6F+EA bytes fromreal
+SceneprivateSource throughcanonicalVisibility/Records/groups toSessionactual
+wholeunitframing/heldFrame/WriteLASTseal/queue/release/preasyncwrite/completion.
+UnitonlyprivateEntryatomics/revision/override/bothIncTokens/immutable86B, no
+Input/EQ/Profile/Source/IncSource/presence/callbackaffinegraph. PrivateFrameSeal
+exactplanIdentity/recipientaddresscontrolblock/frameordinal/actualframepointer
+controlblock/wholeencodedcopy/orderedlogicaloffsets; noPlanstrongcycle. Pure
+Visibilityprepared+Consumedfences afterfinalstored/in-scopeSQL verifywhole
+bytes/leases/lifetimes; projectionchangesreject/no remint. ActualSessionchecks
+stage/FIFO/unhold/planCurrent/write/completion beforecredits/pop; finalexternal
+cutafterContinuation/handler/bind_executor/buffer beforeasync_write. Internal
+Asioallocation/partialwrite/OSrevocationrace/fullwriterexclusionstillOPEN. All
+oldWriteradmissions/invalidate retained/no pending0/no ownwritebypass. External
+statusabsentseallegacy/trueemptygroups preserved; initialCUSTOMpolicyonly.
+Laterstatuswriters/completewritermembership/finalserialization/otherdomains/
+nonemptytail/nativecacheaction/Main/fullTW/CN/fourWS/nativeacceptance OPEN.
+CPP9=8existing1newheader;V58pins144=135same8updated1added/canonical767/Git15.
+No newprojectPY/Lua/CMake/EXE/opcode/formula/fullroutes;percentageunknown.
+All-systemDB/actualtypedrepositories/validatedreload/MySQL8backend-export/
+Englishnames/ChineseTXT required. GoalACTIVE/TW100first;453繁體/clientBIN/
+maxHPpoison10分1/907/common64coin99999999999stack99nativelevels/saves/fonts/IME/
+auth/text preserved. PHASE1no build/test/product/parser/native/VM/codec/gameDBSQL/
+schema/migrate/import/activate/deploy.
+
+Details: docs/research/tw-actor-status-publication-source-20261015.md

@@ -3,6 +3,7 @@
 #include "protocol/Packet.h"
 #include "game/TaiwanActorStatusWriteFence.h"
 #include "game/TaiwanActorStatusIncarnationSource.h"
+#include "game/TaiwanActorStatusPublication.h"
 #include "protocol/ProtocolMode.h"
 #include "protocol/RecoveredC2S0002.h"
 #include "protocol/RecoveredCharacterCreate.h"
@@ -772,6 +773,9 @@ private:
         // Private Visibility-issued indivisible81B6F or81B6F+5BEA units.
         // Deliberate empty groups still create no fabricated frame.
         std::vector<std::vector<std::uint8_t>> actors;
+        // Optional exact owned-status witness per indivisible actor unit.
+        // Empty preserves legacy producers; a nonempty vector must be parallel.
+        std::vector<std::optional<TaiwanActorStatusPublication::ActorUnit>> actor_status{};
     };
     // Only the genuine Visibility Records builder may supply these groups.
     static NativePkReturnOutputPlan prepare_native_pk_return_output(const NativePkReturnReservation&,
@@ -788,6 +792,9 @@ private:
         const std::weak_ptr<const void>&) noexcept;
     static void fail_native_pk_return_finalisation(const std::shared_ptr<NativePkReturnFinalisation::Data>&) noexcept;
     static bool native_pk_return_output_plan_current(const std::shared_ptr<NativePkReturnOutputPlan::Data>&) noexcept;
+    static bool actor_status_frame_matches(const std::optional<TaiwanActorStatusPublication::FrameSeal>&,
+        const std::shared_ptr<std::vector<std::uint8_t>>&,const Session&,std::size_t,
+        const NativePkReturnOutputPlan::Data&) noexcept;
     static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;
     static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
     void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);

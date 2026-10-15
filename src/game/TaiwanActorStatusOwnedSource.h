@@ -1,6 +1,7 @@
 #pragma once
 #include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include "game/TaiwanActorStatusIncarnationSource.h"
+#include "game/TaiwanActorStatusPublication.h"
 #include "cn/world/SharedActorVisibility.h"
 #include <cstdint>
 #include <map>
@@ -12,6 +13,7 @@
 namespace god2 {
 class Session;
 class SharedTaiwanNativeWorldHostPlan;
+class OwnedTaiwanPkReturnSceneSource;
 // CUSTOM-0133 explicit initial-install clear policy. This owned ordinary subset
 // is not recovered native status, complete writer custody or a byte permission.
 class TaiwanActorStatusOwnedSource final {
@@ -78,6 +80,8 @@ public:
     void stop() noexcept;
 private:
     friend class SharedTaiwanNativeWorldHostPlan;
+    friend class OwnedTaiwanPkReturnSceneSource;
+    friend class TaiwanActorStatusPublication;
     TaiwanActorStatusOwnedSource(const std::shared_ptr<SharedWorldPresence>&,
         std::shared_ptr<TaiwanActorStatusIncarnationSource>,Policy);
     // Actual real native.install boundary only. A failed/dropped attempt never
@@ -85,6 +89,10 @@ private:
     std::optional<InitialInstall> begin_initial_install(Session&,const Lease&) noexcept;
     bool commit_initial_clear(const InitialInstall&) noexcept;
     void retire_initial_install(const InitialInstall&) noexcept;
+    // Only the actual qualified Scene builder may bind the whole6F+EA bytes;
+    // observe() itself never mints publication evidence.
+    std::optional<TaiwanActorStatusPublication::ActorUnit> prepare_publication(
+        const Observation&,std::span<const std::uint8_t> whole_unit) const noexcept;
     bool entry_retained(const Entry&) const noexcept;
     bool entry_current(const std::shared_ptr<Entry>&) const;
     bool retained_data(const Data&) const;

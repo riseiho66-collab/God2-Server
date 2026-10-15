@@ -10,6 +10,7 @@
 namespace god2 {
 class Session;
 class SharedTaiwanWorldLifecycle;
+class TaiwanActorStatusPublication;
 // Positive private actor-incarnation lifetime only. Neither admission to this
 // registry nor a live token establishes Known/None/EA or writer permission.
 class TaiwanActorStatusIncarnationSource final {
@@ -28,6 +29,7 @@ public:
     private:
         friend class TaiwanActorStatusIncarnationSource;
         friend class Session;
+        friend class TaiwanActorStatusPublication;
         // IO close/failure can revoke this already-issued entry only.
         void retire() const noexcept;
         bool live() const noexcept;

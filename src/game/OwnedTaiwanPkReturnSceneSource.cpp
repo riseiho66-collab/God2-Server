@@ -201,6 +201,16 @@ std::optional<OwnedTaiwanPkReturnSceneSource::Scene> OwnedTaiwanPkReturnSceneSou
             auto profile=profiles_->observe(input,source_row,eq->second,std::move(source_input),recipient_saved.lease,
                 std::move(receiver_input),std::move(*resources),std::move(*status));
             if(!profile||!fence(*state,Check::Prepare))return {};
+            std::optional<TaiwanActorStatusPublication::ActorUnit> status_publication;
+            if(const auto& status=profile->status();status.owned_status_source){
+                if(!status.owned_status||!profile->actor_override()||!profile->actor_override()->replay())return {};
+                const auto spawn=RecoveredRemoteActor::encode_logical(profile->spawn());
+                const auto replay=RecoveredTaiwanActorOverride::encode_logical(*profile->actor_override()->replay());
+                std::vector<std::uint8_t> unit(spawn.begin(),spawn.end());
+                unit.insert(unit.end(),replay.begin(),replay.end());
+                status_publication=status.owned_status_source->prepare_publication(*status.owned_status,unit);
+                if(!status_publication||!profiles_->current(*profile,Check::Prepare)||!fence(*state,Check::Prepare))return {};
+            }
             state->profiles.push_back(*profile);
             auto qualification=std::make_shared<const cn::SharedActorVisibility::TaiwanReturnQualification>(
                 cn::SharedActorVisibility::TaiwanReturnQualification{profile->revision(),
@@ -209,7 +219,7 @@ std::optional<OwnedTaiwanPkReturnSceneSource::Scene> OwnedTaiwanPkReturnSceneSou
                 profile->movement(),cn::SharedActorVisibility::TaiwanReceiverTextState(*recipient->selector),{}};
             cn::SharedActorVisibility::TaiwanReturnActor output{source_saved.lease,recipient_saved.lease,
                 source_saved.position,recipient_saved.position,source->session,std::move(native),
-                std::move(qualification),profile->actor_override()};
+                std::move(qualification),profile->actor_override(),std::move(status_publication)};
             actors.emplace(key,output);return output;
         };
         for(std::size_t member=0;member<2;++member){

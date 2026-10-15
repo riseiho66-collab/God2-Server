@@ -5107,6 +5107,17 @@
         "src/handlers/OwnedTaiwanPkRoomBackend.h"
       ],
       "native_gap": "Actual full-current actor/resource/text/complete-selection issuer, final strand consume/visibility publication and durable release/recovery remain incomplete.",
+      "actor_status_publication_source422": {
+        "classification": "CUSTOM_DESIGNED_PRIVATE_OWNED_INITIAL_STATUS_BYTE_VERSION_SEAL",
+        "source": "Actual private Scene mint from qualified owned Observation and exact86B6F-EA; no observation/default mint or unknown-state inference; Entry atomics/both IncTokens/bytes only, no affine graph.",
+        "transport": "Same private ActorUnit through canonical duplicate/Records/group slots; actual Session complete framing privately seals plan identity/recipient/frame ordinal/pointer-controlblock/whole encoded copy/ordered units; actual Hold Frame and LAST Write/completion carry it.",
+        "cuts": "Pure whole-unit lifetime/bytes after final stored-in-scope saved-role-EQ SQL, stage/release/unhold/planCurrent/prewrite/post-handler-wrapper pre-async_write and completion before credits/pop; preserve every old Writer admission/invalidation.",
+        "limits": "No generic writer exclusion, pending-zero inference or own-write bypass; internal Asio/partial-write/OS race and complete final serialization remain OPEN; legacy external status/true empty groups preserved, no default Main or native ACK.",
+        "source_connected": true,
+        "default_activated": false,
+        "whole_route_complete": false,
+        "build_tests_runtime_SQL_activation_deployment": false
+      },
       "actor_status_owned_source421": {
         "classification": "CUSTOM_DESIGNED_EXPLICIT_INITIAL_SCENE_INSTALL_CLEAR_NOT_NATIVE_STATUS",
         "policy": "Custom0133OrdinaryInitialClearV1 requires explicit raw byte index<=255; Unknown until actual real scene install returns true; no default, absence or normalized-index inference.",

@@ -361,6 +361,39 @@ struct Session::NativePkReturnReservation::Data {
          game(std::move(executor)),source(std::move(owner)) {}
 };
 
+namespace {
+// Pure private plan lifetime. Seals never retain a Plan, Records, Session,
+// gameplay input, source, callback or game-affine owner.
+struct ActorStatusPublicationPlanIdentity final {std::atomic<bool> active{true};};
+}
+struct TaiwanActorStatusPublication::FrameSeal::Data final {
+    struct Unit {std::size_t offset;TaiwanActorStatusPublication::ActorUnit actor;};
+    const std::shared_ptr<ActorStatusPublicationPlanIdentity> plan;
+    const Session* const recipient_address;
+    const std::weak_ptr<Session> recipient_owner;
+    const std::uint64_t recipient_id;
+    const std::size_t ordinal,logical_size;
+    const std::shared_ptr<const std::vector<std::uint8_t>> frame;
+    const std::vector<std::uint8_t> encoded; // Whole immutable frame copy.
+    const std::vector<Unit> units; // Ordered actual logical offsets, not guessed wire offsets.
+    Data(std::shared_ptr<ActorStatusPublicationPlanIdentity> identity,const std::shared_ptr<Session>& recipient,
+        std::size_t index,std::size_t size,std::shared_ptr<std::vector<std::uint8_t>> bytes,std::vector<Unit> actors)
+        :plan(std::move(identity)),recipient_address(recipient.get()),recipient_owner(recipient),
+         recipient_id(recipient->id()),ordinal(index),logical_size(size),frame(std::move(bytes)),
+         encoded(*frame),units(std::move(actors)){}
+    bool retained() const noexcept {
+        if(!plan||!plan->active.load()||!frame||encoded!=*frame||units.empty()||
+           encoded.size()!=logical_size+3)return false;
+        std::size_t end=0;
+        for(const auto& unit:units){
+            const auto& actor=unit.actor;
+            if(unit.offset<end||unit.offset>logical_size||actor.logical().size()>logical_size-unit.offset||
+               actor.recipient().session!=recipient_id||!actor.retained())return false;
+            end=unit.offset+actor.logical().size();
+        }
+        return plan->active.load();
+    }
+};
 // Network-owned return data contains only capabilities/bytes/weak source identity.
 // Never lock Records identity on a strand: its actual owning State is game-only.
 struct Session::NativePkReturnOutputPlan::Data {
@@ -368,7 +401,9 @@ struct Session::NativePkReturnOutputPlan::Data {
         std::shared_ptr<Session> recipient;
         std::optional<NormalWorldOutputHandle> normal;
         std::vector<std::shared_ptr<std::vector<std::uint8_t>>> frames;
+        std::vector<std::optional<TaiwanActorStatusPublication::FrameSeal>> frame_seals{};
     };
+    const std::shared_ptr<ActorStatusPublicationPlanIdentity> status_identity;
     const NativePkReturnReservation reservation;
     const std::array<std::shared_ptr<Session>,2> sessions;
     const std::array<NativePkReturnPreparation,2> preparations;
@@ -379,16 +414,30 @@ struct Session::NativePkReturnOutputPlan::Data {
     std::atomic<bool> claimed{false};
     Data(NativePkReturnReservation pair,std::array<std::shared_ptr<Session>,2> actual,
         std::array<NativePkReturnPreparation,2> prepared,std::weak_ptr<const void> source,
-        asio::any_io_executor executor,std::vector<Group> ordered)
-        :reservation(std::move(pair)),sessions(std::move(actual)),preparations(std::move(prepared)),
+        asio::any_io_executor executor,std::vector<Group> ordered,std::shared_ptr<ActorStatusPublicationPlanIdentity> identity)
+        :status_identity(std::move(identity)),reservation(std::move(pair)),sessions(std::move(actual)),preparations(std::move(prepared)),
          records(std::move(source)),game(std::move(executor)),groups(std::move(ordered)){}
+    ~Data(){status_identity->active.store(false);}
 };
+bool Session::actor_status_frame_matches(const std::optional<TaiwanActorStatusPublication::FrameSeal>& seal,
+        const std::shared_ptr<std::vector<std::uint8_t>>& frame,const Session& recipient,std::size_t ordinal,
+        const NativePkReturnOutputPlan::Data& plan) noexcept {
+    if(!seal)return true; // Existing unowned producer has no new synthetic authority.
+    const auto& data=seal->data_;
+    const auto actual_owner=recipient.weak_from_this();
+    return data&&data->plan==plan.status_identity&&data->recipient_address==&recipient&&data->recipient_id==recipient.id()&&data->ordinal==ordinal&&
+        !data->recipient_owner.owner_before(actual_owner)&&!actual_owner.owner_before(data->recipient_owner)&&
+        data->frame.get()==frame.get()&&!data->frame.owner_before(frame)&&!frame.owner_before(data->frame)&&data->retained();
+}
 struct Session::NativePkReturnOutputHold::Data {
     enum class Phase {Pending,Held,Consuming,Consumed,Returned,Failed};
     struct Frame {
         const std::shared_ptr<std::vector<std::uint8_t>> bytes;
         std::atomic<std::shared_ptr<Reservation>> budget;
-        explicit Frame(std::shared_ptr<std::vector<std::uint8_t>> value):bytes(std::move(value)){}
+        const std::optional<TaiwanActorStatusPublication::FrameSeal> status_seal;
+        explicit Frame(std::shared_ptr<std::vector<std::uint8_t>> value,
+            std::optional<TaiwanActorStatusPublication::FrameSeal> seal)
+            :bytes(std::move(value)),status_seal(std::move(seal)){}
     };
     struct Recipient {
         const std::shared_ptr<Session> session;
@@ -915,7 +964,8 @@ struct Session::Impl {
         std::shared_ptr<OwnedInputLease> owned_input_lease{}; // Old aggregate positions preserved.
         std::shared_ptr<NativePkReturnOutputWrite> return_output{}; // Existing private cohort position.
         std::weak_ptr<ActiveWriteContinuation> pending_return_continuation{}; // Existing held-task holder.
-        std::optional<TaiwanActorStatusWriteFence::Writer> status_writer{}; // LAST: exact queue lifetime.
+        std::optional<TaiwanActorStatusWriteFence::Writer> status_writer{}; // Existing queue lifetime position.
+        std::optional<TaiwanActorStatusPublication::FrameSeal> status_seal{}; // LAST: pure exact frame version.
     };
     std::deque<Write> writes;
     template<class Executor,class Body>
@@ -1403,7 +1453,10 @@ struct Session::Impl {
                        data.owner_before(markers[ordinal]->cohort)||markers[ordinal]->frame!=frame||
                        markers[ordinal]->recipient!=index||markers[ordinal]->ordinal!=ordinal)
                         throw std::logic_error("Return held frame marker identity");
+                    if(!Session::actor_status_frame_matches(frame->status_seal,frame->bytes,owner,ordinal,*data->plan))
+                        throw std::logic_error("Return held owned-status frame retired");
                     Write value{frame->bytes,std::move(budget),false,true};
+                    value.status_seal=frame->status_seal;
                     value.return_output=markers[ordinal];append_write(std::move(value));write_bytes+=frame->bytes->size();
                 }
             };
@@ -1497,7 +1550,9 @@ struct Session::Impl {
                 if(marker&&marker->cohort.lock()==output){
                     if(ended||seen>=recipient->frames.size()||!queued.held||marker->recipient!=index||
                        marker->ordinal!=seen||marker->frame!=recipient->frames[seen]||
-                       queued.bytes!=marker->frame->bytes)throw std::logic_error("Return publication FIFO identity");
+                       queued.bytes!=marker->frame->bytes||queued.status_seal!=marker->frame->status_seal||
+                       !Session::actor_status_frame_matches(queued.status_seal,queued.bytes,owner,seen,*output->plan))
+                        throw std::logic_error("Return publication FIFO identity/status version");
                     ++seen;
                 }else if(seen)ended=true;
             }
@@ -1505,7 +1560,11 @@ struct Session::Impl {
                 throw std::logic_error("Return publication missing/repeated release");
             const bool start=!writes.empty()&&writes.front().held&&writes.front().return_output&&
                 writes.front().return_output->cohort.lock()==output;
-            for(auto& queued:writes)if(queued.return_output&&queued.return_output->cohort.lock()==output)queued.held=false;
+            for(auto& queued:writes)if(queued.return_output&&queued.return_output->cohort.lock()==output){
+                if(!Session::actor_status_frame_matches(queued.status_seal,queued.bytes,owner,queued.return_output->ordinal,*output->plan))
+                    throw std::logic_error("Return owned-status retired at unhold");
+                queued.held=false;
+            }
             if(recipient->frames.empty()){
                 if(index<2&&(!writes.empty()||write_bytes))throw std::logic_error("Empty returner has output");
                 complete_native_pk_return_publication_recipient(work,index);return;
@@ -3270,11 +3329,13 @@ struct Session::Impl {
                !native_pk_return_publication_transport_current(publication,marked->recipient)||
                marked->ordinal!=publication->progress[marked->recipient]->next.load()||
                marked->frame!=output->recipients[marked->recipient]->frames[marked->ordinal]||
-               writes.front().bytes!=marked->frame->bytes){
+               writes.front().bytes!=marked->frame->bytes||writes.front().status_seal!=marked->frame->status_seal||
+               !Session::actor_status_frame_matches(writes.front().status_seal,writes.front().bytes,owner,marked->ordinal,*output->plan)){
                 if(output)Session::fail_native_pk_return_output(output);else fail("Return frame lost exact cohort");return;
             }
         }
         auto bytes = writes.front().bytes;
+        const auto status_seal=writes.front().status_seal;
         const auto status_writer=writes.front().status_writer;
         // The completion owns the active buffer even when fail() clears the queue.
         const bool owned_initiation=bool(owned_response_input_hold.load()) || owned_input_retired.load();
@@ -3284,11 +3345,18 @@ struct Session::Impl {
         active_write_continuation=continuation;
         owner.invalidate_actor_status_writes(); // Final exhaustive socket sink.
         auto completion=
-            [self = owner.shared_from_this(), bytes,marked,continuation](const asio::error_code& ec, std::size_t transferred) {
+            [self = owner.shared_from_this(), bytes,marked,continuation,status_seal](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 const bool owned_completion=bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
                 try {
+                // The handler owns the seal directly even if failure cleared the FIFO.
+                const auto sealed_output=marked?marked->cohort.lock():nullptr;
+                if(status_seal&&(!sealed_output||status_seal!=marked->frame->status_seal||
+                   !Session::actor_status_frame_matches(status_seal,bytes,*self,marked->ordinal,*sealed_output->plan))){
+                    if(sealed_output)Session::fail_native_pk_return_output(sealed_output);
+                    return;
+                }
                 if (s.finished || s.writes.empty()) return;
                 const auto publication=continuation->work?continuation->work->data:nullptr;
                 const auto output=publication?publication->output.lock():nullptr;
@@ -3303,6 +3371,7 @@ struct Session::Impl {
                 if (ec) { s.fail(ec.message()); return; }
                 if(marked&&(!publication||!output||s.writes.front().return_output!=marked||s.writes.front().held||
                    s.writes.front().bytes!=bytes||bytes!=marked->frame->bytes||transferred!=bytes->size()||
+                   s.writes.front().status_seal!=status_seal||status_seal!=marked->frame->status_seal||
                    marked->recipient>=output->recipients.size()||marked->ordinal>=output->recipients[marked->recipient]->frames.size()||
                    output->recipients[marked->recipient]->session!=self||
                    output->recipients[marked->recipient]->frames[marked->ordinal]!=marked->frame||
@@ -3412,6 +3481,9 @@ struct Session::Impl {
                 if(s.mode==ProtocolMode::God2LegacyCharacterListCandidate && bytes->size()==78) {
                     logger("session")->info("session_id={} LEGACY_CHARACTER_LIST_CANDIDATE_SENT length=78 opcode=7; current client acceptance UNKNOWN",s.id);
                 }
+                if(status_seal&&!Session::actor_status_frame_matches(status_seal,bytes,*self,marked->ordinal,*output->plan)){
+                    Session::fail_native_pk_return_output(output);return;
+                }
                 const auto completed_input_lease=s.writes.front().owned_input_lease;
                 s.write_bytes -= s.writes.front().bytes->size();
                 s.writes.pop_front();
@@ -3444,8 +3516,15 @@ struct Session::Impl {
                 }
             };
         auto initiate=[&](auto handler) {
-            asio::async_write(socket,asio::buffer(*bytes),
-                asio::bind_executor(strand,std::move(handler)));
+            // Finish handler wrapping/executor binding/buffer construction FIRST.
+            // This is the final pure version cut immediately before socket initiation.
+            auto bound=asio::bind_executor(strand,std::move(handler));
+            const auto buffer=asio::buffer(*bytes);
+            const auto sealed_output=marked?marked->cohort.lock():nullptr;
+            if(status_seal&&(!sealed_output||status_seal!=marked->frame->status_seal||
+               !Session::actor_status_frame_matches(status_seal,bytes,owner,marked->ordinal,*sealed_output->plan)))
+                throw std::logic_error("Return owned-status retired before async_write");
+            asio::async_write(socket,buffer,std::move(bound));
         };
         if(status_writer)initiate(retain_actor_status_writer(status_writer,std::move(completion)));
         else initiate(std::move(completion)); // Exact original plain handler without a ticket.
@@ -4738,6 +4817,7 @@ Session::NativePkReturnOutputPlan Session::prepare_native_pk_return_output(
     if(!native_pk_return_reservation_matches(reservation,sessions,preparations)||identity.expired()||
        groups.size()<2||groups[0].recipient!=sessions[0]||groups[1].recipient!=sessions[1])
         throw std::invalid_argument("Return output requires exact private paired Records source");
+    const auto status_identity=std::make_shared<ActorStatusPublicationPlanIdentity>();
     std::vector<NativePkReturnOutputPlan::Data::Group> owned;owned.reserve(groups.size());
     constexpr auto record_size=RecoveredRemoteActor::logical_size;
     constexpr auto override_size=RecoveredTaiwanActorOverride::logical_size;
@@ -4758,17 +4838,30 @@ Session::NativePkReturnOutputPlan Session::prepare_native_pk_return_output(
             normal=session->capture_normal_world_output_on_game(NormalWorldInitialization(init));
             if(!normal)throw std::invalid_argument("Return survivor private output epoch");
         }
+        if(!supplied.actor_status.empty()&&supplied.actor_status.size()!=supplied.actors.size())
+            throw std::invalid_argument("Return owned-status actor witnesses must be parallel");
         NativePkReturnOutputPlan::Data::Group recipient{session,std::move(normal),{}};
         // CUSTOM-0133 known native records, deterministic replay composition.
         // Each supplied actor stays whole across outer0xA00 frame boundaries.
         // All allocations/encoding precede source observers and IO installation.
         std::vector<std::uint8_t> frame;frame.reserve(RecoveredWorldFrame::max_logical_size);
+        std::vector<TaiwanActorStatusPublication::FrameSeal::Data::Unit> status_units;
         const auto flush=[&]{
             if(frame.empty())return;
-            recipient.frames.push_back(std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(frame)));
-            frame.clear();
+            auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(frame));
+            std::optional<TaiwanActorStatusPublication::FrameSeal> seal;
+            if(!status_units.empty()){
+                const auto data=std::make_shared<TaiwanActorStatusPublication::FrameSeal::Data>(status_identity,session,
+                    recipient.frames.size(),frame.size(),bytes,std::move(status_units));
+                seal=TaiwanActorStatusPublication::FrameSeal(data);
+                if(data->plan!=status_identity||!data->retained())
+                    throw std::invalid_argument("Return framed owned-status source retired");
+            }
+            recipient.frames.push_back(std::move(bytes));recipient.frame_seals.push_back(std::move(seal));
+            frame.clear();status_units.clear();
         };
-        for(const auto& actor:supplied.actors){
+        for(std::size_t actor_index=0;actor_index<supplied.actors.size();++actor_index){
+            const auto& actor=supplied.actors[actor_index];
             if(actor.size()!=record_size&&actor.size()!=record_size+override_size)
                 throw std::invalid_argument("Return output whole6F/EA boundaries");
             const auto logical=std::span<const std::uint8_t>(actor);
@@ -4779,14 +4872,19 @@ Session::NativePkReturnOutputPlan Session::prepare_native_pk_return_output(
                 if(!replay||replay->identity()!=spawn->identity())
                     throw std::invalid_argument("Return output EA full identity mismatch");
             }
+            const auto* status=supplied.actor_status.empty()?nullptr:&supplied.actor_status[actor_index];
+            if(status&&*status&&((*status)->recipient().session!=session->id()||
+               (*status)->source().actor_handle!=spawn->identity()||(*status)->logical()!=actor||!(*status)->retained()))
+                throw std::invalid_argument("Return actor bytes differ from exact owned-status publication");
             if(frame.size()>RecoveredWorldFrame::max_logical_size-actor.size())flush();
+            if(status&&*status)status_units.push_back({frame.size(),**status});
             frame.insert(frame.end(),actor.begin(),actor.end());
         }
         flush();
         owned.push_back(std::move(recipient));
     }
     const auto data=std::make_shared<NativePkReturnOutputPlan::Data>(reservation,sessions,preparations,
-        std::move(identity),sessions[0]->impl_->game,std::move(owned));
+        std::move(identity),sessions[0]->impl_->game,std::move(owned),status_identity);
     if(!native_pk_return_output_plan_current(data))throw std::invalid_argument("Return output source changed during preparation");
     return NativePkReturnOutputPlan(data);
 }
@@ -4794,9 +4892,13 @@ bool Session::native_pk_return_output_plan_current(const std::shared_ptr<NativeP
     try{
     if(!data||data->thread!=std::this_thread::get_id()||data->records.expired()||
        !native_pk_return_reservation_matches(data->reservation,data->sessions,data->preparations))return false;
-    for(std::size_t index=2;index<data->groups.size();++index){
+    if(!data->status_identity->active.load())return false;
+    for(std::size_t index=0;index<data->groups.size();++index){
         const auto& group=data->groups[index];
-        if(!group.normal||!group.recipient->normal_world_output_current_on_game(*group.normal))return false;
+        if(index>=2&&(!group.normal||!group.recipient->normal_world_output_current_on_game(*group.normal)))return false;
+        if(group.frame_seals.size()!=group.frames.size())return false;
+        for(std::size_t ordinal=0;ordinal<group.frames.size();++ordinal)
+            if(!actor_status_frame_matches(group.frame_seals[ordinal],group.frames[ordinal],*group.recipient,ordinal,*data))return false;
     }
     return native_pk_return_reservation_matches(data->reservation,data->sessions,data->preparations)&&!data->records.expired();
     }catch(...){return false;}
@@ -4819,6 +4921,7 @@ void Session::fail_native_pk_return_output(const std::shared_ptr<NativePkReturnO
     {
         std::lock_guard lock(data->transition);
         if(data->phase.load()==NativePkReturnOutputHold::Data::Phase::Returned)return; // Old sticky observers no longer owned.
+        data->plan->status_identity->active.store(false); // Revoke pure seals before any callbacks/queue cleanup.
         finalisation=data->finalisation.load();
         if(finalisation)finalisation->phase.store(NativePkReturnFinalisationStatus::Failed);
         publication=data->publication.load();
@@ -4915,7 +5018,8 @@ Session::NativePkReturnOutputHold Session::hold_native_pk_return_output(
         recipients.reserve(prepared->groups.size());
         for(const auto& group:prepared->groups){
             std::vector<std::shared_ptr<NativePkReturnOutputHold::Data::Frame>> frames;frames.reserve(group.frames.size());
-            for(const auto& bytes:group.frames)frames.push_back(std::make_shared<NativePkReturnOutputHold::Data::Frame>(bytes));
+            for(std::size_t ordinal=0;ordinal<group.frames.size();++ordinal)
+                frames.push_back(std::make_shared<NativePkReturnOutputHold::Data::Frame>(group.frames[ordinal],group.frame_seals[ordinal]));
             recipients.push_back(std::make_shared<NativePkReturnOutputHold::Data::Recipient>(group.recipient,group.normal,std::move(frames)));
         }
         data=std::make_shared<NativePkReturnOutputHold::Data>(prepared,std::move(source),std::move(recipients));

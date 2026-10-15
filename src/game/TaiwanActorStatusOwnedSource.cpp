@@ -1,5 +1,7 @@
 #include "game/TaiwanActorStatusOwnedSource.h"
 #include "net/Session.h"
+#include "protocol/RecoveredRemoteActor.h"
+#include <algorithm>
 #include <atomic>
 #include <limits>
 #include <stdexcept>
@@ -33,6 +35,27 @@ struct TaiwanActorStatusOwnedSource::InstallData {
         if(!committed.load(std::memory_order_acquire))entry->retired.store(true,std::memory_order_release);
     }
 };
+struct TaiwanActorStatusPublication::UnitData {
+    // Entry contains immutable revision/override, pure atomic state identity,
+    // source incarnation and only a WEAK Session. No game owner is retained.
+    const std::shared_ptr<TaiwanActorStatusOwnedSource::Entry> entry;
+    const TaiwanActorStatusIncarnationSource::Token recipient_incarnation;
+    const std::vector<std::uint8_t> logical;
+    UnitData(std::shared_ptr<TaiwanActorStatusOwnedSource::Entry> state,
+             TaiwanActorStatusIncarnationSource::Token receiver,std::span<const std::uint8_t> bytes)
+        :entry(std::move(state)),recipient_incarnation(std::move(receiver)),logical(bytes.begin(),bytes.end()){}
+};
+bool TaiwanActorStatusPublication::retained_impl(const std::shared_ptr<const UnitData>& data) noexcept {
+    if(!data||!data->entry)return false;
+    const auto& entry=*data->entry;
+    return !entry.identity->stopped.load(std::memory_order_acquire)&&
+        !entry.retired.load(std::memory_order_acquire)&&entry.known_clear.load(std::memory_order_acquire)&&
+        entry.incarnation.live()&&data->recipient_incarnation.live();
+}
+const SharedWorldPresence::Lease& TaiwanActorStatusPublication::ActorUnit::source() const noexcept{return data_->entry->lease;}
+const SharedWorldPresence::Lease& TaiwanActorStatusPublication::ActorUnit::recipient() const noexcept{return data_->recipient_incarnation.lease();}
+const std::vector<std::uint8_t>& TaiwanActorStatusPublication::ActorUnit::logical() const noexcept{return data_->logical;}
+bool TaiwanActorStatusPublication::ActorUnit::retained() const noexcept{return retained_impl(data_);}
 struct TaiwanActorStatusOwnedSource::Data {
     const std::shared_ptr<Identity> identity;
     const std::shared_ptr<Entry> entry;
@@ -193,6 +216,32 @@ bool TaiwanActorStatusOwnedSource::current(const Observation& value) const noexc
         const auto data=value.data_;
         return retained_data(*data)&&entry_current(data->entry)&&incarnations_->current(data->recipient_incarnation)&&retained_data(*data);
     }catch(...){identity_->stopped.store(true,std::memory_order_release);return false;}
+}
+std::optional<TaiwanActorStatusPublication::ActorUnit> TaiwanActorStatusOwnedSource::prepare_publication(
+        const Observation& value,std::span<const std::uint8_t> whole_unit) const noexcept {
+    Operation operation(*this);if(!operation)return {};
+    try {
+        const auto data=value.data_;
+        if(!retained_data(*data)||!entry_current(data->entry)||
+           !incarnations_->current(data->recipient_incarnation)||!retained_data(*data))return {};
+        constexpr auto actor_size=RecoveredRemoteActor::logical_size;
+        constexpr auto override_size=RecoveredTaiwanActorOverride::logical_size;
+        if(whole_unit.size()!=actor_size+override_size)return {};
+        const auto actor=RecoveredRemoteActor::parse_logical(whole_unit.first(actor_size));
+        const auto& replay=data->entry->actor_override->replay();
+        if(!actor||actor->identity()!=data->source.actor_handle||!replay||replay->type()!=0||
+           replay->identity()!=data->source.actor_handle||replay->is_self(data->recipient.actor_handle))return {};
+        const auto expected=RecoveredTaiwanActorOverride::encode_logical(*replay);
+        if(!std::equal(expected.begin(),expected.end(),whole_unit.begin()+actor_size))return {};
+        auto unit=std::make_shared<const TaiwanActorStatusPublication::UnitData>(
+            data->entry,data->recipient_incarnation,whole_unit);
+        // Byte copies/allocations precede the final actual status/lifetime cuts.
+        // The returned unit never captures this Observation or its saved input.
+        if(!retained_data(*data)||!entry_current(data->entry)||
+           !incarnations_->current(data->recipient_incarnation)||!retained_data(*data)||
+           !TaiwanActorStatusPublication::retained_impl(unit))return {};
+        return TaiwanActorStatusPublication::ActorUnit(std::move(unit));
+    }catch(...){identity_->stopped.store(true,std::memory_order_release);return {};}
 }
 std::uint64_t TaiwanActorStatusOwnedSource::Observation::revision() const noexcept{return data_->entry->revision;}
 const std::shared_ptr<const TaiwanActorStatusOwnedSource::Override>& TaiwanActorStatusOwnedSource::Observation::actor_override() const noexcept{return data_->entry->actor_override;}

@@ -6,6 +6,7 @@
 #include "game/SharedWorldPresence.h"
 #include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include "net/Session.h"
+#include "game/TaiwanActorStatusPublication.h"
 #include "protocol/RecoveredRemoteActor.h"
 #include "protocol/RecoveredTaiwanActorOverride.h"
 #include "protocol/RecoveredTaiwanPlayerAppearanceUpdate.h"
@@ -377,6 +378,9 @@ public:
         // including marker resources, at Prepare/Retained/Consumed. Duplicate
         // mutual copies must share THIS witness, not just equal bytes.
         std::shared_ptr<const TaiwanReturnActorOverride> actor_override;
+        // LAST: same private owned-status/whole-unit witness. Absent only for
+        // the preserved external status provider, never a failed typed mint.
+        std::optional<TaiwanActorStatusPublication::ActorUnit> status_publication{};
     };
     enum class TaiwanReturnCheck {Prepare,Retained,Consumed};
     struct TaiwanReturnScene {
@@ -451,18 +455,23 @@ public:
             const std::optional<RecoveredTaiwanActorOverride::LogicalRecord>& override_logical()const noexcept {
                 return override_logical_;
             }
+            const std::optional<TaiwanActorStatusPublication::ActorUnit>& status_publication()const noexcept {
+                return status_publication_;
+            }
         private:
             friend class SharedActorVisibility;
             Record(Lease source,Lease recipient,std::shared_ptr<Session> from,
                 std::shared_ptr<Session> to,std::vector<std::uint8_t> logical,
-                std::optional<RecoveredTaiwanActorOverride::LogicalRecord> actor_override)
+                std::optional<RecoveredTaiwanActorOverride::LogicalRecord> actor_override,
+                std::optional<TaiwanActorStatusPublication::ActorUnit> status_publication)
                 :source_(std::move(source)),recipient_(std::move(recipient)),
                  source_session_(std::move(from)),recipient_session_(std::move(to)),logical_(std::move(logical)),
-                 override_logical_(std::move(actor_override)){}
+                 override_logical_(std::move(actor_override)),status_publication_(std::move(status_publication)){}
             Lease source_,recipient_;
             std::shared_ptr<Session> source_session_,recipient_session_;
             std::vector<std::uint8_t> logical_;
             std::optional<RecoveredTaiwanActorOverride::LogicalRecord> override_logical_;
+            std::optional<TaiwanActorStatusPublication::ActorUnit> status_publication_;
         };
         TaiwanPkReturnRecords(const TaiwanPkReturnRecords&)=default;
         TaiwanPkReturnRecords& operator=(const TaiwanPkReturnRecords&)=default;
@@ -539,6 +548,7 @@ public:
     void release(const Lease&);
 private:
     void cancel_taiwan_pk_return_consumption_state(TaiwanPkReturnConsumption::State&)noexcept;
+    bool taiwan_pk_return_status_unit_matches(const TaiwanReturnActor&)const noexcept;
     bool taiwan_pk_return_records_fence(const std::shared_ptr<const TaiwanPkReturnRecords::State>&)const;
     bool taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;
     bool taiwan_pk_return_population_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>&)const;

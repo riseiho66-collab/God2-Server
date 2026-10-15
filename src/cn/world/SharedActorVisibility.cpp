@@ -168,6 +168,21 @@ bool SharedActorVisibility::taiwan_pk_return_population_fence(const std::shared_
     }
     return true;
 }
+bool SharedActorVisibility::taiwan_pk_return_status_unit_matches(const TaiwanReturnActor& actor)const noexcept {
+    if(!actor.status_publication)return true; // Existing external status source.
+    const auto& unit=*actor.status_publication;
+    if(!unit.retained()||unit.source()!=actor.source||unit.recipient()!=actor.recipient||!actor.actor_override)return false;
+    const auto spawn=RecoveredRemoteActor::encode_logical(actor.native.spawn);
+    const auto& replay=actor.actor_override->replay();const auto& logical=unit.logical();
+    const auto size=spawn.size()+(replay?RecoveredTaiwanActorOverride::logical_size:0);
+    if(logical.size()!=size||!std::equal(spawn.begin(),spawn.end(),logical.begin()))return false;
+    if(replay){
+        const auto bytes=RecoveredTaiwanActorOverride::encode_logical(*replay);
+        if(!std::equal(bytes.begin(),bytes.end(),logical.begin()+spawn.size()))return false;
+    }
+    // Cached complete bytes and atomics only. No text/source/SQL callback or allocation.
+    return unit.retained();
+}
 bool SharedActorVisibility::taiwan_pk_return_fence(const std::shared_ptr<TaiwanPkReturnPlan::State>& state)const {
     // Pure registry/Session fence: no source/repository/name callbacks.
     if(!state||state->poisoned||taiwan_return_reentered_||state->identity!=identity_||
@@ -195,7 +210,8 @@ bool SharedActorVisibility::taiwan_pk_return_fence(const std::shared_ptr<TaiwanP
         std::size_t count=0;
         for(const auto& [present,entry]:entries_)if(present.second==key.second)++count;
         for(const auto& [prepared,other]:state->actors)if(prepared.second==key.second)++count;
-        if(!endpoint(actor.source,actor.source_connection)||!endpoint(actor.recipient,receiver)||
+        if(!taiwan_pk_return_status_unit_matches(actor)||
+           !endpoint(actor.source,actor.source_connection)||!endpoint(actor.recipient,receiver)||
            outward_pending(actor.source)||outward_pending(actor.recipient)||
            taiwan_appearance_pending(key)||entries_.contains(key)||count>128)return false;
     }
@@ -425,6 +441,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnPlan> SharedActorVisibility::
             a.recipient_position==b.recipient_position&&a.source_connection==b.source_connection&&
             a.native.connection.lock()==b.native.connection.lock()&&a.qualification==b.qualification&&
             a.native.common_name_source==b.native.common_name_source&&a.actor_override==b.actor_override&&
+            a.status_publication==b.status_publication&&
             RecoveredRemoteActor::encode_logical(a.native.spawn)==RecoveredRemoteActor::encode_logical(b.native.spawn)&&
             RecoveredRemoteActorMove::encode_logical(a.native.movement)==RecoveredRemoteActorMove::encode_logical(b.native.movement)&&
             RecoveredRemoteActorRemove::encode_logical(a.native.removal)==RecoveredRemoteActorRemove::encode_logical(b.native.removal);
@@ -562,6 +579,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnRecords> SharedActorVisibilit
         const auto from=source->endpoints.find(key.first),to=source->endpoints.find(key.second);
         const auto logical=RecoveredRemoteActor::encode_logical(actor.native.spawn);
         if(!actor.actor_override||actor.actor_override!=supplied.actor_override||
+           actor.status_publication!=supplied.status_publication||!taiwan_pk_return_status_unit_matches(actor)||
            actor.source!=supplied.source||actor.recipient!=supplied.recipient||
            from==source->endpoints.end()||to==source->endpoints.end()||
            from->second.lease!=actor.source||to->second.lease!=actor.recipient||
@@ -579,7 +597,7 @@ std::optional<SharedActorVisibility::TaiwanPkReturnRecords> SharedActorVisibilit
         if(const auto& replay=actor.actor_override->replay())
             actor_override=RecoveredTaiwanActorOverride::encode_logical(*replay);
         ordered.push_back(TaiwanPkReturnRecords::Record(actor.source,actor.recipient,
-            actor.source_connection,receiver,bytes,std::move(actor_override)));
+            actor.source_connection,receiver,bytes,std::move(actor_override),actor.status_publication));
         return true;
     };
     // Each returning recipient keeps its supplied incoming order.
@@ -656,6 +674,12 @@ std::optional<Session::NativePkReturnOutputPlan> SharedActorVisibility::prepare_
         // No normalized-index inversion, guessed clear or self override.
         if(const auto& replay=record.override_logical())
             actor.insert(actor.end(),replay->begin(),replay->end());
+        // Parallel optional witnesses preserve every exact actor slot, including
+        // genuinely external-status units sharing the same complete frame.
+        group->actor_status.push_back(record.status_publication());
+        if(const auto& unit=record.status_publication();unit&&
+           (!unit->retained()||unit->source()!=record.source()||unit->recipient()!=record.recipient()||
+            unit->logical()!=actor))return {};
     }
     const std::weak_ptr<const void> identity(state);
     auto output=Session::prepare_native_pk_return_output(reservation,source->sessions,
@@ -764,6 +788,10 @@ bool SharedActorVisibility::taiwan_pk_return_consumption_fence(
         if(!Session::native_pk_return_publication_matches(*state->publication,state->transport)||
            !Session::native_pk_return_publication_records_matches(*state->publication,identity))return false;
     }
+    // This pure status/version/whole-unit cut also follows the final stored or
+    // in-scope saved-role-EQ SQL observers through taiwan_pk_return_read.valid().
+    for(const auto& [key,actor]:source->actors)
+        if(!taiwan_pk_return_status_unit_matches(actor))return false;
     return Session::native_pk_return_consumption_current(state->transport);
 }
 bool SharedActorVisibility::taiwan_pk_return_consumption_source_current(const TaiwanPkReturnConsumption& token)const{
