@@ -1,4 +1,5 @@
 #include "core/SharedTaiwanNativeWorldHostPlan.h"
+#include "game/TaiwanActorStatusWriteFence.h"
 #include "game/SharedTaiwanNativeRecordHandlerSource.h"
 #include "handlers/RecoveredOwnedCompanions.h"
 #include <algorithm>
@@ -82,6 +83,7 @@ struct Owner {
     std::optional<OwnedPkSources> owned_pk;
     std::optional<SharedTaiwanNativeCharacterListSource::Binding> characters_source;
     std::function<void()> records_invalidate;
+    const std::shared_ptr<TaiwanActorStatusWriteFence> actor_status_write_fence;
     const std::size_t capacity;
     bool entry_taken=false,entered_taken=false,movement_taken=false,records_taken=false;
     bool characters_taken=false,pk_taken=false;
@@ -102,7 +104,12 @@ struct Owner {
          app_owned_initial_player(context.app_owned_initial_player),app_owned_pk(context.app_owned_pk),
          game(context.game),common(context.common_world),
          records(std::move(sources.records)),owned_pk(std::move(sources.owned_pk)),
-         characters_source(std::move(sources.characters)),capacity(sources.actual_session_capacity) {
+         characters_source(std::move(sources.characters)),
+         actor_status_write_fence(std::move(sources.actor_status_write_fence)),capacity(sources.actual_session_capacity) {
+        struct ConstructionMonitor {
+            TaiwanActorStatusWriteFence* fence;bool published=false;
+            ~ConstructionMonitor(){if(fence&&!published)fence->stop();}
+        } monitor{actor_status_write_fence.get()};
         require_owned_pk_sources(context,owned_pk,dispatch);
         if(app_owned_initial_player&&!app_owned_initial_deities)
             throw std::invalid_argument("Owned initial player requires exclusive initial deity ownership");
@@ -147,6 +154,8 @@ struct Owner {
                 [weak]{if(const auto source=weak.lock())source->invalidate_selection_callbacks();},weak};
         }
         auto presence=common->presence();auto visibility=common->visibility();
+        if(actor_status_write_fence && !actor_status_write_fence->owns_presence(presence))
+            throw std::invalid_argument("TW status writer fence requires this exact common presence");
         entry=SharedTaiwanWorldEntrySource::create(*characters,*maps,std::move(sources.entry),
             characters_source?characters_source->selected:SharedTaiwanNativeCharacterListSource::SelectedSource{},
             std::move(sources.entry_prepare),characters_source?presence:nullptr,identity);
@@ -166,8 +175,10 @@ struct Owner {
         binding=movement->binding();
         if(!binding.movement || !binding.release || !binding.invalidate_active || !binding.retire)
             throw std::invalid_argument("TW native host plan requires exact movement retirement");
+        monitor.published=true;
     }
     ~Owner() {
+        if(actor_status_write_fence)actor_status_write_fence->stop();
         if(std::this_thread::get_id()!=thread)std::terminate();
         // Real callbacks are game-affine. The plan factory keeps only a weak
         // reference; these owners therefore drain with Application's facades.
@@ -201,6 +212,7 @@ struct Owner {
         }
     }
     void invalidate() const {
+        if(actor_status_write_fence)actor_status_write_fence->stop();
         check();
         const auto record=records_invalidate;const auto move=binding.invalidate_active;
         const auto character=characters_source?characters_source->invalidate_active:std::function<void()>{};
@@ -213,6 +225,7 @@ struct Owner {
         if(failure)std::rethrow_exception(failure);
     }
     void cancel(Session& session,const SharedWorldPresence::Lease& lease) {
+        if(actor_status_write_fence)actor_status_write_fence->stop();
         check();std::exception_ptr failure;
         // Retire exact controller and resource lineage before the real native
         // initial-scene cleanup; both paths run even if one cleanup throws.
@@ -253,6 +266,7 @@ struct Factory {
             }
         }
         if(existing) {existing->same(context);return existing;}
+        std::shared_ptr<TaiwanActorStatusWriteFence> constructing_fence;
         try {
             // Reject requested PK mode before invoking any actual supplier.
             require_owned_pk_context(context,dispatch);
@@ -262,6 +276,7 @@ struct Factory {
             if(!context.common_world || !context.common_world->owns_repository(context.characters))
                 throw std::invalid_argument("TW native host plan needs the actual Application common world");
             auto sources=source(context);
+            constructing_fence=sources.actor_status_write_fence;
             require_owned_pk_sources(context,sources.owned_pk,dispatch);
             {
                 std::lock_guard lock(mutex);
@@ -277,6 +292,7 @@ struct Factory {
             }
             return owner;
         }catch(...) {
+            if(constructing_fence)constructing_fence->stop();
             std::lock_guard lock(mutex);stage=Stage::Failed;bound.reset();throw;
         }
     }
@@ -594,9 +610,23 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::equipment_publication_factory(co
     };
 }
 SharedTaiwanNativeWorldHostPlan::Sources
+SharedTaiwanNativeWorldHostPlan::Sources::with_actor_status_write_fence(const Context& context,Sources sources) {
+    if(!context.common_world || sources.actor_status_write_fence)
+        throw std::invalid_argument("TW status writer fence requires a fresh explicit actual host binding");
+    sources.actor_status_write_fence=TaiwanActorStatusWriteFence::create(context.common_world->presence());
+    return sources;
+}
+SharedTaiwanNativeWorldHostPlan::Sources
 SharedTaiwanNativeWorldHostPlan::Sources::with_owned_inventory_movement(const Context& context,Sources sources) {
     if(sources.movement_custody)throw std::invalid_argument("TW movement custody already installed");
     sources.movement_custody=StoredSources::owned_equipment_transaction(context);return sources;
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_actor_status_write_fence(const Context& context,StoredSources sources) {
+    if(!context.common_world || sources.actor_status_write_fence)
+        throw std::invalid_argument("TW stored writer fence requires a fresh explicit actual host binding");
+    sources.actor_status_write_fence=TaiwanActorStatusWriteFence::create(context.common_world->presence());
+    return sources;
 }
 SharedTaiwanNativeWorldHostPlan::StoredSources
 SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_inventory_movement(const Context& context,StoredSources sources) {
@@ -771,6 +801,10 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
             throw std::invalid_argument("TW stored host requires its actual Application character delivery reader");
         const auto* reader=context.native_world_entries;
         auto actual=supply(context);
+        struct ForwardMonitor {
+            TaiwanActorStatusWriteFence* fence;bool forwarded=false;
+            ~ForwardMonitor(){if(fence&&!forwarded)fence->stop();}
+        } monitor{actual.actor_status_write_fence.get()};
         if(actual.return_profiles_installed_)actual.require_profile_entry_binding();
         // Before constructing list/entry owners from the stored wrapper.
         require_owned_pk_sources(context,actual.owned_pk,dispatch);
@@ -813,9 +847,11 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
             entry_prepare=SharedTaiwanNativeWorldEntryOfferSource::create(*context.native_world_entry_writer,
                 *context.accounts,context.characters,context.maps,client,std::move(actual.entry_offer),identity);
         }
-        return Sources{std::move(entry),std::move(actual.entered),std::move(actual.movement_rules),
+        auto forwarded=Sources{std::move(entry),std::move(actual.entered),std::move(actual.movement_rules),
             std::move(actual.movement_resources),actual.actual_session_capacity,std::move(actual.records),std::move(characters),
-            std::move(entry_prepare),std::move(actual.movement_custody),std::move(actual.owned_pk)};
+            std::move(entry_prepare),std::move(actual.movement_custody),std::move(actual.owned_pk),
+            std::move(actual.actor_status_write_fence)};
+        monitor.forwarded=true;return forwarded;
     },dispatch,native_characters,identity);
     plan.requires_native_world_entry_snapshots=true;
     plan.requires_native_character_summaries=native_characters;
@@ -875,6 +911,10 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
                 owner->check();invoke(session);
             }
         };
+    };
+    plan.make_taiwan_actor_status_write_fence=[factory](const Context& context) {
+        auto owner=factory->get(context);owner->check();
+        return owner->actor_status_write_fence;
     };
     plan.make_taiwan_entered_async=[factory](const Context& context) {
         auto owner=factory->get(context);

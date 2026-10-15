@@ -112,6 +112,9 @@ public:
         // common connection. Absence preserves the existing movement path.
         std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody;
         std::optional<SharedWorldHostPlan::OwnedPkSources> owned_pk;
+        // Explicit revocation-only monitor on the actual same common host.
+        std::shared_ptr<TaiwanActorStatusWriteFence> actor_status_write_fence;
+        static Sources with_actor_status_write_fence(const SharedWorldHostPlan::Context&,Sources);
         static Sources with_owned_inventory_movement(const SharedWorldHostPlan::Context&,Sources);
         Sources(SharedTaiwanWorldEntrySource::NativeSource native_entry,
             SharedTaiwanWorldEntered::Source native_entered,
@@ -121,12 +124,13 @@ public:
             std::optional<SharedTaiwanNativeCharacterListSource::Binding> native_characters=std::nullopt,
             SharedTaiwanWorldEntrySource::Prepare actual_entry_issuer={},
             std::shared_ptr<SqliteOwnedEquipmentTransaction> actual_movement_custody={},
-            std::optional<SharedWorldHostPlan::OwnedPkSources> actual_owned_pk=std::nullopt)
+            std::optional<SharedWorldHostPlan::OwnedPkSources> actual_owned_pk=std::nullopt,
+            std::shared_ptr<TaiwanActorStatusWriteFence> actual_status_write_fence={})
             :entry(std::move(native_entry)),entered(std::move(native_entered)),
              movement_rules(std::move(rules)),movement_resources(std::move(resources)),
              actual_session_capacity(capacity),records(std::move(native_records)),characters(std::move(native_characters)),
              entry_prepare(std::move(actual_entry_issuer)),movement_custody(std::move(actual_movement_custody)),
-             owned_pk(std::move(actual_owned_pk)) {}
+             owned_pk(std::move(actual_owned_pk)),actor_status_write_fence(std::move(actual_status_write_fence)) {}
     };
     // Called once on Application's game owner. The returned suppliers retain
     // their real entry/peer/resource/Current/Authority dependencies strongly.
@@ -166,6 +170,8 @@ public:
         SharedTaiwanNativeWorldEntryOfferSource::Supply entry_offer;
         std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody;
         std::optional<SharedWorldHostPlan::OwnedPkSources> owned_pk;
+        std::shared_ptr<TaiwanActorStatusWriteFence> actor_status_write_fence;
+        static StoredSources with_actor_status_write_fence(const SharedWorldHostPlan::Context&,StoredSources);
         static StoredSources with_owned_inventory_movement(const SharedWorldHostPlan::Context&,StoredSources);
         // Actual same-Context scene inputs -> complete entry producer -> the
         // existing stored-entry issuer/CAS path. Call inside StoredSourceFactory.
@@ -285,12 +291,13 @@ public:
             std::optional<RecordSources> native_records=std::nullopt,std::optional<ListSources> native_characters=std::nullopt,
             SharedTaiwanNativeWorldEntryOfferSource::Supply actual_entry_offer={},
             std::shared_ptr<SqliteOwnedEquipmentTransaction> actual_movement_custody={},
-            std::optional<SharedWorldHostPlan::OwnedPkSources> actual_owned_pk=std::nullopt)
+            std::optional<SharedWorldHostPlan::OwnedPkSources> actual_owned_pk=std::nullopt,
+            std::shared_ptr<TaiwanActorStatusWriteFence> actual_status_write_fence={})
             :entry_qualify(std::move(qualify)),entered(std::move(native_entered)),
              movement_rules(std::move(rules)),movement_resources(std::move(resources)),
              actual_session_capacity(capacity),records(std::move(native_records)),characters(std::move(native_characters)),
              entry_offer(std::move(actual_entry_offer)),movement_custody(std::move(actual_movement_custody)),
-             owned_pk(std::move(actual_owned_pk)) {}
+             owned_pk(std::move(actual_owned_pk)),actor_status_write_fence(std::move(actual_status_write_fence)) {}
     private:
         friend class SharedTaiwanNativeWorldHostPlan;
         // Issued only by the full scene-content assembly, not caller scalars.

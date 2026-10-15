@@ -1,4 +1,5 @@
 #include "handlers/OwnedGuildSuccessionApplicationDraft.h"
+#include "game/TaiwanActorStatusWriteFence.h"
 #include "handlers/OwnedGuildSuccessionSemanticReceiptDraft.h"
 #include "db/GuildSuccessionSqliteMigrationsDraft.h"
 #include "db/GuildOfficerSqliteMigrations.h"
@@ -749,6 +750,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> configured_deity_selection_source;
             SharedTaiwanWorldLifecycle::Entered taiwan_entered;
             SharedTaiwanWorldLifecycle::AsyncOwner taiwan_entered_async;
+            std::shared_ptr<TaiwanActorStatusWriteFence> taiwan_actor_status_write_fence;
             SharedTaiwanWorldEntrySource::Entry taiwan_world_entry;
             SharedTaiwanMovementSource::Binding taiwan_movement;
             SharedTaiwanWorldRecordSource::Binding taiwan_records;
@@ -808,6 +810,14 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
                         throw std::invalid_argument("Shared world host requires actual deferred Taiwan scene and cancellation owners");
                 }else taiwan_entered=world_plan->make_taiwan_entered(context);
+                // The actual Entered facade first retains the canonical Owner;
+                // the monitor itself must never retain affine game callbacks.
+                if(world_plan->make_taiwan_actor_status_write_fence) {
+                    taiwan_actor_status_write_fence=world_plan->make_taiwan_actor_status_write_fence(context);
+                    if(taiwan_actor_status_write_fence &&
+                       !taiwan_actor_status_write_fence->owns_presence(common_world->presence()))
+                        throw std::invalid_argument("TW writer monitor does not own the actual common host");
+                }
                 if((!taiwan_entered && !taiwan_entered_async.entered) || !common_world->owns_repository(database.recovered_characters()))
                     throw std::invalid_argument("Shared world host requires actual Taiwan Entered owner on the same repository");
                 if(world_plan->make_taiwan_world_entry) {
@@ -1458,6 +1468,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             if(whole_bag_moves)whole_bag_moves->actual_session_capacity=config.max_sessions;
             std::shared_ptr<OwnedSkillBookLearningService> skill_book_learning_service;
             Session::RecoveredCharacterHandlers character_handlers;
+            // The later game handler is copied from this same holder. Both
+            // actual listener Sessions receive it before any socket output.
+            character_handlers.actor_status_write_fence=taiwan_actor_status_write_fence;
             std::unique_ptr<RecoveredWorldService> recovered_world;
             if(config.recovered_character_creation) {
                 character_handlers.list=[&](std::uint64_t account) {

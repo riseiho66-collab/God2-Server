@@ -177,5 +177,8 @@ struct SharedWorldHostPlan {
     // Actual same-Context native Owner recipe, taken at most once. Default
     // plans retain absence; no ordinary configuration or supplier is activated.
     std::function<std::optional<OwnedPkSources>(const Context&)> make_owned_taiwan_pk_sources;
+    // Pure revocation holder only; no affine callbacks in network copies.
+    // Null explicitly preserves legacy plans. Does not initialize actor status.
+    std::function<std::shared_ptr<TaiwanActorStatusWriteFence>(const Context&)> make_taiwan_actor_status_write_fence;
 };
 }

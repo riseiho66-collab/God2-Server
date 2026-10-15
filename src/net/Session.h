@@ -26,6 +26,8 @@ namespace god2::cn {class SharedActorVisibility;}
 
 namespace god2 {
 
+class TaiwanActorStatusWriteFence;
+
 enum class SessionState {
     Connected, Handshaked, Authenticated, CharacterSelected,
     InWorld, InBattle, Disconnected
@@ -537,6 +539,9 @@ public:
         bool native_world_skill_requests=false;
         // Default-off raw WORLD81/83; actual complete batch/operation owner required.
         bool native_preborn_requests=false;
+        // Optional shared host revocation monitor; no status/EA authority.
+        // Immutable per Session, installed before either listener starts.
+        std::shared_ptr<TaiwanActorStatusWriteFence> actor_status_write_fence;
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,
@@ -552,6 +557,7 @@ public:
     void send(Packet packet);
     // Recovered logical S2C records, after world-tail acceptance only. Application
     // owns visibility/authorization; queue acceptance does not prove client receipt.
+    bool actor_status_write_fence_matches(const std::shared_ptr<TaiwanActorStatusWriteFence>&) const noexcept;
     void send_world_records(std::vector<std::uint8_t> logical);
     // Uses the SAME legacy enqueue/encoding/order/budget path. The actual
     // synchronous world-records game callback alone can create/current this
@@ -781,6 +787,7 @@ private:
     static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;
     static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
     void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);
+    void invalidate_actor_status_writes() noexcept;
     std::unique_ptr<Impl> impl_;
     std::atomic<SessionState> state_{SessionState::Connected};
     std::atomic<std::uint64_t> battle_generation_{0};

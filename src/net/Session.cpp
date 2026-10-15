@@ -17,6 +17,7 @@
 #include "protocol/RecoveredWorldReady.h"
 #include "protocol/RecoveredWorldEntryView.h"
 #include "game/TaiwanWorldEntryIdentity.h"
+#include "game/TaiwanActorStatusWriteFence.h"
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include "protocol/RecoveredBattleBootstrap.h"
 #include "protocol/RecoveredBattlePlayerAppearance.h"
@@ -877,6 +878,12 @@ struct Session::Impl {
         std::weak_ptr<ActiveWriteContinuation> pending_return_continuation{}; // LAST default: actual held-task holder only.
     };
     std::deque<Write> writes;
+    void append_write(Write value) {
+        // Before insertion, even if allocation subsequently fails. All actual
+        // queue producers use this sink; game owners are never invoked here.
+        owner.invalidate_actor_status_writes();
+        writes.push_back(std::move(value));
+    }
     // Network strand only; set by the exact marked Write's success completion,
     // then captured as immutable owned data into the account selection game job.
     std::shared_ptr<const Session::RecoveredServerAdvertisement> written_advertisement;
@@ -1041,7 +1048,7 @@ struct Session::Impl {
                 const auto hello=RecoveredSeedExchange::hello();
                 auto bytes=std::make_shared<std::vector<std::uint8_t>>(hello.begin(),hello.end());
                 if(!terminal_write_allowed())return;
-                write_bytes+=bytes->size();writes.push_back({bytes,{}});write();
+                write_bytes+=bytes->size();append_write({bytes,{}});write();
                 logger("session")->debug("session_id={} GOD2_INITIAL_S2C_QUEUED length=19",id);
             } else protocol.on_session_created(owner);
             arm_timer(idle_timeout);
@@ -1345,7 +1352,7 @@ struct Session::Impl {
                        markers[ordinal]->recipient!=index||markers[ordinal]->ordinal!=ordinal)
                         throw std::logic_error("Return held frame marker identity");
                     Write value{frame->bytes,std::move(budget),false,true};
-                    value.return_output=markers[ordinal];writes.push_back(std::move(value));write_bytes+=frame->bytes->size();
+                    value.return_output=markers[ordinal];append_write(std::move(value));write_bytes+=frame->bytes->size();
                 }
             };
             if(index<2){insert();}
@@ -1681,7 +1688,7 @@ struct Session::Impl {
                 throw std::length_error("Native PK held queue limit");
             Write held{data->frame,std::move(native_pk_reservation),false,true};held.native_pk=data;
             if(!terminal_write_allowed())return;
-            writes.push_back(std::move(held));write_bytes+=data->frame->size();
+            append_write(std::move(held));write_bytes+=data->frame->size();
             auto preparing=NativePkEntryHold::Data::Phase::Preparing;
             if(!data->phase.compare_exchange_strong(preparing,NativePkEntryHold::Data::Phase::Held)) {
                 write_bytes-=data->frame->size();writes.pop_back();return;
@@ -1714,7 +1721,7 @@ struct Session::Impl {
                 fail("Native PK output queue limit");return;
             }
             if(!terminal_write_allowed())return;
-            writes.push_back({bytes,std::move(native_pk_output_reservation),false,true,{},{},pending});
+            append_write({bytes,std::move(native_pk_output_reservation),false,true,{},{},pending});
             write_bytes+=bytes->size();native_pk_output_staged.reset();
             release_native_battle(pending,bytes);
         }catch(...){fail("Native PK output staged encoding or handoff failed");}
@@ -1783,7 +1790,7 @@ struct Session::Impl {
                                     const auto candidate=LegacyCharacterListCandidate::wire();
                                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(candidate.begin(),candidate.end());
                                     if(!s.terminal_write_allowed())return;
-                                    s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                                    s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                                     if(s.writes.size()==1) s.write();
                                     logger("session")->info("session_id={} POST_SERVER_SELECT_C2S_ACCEPTED length=6; legacy character-list candidate queued; current client acceptance UNKNOWN",s.id);
                                 } else {
@@ -1829,7 +1836,7 @@ struct Session::Impl {
                                             auto reply=std::make_shared<std::vector<std::uint8_t>>(
                                                 RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
                                             if(!s.terminal_write_allowed())return;
-                                            s.write_bytes+=reply->size();s.writes.push_back({reply,{}});
+                                            s.write_bytes+=reply->size();s.append_write({reply,{}});
                                             if(s.writes.size()==1)s.write();
                                             logger("session")->info("session_id={} CHARACTER_TERMINAL_ACK_QUEUED reason={}",s.id,(*logical)[1]);
                                             s.close();return;
@@ -1920,7 +1927,7 @@ struct Session::Impl {
                                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(
                                         RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
                                     if(!s.terminal_write_allowed())return;
-                                    s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                                    s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                                     if(s.writes.size()==1) s.write();
                                     s.close();return;
                                 }
@@ -2026,7 +2033,7 @@ struct Session::Impl {
                                 const auto frame=RecoveredPostSeed::frame(s.mode==ProtocolMode::God2CharacterConnection?0xf6:0x53);
                                 auto bytes=std::make_shared<std::vector<std::uint8_t>>(frame.begin(),frame.end());
                                 if(!s.terminal_write_allowed())return;
-                                s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                                s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                                 if(s.writes.size()==1) s.write();
                             }
                         }
@@ -2055,7 +2062,7 @@ struct Session::Impl {
     void send_recovered_login(std::span<const std::uint8_t> response) {
         auto bytes=std::make_shared<std::vector<std::uint8_t>>(response.begin(),response.end());
         if(!terminal_write_allowed())return;
-        write_bytes+=bytes->size();writes.push_back({bytes,{}});
+        write_bytes+=bytes->size();append_write({bytes,{}});
         if(is_server_list_mode(mode)) {
             const auto entry=RecoveredServerList::one_entry();
             auto next=character_routes.empty()
@@ -2067,13 +2074,13 @@ struct Session::Impl {
                     Session::RecoveredServerAdvertisement::Origin::LegacyListCandidate:
                     Session::RecoveredServerAdvertisement::Origin::LoopbackRoutesCandidate,*next});
             if(!terminal_write_allowed())return;
-            write_bytes+=next->size();writes.push_back({next,{},false,false,std::move(observation)});
+            write_bytes+=next->size();append_write({next,{},false,false,std::move(observation)});
         }
         if(is_terminal_mode(mode)) {
             const auto terminal=RecoveredLoginTerminal::success();
             auto next=std::make_shared<std::vector<std::uint8_t>>(terminal.begin(),terminal.end());
             if(!terminal_write_allowed())return;
-            write_bytes+=next->size();writes.push_back({next,{}});
+            write_bytes+=next->size();append_write({next,{}});
         }
         if(writes.front().bytes==bytes) write();
     }
@@ -2113,7 +2120,7 @@ struct Session::Impl {
                     const auto frame=error ? RecoveredLoginFailure::server_error() : RecoveredLoginFailure::password_mismatch();
                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(frame.begin(),frame.end());
                     if(!s.terminal_write_allowed())return;
-                    s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                    s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                     logger("session")->info("session_id={} LOGIN_REJECTION_QUEUED opcode=30 result={} bytes=5",s.id,error?255:3);
                     if(s.writes.size()==1) s.write();
                     s.close();
@@ -2197,8 +2204,8 @@ struct Session::Impl {
                         if(s.writes.size()>=max_writes || s.write_bytes>max_buffer-bytes->size())
                             throw std::invalid_argument("Native character list queue capacity exhausted");
                         if(!s.terminal_write_allowed())return;
-                        s.writes.push_back({bytes,{},false,true,{},delivery});s.write_bytes+=bytes->size();
-                    } else { if(!s.terminal_write_allowed())return; s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});}
+                        s.append_write({bytes,{},false,true,{},delivery});s.write_bytes+=bytes->size();
+                    } else { if(!s.terminal_write_allowed())return; s.write_bytes+=bytes->size();s.append_write({bytes,{}});}
                     if(created_id) {
                         s.c2s0002_state=C2S0002State::CharacterCreateCommitted;
                         s.character_create_input.clear();
@@ -2273,7 +2280,7 @@ struct Session::Impl {
                 auto bytes=std::make_shared<std::vector<std::uint8_t>>(
                     RecoveredCharacterDelete::response(accepted));
                 if(!s.terminal_write_allowed())return;
-                s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                 logger("session")->info("session_id={} CHARACTER_DELETE_RESULT accepted={}",s.id,accepted);
                 if(s.writes.size()==1)s.write();
                 s.arm_timer(idle_timeout);s.read();
@@ -2300,7 +2307,7 @@ struct Session::Impl {
                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(
                         RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{0x18,*slot,0}));
                     if(!s.terminal_write_allowed())return;
-                    s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                    s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                     s.native_create_ack_sent=true;s.post_create_input.clear();
                     logger("session")->info("session_id={} NATIVE_CREATE_SLOT_ACK_QUEUED slot={}; tail=unverified_zero; world not entered",s.id,*slot);
                     if(s.writes.size()==1) s.write();
@@ -2397,15 +2404,16 @@ struct Session::Impl {
                     const auto frame=RecoveredCharacterCreateResult::committed_success();
                     auto bytes=std::make_shared<std::vector<std::uint8_t>>(frame.begin(),frame.end());
                     if(!s.terminal_write_allowed())return;
-                    s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                    s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                     s.retire_normal_output(); // Before replacement, not after new identity publication.
+                    s.owner.invalidate_actor_status_writes(); // Before incarnation replacement.
                     if(const auto old=s.normal_entry.exchange(normal_entry))old->retired.store(true);
                     s.normal_initialization.store({});
                     s.normal_tail_size=0;s.normal_tail_observable=true;
                     if(world_frame) {
                         auto next=std::make_shared<std::vector<std::uint8_t>>(world_frame->begin(),world_frame->end());
                         if(!s.terminal_write_allowed())return;
-                        s.write_bytes+=next->size();s.writes.push_back({next,{},true});
+                        s.write_bytes+=next->size();s.append_write({next,{},true});
                         s.writes.back().normal_entry=normal_entry;
                     }
                     s.c2s0002_state=world_frame?C2S0002State::WorldEntrySent:C2S0002State::CharacterSelected;
@@ -2431,6 +2439,7 @@ struct Session::Impl {
         normal_tail_size+=bytes.size();
     }
     void retire_normal_initialization() noexcept {
+        owner.invalidate_actor_status_writes();
         retire_normal_output();
         if(const auto entry=normal_entry.load())entry->retired.store(true);
         normal_initialization.store({});
@@ -2749,7 +2758,7 @@ struct Session::Impl {
                 auto reply=std::make_shared<std::vector<std::uint8_t>>(
                     RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
                 if(!terminal_write_allowed())return;
-                write_bytes+=reply->size();writes.push_back({reply,{}});
+                write_bytes+=reply->size();append_write({reply,{}});
                 if(writes.size()==1)write();
                 logger("session")->info("session_id={} NATIVE_LOGOUT_ACK_QUEUED reason={}",id,(*control)[1]);
                 close();return;
@@ -3038,7 +3047,7 @@ struct Session::Impl {
                                    normal_response->receipt->status.load()==NormalWorldResponseStatus::Pending &&
                                    (!admission || (admission->receipt->status.load()==NormalWorldCallbackAdmissionStatus::Pending &&
                                     s.normal_output_transport_current_locked(admission->receipt->source)))) {
-                                    s.writes.push_back({bytes,{}});s.write_bytes+=bytes->size();
+                                    s.append_write({bytes,{}});s.write_bytes+=bytes->size();
                                     s.writes.back().observed_response=response_write;
                                     auto pending=NormalWorldResponseStatus::Pending;
                                     queued=normal_response->receipt->status.compare_exchange_strong(pending,NormalWorldResponseStatus::Queued);
@@ -3051,13 +3060,13 @@ struct Session::Impl {
                                 std::lock_guard lock(admission->receipt->source->sync->mutex);
                                 if(admission->receipt->status.load()==NormalWorldCallbackAdmissionStatus::Pending &&
                                    s.normal_output_transport_current_locked(admission->receipt->source)) {
-                                    s.writes.push_back({bytes,{}});s.write_bytes+=bytes->size();
+                                    s.append_write({bytes,{}});s.write_bytes+=bytes->size();
                                     s.writes.back().observed_response=response_write;queued=true;
                                 }
                             }
                             if(!queued){admission->fail();s.fail("Original callback prefix source retired");return;}
                         } else {
-                            s.write_bytes+=bytes->size();s.writes.push_back({bytes,{}});
+                            s.write_bytes+=bytes->size();s.append_write({bytes,{}});
                             s.writes.back().observed_response=response_write;
                         }
                         if(input_lease)s.writes.back().owned_input_lease=input_lease;
@@ -3148,7 +3157,7 @@ struct Session::Impl {
             log_packet(packet, "S2C");
             if(!terminal_write_allowed())return;
             write_bytes += bytes->size();
-            writes.push_back({std::move(bytes), std::move(reservation)});
+            append_write({std::move(bytes), std::move(reservation)});
             if (writes.size() == 1) write();
         } catch (const std::exception& e) { fail(e.what()); }
         catch (...) { fail("protocol encode failed"); }
@@ -3187,6 +3196,7 @@ struct Session::Impl {
         try {
         continuation=std::make_shared<ActiveWriteContinuation>(carried,bytes);
         active_write_continuation=continuation;
+        owner.invalidate_actor_status_writes(); // Final exhaustive socket sink.
         asio::async_write(socket, asio::buffer(*bytes), asio::bind_executor(strand,
             [self = owner.shared_from_this(), bytes,marked,continuation](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
@@ -3356,6 +3366,7 @@ struct Session::Impl {
         }
     }
     void close() {
+        owner.invalidate_actor_status_writes();
         if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
             Session::fail_native_pk_return_finalisation(final);
         const bool was_closing=closing;
@@ -3377,6 +3388,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        owner.invalidate_actor_status_writes();
         if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
             Session::fail_native_pk_return_finalisation(final);
         if(const auto output=native_pk_return_output.load())Session::fail_native_pk_return_output(output);
@@ -3454,11 +3466,20 @@ Session::Session(asio::ip::tcp::socket socket, asio::any_io_executor game_execut
         } catch(...) {}
     }
 }
-Session::~Session() = default;
+Session::~Session() { invalidate_actor_status_writes(); }
+void Session::invalidate_actor_status_writes() noexcept {
+    if(impl_ && impl_->character_handlers.actor_status_write_fence)
+        impl_->character_handlers.actor_status_write_fence->invalidate();
+}
+bool Session::actor_status_write_fence_matches(
+        const std::shared_ptr<TaiwanActorStatusWriteFence>& fence) const noexcept {
+    return fence && impl_->character_handlers.actor_status_write_fence==fence;
+}
 void Session::start() {
     asio::dispatch(impl_->strand, [self = shared_from_this()] { self->impl_->start(); });
 }
 void Session::send(Packet packet) {
+    invalidate_actor_status_writes();
     if (impl_->close_requested.load()) return;
     const auto charge = packet.payload.size();
     auto budget = impl_->budget;
@@ -3478,9 +3499,11 @@ void Session::send(Packet packet) {
     });
 }
 void Session::send_world_records(std::vector<std::uint8_t> logical) {
+    invalidate_actor_status_writes();
     send_world_records_impl(std::move(logical),{});
 }
 Session::WorldRecordsWrite Session::send_world_records_observed(std::vector<std::uint8_t> logical) {
+    invalidate_actor_status_writes();
     if(observed_world_callback!=this)
         throw std::logic_error("Observed world sender requires actual world-records game callback");
     if(impl_->mode!=ProtocolMode::God2CharacterConnection || closing() || !recovered_world_ready() ||
@@ -3620,6 +3643,7 @@ bool Session::normal_world_output_current_on_game(const NormalWorldOutputHandle&
 }
 Session::NormalWorldOutputAttempt Session::send_normal_world_records(
         const NormalWorldOutputHandle& handle,std::vector<std::uint8_t> logical) {
+    invalidate_actor_status_writes();
     auto data=std::make_shared<NormalWorldOutputAttempt::Data>();
     const NormalWorldOutputAttempt result(data);
     const auto pending=std::make_shared<Impl::NormalOutputPending>(data);
@@ -3651,7 +3675,7 @@ Session::NormalWorldOutputAttempt Session::send_normal_world_records(
             {
                 std::lock_guard lock(recipient->sync->mutex);
                 if(!s.normal_output_transport_current_locked(recipient))return;
-                s.writes.push_back({bytes,std::move(reservation)});
+                s.append_write({bytes,std::move(reservation)});
                 s.write_bytes+=bytes->size();
                 auto expected=NormalWorldOutputStatus::Pending;
                 pending->data->status.compare_exchange_strong(expected,NormalWorldOutputStatus::Queued);
@@ -3755,6 +3779,7 @@ bool Session::normal_world_response_callback_current(const NormalWorldResponseAt
 }
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         std::shared_ptr<WorldRecordsWrite::Data> observed) {
+    invalidate_actor_status_writes();
     const auto attempt=observed?std::make_shared<Impl::WorldWriteAttempt>(std::move(observed)):
         std::shared_ptr<Impl::WorldWriteAttempt>{};
     if(impl_->close_requested.load()) return;
@@ -3788,7 +3813,7 @@ void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
             if(!s.terminal_write_allowed())return;
             s.write_bytes+=bytes->size();
             if(attempt)attempt->frame=bytes;
-            s.writes.push_back({std::move(bytes),std::move(reservation),false,false,{},{},{},attempt});
+            s.append_write({std::move(bytes),std::move(reservation),false,false,{},{},{},attempt});
             if(s.writes.size()==1) s.write();
         } catch(...) { s.fail("Recovered world push encoding failed"); }
     });
@@ -3843,6 +3868,7 @@ void Session::bind_common_world_delivery_identity(std::uint64_t account,std::uin
         throw std::logic_error("Common world delivery identity already bound");
 }
 void Session::release_common_world_delivery_identity(std::uint64_t account,std::uint64_t character,std::uint64_t generation) {
+    invalidate_actor_status_writes();
     auto current=impl_->common_world_identity.load();
     if(current && current->account==account && current->character==character && current->generation==generation)
         impl_->common_world_identity.compare_exchange_strong(current,{});
@@ -3869,6 +3895,7 @@ void Session::bind_common_world_entry_identity(std::uint64_t account,std::uint64
         throw std::invalid_argument("Pending common entry already bound");
 }
 void Session::release_common_world_entry_identity(std::uint64_t account,std::uint64_t character,std::uint64_t generation) {
+    invalidate_actor_status_writes();
     auto current=impl_->common_entry_identity.load();
     if(current && current->account==account && current->character==character && current->generation==generation)
         impl_->common_entry_identity.compare_exchange_strong(current,{});
@@ -3881,6 +3908,7 @@ bool Session::common_world_entry_current(std::uint64_t account,std::uint64_t cha
 void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
     std::function<bool()> publish,std::function<void(bool)> queued) {
+    invalidate_actor_status_writes();
     if(impl_->common_ready_thread!=std::this_thread::get_id())
         throw std::logic_error("Pending common publication game owner mismatch");
     if(!queued)throw std::invalid_argument("Pending common entry completion required");
@@ -3941,7 +3969,7 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
             }
             if(!s.terminal_write_allowed()){finish(false);return;}
             const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
-            s.writes.push_back({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
+            s.append_write({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
             s.writes.back().pending_return_continuation=held_continuation;
             asio::post(s.game,[self,bytes,held_continuation,before,after,account,character,publish=std::move(publish),finish] {
                 bool accepted=false;
@@ -3964,6 +3992,7 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
 void Session::send_common_world_records_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
     std::function<bool()> publish,std::function<void(bool)> queued) {
+    invalidate_actor_status_writes();
     if(!queued)throw std::invalid_argument("Common world publication completion required");
     auto completion=std::make_shared<std::function<void(bool)>>(std::move(queued));
     const auto finish=[self=shared_from_this(),completion](bool accepted) {
@@ -4005,7 +4034,7 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
             // not strand bytes or the reservation. Prior writes may finish.
             if(!s.terminal_write_allowed()){finish(false);return;}
             const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
-            s.writes.push_back({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
+            s.append_write({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
             s.writes.back().pending_return_continuation=held_continuation;
             asio::post(s.game,[self,bytes,held_continuation,account,character,common,publish=std::move(publish),finish]() mutable {
                 bool accepted=false;
@@ -4032,6 +4061,7 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
 }
 void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     std::weak_ptr<NativeBattleSkillPublicationOwner> source) {
+    invalidate_actor_status_writes();
     // Game-owner-only entry. All game-owned fields are checked here or in the
     // posted game hooks, never by the strand. No default/frozen sender changes.
     const auto self=shared_from_this();
@@ -4095,7 +4125,7 @@ void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
                     s.fail("Native battle publication queue limit");return;
                 }
                 if(!s.terminal_write_allowed())return;
-                s.writes.push_back({bytes,std::move(reservation),false,true,{},{},pending});
+                s.append_write({bytes,std::move(reservation),false,true,{},{},pending});
                 s.write_bytes+=bytes->size();
                 s.release_native_battle(pending,bytes);
             }catch(...) {s.fail("Native battle publication encoding or handoff failed");}
@@ -4773,6 +4803,7 @@ Session::NativePkReturnOutputHold Session::hold_native_pk_return_output(
             if(recipient->session->impl_->native_pk_return_output.load()!=data)throw std::logic_error("Return output halfslot lost");
         for(std::size_t index=0;index<data->recipients.size();++index){
             const auto session=data->recipients[index]->session;
+            session->invalidate_actor_status_writes(); // Before held return-group handoff.
             asio::post(session->impl_->strand,[session,data,index,owned=std::move(markers[index]),attempt]()mutable{
                 session->impl_->stage_native_pk_return_output(data,index,std::move(owned),attempt);
             });
@@ -5168,6 +5199,7 @@ bool Session::complete_native_pk_return_finalisation(const NativePkReturnFinalis
 }
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){
+    invalidate_actor_status_writes();
     // CUSTOM-0115 explicit exact accepted entry. Raw output is never room,
     // grant/skill or current checkpoint authority; its game owner must prove it.
     if(impl_->native_pk_terminal.load() || !native_pk_entry_written_current(hold))
@@ -5271,6 +5303,7 @@ bool Session::commit_native_pk_entry(const NativePkEntryHold& hold)noexcept {
         battle_generation()==data->request.prebattle_generation+1;
 }
 void Session::release_native_pk_entry(const NativePkEntryHold& hold) {
+    invalidate_actor_status_writes();
     const auto data=hold.data_;
     if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
        data->session.lock().get()!=this || data->phase.load()!=NativePkEntryHold::Data::Phase::Committed ||
@@ -5295,6 +5328,7 @@ void Session::release_native_pk_entry(const NativePkEntryHold& hold) {
     });
 }
 void Session::abort_native_pk_entry(const NativePkEntryHold& hold) {
+    invalidate_actor_status_writes();
     const auto data=hold.data_;
     if(!data || data->thread!=std::this_thread::get_id() || data->game!=impl_->game ||
        data->session.lock().get()!=this)throw std::logic_error("Native PK abort game owner mismatch");
@@ -5322,6 +5356,7 @@ void Session::abort_native_pk_entry(const NativePkEntryHold& hold) {
 }
 void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logical,
     std::uint64_t expected_account,std::uint64_t expected_character,std::uint64_t expected_world_generation,std::uint64_t expected_battle_generation,std::function<void(bool)> acceptance) {
+    invalidate_actor_status_writes();
     auto complete=[callback=std::move(acceptance)](bool enqueued) mutable {if(callback){auto once=std::move(callback);try{once(enqueued);}catch(...){}}};
     if(impl_->close_requested.load()) {complete(false);return;}
     if(logical.empty() || logical.size()>RecoveredWorldFrame::max_logical_size) {complete(false);close();return; }
@@ -5354,13 +5389,14 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
             }
             if(!s.terminal_write_allowed()){complete(false);return;}
             s.write_bytes+=bytes->size();
-            s.writes.push_back({std::move(bytes),std::move(reservation)});
+            s.append_write({std::move(bytes),std::move(reservation)});
             complete(true);
             if(s.writes.size()==1) s.write();
         } catch(...) {complete(false);s.fail("Recovered world push encoding failed"); }
     });
 }
 void Session::close() {
+    invalidate_actor_status_writes();
     if(const auto pair=impl_->native_pk_return.load())fail_native_pk_return_reservation(pair);
     impl_->retire_normal_output(); // Synchronized retirement before close publication/post.
     if (impl_->close_requested.exchange(true)) return;

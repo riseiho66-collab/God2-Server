@@ -5418,6 +5418,33 @@
           "src/game/TaiwanNativeActorResourceSource.cpp"
         ],
         "evidence": "docs/research/tw-actor-resource-source-20261015.md"
+      },
+      "actor_status_write_fence415": {
+        "round": 415,
+        "classification": "OPTIONAL_ACTUAL_SESSION_OUTPUT_REVOCATION_ONLY_PARTIAL_SOURCE",
+        "source_paths": [
+          "src/net/Session.h",
+          "src/net/Session.cpp",
+          "src/core/SharedWorldHostPlan.h",
+          "src/core/Application.cpp",
+          "src/core/SharedTaiwanNativeWorldHostPlan.h",
+          "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+          "src/game/TaiwanActorStatusWriteFence.h",
+          "src/game/TaiwanActorStatusWriteFence.cpp"
+        ],
+        "evidence": "docs/research/tw-actor-status-write-fence-source-20261015.md",
+        "actual_queue_and_socket_sink_connected": true,
+        "actual_same_context_host_and_both_listener_holders": true,
+        "all_29_previous_queue_insertions_connected": true,
+        "public_producer_and_return_handoff_revocation": true,
+        "weak_presence_identity_io_safe": true,
+        "concurrent_monotonic_no_wrap_stop_permanent": true,
+        "failed_construction_and_host_lifecycle_stop": true,
+        "known_initial_status_or_EA_authority": false,
+        "all_internal_callback_handoff_gaps_closed": false,
+        "complete_host_membership_or_byte_permission_proved": false,
+        "complete_route_added": 0,
+        "default_enabled": false
       }
     },
     {
