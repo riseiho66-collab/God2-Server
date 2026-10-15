@@ -5107,6 +5107,18 @@
         "src/handlers/OwnedTaiwanPkRoomBackend.h"
       ],
       "native_gap": "Actual full-current actor/resource/text/complete-selection issuer, final strand consume/visibility publication and durable release/recovery remain incomplete.",
+      "initial_status_transport_audit431": {
+        "classification": "READONLY_SOURCE_AUDIT_OF_INITIAL_STATUS_TRANSPORT_WITHIN_CUSTOM0133",
+        "source": "Actual initial held validator rejects PK status_seal; socket checks require PK marker/plan; full initial/outward unit/typed frame context and qualified mint bridge remain absent.",
+        "limits": "No C++ implementation/source connection/native byte/formula/opcode/full route credited. Owner requests pause after Round431 publication.",
+        "source_audit_complete": true,
+        "source_connected": false,
+        "transport_implemented": false,
+        "default_activated": false,
+        "whole_route_complete": false,
+        "owner_pause_after_current_round": true,
+        "build_tests_runtime_SQL_activation_deployment": false
+      },
       "initial_endpoints430": {
         "classification": "SOURCE_INTEGRATION_OF_INITIAL_ENDPOINT_PROOFS_WITHIN_CUSTOM0133",
         "source": "Actual initial endpoint producer hosted inside429 augmented Scope; real joining Session/Initial token/Written selector and actual selected peer transport registration.",

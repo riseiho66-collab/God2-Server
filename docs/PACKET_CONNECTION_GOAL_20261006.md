@@ -6524,3 +6524,26 @@ fonts/IME/auth/text/CNfourWS. PHASE1 no build/tests/product/parser/native/VM/
 codec/gameDBSQL/schema/migrate/import/activate/deploy; no newprojectPY.
 
 Details: docs/research/tw-initial-actor-endpoints-source-20261015.md
+
+## Round431 — Initial status transport audit; owner pause (2026-10-15)
+
+Owner stop directive (2026-10-15, current Round431): finish THIS round then STOP.
+After publishing431's read-only audit/unique static report, pause the active
+goal. Do not start432/baseline/implementation/runtime work until explicit resume.
+The full TW100/CN/fourWS/common core/all-system DB objective remains unchanged.
+Round431 verifies actual initial status transport gaps: initial held validator
+rejects status_seal; final socket seal paths expect PK marker/plan; queue release
+lifetime differs from per-frame completion. Initial/outward models lack typed
+ActorUnit; final projected whole86B and actual frame identity/offsets must match.
+Only actual mint call is Ready-only PKScene; HostPlan is also a declared friend.
+Initial pending vault cannot own ready outward callbacks. Distinct private
+initial marker/plan/pure frame checks/full qualified mint bridge still required.
+Readonly13file/14positivechecks; C++changed0/V67pins153allunchanged/canonical794.
+No source connection or full route credit; counts/percentage remain unchanged/
+unknown. Full actor/material/status transport/affineIO/fanoutACK/coverage/
+movement/Main/configreload/MySQL OPEN. Preserve453Traditional/clientBIN/maxHP
+poison10th/907/common64coin99999999999stack99nativelevels/saves/fonts/IME/auth/
+text/CNfourWS. PHASE1 no build/test/product/parser/native/VM/codec/gameDBSQL/
+schema/migrate/import/activate/deploy; no newprojectPY. Owner pause after431.
+
+Details: docs/research/tw-initial-status-transport-audit-20261015.md
