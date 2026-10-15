@@ -1257,3 +1257,19 @@ validatedreload/MySQL8backend-export required. GoalACTIVE/TW100first;453繁體/
 clientBIN/maxHPpoison10分1/907/common64coin99999999999stack99nativelevels/
 saves/fonts/IME/auth/text preserved. PHASE1no build/test/product/parser/native/
 VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
+
+Round426 connects actual Application stored71/72 display route to one private
+immutable same-connection Main-qualified readset: worldrows+levels+referenced
+NPC/enemy fullsource/rawvalues in ONE consistent transaction; purecomposer
+preserves ordered21B/78/framecap. Exactissuer/fullvalueCurrent; noDB/callbackin
+readset/no guessed fullscene or ABA generation. Fullcatalog pin once per family;
+emptyreferences unrequested not emptyworld proof. Legacy APIs/schemas preserved.
+CPP7 ALLexisting; V62 retains146oldpins/adds7existing sourcefiles,153total.
+All-systemDBscope byactualgame rules/config-vs-state-vs-evidence/Englishnames/
+oneChineseTXTpertable/typedC++Lua/versionedvalidatedreload/MySQL8backend-export
+required. Fullinitialroster/positivecoverage/prepared-activeprofile/movement/
+MainWorldPlan/fullroutes/nativeacceptance OPEN; wholepercentageunknown.
+No newprojectPY/Lua/CMake/EXE/opcode/formula/fullroutes. GoalACTIVE/TW100first;
+453繁體/clientBIN/maxHPpoison10分1/907/common64coin99999999999stack99nativelevels/
+saves/fonts/IME/auth/text preserved. PHASE1no build/test/product/parser/native/
+VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.

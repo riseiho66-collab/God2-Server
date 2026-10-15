@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -48,6 +49,15 @@ public:
         std::uint32_t records{},lookup_visible{},groups{};
         bool operator==(const Counts&) const = default;
     };
+    struct Key {
+        std::int64_t area{},scene{},ordinal{};
+        bool operator==(const Key&) const = default;
+    };
+    struct References {
+        std::optional<NativeEnemyDisplaySource> source;
+        std::vector<NativeEnemyDisplayRecord> records;
+        bool operator==(const References&) const = default;
+    };
     // One complete source-qualified scene observation. Records preserve final
     // native lookup order and original occurrences, not a synthesized26B bank.
     struct Scene {
@@ -58,6 +68,7 @@ public:
         bool operator==(const Scene&) const = default;
     };
     explicit NativeEnemyDisplayCatalog(sqlite3* db);
+    bool uses_connection(const sqlite3* db) const noexcept {return db_==db;}
     // Empty source+table -> zeros. Otherwise requires the complete pinned
     // source and all row bytes/metadata, including 24 superseded arena rows.
     // Intended for startup integrity qualification, not per-frame hashing.
@@ -73,7 +84,14 @@ public:
     // Uses main tables and rejects temp shadows; existing lookup/counts keep
     // their original behavior. No spawn/stat/skill or2A issuer authority.
     std::optional<Scene> read_scene(std::int64_t area,std::int64_t scene) const;
+    // Empty keys are unrequested, with no catalog/absence qualification. A
+    // nonempty request hashes the complete pinned main catalog once, then
+    // captures sorted unique visible keys. Missing catalog/keys throw.
+    References read_references(std::span<const Key> keys) const;
 private:
+    Counts counts_for_source(bool main) const;
+    std::optional<NativeEnemyDisplayRecord> lookup_for_source(const std::string& dataset_id,
+        std::int64_t area,std::int64_t scene,std::int64_t ordinal,bool main) const;
     sqlite3* db_;
 };
 }

@@ -71,12 +71,20 @@ NativeEnemyDisplayCatalog::NativeEnemyDisplayCatalog(sqlite3* db):db_(db) {
 }
 
 NativeEnemyDisplayCatalog::Counts NativeEnemyDisplayCatalog::counts() const {
+    return counts_for_source(false);
+}
+
+NativeEnemyDisplayCatalog::Counts NativeEnemyDisplayCatalog::counts_for_source(bool main) const {
     using sqlite_detail::Statement;
     CatalogReadScope scope(db_);
-    Statement total(db_,"SELECT count(*) FROM native_enemy_display_catalog");
+    Statement total(db_,main?"SELECT count(*) FROM main.native_enemy_display_catalog":
+        "SELECT count(*) FROM native_enemy_display_catalog");
     if(!total.row())throw DatabaseError("Enemy catalog count unavailable");
     const auto all=total.number<std::uint32_t>(0);
-    Statement source(db_,"SELECT dataset_id,source_path,source_sha256,decoded_sha256,native_image_sha256,"
+    Statement source(db_,main?
+        "SELECT dataset_id,source_path,source_sha256,decoded_sha256,native_image_sha256,"
+        "source_section,loader_rva,lookup_rva,row_count FROM main.native_data_sources WHERE dataset_id=?":
+        "SELECT dataset_id,source_path,source_sha256,decoded_sha256,native_image_sha256,"
         "source_section,loader_rva,lookup_rva,row_count FROM native_data_sources WHERE dataset_id=?");
     source.bind(1,std::string(current_dataset_id));
     if(!source.row()) {
@@ -88,7 +96,11 @@ NativeEnemyDisplayCatalog::Counts NativeEnemyDisplayCatalog::counts() const {
     for(int c=0;c<8;++c)append_catalog(fingerprint,required_text(source,c));
     catalog_number(fingerprint,source.number<std::uint32_t>(8));
     if(source.row())throw DatabaseError("Duplicate enemy catalog source");
-    Statement rows(db_,"SELECT dataset_id,source_record_index,source_line,source_offset,record_sha256,"
+    Statement rows(db_,main?
+        "SELECT dataset_id,source_record_index,source_line,source_offset,record_sha256,"
+        "raw_record,area_generation,area,scene,ordinal,lookup_visible,source_label,name_bytes "
+        "FROM main.native_enemy_display_catalog ORDER BY source_record_index":
+        "SELECT dataset_id,source_record_index,source_line,source_offset,record_sha256,"
         "raw_record,area_generation,area,scene,ordinal,lookup_visible,source_label,name_bytes "
         "FROM native_enemy_display_catalog ORDER BY source_record_index");
     Counts out;std::set<std::pair<std::uint32_t,std::uint32_t>> groups;
@@ -112,11 +124,23 @@ NativeEnemyDisplayCatalog::Counts NativeEnemyDisplayCatalog::counts() const {
 
 std::optional<NativeEnemyDisplayRecord> NativeEnemyDisplayCatalog::lookup(
     const std::string& dataset_id,std::int64_t area,std::int64_t scene,std::int64_t ordinal) const {
+    return lookup_for_source(dataset_id,area,scene,ordinal,false);
+}
+
+std::optional<NativeEnemyDisplayRecord> NativeEnemyDisplayCatalog::lookup_for_source(
+    const std::string& dataset_id,std::int64_t area,std::int64_t scene,std::int64_t ordinal,bool main) const {
     if(!valid_text(dataset_id) ||
        dataset_id.size()>static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
        area<0 || area>16 || scene<0 || scene>65535 || ordinal<1 || ordinal>7815)
         throw DatabaseError("Invalid enemy display selector");
-    sqlite_detail::Statement row(db_,
+    sqlite_detail::Statement row(db_,main?
+        "SELECT c.dataset_id,c.source_record_index,c.source_line,c.source_offset,"
+        "c.record_sha256,c.raw_record,c.area_generation,c.area,c.scene,c.ordinal,"
+        "c.lookup_visible,c.source_label,c.name_bytes,"
+        "s.dataset_id,s.source_path,s.source_sha256,s.decoded_sha256,s.native_image_sha256,"
+        "s.source_section,s.loader_rva,s.lookup_rva,s.row_count "
+        "FROM main.native_enemy_display_catalog c LEFT JOIN main.native_data_sources s ON s.dataset_id=c.dataset_id "
+        "WHERE c.dataset_id=? AND c.area=? AND c.scene=? AND c.ordinal=? AND c.lookup_visible=1 LIMIT 2":
         "SELECT c.dataset_id,c.source_record_index,c.source_line,c.source_offset,"
         "c.record_sha256,c.raw_record,c.area_generation,c.area,c.scene,c.ordinal,"
         "c.lookup_visible,c.source_label,c.name_bytes,"
@@ -170,18 +194,17 @@ std::optional<NativeEnemyDisplayCatalog::Scene> NativeEnemyDisplayCatalog::read_
     if(area<0 || area>16 || scene<0 || scene>65535)
         throw DatabaseError("Invalid enemy scene selector");
     CatalogReadScope scope(db_);
-    // counts() predates this additive main-only API. Reject shadows before its
-    // unqualified reads so qualification and the selected rows share a source.
+    // Reject temp shadows before observing the explicit main catalog.
     sqlite_detail::Statement shadows(db_,
-        "SELECT 1 FROM temp.sqlite_master WHERE name IN ('native_data_sources','native_enemy_display_catalog') "
-        "OR tbl_name IN ('native_data_sources','native_enemy_display_catalog') LIMIT 1");
+        "SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('native_data_sources','native_enemy_display_catalog') "
+        "OR tbl_name COLLATE NOCASE IN ('native_data_sources','native_enemy_display_catalog') LIMIT 1");
     if(shadows.row())throw DatabaseError("Enemy scene catalog temp shadow");
     // Missing main schema must fail, even if an attached database exposes
     // empty tables which the older unqualified counts() could otherwise use.
     sqlite_detail::Statement main_tables(db_,
         "SELECT 1 FROM main.native_enemy_display_catalog,main.native_data_sources LIMIT 0");
     if(main_tables.row())throw DatabaseError("Unexpected enemy scene schema row");
-    const auto complete=counts();
+    const auto complete=counts_for_source(true);
     if(complete==Counts{}) {scope.finish();return std::nullopt;}
     if(complete!=Counts{7815,7791,96})throw DatabaseError("Enemy scene catalog incomplete");
 
@@ -233,6 +256,41 @@ std::optional<NativeEnemyDisplayCatalog::Scene> NativeEnemyDisplayCatalog::read_
             throw DatabaseError("Enemy scene record order/provenance mismatch");
         result.records.push_back(std::move(record));
     }
+    scope.finish();return result;
+}
+NativeEnemyDisplayCatalog::References NativeEnemyDisplayCatalog::read_references(
+        std::span<const Key> keys) const {
+    if(keys.empty())return {};
+    std::vector<Key> requested(keys.begin(),keys.end());
+    for(const auto& key:requested)
+        if(key.area<0 || key.area>16 || key.scene<0 || key.scene>65535 || key.ordinal<1 || key.ordinal>7815)
+            throw DatabaseError("Invalid enemy references selector");
+    std::sort(requested.begin(),requested.end(),[](const Key& left,const Key& right) {
+        if(left.area!=right.area)return left.area<right.area;
+        if(left.scene!=right.scene)return left.scene<right.scene;
+        return left.ordinal<right.ordinal;
+    });
+    requested.erase(std::unique(requested.begin(),requested.end()),requested.end());
+    CatalogReadScope scope(db_);
+    const auto no_shadows=[this] {
+        sqlite_detail::Statement shadows(db_,
+            "SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('native_data_sources','native_enemy_display_catalog') "
+            "OR tbl_name COLLATE NOCASE IN ('native_data_sources','native_enemy_display_catalog') LIMIT 1");
+        if(shadows.row())throw DatabaseError("Enemy references catalog temp shadow");
+    };
+    no_shadows();
+    if(counts_for_source(true)!=Counts{7815,7791,96})
+        throw DatabaseError("Enemy references catalog missing/incomplete");
+    References result;
+    result.records.reserve(requested.size());
+    for(const auto& key:requested) {
+        auto record=lookup_for_source(current_dataset_id,key.area,key.scene,key.ordinal,true);
+        if(!record)throw DatabaseError("Enemy references key missing");
+        if(!result.source)result.source=record->source;
+        else if(*result.source!=record->source)throw DatabaseError("Enemy references source mismatch");
+        result.records.push_back(std::move(*record));
+    }
+    no_shadows();
     scope.finish();return result;
 }
 }

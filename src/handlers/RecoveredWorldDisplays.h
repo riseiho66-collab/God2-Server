@@ -11,26 +11,13 @@ namespace god2 {
 // Full records remain opaque; existing native render resource selection applies.
 // NPC catalog selectors, monster namespace and scene identity are separate keys.
 inline std::vector<std::vector<std::uint8_t>> recovered_world_display_batches(
-    const SqliteWorldDisplayRepository& repository,const NativeNpcDisplayCatalog& npcs,
-    const NativeEnemyDisplayCatalog& enemies,std::uint16_t area,std::uint16_t scene,bool isolated_test=false) {
+    const SqliteWorldDisplayRepository::SceneReadset& readset) {
     std::vector<std::vector<std::uint8_t>> batches;
-    const auto rows=repository.load(area,scene,isolated_test);
-    const auto levels=repository.load_levels(area,scene,isolated_test);
-    std::vector<std::uint16_t> selectors;
-    for(const auto& row:rows) if(const auto npc=RecoveredNpcRecord::parse(row.logical)) {
-        selectors.push_back(npc->primarySelector());
-        if(npc->secondarySelector())selectors.push_back(npc->secondarySelector());
-    }
-    if(!npcs.contains_all(selectors))throw DatabaseError("World NPC selectors lack qualified current catalog");
+    const auto& rows=readset.rows();
+    const auto& levels=readset.levels();
     for(const auto& row:rows) {
-        if(const auto npc=RecoveredNpcRecord::parse(row.logical)) {
-            // Membership was qualified in one full catalog read above.
-            (void)npc;
-        } else if(const auto monster=RecoveredMonsterRecord::parse(row.logical)) {
-            if(!enemies.lookup(NativeEnemyDisplayCatalog::current_dataset_id,
-                monster->catalogArea(),monster->catalogScene(),monster->catalogOrdinal()))
-                throw DatabaseError("World monster namespace lacks qualified current catalog");
-        } else throw DatabaseError("Invalid world display record");
+        // The private readset already qualified full records and all referenced
+        // catalogs in one snapshot. This composer never calls SQL or callbacks.
         if(batches.empty() || batches.back().size()+21>RecoveredWorldFrame::max_logical_size)batches.emplace_back();
         batches.back().insert(batches.back().end(),row.logical.begin(),row.logical.end());
         if(const auto monster=RecoveredMonsterRecord::parse(row.logical)) {
@@ -43,5 +30,12 @@ inline std::vector<std::vector<std::uint8_t>> recovered_world_display_batches(
         }
     }
     return batches;
+}
+// Preserve the existing Application caller, now with one joint observation.
+inline std::vector<std::vector<std::uint8_t>> recovered_world_display_batches(
+    const SqliteWorldDisplayRepository& repository,const NativeNpcDisplayCatalog& npcs,
+    const NativeEnemyDisplayCatalog& enemies,std::uint16_t area,std::uint16_t scene,bool isolated_test=false) {
+    const auto readset=repository.observe_scene(npcs,enemies,area,scene,isolated_test);
+    return recovered_world_display_batches(readset);
 }
 }

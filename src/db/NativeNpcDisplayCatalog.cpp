@@ -47,13 +47,30 @@ CREATE TABLE native_npc_display_rows (
  record_sha256 TEXT NOT NULL, raw_record BLOB NOT NULL CHECK(typeof(raw_record)='blob'),
  prefix28 BLOB NOT NULL CHECK(typeof(prefix28)='blob' AND length(prefix28)=28));
 )SQL";}
-std::vector<NativeNpcDisplayRecord> NativeNpcDisplayCatalog::read_all() const {
+std::vector<NativeNpcDisplayRecord> NativeNpcDisplayCatalog::read_all(bool main,
+        std::optional<NativeNpcDisplaySource>* captured_source) const {
     ReadScope scope(db_);
-    sqlite_detail::Statement source(db_,"SELECT id,source_file,source_sha256,decoded_sha256,client_sha256,memory_receipt_sha256,dataset_sha256,row_count,section,loader_rva,authority FROM native_npc_display_sources ORDER BY id");
+    sqlite_detail::Statement source(db_,main?
+        "SELECT id,source_file,source_sha256,decoded_sha256,client_sha256,memory_receipt_sha256,dataset_sha256,row_count,section,loader_rva,authority FROM main.native_npc_display_sources ORDER BY id":
+        "SELECT id,source_file,source_sha256,decoded_sha256,client_sha256,memory_receipt_sha256,dataset_sha256,row_count,section,loader_rva,authority FROM native_npc_display_sources ORDER BY id");
     const bool present=source.row();
     if(present && (source.integer(0)!=1 || source.integer(7)!=4043 || source.text(1)!="Data2/Patch/Comm/gamedata.csvZ" || source.text(2)!="70a4e7dd1a1f66d7a70f5c5e97c77ef4063904cc473292758c5abd2da7bd8731" || source.text(3)!="75c3c37947a64b0917fbf8e546884d9bf893fe6a606d3e2b8f3b1857966b1815" || source.text(4)!="6bf75ef8ac1e0f6b2240800ff841d205788bd1b6512149584b5386b10f431e98" || source.text(5)!="1f3de6e0f62c340b20447c3b868907103b01caa64074688ebf47e9b5c725930a" || source.text(6)!="b770c11e516b488adba54ab7b2bee5d1fee3eaf1c5deb3dafe2e22962ccd343c" || source.text(8)!="NPCAppearData" || source.text(9)!="0x570f0" || source.text(10)!="SOURCE_DISPLAY_ONLY"))throw DatabaseError("NPC display source identity mismatch");
+    if(captured_source) {
+        captured_source->reset();
+        if(present) {
+            NativeNpcDisplaySource value;
+            value.id=source.integer(0);value.source_file=source.text(1);
+            value.source_sha256=source.text(2);value.decoded_sha256=source.text(3);
+            value.client_sha256=source.text(4);value.memory_receipt_sha256=source.text(5);
+            value.dataset_sha256=source.text(6);value.row_count=source.integer(7);
+            value.section=source.text(8);value.loader_rva=source.text(9);value.authority=source.text(10);
+            *captured_source=std::move(value);
+        }
+    }
     if(present && source.row())throw DatabaseError("Multiple NPC display sources");
-    sqlite_detail::Statement rows(db_,"SELECT npc_key,source_line,decoded_offset,record_sha256,raw_record,prefix28 FROM native_npc_display_rows ORDER BY npc_key");
+    sqlite_detail::Statement rows(db_,main?
+        "SELECT npc_key,source_line,decoded_offset,record_sha256,raw_record,prefix28 FROM main.native_npc_display_rows ORDER BY npc_key":
+        "SELECT npc_key,source_line,decoded_offset,record_sha256,raw_record,prefix28 FROM native_npc_display_rows ORDER BY npc_key");
     std::vector<NativeNpcDisplayRecord> records;
     std::vector<std::uint8_t> canonical;
     const auto append=[&canonical](std::uint32_t value,unsigned width){for(unsigned i=0;i<width;++i)canonical.push_back(static_cast<std::uint8_t>(value>>(8*i)));};
@@ -91,5 +108,33 @@ std::optional<NativeNpcDisplayRecord> NativeNpcDisplayCatalog::lookup(std::uint1
     const auto match=std::lower_bound(rows.begin(),rows.end(),key,[](const NativeNpcDisplayRecord& row,std::uint16_t id){return row.key<id;});
     if(match==rows.end() || match->key!=key)return std::nullopt;
     return *match;
+}
+NativeNpcDisplayCatalog::References NativeNpcDisplayCatalog::read_references(
+        std::span<const std::uint16_t> keys) const {
+    if(keys.empty())return {};
+    std::vector<std::uint16_t> requested(keys.begin(),keys.end());
+    std::sort(requested.begin(),requested.end());
+    requested.erase(std::unique(requested.begin(),requested.end()),requested.end());
+    ReadScope scope(db_);
+    const auto no_shadows=[this] {
+        sqlite_detail::Statement shadows(db_,
+            "SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ('native_npc_display_sources','native_npc_display_rows') "
+            "OR tbl_name COLLATE NOCASE IN ('native_npc_display_sources','native_npc_display_rows') LIMIT 1");
+        if(shadows.row())throw DatabaseError("NPC references catalog temp shadow");
+    };
+    no_shadows();
+    References result;
+    const auto records=read_all(true,&result.source);
+    if(!result.source)throw DatabaseError("NPC references catalog missing");
+    result.records.reserve(requested.size());
+    for(const auto key:requested) {
+        const auto match=std::lower_bound(records.begin(),records.end(),key,
+            [](const auto& row,std::uint16_t value){return row.key<value;});
+        if(match==records.end() || match->key!=key)
+            throw DatabaseError("NPC references key missing");
+        result.records.push_back(*match);
+    }
+    no_shadows();
+    scope.finish();return result;
 }
 }
