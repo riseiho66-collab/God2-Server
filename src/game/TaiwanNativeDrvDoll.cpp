@@ -97,4 +97,52 @@ std::shared_ptr<const TaiwanNativeDrvDoll> TaiwanNativeDrvDoll::from_pinned_deco
 const TaiwanNativeDrvDoll::Record* TaiwanNativeDrvDoll::find(std::uint16_t ordinal) const noexcept {
     if(ordinal>=records_.size())return nullptr;return &records_[ordinal];
 }
+TaiwanNativeDrvDoll::NativeRomRequest::NativeRomRequest(std::shared_ptr<const TaiwanNativeDrvDoll> bank,
+        std::size_t ordinal,NativeRomContext context,TaiwanNativeResourceSelection::Request request)
+    :bank_(std::move(bank)),ordinal_(ordinal),context_(std::move(context)),request_(std::move(request)){}
+TaiwanNativeDrvDoll::ResolvedRom::ResolvedRom(std::shared_ptr<const NativeRomRequest> request,
+        TaiwanNativeResourceSelection selected,std::shared_ptr<const TaiwanNativeRomAsset> rom,std::uint32_t action)
+    :request_(std::move(request)),selected_(std::move(selected)),rom_(std::move(rom)),action_operand_(action){}
+std::shared_ptr<const TaiwanNativeDrvDoll::NativeRomRequest> TaiwanNativeDrvDoll::native_rom_request(
+        std::shared_ptr<const TaiwanNativeDrvDoll> bank,std::uint32_t ordinal,const NativeRomContext& context) {
+    if(!bank||ordinal>=bank->records_.size())return {};
+    const auto& source=bank->records_[ordinal];
+    const auto printable=[](const auto& bytes){return std::all_of(bytes.begin(),bytes.end(),
+        [](auto c){return c>=0x20&&c<0x7f;});};
+    if(source.filename.empty()||source.filename.size()>=128||!printable(source.filename)||
+       context.actual_52f550_root.empty()||context.actual_52f550_root.size()>=256||!printable(context.actual_52f550_root)||
+       !context.actual_working_directory.is_absolute()||context.actual_manager_bank_operand>=512)return {};
+    std::wstring root;for(const auto c:context.actual_52f550_root)root.push_back(static_cast<wchar_t>(c));
+    const std::filesystem::path root_path(root);
+    if(!root_path.has_root_name()||!root_path.has_root_directory())return {};
+    const std::size_t separator=source.filename.front()=='\\'?0:1;
+    if(source.filename.size()>=256-context.actual_52f550_root.size()-separator)return {};
+    // Actual52F550: leading backslash uses5847F8 "%s%s"; otherwise585BC8
+    // "%s\\%s". Preserve actual raw path/case/separators, no guessed dirname.
+    auto reference=context.actual_52f550_root;
+    if(source.filename.front()!='\\')reference.push_back('\\');
+    reference.insert(reference.end(),source.filename.begin(),source.filename.end());
+    if(reference.size()>=256)return {};
+    //463B65 calls429820 directly: model+1C concatenation in44D520 does not
+    // occur here. Allocator WORD operand is independent of this source ordinal.
+    TaiwanNativeResourceSelection::Request request{TaiwanNativeResourceSelection::Kind::RomBinary,
+        std::move(reference),{},context.actual_working_directory,context.actual_manager_bank_operand};
+    const auto source_ordinal=source.ordinal;
+    return std::shared_ptr<const NativeRomRequest>(new NativeRomRequest(std::move(bank),source_ordinal,context,std::move(request)));
+}
+std::shared_ptr<const TaiwanNativeDrvDoll::ResolvedRom> TaiwanNativeDrvDoll::bind_native_rom(
+        std::shared_ptr<const NativeRomRequest> request,const TaiwanNativeResourceSelection& selected,
+        std::shared_ptr<const TaiwanNativeRomAsset> rom,std::uint32_t action) {
+    if(!request||!rom)return {};
+    const auto& expected=request->request();const auto& actual=selected.request();
+    if(expected.kind!=actual.kind||expected.original_reference!=actual.original_reference||
+       expected.native_prefix!=actual.native_prefix||expected.actual_working_directory!=actual.actual_working_directory||
+       expected.full_bank_operand!=actual.full_bank_operand)return {};
+    // Retain an immutable VALUE before validation; a mutable public ROM object's
+    // later reassignment must not change this private selection/action binding.
+    auto owned=std::make_shared<const TaiwanNativeRomAsset>(*rom);
+    if(owned->source()!=selected.actual_source()||owned->encoded_bytes()!=selected.encoded_bytes()||
+       owned->images().empty()||!owned->find_action(action))return {};
+    return std::shared_ptr<const ResolvedRom>(new ResolvedRom(std::move(request),selected,std::move(owned),action));
+}
 }

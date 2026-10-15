@@ -257,6 +257,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_actor_drv_fifth420', {}).get('source_paths', [])) |
                    set(ledger.get('tw_actor_status_owned421', {}).get('source_paths', [])) |
                    set(ledger.get('tw_actor_status_publication422', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_actor_drv_doll_tail423', {}).get('source_paths', [])) |
                    set(ledger.get('tw_full_actor_profile411', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_operator402', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_import401', {}).get('source_paths', [])) |
@@ -494,6 +495,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_actor_drv_fifth420': ledger.get('tw_actor_drv_fifth420'),
         'tw_actor_status_owned421': ledger.get('tw_actor_status_owned421'),
         'tw_actor_status_publication422': ledger.get('tw_actor_status_publication422'),
+        'tw_actor_drv_doll_tail423': ledger.get('tw_actor_drv_doll_tail423'),
         'tw_full_actor_profile411': ledger.get('tw_full_actor_profile411'),
         'tw_installed453_operator402': ledger.get('tw_installed453_operator402'),
         'tw_installed453_import401': ledger.get('tw_installed453_import401'),

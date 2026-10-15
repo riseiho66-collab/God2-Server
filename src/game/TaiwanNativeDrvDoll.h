@@ -1,4 +1,6 @@
 #pragma once
+#include "game/TaiwanNativeResourceSelection.h"
+#include "game/TaiwanNativeRomAsset.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -10,7 +12,8 @@
 
 namespace god2 {
 // Exact149c DrvDoll source consumed by4637B0/463AD0, distinct from Drv.
-// Own supplied decoded bytes; no file read, resource codec, ROM or DB access.
+// Own supplied decoded bytes; request/ROM bindings below retain supplied
+// selection/parsed values without executing file reads, resource codec or DB.
 class TaiwanNativeDrvDoll final {
 public:
     static constexpr std::string_view native_image_sha256=
@@ -52,6 +55,54 @@ public:
     // nullptr is an absent source ordinal, not an entry rejection. Empty row0
     // stays a real empty filename; no cache handle or load success is supplied.
     const Record* find(std::uint16_t ordinal) const noexcept;
+    // Dedicated463AD0 direct-loader context. There is NO Hero/model+1C prefix:
+    // actual row filename already carries its full relative path to52F550.
+    struct NativeRomContext {
+        std::vector<std::uint8_t> actual_52f550_root;
+        std::filesystem::path actual_working_directory;
+        std::uint32_t actual_manager_bank_operand;
+    };
+    class NativeRomRequest final {
+    public:
+        const TaiwanNativeResourceSelection::Request& request() const noexcept{return request_;}
+        const NativeRomContext& context() const noexcept{return context_;}
+        const TaiwanNativeDrvDoll& bank() const noexcept{return *bank_;}
+        std::size_t row_ordinal() const noexcept{return ordinal_;}
+    private:
+        friend class TaiwanNativeDrvDoll;
+        NativeRomRequest(std::shared_ptr<const TaiwanNativeDrvDoll>,std::size_t,
+            NativeRomContext,TaiwanNativeResourceSelection::Request);
+        const std::shared_ptr<const TaiwanNativeDrvDoll> bank_;
+        const std::size_t ordinal_;
+        const NativeRomContext context_;
+        const TaiwanNativeResourceSelection::Request request_;
+    };
+    class ResolvedRom final {
+    public:
+        const TaiwanNativeDrvDoll& bank() const noexcept{return request_->bank();}
+        std::size_t row_ordinal() const noexcept{return request_->row_ordinal();}
+        const TaiwanNativeResourceSelection& selection() const noexcept{return selected_;}
+        const TaiwanNativeRomAsset& rom() const noexcept{return *rom_;}
+        std::uint32_t full_action_operand() const noexcept{return action_operand_;}
+        const TaiwanNativeRomAsset::Action& action() const{return *rom_->find_action(action_operand_);}
+        const std::shared_ptr<const NativeRomRequest>& native_request() const noexcept{return request_;}
+    private:
+        friend class TaiwanNativeDrvDoll;
+        ResolvedRom(std::shared_ptr<const NativeRomRequest>,TaiwanNativeResourceSelection,
+            std::shared_ptr<const TaiwanNativeRomAsset>,std::uint32_t);
+        const std::shared_ptr<const NativeRomRequest> request_;
+        const TaiwanNativeResourceSelection selected_;
+        const std::shared_ptr<const TaiwanNativeRomAsset> rom_;
+        const std::uint32_t action_operand_;
+    };
+    // Actual first-selector/source ordinal only, never cacheWORD/word0/scale.
+    static std::shared_ptr<const NativeRomRequest> native_rom_request(
+        std::shared_ptr<const TaiwanNativeDrvDoll>,std::uint32_t full_source_ordinal,const NativeRomContext&);
+    // Explicit CUSTOM full action remains separate from original source fields.
+    // Same private bank/request, complete selected bytes and immutable ROM VALUE.
+    static std::shared_ptr<const ResolvedRom> bind_native_rom(
+        std::shared_ptr<const NativeRomRequest>,const TaiwanNativeResourceSelection&,
+        std::shared_ptr<const TaiwanNativeRomAsset>,std::uint32_t actual_full_action_operand);
 private:
     TaiwanNativeDrvDoll(std::filesystem::path,std::vector<std::uint8_t>,
         std::vector<std::uint8_t>,std::vector<Record>);

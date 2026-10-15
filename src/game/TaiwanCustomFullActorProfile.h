@@ -79,6 +79,9 @@ public:
         // Real resource/selection/window/action epoch over this entire material.
         // Files/bank membership or an always-true callback are not Current.
         std::function<bool(Check,const ResourceInput&)> current;
+        // LAST: independent136-byte DrvDoll tail, not ordinary32-byte Drv.
+        // Empty only when the actual pinned first-selector row has no filename.
+        std::shared_ptr<const TaiwanNativeDrvDoll::ResolvedRom> tail{};
     };
     struct StatusInput {
         enum class Domain {OrdinaryKnownAbsence,OrdinaryExplicitClear};

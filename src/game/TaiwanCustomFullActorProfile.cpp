@@ -35,6 +35,20 @@ bool rom_row(const std::shared_ptr<const TaiwanNativeActorResourceBank>& bank,
         rom->rom().encoded_bytes()==rom->selection().encoded_bytes();
 }
 }
+namespace {
+bool tail_rom_row(const std::shared_ptr<const TaiwanNativeDrvDoll>& bank,
+        const std::shared_ptr<const TaiwanNativeDrvDoll::ResolvedRom>& rom,std::uint16_t ordinal) {
+    if(!rom||&rom->bank()!=bank.get()||rom->row_ordinal()!=ordinal||
+       !rom->rom().find_action(rom->full_action_operand())||rom->rom().images().empty())return false;
+    const auto& request=rom->native_request();if(!request||&request->bank()!=bank.get()||request->row_ordinal()!=ordinal)return false;
+    const auto& a=request->request();const auto& b=rom->selection().request();
+    // Native463AD0 calls429820 directly after52F550. No Hero model+1C prefix.
+    return a.kind==TaiwanNativeResourceSelection::Kind::RomBinary&&a.kind==b.kind&&a.native_prefix.empty()&&
+        a.original_reference==b.original_reference&&a.native_prefix==b.native_prefix&&
+        a.actual_working_directory==b.actual_working_directory&&a.full_bank_operand==b.full_bank_operand&&
+        rom->rom().source()==rom->selection().actual_source()&&rom->rom().encoded_bytes()==rom->selection().encoded_bytes();
+}
+}
 TaiwanCustomFullActorProfile::Policy::Policy(Version version_value,std::uint32_t a,std::uint32_t b,
         std::uint32_t c,std::uint32_t d,std::uint8_t e,std::uint16_t f,std::uint16_t g,std::uint32_t h,std::uint16_t i)
     :version(version_value),word1_unknown(a),word5_unknown(b),opaque9(c),opaque17(d),position_low2(e),
@@ -137,11 +151,12 @@ bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
     const auto& derived=*resource.arguments;
     if(derived.first_selector()!=resource.first_selector||derived.second_selector()!=resource.second_selector||
        derived.full_drv_ordinal()!=resource.full_drv_ordinal)return false;
-    // The tail is a DISTINCT136-byte native bank even for selector0. Support
-    // only its actual pinned empty-filename/not-requested row with real epoch
-    // Current. Nonempty tail ROM/cache/window qualification remains OPEN.
-    const auto* tail=drv_doll_bank_->find(resource.first_selector);
-    if(!tail||!tail->filename.empty())return false;
+    // Independent136-byte tail lookup always follows the actual first selector.
+    // Four Hero and the ordinary fifth Drv retain their independent requirements.
+    const auto* tail=drv_doll_bank_->find(resource.first_selector);if(!tail)return false;
+    if(tail->filename.empty()) {
+        if(resource.tail)return false;
+    }else if(!tail_rom_row(drv_doll_bank_,resource.tail,tail->ordinal))return false;
     if(resource.origin==ResourceInput::Origin::SavedWorldSelectors){
         if(derived.origin()!=TaiwanNativeActorArgumentSource::Origin::CurrentSavedWorldWitness)return false;
         const auto& material=data.saved->readset().materials()[data.row];

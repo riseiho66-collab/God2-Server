@@ -6353,3 +6353,25 @@ auth/text preserved. PHASE1no build/test/product/parser/native/VM/codec/gameDBSQ
 schema/migrate/import/activate/deploy.
 
 Details: docs/research/tw-actor-status-publication-source-20261015.md
+
+## Round423 — Independent DrvDoll tail resource source (2026-10-15)
+
+Round423 connects independent136B DrvDoll tail private request/immutableROM/
+explicitfullaction throughactualResourceSource/Profile. Native52F550 fullraw
+relativefilename separator proof/direct429820 EMPTYmodelprefix; dedicatedroot/
+CWD/actualmanageroperand0..511, never inferfromordinal/word0/scale/cacheWORD.
+Alwaysvalidatetail evenordinaryDrvempty; sameprivatebank/fullordinal/context/
+selection/wholebytes/action/images; physicalreselect BEFOREfinalsavedEQSQL.
+FourHero+ordinaryDrvfifth/oldModes/status422 preserved. Knowncode989B/newnative
+codecredit0/literalreference6B/noglobalnovelty. Nativecache/actionchoice/mount
+gameplay/fullstatuswriters/finalIOexclusion/Main/fullroutes/acceptance OPEN.
+CPP6 ALLexisting76472B;V59pins146=140same4updated2existingfirstpins;canonical771/
+Git12=10existinginverses2newdocs. No newprojectPY/Lua/CMake/EXE/opcode/formula/
+fullroutes;percentageunknown. All-systemDB byactualgamerules/Englishnames/
+ChineseTXT/typedrepositories/validatedreload/MySQL8backend-export required.
+GoalACTIVE/TW100first;453繁體/clientBIN/maxHPpoison10分1/907/common64/
+coin99999999999stack99nativelevels/saves/fonts/IME/auth/text preserved.
+PHASE1no build/test/product/parser/native/VM/codec/gameDBSQL/schema/migrate/
+import/activate/deploy.
+
+Details: docs/research/tw-actor-drv-doll-tail-source-20261015.md
