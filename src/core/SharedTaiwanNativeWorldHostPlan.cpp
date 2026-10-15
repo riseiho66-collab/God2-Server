@@ -53,6 +53,135 @@ void require_owned_pk_sources(const Context& context,const std::optional<OwnedPk
         throw std::invalid_argument("Owned PK source presence differs from the exact requested Context");
     if(sources)sources->require_complete();
 }
+// The genuine scene source and all its callbacks see one owned augmented
+// Scope. The actual Entered owner retains its original base Scope unchanged.
+SharedTaiwanWorldEntered::Source with_initial_saved_actor_input(
+        std::shared_ptr<SharedWorldPresence> presence,
+        std::shared_ptr<OwnedTaiwanReturnActorSavedSource::InitialIssuer> issuer,
+        SharedTaiwanWorldEntered::Source source) {
+    using Entered=SharedTaiwanWorldEntered;
+    if(!presence||!issuer||!issuer->owns_presence(presence)||!source)
+        throw std::invalid_argument("TW initial saved input requires exact private owners and real Source");
+    struct OwnerState {
+        const std::thread::id thread=std::this_thread::get_id();
+        bool supplying=false,poisoned=false;
+    };
+    struct SceneState {
+        const std::weak_ptr<Session> connection;
+        const Entered::Scope base,augmented;
+        const std::shared_ptr<SharedWorldPresence> presence;
+        Entered::Cleanup real_cleanup;
+        bool cancelled=false,cleaned=false,running=false,installed=false;
+        SceneState(Session& session,const Entered::Scope& original,
+                std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput> input,
+                std::shared_ptr<SharedWorldPresence> actual)
+            :connection(session.weak_from_this()),base(original),augmented([&]{auto value=original;
+                value.actor_input=std::move(input);return value;}()),presence(std::move(actual)){}
+        bool matches(const Entered::Scope& value) const noexcept {
+            return value.lease==base.lease&&value.entry.wire==base.entry.wire&&
+                value.entry.logical==base.entry.logical&&value.entry.actor_handle==base.entry.actor_handle&&
+                value.entry.area==base.entry.area&&value.entry.scene==base.entry.scene&&
+                value.entry.x==base.entry.x&&value.entry.y==base.entry.y&&value.entry.kind==base.entry.kind&&
+                value.tail_language==base.tail_language&&value.population==base.population&&
+                value.actor_input==base.actor_input;
+        }
+        bool pure_current() const {
+            const auto session=connection.lock();
+            return !cancelled&&session&&!session->closing()&&session->id()==base.lease.session&&
+                session->account_id==base.lease.account&&session->character_id==base.lease.character&&
+                session->recovered_client_language()==base.tail_language&&base.population&&
+                base.population->joining().lease==base.lease&&augmented.actor_input&&
+                augmented.actor_input->initial_population()&&
+                *augmented.actor_input->initial_population()==*base.population&&
+                augmented.actor_input->population_current(presence);
+        }
+        bool saved_current() const {
+            return pure_current()&&augmented.actor_input->source()->current(augmented.actor_input->readset())&&pure_current();
+        }
+        void cleanup() {
+            cancelled=true;
+            if(cleaned)return;
+            cleaned=true;
+            // Revocation never prevents genuine cleanup with its exact input.
+            if(real_cleanup)real_cleanup(augmented);
+        }
+    };
+    struct Call {
+        SceneState& state;bool entered=false;
+        explicit Call(SceneState& value):state(value) {
+            if(state.running){state.cancelled=true;return;}
+            if(!state.cancelled){state.running=true;entered=true;}
+        }
+        ~Call(){if(entered)state.running=false;}
+    };
+    const auto owner=std::make_shared<OwnerState>();
+    return [owner,presence=std::move(presence),issuer=std::move(issuer),source=std::move(source)](
+            Session& session,const Entered::Scope& original)->std::optional<Entered::Native> {
+        if(owner->thread!=std::this_thread::get_id())throw std::logic_error("TW initial input game owner mismatch");
+        if(owner->supplying){owner->poisoned=true;return {};}
+        if(owner->poisoned)return {};
+        struct Supplying {OwnerState& value;explicit Supplying(OwnerState& v):value(v){value.supplying=true;}
+            ~Supplying(){value.supplying=false;}} supplying(*owner);
+        const auto base=original;
+        if(base.actor_input||!base.population||base.population->activated()||
+           base.population->joining().lease!=base.lease||!issuer->owns_presence(presence)||
+           !presence->retained_initial_population_current(*base.population))return {};
+        const auto input=issuer->observe(*base.population);
+        if(!input)return {};
+        const auto state=std::make_shared<SceneState>(session,base,input,presence);
+        if(owner->poisoned||!state->saved_current())return {};
+        auto native=source(session,state->augmented);
+        if(!native)return {};
+        try {
+            state->real_cleanup=native->cleanup;
+            if(owner->poisoned||!state->saved_current()) {state->cleanup();return {};}
+            // Keep original callbacks boxed while constructing every wrapper.
+            // No original callback is replaced until all allocations finish.
+            const auto real_current=std::make_shared<const Entered::Current>(native->current);
+            const auto real_install=std::make_shared<const Entered::Install>(native->install);
+            Entered::Current current=[state,real_current](Entered::Check check,const Entered::Scope& value) {
+                Call call(*state);
+                if(!call.entered||!state->matches(value)||!state->saved_current())return false;
+                const bool okay=(*real_current)(check,state->augmented);
+                return okay&&state->saved_current();
+            };
+            Entered::Install install=[state,real_install](Session& actual,const Entered::Scope& value) {
+                Call call(*state);
+                if(!call.entered||state->installed||state->connection.lock().get()!=&actual||
+                   !state->matches(value)||!state->pure_current())return false;
+                state->installed=true;
+                // Full saved SQL Current belongs to the surrounding Current
+                // calls; the held install itself adds only pure retained fences.
+                const bool okay=(*real_install)(actual,state->augmented);
+                return okay&&state->pure_current();
+            };
+            Entered::Cleanup cleanup=[state](const Entered::Scope&){state->cleanup();};
+            std::shared_ptr<const Entered::OutwardProvider> outward;
+            if(native->outward_provider) {
+                const auto real=native->outward_provider;
+                outward=std::make_shared<const Entered::OutwardProvider>([state,real](
+                        Session& actual,const Entered::Scope& value)
+                        ->std::optional<std::vector<cn::SharedActorVisibility::OutwardRecipient>> {
+                    Call call(*state);
+                    if(!call.entered||state->connection.lock().get()!=&actual||!state->matches(value)||
+                       !state->saved_current())return {};
+                    auto result=(*real)(actual,state->augmented);
+                    if(!result||!state->saved_current())return {};
+                    return result;
+                });
+            }
+            native->current=std::move(current);native->install=std::move(install);
+            native->cleanup=std::move(cleanup);native->outward_provider=std::move(outward);
+            // Original callback destruction can cancel; check after replacements.
+            if(owner->poisoned||!state->saved_current()) {state->cleanup();return {};}
+            return native;
+        }catch(...) {
+            if(state->real_cleanup)try {state->cleanup();}catch(...) {}
+            else try {native->cleanup(state->augmented);}catch(...) {}
+            throw;
+        }
+    };
+}
 struct Owner {
     RecoveredCharacterRepository* characters;
     const NativeMapCatalog* maps;
@@ -631,7 +760,8 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_owned_statu
     auto status=TaiwanActorStatusOwnedSource::create(context.common_world->presence(),
         sources.actor_status_incarnations,std::move(status_policy));
     if(!status)throw std::invalid_argument("TW owned status cannot retain the actual host incarnation source");
-    auto real_source=std::move(sources.entered);
+    auto real_source=with_initial_saved_actor_input(context.common_world->presence(),
+        context.initial_actor_inputs,std::move(sources.entered));
     sources.entered=[status,real_source=std::move(real_source)](
             Session& session,const SharedTaiwanWorldEntered::Scope& scope)
             ->std::optional<SharedTaiwanWorldEntered::Native> {

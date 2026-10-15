@@ -121,7 +121,7 @@ bool SharedActorVisibility::taiwan_pk_return_population_fence(const std::shared_
        !scene.actor_saved_source->owns_readset(*scene.actor_saved_rows) ||
        !presence_->retained_population_current(*scene.ready_population) ||
        !scene.actor_saved_rows->matches_population(scene.ready_population->characters()))return false;
-    if(scene.actor_input&&(scene.actor_input->source()!=scene.actor_saved_source||
+    if(scene.actor_input&&(scene.actor_input->initial_population()||scene.actor_input->source()!=scene.actor_saved_source||
        scene.actor_input->role_text_source()!=scene.role_text_source||
        scene.actor_input->population()!=*scene.ready_population||
        scene.actor_input->readset()!=*scene.actor_saved_rows))return false;

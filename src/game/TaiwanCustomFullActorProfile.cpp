@@ -131,14 +131,14 @@ bool TaiwanCustomFullActorProfile::retained(const Data& data) const noexcept {
        !data.saved||!data.saved->source()||!data.saved->role_text_source()||!data.revision||
        !data.saved->source()->owns_presence(presence_)||!data.saved->source()->owns_readset(data.saved->readset())||
        !data.saved->source()->profile_equipment_matches(data.equipment,data.saved->readset(),data.row)||
-       !data.saved->readset().matches_population(data.saved->population().characters())||
+       !data.saved->readset().matches_population(data.saved->characters())||
        !data.status.profile_scope_source||!data.status.profile_scope||
        !data.status.profile_scope_source->owns_presence(presence_)||
        !data.status.profile_scope_source->matches_inputs(*data.status.profile_scope,data.saved,data.row,data.equipment,data.recipient)||
        data.status.profile_scope->source()!=data.source||data.status.profile_scope->recipient()!=data.recipient||
        !data.status.profile_scope_source->retained(*data.status.profile_scope)||
        !owned_status_qualified(data.status,data.saved,data.row,data.equipment,data.recipient,false))return false;
-    return presence_->retained_population_current(data.saved->population());
+    return data.saved->population_current(presence_);
 }
 bool TaiwanCustomFullActorProfile::resources_qualified(const Data& data) const {
     const auto& resource=data.resources;
@@ -232,11 +232,11 @@ std::optional<TaiwanCustomFullActorProfile::Profile> TaiwanCustomFullActorProfil
         if(!saved||!saved->source()||!saved->role_text_source()||index>=saved->readset().materials().size()||
            !saved->source()->owns_presence(presence_)||!saved->source()->owns_readset(saved->readset())||
            !saved->source()->profile_equipment_matches(equipment,saved->readset(),index)||
-           !saved->readset().matches_population(saved->population().characters())||
-           !presence_->retained_population_current(saved->population()))return {};
+           !saved->readset().matches_population(saved->characters())||
+           !saved->population_current(presence_))return {};
         const auto& material=saved->readset().materials()[index];const Lease source=material.actor.lease;
         bool recipient_found=false;
-        for(const auto& row:saved->population().characters())if(row.lease==recipient){if(recipient_found)return {};recipient_found=true;}
+        for(const auto& row:saved->characters())if(row.lease==recipient){if(recipient_found)return {};recipient_found=true;}
         if(!recipient_found||!source.actor_handle||source.actor_handle>0xfff||source.session==recipient.session||
            !session_tuple(source_state.session,source)||!session_tuple(receiver.session,recipient)||
            !source_state.phase_owner||!source_state.current||!receiver.phase_owner||!receiver.current||

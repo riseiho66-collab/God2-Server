@@ -6,6 +6,7 @@
 #include "game/SharedTaiwanWorldRecordSource.h"
 #include "game/SharedTaiwanNativeCharacterListSource.h"
 #include "db/NativeMapCatalog.h"
+#include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include <asio.hpp>
 #include <functional>
 #include "handlers/OwnedTaiwanPkRoomBackend.h"
@@ -119,6 +120,9 @@ struct SharedWorldHostPlan {
         // CUSTOM-0149 explicit saved player22/24 publisher; requires deities.
         bool app_owned_initial_player=false;
         bool app_owned_pk=false; // Explicit complete hosted PK only; default off.
+        // LAST: actual same-Database initial saved-input owner, selected only
+        // with all existing entry/equipment/inventory capabilities. No DB borrow.
+        std::shared_ptr<OwnedTaiwanReturnActorSavedSource::InitialIssuer> initial_actor_inputs{};
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in

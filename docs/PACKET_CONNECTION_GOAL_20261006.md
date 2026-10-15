@@ -6478,3 +6478,25 @@ CN/four WS. PHASE1 no build/tests/product/parser/native/VM/codec/game DB SQL/
 schema/migration/import/activation/deployment.
 
 Details: docs/research/tw-post-install-outward-source-20261015.md
+
+## Round429 — Initial saved actor inputs (2026-10-15)
+
+Round429 connects same-Database initial saved actor input to the actual owned
+status Entered supplier. Private Ready/Initial population variant and exact
+initial Readset witness; same saved tuples/lifetime/transaction checks. Actual
+Database issuer -> selected Application Context -> base/augmented Scope through
+all real callbacks; pure install/full saved Current outside; cleanup once even
+revoked. Four consumers16 unified API substitutions; PK4 early Initial refusals
+retain Ready-only rules. Fourteen existing C++ files; V65 pins153=139same14updated.
+Full initial Profile/source-receiver/material/statusFrameSeal/affineIO/fanoutACK/
+coverage/movement/Main OPEN. Goal ACTIVE/TW100 first/full routes0/percentunknown.
+All recovered game systems require rule-based DB classification, config vs actor
+worldstate vs sourceevidence, English names/one Chinese TXT per table, typed
+C++Lua consumers/validated versioned reload/MySQL8 backend-losslessfull export.
+Player learning separate pet learning/monsterAI; weaponarmor法寶general/perowned
+instance+N. Preserve453 Traditional/clientBIN/maxHP poison10th/907/common64/
+coin99999999999/stack99/native levels/saves/fonts/IME/auth/text/CN/fourWS.
+PHASE1 no build/tests/product/parser/native/VM/codec/gameDBSQL/schema/migration/
+import/activation/deployment; no newprojectPY.
+
+Details: docs/research/tw-initial-saved-input-source-20261015.md

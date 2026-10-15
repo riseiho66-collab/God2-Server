@@ -1,5 +1,6 @@
 #pragma once
 #include "game/SharedTaiwanWorldLifecycle.h"
+#include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include <cstddef>
 #include <optional>
 
@@ -32,6 +33,9 @@ public:
         // this exact prepared joining actor before invoking the scene source.
         // Only its held publication can consume the private activation step.
         std::optional<SharedWorldPresence::InitialPopulation> population{};
+        // LAST: only the same-Database initial issuer attaches this owned input
+        // to the genuine supplier/callback Scope; the Entered base stays empty.
+        std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput> actor_input{};
     };
     enum class Check {AfterSupply,BeforeQueue,BeforePublish,AfterInstall,QueueReleased,LocalPublished,BeforeOutward,OutwardPublish,Completed,
         BeforeDeferredOutward,AfterDeferredOutward};

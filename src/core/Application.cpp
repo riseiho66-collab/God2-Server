@@ -801,12 +801,16 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     throw std::invalid_argument("TW list reader does not own the actual common account/character sources");
                 if(summary_writer && static_cast<NativeCharacterSummarySnapshotRepository*>(summary_writer)!=summary_snapshots)
                     throw std::invalid_argument("TW list writer differs from the actual summary reader");
+                // Selected existing same-DB capabilities only; no schema, input
+                // observation or native defaults are manufactured at startup.
+                auto initial_actor_inputs=(entry_snapshots&&equipment_snapshots&&owned_inventory)?
+                    database.make_owned_taiwan_initial_actor_input_source(common_world->presence()):nullptr;
                 const SharedWorldHostPlan::Context context{database.recovered_characters(),
                     database.native_map_catalog(),game.get_executor(),common_world,
                     &database.native_skill_catalog(),entry_snapshots,summary_accounts,summary_snapshots,summary_writer,entry_writer,
                     &database.native_enemy_display_catalog(),equipment_snapshots,equipment_writer,owned_inventory,owned_inventory_writer,
                     &database.companions(),&owned_companions,owned_deity_skill_source,
-                    config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled,hosted_pk};
+                    config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled,hosted_pk,std::move(initial_actor_inputs)};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)

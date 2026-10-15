@@ -176,10 +176,10 @@ bool TaiwanActorStatusOwnedSource::retained_data(const Data& data) const {
     const auto& saved=data.input->readset();const auto& rows=saved.materials();
     if(data.row>=rows.size()||rows[data.row].actor.lease!=data.source||!data.input->source()||
        !data.input->source()->owns_readset(saved)||!data.input->source()->profile_equipment_matches(data.equipment,saved,data.row)||
-       !saved.matches_population(data.input->population().characters()))return false;
+       !saved.matches_population(data.input->characters()))return false;
     const auto presence=presence_.lock();
     if(!presence||!owns_presence(presence)||!data.input->source()->owns_presence(presence)||
-       !presence->retained_population_current(data.input->population()))return false;
+       !data.input->population_current(presence))return false;
     std::size_t receivers=0;for(const auto& row:rows)if(row.actor.lease==data.recipient)++receivers;
     return receivers==1&&entry_retained(*data.entry)&&incarnations_->retained(data.recipient_incarnation);
 }

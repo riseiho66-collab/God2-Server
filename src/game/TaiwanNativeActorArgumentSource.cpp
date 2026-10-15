@@ -68,8 +68,8 @@ bool TaiwanNativeActorArgumentSource::retained(const Data& data) const noexcept 
        !data.saved->source()->profile_equipment_matches(data.equipment,data.saved->readset(),data.row)||
        data.row>=data.saved->readset().materials().size()||data.first>127||data.second>127||data.act_type>=3||
        !data.tail_bank->find(data.first)||!data.bank->find_drv(data.second)||
-       !data.saved->readset().matches_population(data.saved->population().characters()))return false;
-    try{return presence_->retained_population_current(data.saved->population());}catch(...){return false;}
+       !data.saved->readset().matches_population(data.saved->characters()))return false;
+    try{return data.saved->population_current(presence_);}catch(...){return false;}
 }
 bool TaiwanNativeActorArgumentSource::owns_observation(const Observation& observation) const noexcept {
     return observation.data_&&retained(*observation.data_);
@@ -97,8 +97,8 @@ std::optional<TaiwanNativeActorArgumentSource::Observation> TaiwanNativeActorArg
     if(!input||!input->source()||row>=input->readset().materials().size()||
        !input->source()->owns_presence(presence_)||!input->source()->owns_readset(input->readset())||
        !input->source()->profile_equipment_matches(equipment,input->readset(),row)||
-       !input->readset().matches_population(input->population().characters())||
-       !presence_->retained_population_current(input->population()))return {};
+       !input->readset().matches_population(input->characters())||
+       !input->population_current(presence_))return {};
     const auto material=input->readset().materials()[row];
     const auto da=equipment.equipment().appearance();if(!da||da->transform_key()!=0)return {};
     std::array<std::uint8_t,8> packed{};std::copy(da->components().begin(),da->components().end(),packed.begin());
@@ -134,7 +134,7 @@ std::optional<TaiwanNativeActorArgumentSource::Observation> TaiwanNativeActorArg
         first,second,type,arguments,head,sixth,*modifier);
     const std::array<Equipment,1> profiles{equipment};
     if(!input->source()->current_with_role_text(input->readset(),{}, {}, {},profiles)||poisoned_||
-       !presence_->retained_population_current(input->population()))return {};
+       !input->population_current(presence_))return {};
     if(!retained(*data))return {};
     return Observation(std::move(data));
 }

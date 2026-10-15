@@ -10,6 +10,7 @@
 #include <span>
 #include <thread>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace god2 {
@@ -42,6 +43,7 @@ public:
         Readset& operator=(Readset&& other) noexcept {data_=other.data_;return *this;}
         const std::vector<Material>& materials() const noexcept;
         bool matches_population(std::span<const SharedWorldPresence::ReadyCharacter>) const noexcept;
+        bool matches_initial_population(const SharedWorldPresence::InitialPopulation&) const noexcept;
         bool operator==(const Readset& other) const noexcept {return data_==other.data_;}
     private:
         friend class OwnedTaiwanReturnActorSavedSource;
@@ -49,23 +51,54 @@ public:
         std::shared_ptr<const Data> data_;
     };
     using Snapshot=Readset;
+    class InitialIssuer;
     class PopulationInput final {
     public:
         const std::shared_ptr<OwnedTaiwanReturnActorSavedSource>& source() const noexcept{return source_;}
-        const SharedWorldPresence::ReadyPopulation& population() const noexcept{return population_;}
+        // Legacy Ready-only accessor rejects the initial domain rather than
+        // manufacturing a ReadyPopulation from a prepared joining actor.
+        const SharedWorldPresence::ReadyPopulation& population() const {return std::get<SharedWorldPresence::ReadyPopulation>(population_);}
+        std::span<const SharedWorldPresence::ReadyCharacter> characters() const noexcept;
+        const SharedWorldPresence::InitialPopulation* initial_population() const noexcept;
+        bool population_current(const std::shared_ptr<SharedWorldPresence>&) const noexcept;
         const Readset& readset() const noexcept{return readset_;}
         const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>& role_text_source() const noexcept{return role_text_source_;}
     private:
         friend class SqliteDatabase;
+        friend class InitialIssuer;
         PopulationInput(std::shared_ptr<OwnedTaiwanReturnActorSavedSource> source,
             SharedWorldPresence::ReadyPopulation population,Readset readset,
             std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource> role_text_source={})
             :source_(std::move(source)),population_(std::move(population)),readset_(std::move(readset)),
              role_text_source_(std::move(role_text_source)){}
+        PopulationInput(std::shared_ptr<OwnedTaiwanReturnActorSavedSource> source,
+            SharedWorldPresence::InitialPopulation population,Readset readset,
+            std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource> role_text_source)
+            :source_(std::move(source)),population_(std::move(population)),readset_(std::move(readset)),
+             role_text_source_(std::move(role_text_source)){}
         const std::shared_ptr<OwnedTaiwanReturnActorSavedSource> source_;
-        const SharedWorldPresence::ReadyPopulation population_;
+        const std::variant<SharedWorldPresence::ReadyPopulation,SharedWorldPresence::InitialPopulation> population_;
         const Readset readset_;
         const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource> role_text_source_;
+    };
+    // Only the actual database assembles this issuer from its same-connection
+    // Saved/Role owners. Issuing input grants no native actor/status authority.
+    class InitialIssuer final {
+    public:
+        InitialIssuer(const InitialIssuer&)=delete;
+        InitialIssuer& operator=(const InitialIssuer&)=delete;
+        bool owns_presence(const std::shared_ptr<SharedWorldPresence>&) const noexcept;
+        std::shared_ptr<const PopulationInput> observe(const SharedWorldPresence::InitialPopulation&) const;
+    private:
+        friend class SqliteDatabase;
+        InitialIssuer(std::shared_ptr<OwnedTaiwanReturnActorSavedSource> source,
+            std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource> role)
+            :source_(std::move(source)),role_(std::move(role)){}
+        struct Operation;
+        const std::shared_ptr<OwnedTaiwanReturnActorSavedSource> source_;
+        const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource> role_;
+        const std::thread::id thread_=std::this_thread::get_id();
+        mutable bool reading_=false,poisoned_=false;
     };
     // Consistent saved tuple input for explicit CUSTOM fresh projection.
     // No native equip permission, canonical-slot or item-to-appearance authority.
@@ -96,6 +129,7 @@ public:
     bool profile_equipment_current(const ProfileEquipment&) const;
     bool profile_equipment_stored_current_in_scope(sqlite3*,const ProfileEquipment&) const;
     std::optional<Readset> observe_population(std::span<const SharedWorldPresence::ReadyCharacter>) const;
+    std::optional<Readset> observe_initial_population(const SharedWorldPresence::InitialPopulation&) const;
     bool current(const Readset&) const;
     bool current_with_role_text(const Readset&,const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>&,
         std::span<const OwnedTaiwanPkReturnRoleTextSource::Observation>,
@@ -128,6 +162,9 @@ private:
     void namespaces(sqlite3_int64) const;
     bool identity_current(const Readset&) const noexcept;
     bool registry_current(const Readset&) const;
+    bool row_live_current(const Readset&,const SharedWorldPresence::ReadyCharacter&) const;
+    bool row_retained_current(const Readset&,const SharedWorldPresence::ReadyCharacter&) const;
+    bool input_population_current(const PopulationInput&,const std::shared_ptr<SharedWorldPresence>&) const noexcept;
     std::optional<Material> read_actor(const SharedWorldPresence::ReadyCharacter&,sqlite3_int64) const;
     bool stored(const Readset&,sqlite3_int64) const;
     bool profile_shape(const ProfileEquipment&) const noexcept;

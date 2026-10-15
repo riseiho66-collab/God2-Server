@@ -399,6 +399,28 @@ SqliteDatabase::make_owned_taiwan_return_actor_saved_source(std::shared_ptr<Shar
         std::move(presence),owner->return_actor_saved_lifetime));
     fence();return result;
 }
+std::shared_ptr<OwnedTaiwanReturnActorSavedSource::InitialIssuer>
+SqliteDatabase::make_owned_taiwan_initial_actor_input_source(std::shared_ptr<SharedWorldPresence> presence) {
+    auto saved=make_owned_taiwan_return_actor_saved_source(presence);
+    auto* const owner=impl_.get();auto* const db=owner->connection.get();
+    const auto changes=sqlite3_total_changes64(db);
+    const auto fence=[&] {
+        if(impl_.get()!=owner||owner->connection.get()!=db||owner->pk_player_thread!=std::this_thread::get_id()||
+           !sqlite3_get_autocommit(db)||sqlite3_total_changes64(db)!=changes||
+           !owner->role_text||!owner->guilds||!saved->owns_presence(presence)||
+           !owner->role_text->uses_connection(db)||!owner->guilds->uses_connection(db))
+            throw DatabaseError("TW initial actor input factory changed private owners or rows");
+    };
+    fence();
+    auto role=std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>(new OwnedTaiwanPkReturnRoleTextSource(
+        db,*owner->role_text,*owner->guilds,*owner->recovered_characters,presence));
+    fence();
+    auto result=std::shared_ptr<OwnedTaiwanReturnActorSavedSource::InitialIssuer>(
+        new OwnedTaiwanReturnActorSavedSource::InitialIssuer(saved,std::move(role)));
+    fence();
+    if(!result->owns_presence(presence))throw DatabaseError("TW initial actor issuer lost its actual Presence");
+    fence();return result;
+}
 SqliteOwnedBlacklistRepository& SqliteDatabase::blacklist() {
     if(!migrated_)throw DatabaseError("Migrate before accessing blacklist storage");
     if(!impl_->blacklist)impl_->blacklist=std::make_unique<SqliteOwnedBlacklistRepository>(impl_->connection.get());

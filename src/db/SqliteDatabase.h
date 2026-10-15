@@ -52,6 +52,7 @@
 #include "handlers/OwnedTaiwanPkEntryPreparation.h"
 #include "game/OwnedTaiwanPkPlayerEntrySource.h"
 #include "handlers/OwnedTaiwanPkRoomBackend.h"
+#include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include <filesystem>
 #include <memory>
 namespace god2 {
@@ -96,6 +97,10 @@ public:
     // Explicit same-DB saved observations; no schema, material or native actor
     // is installed. ReadyPopulation, visibility and transport remain separate.
     std::shared_ptr<OwnedTaiwanReturnActorSavedSource> make_owned_taiwan_return_actor_saved_source(
+        std::shared_ptr<SharedWorldPresence>);
+    // Same private Database/Presence initial-population issuer; no schema or
+    // native actor defaults. Its saved source refuses an expired DB lifetime.
+    std::shared_ptr<OwnedTaiwanReturnActorSavedSource::InitialIssuer> make_owned_taiwan_initial_actor_input_source(
         std::shared_ptr<SharedWorldPresence>);
     // Explicit fresh shared custody schema only. No import, automatic grants
     // or legacy promotion; ordinary migration/access does not install it.

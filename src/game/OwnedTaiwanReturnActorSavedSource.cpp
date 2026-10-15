@@ -18,8 +18,10 @@ struct OwnedTaiwanReturnActorSavedSource::Data {
     const OwnedTaiwanReturnActorSavedSource* const owner;
     const std::shared_ptr<const Identity> identity;
     const std::vector<Material> rows;
-    Data(const OwnedTaiwanReturnActorSavedSource* source,std::shared_ptr<const Identity> key,std::vector<Material> material)
-        :owner(source),identity(std::move(key)),rows(std::move(material)){}
+    const std::optional<SharedWorldPresence::InitialPopulation> initial; // LAST, privately captured domain.
+    Data(const OwnedTaiwanReturnActorSavedSource* source,std::shared_ptr<const Identity> key,std::vector<Material> material,
+        std::optional<SharedWorldPresence::InitialPopulation> population={})
+        :owner(source),identity(std::move(key)),rows(std::move(material)),initial(std::move(population)){}
 };
 struct OwnedTaiwanReturnActorSavedSource::ProfileData {
     const OwnedTaiwanReturnActorSavedSource* const owner;
@@ -50,6 +52,61 @@ bool OwnedTaiwanReturnActorSavedSource::Readset::matches_population(
     if(rows.size()!=data_->rows.size())return false;
     for(std::size_t i=0;i<rows.size();++i)if(!same_actor(rows[i],data_->rows[i].actor))return false;
     return true;
+}
+bool OwnedTaiwanReturnActorSavedSource::Readset::matches_initial_population(
+        const SharedWorldPresence::InitialPopulation& population) const noexcept {
+    return data_&&data_->initial&&*data_->initial==population&&matches_population(population.characters());
+}
+std::span<const SharedWorldPresence::ReadyCharacter>
+OwnedTaiwanReturnActorSavedSource::PopulationInput::characters() const noexcept {
+    return std::visit([](const auto& value){return value.characters();},population_);
+}
+const SharedWorldPresence::InitialPopulation*
+OwnedTaiwanReturnActorSavedSource::PopulationInput::initial_population() const noexcept {
+    return std::get_if<SharedWorldPresence::InitialPopulation>(&population_);
+}
+bool OwnedTaiwanReturnActorSavedSource::PopulationInput::population_current(
+        const std::shared_ptr<SharedWorldPresence>& presence) const noexcept {
+    return source_&&source_->input_population_current(*this,presence);
+}
+struct OwnedTaiwanReturnActorSavedSource::InitialIssuer::Operation {
+    const InitialIssuer& issuer;
+    explicit Operation(const InitialIssuer& owner):issuer(owner){
+        if(issuer.thread_!=std::this_thread::get_id())throw DatabaseError("Initial saved issuer owner mismatch");
+        if(issuer.reading_){issuer.poisoned_=true;throw DatabaseError("Initial saved issuer reentered");}
+        // Never touch Role's borrowed database owners after Saved lifetime ends.
+        if(issuer.poisoned_||!issuer.source_||!issuer.role_||!issuer.source_->owns_database())
+            throw DatabaseError("Initial saved issuer retired");
+        issuer.reading_=true;
+    }
+    ~Operation(){issuer.reading_=false;}
+};
+bool OwnedTaiwanReturnActorSavedSource::InitialIssuer::owns_presence(
+        const std::shared_ptr<SharedWorldPresence>& presence) const noexcept {
+    try{
+        if(thread_!=std::this_thread::get_id())return false;
+        if(reading_){poisoned_=true;return false;}
+        return !poisoned_&&source_&&role_&&source_->owns_database()&&
+            source_->owns_presence(presence)&&role_->owns_presence(presence);
+    }catch(...){return false;}
+}
+std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput>
+OwnedTaiwanReturnActorSavedSource::InitialIssuer::observe(const SharedWorldPresence::InitialPopulation& supplied) const {
+    try{
+        Operation operation(*this);const auto population=supplied;
+        const auto source=source_;const auto role=role_;const auto presence=source->presence_;
+        if(!source->owns_presence(presence)||!role->owns_presence(presence)||
+           !presence->retained_initial_population_current(population))return {};
+        const auto saved=source->observe_initial_population(population);
+        if(poisoned_||!saved||!saved->matches_initial_population(population)||
+           !presence->retained_initial_population_current(population))return {};
+        const auto input=std::shared_ptr<const PopulationInput>(new PopulationInput(source,population,*saved,role));
+        // Input/control-block allocation may reenter or modify storage. Qualify
+        // the entire stored tuple AFTER allocation, then only pure witnesses.
+        if(poisoned_||!source->current(input->readset())||poisoned_||
+           !input->population_current(presence))return {};
+        return input;
+    }catch(const std::exception&){return {};}
 }
 struct OwnedTaiwanReturnActorSavedSource::Operation {
     const OwnedTaiwanReturnActorSavedSource& source;
@@ -146,7 +203,7 @@ OwnedTaiwanReturnActorSavedSource::observe_profile_equipment(const Readset& valu
         fence(changes,true);if(!receipt)return {};
         ProfileEquipment result(std::make_shared<const ProfileData>(this,identity_,saved,index,std::move(*receipt)));
         if(!profile_shape(result))return {};
-        for(const auto& member:saved.materials()){if(!presence_->ready(member.actor.lease))return {};fence(changes,true);}
+        for(const auto& member:saved.materials()){if(!row_live_current(saved,member.actor))return {};fence(changes,true);}
         {
             ReadScope scope(*this);scope.begin(changes);
             if(!stored(saved,changes)||!profiles_stored(saved,std::span<const ProfileEquipment>(&result,1),changes))return {};
@@ -189,9 +246,40 @@ void OwnedTaiwanReturnActorSavedSource::namespaces(sqlite3_int64 changes) const 
 bool OwnedTaiwanReturnActorSavedSource::identity_current(const Readset& value) const noexcept {
     return value.data_&&value.data_->owner==this&&value.data_->identity==identity_&&owns_database();
 }
+bool OwnedTaiwanReturnActorSavedSource::row_retained_current(const Readset& value,
+        const SharedWorldPresence::ReadyCharacter& row) const {
+    const auto& initial=value.data_->initial;
+    if(!initial)return presence_->retained_ready_current(row.lease);
+    if(!value.matches_initial_population(*initial)||!presence_->retained_initial_population_current(*initial))return false;
+    const bool active=row.lease!=initial->joining().lease||initial->activated();
+    return (active?presence_->retained_ready_current(row.lease):presence_->retained_preparation_current(row.lease))&&
+        presence_->retained_initial_population_current(*initial);
+}
+bool OwnedTaiwanReturnActorSavedSource::row_live_current(const Readset& value,
+        const SharedWorldPresence::ReadyCharacter& row) const {
+    const auto& initial=value.data_->initial;
+    if(!initial)return presence_->ready(row.lease); // Legacy all-ready domain.
+    if(!value.matches_initial_population(*initial)||!presence_->retained_initial_population_current(*initial))return false;
+    const bool activated=initial->activated();
+    const bool active=row.lease!=initial->joining().lease||activated;
+    const bool valid=active?presence_->ready(row.lease):presence_->preparation_current(row.lease);
+    return valid&&initial->activated()==activated&&row_retained_current(value,row);
+}
 bool OwnedTaiwanReturnActorSavedSource::registry_current(const Readset& value) const {
-    for(const auto& row:value.data_->rows)if(!presence_->retained_ready_current(row.actor.lease))return false;
-    return true; // Root additionally retains/checks the complete private population identity.
+    for(const auto& row:value.data_->rows)if(!row_retained_current(value,row.actor))return false;
+    return !value.data_->initial||presence_->retained_initial_population_current(*value.data_->initial);
+}
+bool OwnedTaiwanReturnActorSavedSource::input_population_current(const PopulationInput& input,
+        const std::shared_ptr<SharedWorldPresence>& presence) const noexcept {
+    try{
+        if(thread_!=std::this_thread::get_id())return false;
+        if(reading_){poisoned_=true;return false;}
+        if(input.source().get()!=this||!presence||presence!=presence_||!identity_current(input.readset())||
+           !input.readset().matches_population(input.characters()))return false;
+        if(const auto* initial=input.initial_population())
+            return input.readset().matches_initial_population(*initial)&&presence_->retained_initial_population_current(*initial);
+        return !input.readset().data_->initial&&presence_->retained_population_current(input.population());
+    }catch(...){return false;}
 }
 std::optional<OwnedTaiwanReturnActorSavedSource::Material> OwnedTaiwanReturnActorSavedSource::read_actor(
         const SharedWorldPresence::ReadyCharacter& request,sqlite3_int64 changes) const {
@@ -254,7 +342,37 @@ std::optional<OwnedTaiwanReturnActorSavedSource::Readset> OwnedTaiwanReturnActor
         if(!stored(result,changes))return {};scope.finish(changes);
         // Any live Presence/repository observer follows SQL, then the ENTIRE
         // saved set is re-read. Only pure registry/owner fences follow that cut.
-        for(const auto& row:result.materials()){if(!presence_->ready(row.actor.lease))return {};fence(changes,true);}
+        for(const auto& row:result.materials()){if(!row_live_current(result,row.actor))return {};fence(changes,true);}
+        {ReadScope final(*this);final.begin(changes);if(!stored(result,changes))return {};final.finish(changes);}
+        if(!registry_current(result))return {};fence(changes,true);return result;
+    }catch(const std::exception&){return {};}
+}
+std::optional<OwnedTaiwanReturnActorSavedSource::Readset> OwnedTaiwanReturnActorSavedSource::observe_initial_population(
+        const SharedWorldPresence::InitialPopulation& supplied) const {
+    try{
+        Operation operation(*this);const auto population=supplied;
+        if(!presence_->retained_initial_population_current(population))return {};
+        const auto rows=population.characters();
+        const std::vector<SharedWorldPresence::ReadyCharacter> requests(rows.begin(),rows.end());
+        const auto changes=sqlite3_total_changes64(db_);fence(changes,true);
+        if(!presence_->retained_initial_population_current(population))return {};
+        std::set<std::uint64_t> sessions,characters;std::set<std::uint16_t> handles;
+        bool joining_found=false;
+        for(const auto& row:requests){
+            if(!sessions.insert(row.lease.session).second||!characters.insert(row.lease.character).second||
+               !handles.insert(row.lease.actor_handle).second)return {};
+            if(row.lease==population.joining().lease){
+                if(joining_found||!same_actor(row,population.joining())||row.position!=row.lease.position)return {};
+                joining_found=true;
+            }
+        }
+        if(!joining_found)return {};
+        std::vector<Material> material;material.reserve(requests.size());
+        ReadScope scope(*this);scope.begin(changes);namespaces(changes);
+        for(const auto& row:requests){auto actual=read_actor(row,changes);if(!actual)return {};material.push_back(std::move(*actual));}
+        Readset result(std::make_shared<const Data>(this,identity_,std::move(material),population));
+        if(!result.matches_initial_population(population)||!stored(result,changes))return {};scope.finish(changes);
+        for(const auto& row:result.materials()){if(!row_live_current(result,row.actor))return {};fence(changes,true);}
         {ReadScope final(*this);final.begin(changes);if(!stored(result,changes))return {};final.finish(changes);}
         if(!registry_current(result))return {};fence(changes,true);return result;
     }catch(const std::exception&){return {};}
@@ -280,7 +398,7 @@ bool OwnedTaiwanReturnActorSavedSource::current_with_role_text(const Readset& va
         const auto changes=sqlite3_total_changes64(db_);fence(changes,true);
         if(role_owner&&!role_owner->owns_presence(presence_))return false;
         fence(changes,true);
-        for(const auto& row:retained.materials()){if(!presence_->ready(row.actor.lease))return false;fence(changes,true);}
+        for(const auto& row:retained.materials()){if(!row_live_current(retained,row.actor))return false;fence(changes,true);}
         {
             ReadScope scope(*this);scope.begin(changes);
             if(!stored(retained,changes)||(role_owner&&!role_owner->stored_current_in_scope(db_,text_rows,endpoint_rows)))return false;

@@ -66,7 +66,7 @@ bool TaiwanActorStatusProfileScope::shape(const Data& data) const noexcept {
        data.source_incarnation.lease()!=data.source||data.recipient_incarnation.lease()!=data.recipient||
        !data.input->source()||!data.input->source()->owns_readset(saved)||
        !data.input->source()->profile_equipment_matches(data.equipment,saved,data.row)||
-       !saved.matches_population(data.input->population().characters()))return false;
+       !saved.matches_population(data.input->characters()))return false;
     std::size_t recipients=0;
     for(const auto& actor:rows)if(actor.actor.lease==data.recipient)++recipients;
     return recipients==1;
@@ -75,7 +75,7 @@ bool TaiwanActorStatusProfileScope::retained_data(const Data& data) const {
     if(!shape(data))return false;
     const auto presence=presence_.lock();
     if(!presence||!owns_presence(presence)||!data.input->source()->owns_presence(presence)||
-       !incarnations_->owns_presence(presence)||!presence->retained_population_current(data.input->population())||
+       !incarnations_->owns_presence(presence)||!data.input->population_current(presence)||
        !incarnations_->retained(data.source_incarnation)||!incarnations_->retained(data.recipient_incarnation))return false;
     return !identity_->stopped.load(std::memory_order_acquire);
 }
@@ -87,8 +87,8 @@ std::optional<TaiwanActorStatusProfileScope::Observation> TaiwanActorStatusProfi
         if(!presence||!input||!owns_presence(presence)||!input->source()||
            !input->source()->owns_presence(presence)||!input->source()->owns_readset(input->readset())||
            !input->source()->profile_equipment_matches(equipment,input->readset(),row)||
-           !input->readset().matches_population(input->population().characters())||
-           !presence->retained_population_current(input->population())||row>=input->readset().materials().size())return {};
+           !input->readset().matches_population(input->characters())||
+           !input->population_current(presence)||row>=input->readset().materials().size())return {};
         const auto source=input->readset().materials()[row].actor.lease;
         if(source.session==recipient.session)return {};
         std::size_t recipients=0;for(const auto& actor:input->readset().materials())if(actor.actor.lease==recipient)++recipients;

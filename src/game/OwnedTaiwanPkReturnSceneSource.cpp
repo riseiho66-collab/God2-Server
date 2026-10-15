@@ -18,7 +18,7 @@ struct OwnedTaiwanPkReturnSceneSource::Endpoint {
     const std::optional<Session::NormalWorldInitialization> normal;
     const std::thread::id thread=std::this_thread::get_id();
     bool current(Check check) const {
-        if(thread!=std::this_thread::get_id()||!request->actor_input||
+        if(thread!=std::this_thread::get_id()||!request->actor_input||request->actor_input->initial_population()||
            !presence->retained_population_current(request->actor_input->population())||
            !transports->registry_current(snapshot.token())||!session||!selector||
            !session->same_native_pk_game_executor(*request->sessions[0])||
@@ -77,7 +77,7 @@ OwnedPkOutboxPublication::ReturnSceneSource OwnedTaiwanPkReturnSceneSource::retu
     return [owner](const Request& request){return owner->observe(request);};
 }
 bool OwnedTaiwanPkReturnSceneSource::fence(const State& state,Check check)const{
-    if(thread_!=std::this_thread::get_id()||poisoned_||state.poisoned||!state.request->actor_input||
+    if(thread_!=std::this_thread::get_id()||poisoned_||state.poisoned||!state.request->actor_input||state.request->actor_input->initial_population()||
        state.request->departure.presence!=presence_||state.request->departure.visibility!=visibility_)return false;
     const auto input=state.request->actor_input;
     if(!input->source()||!input->source()->owns_presence(presence_)||
@@ -121,7 +121,7 @@ std::optional<OwnedTaiwanPkReturnSceneSource::Scene> OwnedTaiwanPkReturnSceneSou
     if(poisoned_)return {};
     // Own all request/private input before repository, Session or provider observers.
     const auto request=std::make_shared<const Request>(supplied);
-    if(!request->actor_input||!request->sessions[0]||!request->sessions[1]||
+    if(!request->actor_input||request->actor_input->initial_population()||!request->sessions[0]||!request->sessions[1]||
        request->sessions[0]==request->sessions[1]||request->departure.presence!=presence_||
        request->departure.visibility!=visibility_)return {};
     const auto appearances=request->ticket.input().entry.owned_appearances();
