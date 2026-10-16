@@ -6621,3 +6621,25 @@ export remains required. PHASE1no build/tests/product/parser/native/VM/codec/
 gameDBSQL/schema/migrate/import/activate/deploy.
 
 Details: docs/research/tw-outward-actor-publication-20261016.md
+
+## Round435 — Actual initial NPC database source (2026-10-16)
+
+Round435 connects actual same-Database selected initial NPC display SceneReadset
+Source/Current to explicit owned-status recipe inside unchanged421 install.
+Application LAST Context passes actual world/NPC readers; pure sameconnection
+catalog gate rejects null backend. Outer429/433 same augmentedScope retained.
+Every genuine72 boundary binds unique captured native instance/full21B equality;
+all otherbytes/actoroffsets/order/71monsterpets retained; no guessedplacement,
+unselected DBNPC emission or emptyworld proof. Own readset/originalNative/weak
+Session; copy/destructor before finalNPC valuecut, pureheldinstall, revoke-before
+exactcleanup. Supplied/Deferred semantics retained. Cross actor+NPC jointSQL/ABA/
+finalgameIO/fullcoverage/positiveplacements/Main/movement/allwriters/fanoutACK/
+fullinventory remain OPEN. V71pins157=150same5updated2new; canonical806;
+7CPP=5existing2new/no newprojectPY. Fullroutes0/countsunchanged/whole%unknown;
+fullTW100-first/commonCN/fourWS/allDBgoal ACTIVE. Preserve453Traditional/
+clientBIN/maxHPpoison10th/907/common64/coin99999999999/stack99/nativelevels/
+saves/fonts/IME/auth/text. English+per-tableChineseTXT/typedreload/MySQL8backend
+losslessexport fullDB scope retained. PHASE1no build/tests/product/parser/native/
+VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
+
+Details: docs/research/tw-initial-npc-display-source-20261016.md

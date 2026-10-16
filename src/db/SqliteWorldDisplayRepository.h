@@ -32,6 +32,10 @@ public:
     explicit SqliteWorldDisplayRepository(sqlite3* db):db_(db){}
     SqliteWorldDisplayRepository(const SqliteWorldDisplayRepository&)=delete;
     SqliteWorldDisplayRepository& operator=(const SqliteWorldDisplayRepository&)=delete;
+    // Pure same-connection qualification; no SQL, schema access or row grant.
+    bool uses_catalogs(const NativeNpcDisplayCatalog& npcs,const NativeEnemyDisplayCatalog& enemies) const noexcept {
+        return db_&&npcs.uses_connection(db_)&&enemies.uses_connection(db_);
+    }
     // Pure owning VALUE observation from this exact issuer. No DB/repository,
     // callbacks, game state, full-scene coverage or empty-world proof retained.
     class SceneReadset final {

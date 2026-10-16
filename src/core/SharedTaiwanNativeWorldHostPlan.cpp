@@ -2,6 +2,8 @@
 #include "game/TaiwanActorStatusWriteFence.h"
 #include "game/TaiwanActorStatusIncarnationSource.h"
 #include "game/OwnedTaiwanInitialActorSceneSource.h"
+#include "game/OwnedTaiwanInitialNpcDisplaySource.h"
+#include "db/SqliteWorldDisplayRepository.h"
 #include "game/SharedTaiwanNativeRecordHandlerSource.h"
 #include "handlers/RecoveredOwnedCompanions.h"
 #include <algorithm>
@@ -776,15 +778,20 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_owned_statu
         TaiwanCustomFullActorProfile::Policy policy,OwnedTaiwanPkReturnSceneSource::Selection selection,
         TaiwanNativeActorResourceSource::Configuration configuration,TaiwanActorStatusOwnedSource::Policy status_policy,
         OwnedPkProfileRecipe recipe,StoredSources sources) {
-    if(!context.common_world||!sources.entered||!sources.actor_status_incarnations||sources.initial_profiles_requested_)
-        throw std::invalid_argument("TW owned status requires actual initial scene and host incarnations");
+    if(!context.common_world||!sources.entered||!sources.actor_status_incarnations||sources.initial_profiles_requested_||
+       !context.world_displays||!context.native_npc_displays||!context.native_enemy_displays||
+       !context.world_displays->uses_catalogs(*context.native_npc_displays,*context.native_enemy_displays))
+        throw std::invalid_argument("TW owned status requires actual initial scene, host incarnations and same-DB NPC catalogs");
     auto status=TaiwanActorStatusOwnedSource::create(context.common_world->presence(),
         sources.actor_status_incarnations,std::move(status_policy));
     if(!status)throw std::invalid_argument("TW owned status cannot retain the actual host incarnation source");
     // Defer the outer input/endpoint wrapper until the common Profile/material
     // owner exists. Its augmented Scope then reaches this exact status install
     // wrapper AND the genuine supplier through the new initial producer.
-    auto real_source=std::move(sources.entered);
+    // Inside the owned install wrapper: Source/Current observe real NPC rows,
+    // while the original held install remains a pure private state transition.
+    auto real_source=OwnedTaiwanInitialNpcDisplaySource::wrap(context.common_world->presence(),
+        *context.world_displays,*context.native_npc_displays,*context.native_enemy_displays,std::move(sources.entered));
     sources.initial_profiles_requested_=true;
     sources.entered=[status,real_source=std::move(real_source)](
             Session& session,const SharedTaiwanWorldEntered::Scope& scope)

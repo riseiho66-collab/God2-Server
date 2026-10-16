@@ -261,8 +261,10 @@ public:
         // The actual install/cleanup and incarnation remain mandatory; complete
         // writer exclusion/private byte permits are separate unfinished work.
         // The same Profile/resource/status owners also author the actual ordered
-        // initial incoming actors; the genuine scene still owns selection and
-        // every opaque/NPC record. No default Main or outward transport follows.
+        // initial incoming actors and directed post-install outward status.
+        // Same-DB NPC observations qualify genuine ordered scene bytes; every
+        // opaque record and original selection remain genuine-supplier owned.
+        // No default Main, complete placements or full writer exclusion follows.
         static StoredSources with_owned_pk_return_owned_status(const SharedWorldHostPlan::Context&,
             std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
             OwnedTaiwanPkReturnSceneSource::Selection,TaiwanNativeActorResourceSource::Configuration,
