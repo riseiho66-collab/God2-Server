@@ -1509,3 +1509,22 @@ coins99999999999stack99nativelevels/saves/fonts/IME/auth/text/EnglishDBidentifie
 per-tableChineseTXT/typedreload/MySQL8losslessexport. PHASE1no build/tests/product/
 native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.5070GPUauthorized
 whenbeneficial; noGPUused.
+
+Round440 connects actual CUSTOM0150/shared ordinary Core preCAS private step
+receipt -> actual commit/authority/peer success -> registered original input
+run/exact nested parent response offsets -> Session original callback/final
+whole bytes -> LAST FIFO Write/direct full async_write completion custody.
+Pure immutable values/weakSession/atomics onIO; no gameowner/DB/Lua/callback.
+Historical phases/positions preserved; legal laterphase progression no new
+barrier, no inputhold/sequence-reset/secondCAS/send/nativeACK fiction. Exact
+Core runs only; legacyWholeBag intercepted2E unattested preservesoldbehavior.
+Native6CC00/68950/5Ecaller windows byteequal, not client receipt/ring proof.
+V76pins177=172same4updated1added;canonical829;CPP5existing/newCPP0/newLua0/
+newprojectPY0/CMake0. Partialsource+1/fullroutes0/countsunchanged/whole%unknown.
+FullTW100first/commonCN/fourWS/allDB goalACTIVE; native/fullscene/legacycustody/
+Main/allwriters/affineIO/fanoutACK/fullinventory/MySQLbackend-fullconsistent
+losslessexport-fullconstraints-atomicpub-import remainOPEN. Preserve453shared
+Traditional/clientBIN/maxHPpoison10th/custom126150/907/common64/coin99999999999/
+stack99/nativelevels/saves/fonts/IME/auth/text/EnglishDBfields/per-tableChineseTXT.
+PHASE1no build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/
+activate/deploy.5070authorizedwhenbeneficialunused.

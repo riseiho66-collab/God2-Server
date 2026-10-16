@@ -25,10 +25,14 @@
         "src/game/OwnedOrdinaryMovementPolicy.h",
         "src/game/OwnedTaiwanOrdinaryMovementAuthority.cpp",
         "src/game/OwnedTaiwanOrdinaryMovementAuthority.h",
+        "src/game/SharedTaiwanMovement.cpp",
         "src/game/SharedTaiwanNativeMovementHost.cpp",
         "src/game/SharedTaiwanNativeMovementHost.h",
+        "src/game/SharedTaiwanWorldRecordSource.cpp",
         "src/game/TaiwanNativeSceneResourceOwner.cpp",
         "src/game/TaiwanNativeSceneResourceOwner.h",
+        "src/net/Session.cpp",
+        "src/net/Session.h",
         "src/scripting/TaiwanMovementRules.cpp",
         "src/scripting/TaiwanMovementRules.h"
       ],
@@ -41,7 +45,8 @@
         "phase": "Actual customHost first postbattle movement retiresoldincarnation andrequiresreal freshInput/newscene generation; no publicreset/rebase. Complete reset/transfer/nativebattle scene coverage OPEN.",
         "lifetime": "Retire typedleaf before callbacks; actualnewEntryaffected; copied Inputcallbacks drain beforepurefinalEntry/Slot/phase/privateleaf fences afterlast SQLobserver.",
         "database_policy439": "Actual same-Database movement_rules full typed own read; immutable whole-version cache/private observations; actual Application Context and both host source forms select real Input data -> concrete leaf binding; per-authorize refresh; staged effective policy/fraction credit only after soleCAS, no live sequence reset.",
-        "mysql_policy439": "Actual typed one-load full owned table snapshot -> complete fresh MySQL8.0.17+ CHECK/PK/ASCII/no-pad schema and decimal INSERT string. Source only, not full backend/export/import/atomic publication."
+        "mysql_policy439": "Actual typed one-load full owned table snapshot -> complete fresh MySQL8.0.17+ CHECK/PK/ASCII/no-pad schema and decimal INSERT string. Source only, not full backend/export/import/atomic publication.",
+        "sender_custody440": "Actual Core preCAS private step/commit afterrealworld+peers -> exact actualinput/run/parent output offsets -> Session actualcallback sealed historicalwholeframe -> pure LASTFIFO/direct full async_write receipt; no nativeACK/inputhold/reset/secondCAS; intercepted legacy2E remainunattested."
       },
       "activation": false,
       "production_activated": false,
@@ -50,9 +55,9 @@
       "native_client_acceptance": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
-      "document": "docs/research/tw-owned-ordinary-movement-policy-db-source-20261016.md",
+      "document": "docs/research/tw-owned-ordinary-movement-frame-custody-source-20261016.md",
       "reason": "Replace missing externally fabricated ordinary permit dependency with an actual game-owned leaf while preserving native evidence and sole shared settlement.",
-      "replacement": "Recover original server movement/path/reset/fullscene/Main/senderACK; finish all-system typedDB/MySQL backend/full consistent lossless export/atomic publication/import then centralized acceptance."
+      "replacement": "Recover originalserver movement/path/reset/fullscene/Main/clientACK; connect legacyWholeBag sendercustody andallroutes; finish all-system typedDB/MySQL backend/full consistent lossless export/atomic publication/import then centralized acceptance."
     },
     {
       "id": "CUSTOM-0037",

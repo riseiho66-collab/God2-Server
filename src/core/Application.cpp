@@ -7784,6 +7784,9 @@ if(guild_officer_runtime && player_guild(session) &&
                             game_handlers.native_world_skill_requests=native_world_skill_requests;
                             game_handlers.native_preborn_requests=native_preborn_requests;
                         }else game_handlers.movement=common_world_lifetime.vault->movement_facade();
+                        // CUSTOM-0150 actual selected shared-core sender evidence only.
+                        // Legacy intercepted movements remain explicitly unattested.
+                        game_handlers.native_movement_response_custody=true;
                     }
                 }
                 if(common_world && config.owned_skillbook_learning_enabled) {
@@ -8163,7 +8166,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                     if(pending){at->second.live_disabled=true;session.close();return {};}
                                 }
                             }
-                            const auto reply=original(session,records.subspan(begin,i-begin));
+                            const auto reply=[&] {
+                                const auto sender_offset=session.movement_response_output_offset(wire.size());
+                                return original(session,records.subspan(begin,i-begin));
+                            }();
                             if(!reply || dispatch->reentered)return {};
                             append(*reply); // Preserve successful unrelated phase/owner-policy transitions.
                             if(tick && current()) {
@@ -8425,7 +8431,10 @@ if(guild_officer_runtime && player_guild(session) &&
                         for(std::size_t at=0;at<records.size();) {
                             if(!std::holds_alternative<TaiwanNativePartyMenu::Request>(records[at])) {
                                 auto end=at+1;while(end<records.size() && !std::holds_alternative<TaiwanNativePartyMenu::Request>(records[end]))++end;
-                                const auto reply=original(session,records.subspan(at,end-at));
+                                const auto reply=[&] {
+                                    const auto sender_offset=session.movement_response_output_offset(wire.size());
+                                    return original(session,records.subspan(at,end-at));
+                                }();
                                 if(!reply || dispatch->reentered)return {};
                                 wire.insert(wire.end(),reply->begin(),reply->end());
                                 try{(void)reconcile(nullptr,&session,&wire);}catch(const std::exception& error){if(dispatch->committed_preview){dispatch->reject_admission();return {};}spdlog::warn("PARTY_DIRECTORY_WATCH_REFRESH_FAILED reason={}",error.what());}
@@ -8834,7 +8843,10 @@ if(guild_officer_runtime && player_guild(session) &&
                             }
                             const auto begin=i;
                             while(i<records.size() && !options(records[i]))++i;
-                            const auto reply=original(session,records.subspan(begin,i-begin));
+                            const auto reply=[&] {
+                                const auto sender_offset=session.movement_response_output_offset(wire.size());
+                                return original(session,records.subspan(begin,i-begin));
+                            }();
                             if(!reply || dispatch->reentered)return {};
                             wire.insert(wire.end(),reply->begin(),reply->end()); // Keep existing framed run ordering.
                             try{synchronize({},{},true);}catch(const std::exception&){if(dispatch->reentered)return {};}

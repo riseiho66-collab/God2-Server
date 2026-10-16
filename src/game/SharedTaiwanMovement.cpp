@@ -77,6 +77,14 @@ std::optional<std::vector<std::uint8_t>> SharedTaiwanMovement::move_owned(Sessio
     const auto ack=RecoveredNativeMovement::read_ack(authorization->full_native_ack);
     if(!ack)return std::nullopt;
     auto framed=RecoveredWorldFrame::encode(ack->logical());
+    // CUSTOM-0150 sender custody only: allocate the private exact step before
+    // any position CAS. This records supplied5D, not a recovered native ACK rule.
+    std::optional<Session::MovementStepWrite> sender_write;
+    if(session.native_movement_response_custody_enabled()) {
+        sender_write=session.prepare_movement_response_write(lease_,*before,request,
+            step->direction,step->native_cell,scene->revision,authorization->full_native_ack,framed);
+        if(!sender_write)return std::nullopt;
+    }
     auto peers=publication_.prepare(lease_,*before,request.x,request.y);
     if(!peers || !scene_current_owned(session,*scene) || !publication_.current(*peers))return std::nullopt;
     std::optional<RecoveredPosition> after;
@@ -112,6 +120,10 @@ std::optional<std::vector<std::uint8_t>> SharedTaiwanMovement::move_owned(Sessio
     const auto published=world_.publish(lease_,*scene,Committed{*before,*after,*step});
     if(!published || !current(session) || (movement_custody_ && owned_reentered_))return std::nullopt;
     if(!publication_.deliver(*peers,*after) || !current(session) || (movement_custody_ && owned_reentered_))return std::nullopt;
+    // Seal only this actual durable step after the real authority and peer
+    // publication. Failure follows existing terminal cleanup; no position,
+    // sequence or rate credit is rewound and no extra send/CAS is introduced.
+    if(sender_write && !session.commit_movement_response_write(*sender_write,*after))return std::nullopt;
     return framed;
 }
 std::vector<std::uint8_t> SharedTaiwanMovement::handle_owned(Session& session,

@@ -221,9 +221,14 @@ struct Owner {
                     throw std::runtime_error("TW mixed native run qualification failed");
                 std::vector<std::uint8_t> response;
                 if(work.run.kind==Source::Kind::Movement) {
+                    // CUSTOM-0150 exact actual input slice, no copied-facade attribution.
+                    const auto sender_run=session.movement_response_input_run(
+                        records.subspan(work.run.offset,work.run.count));
                     const auto dispatch=movement.movement;
                     response=dispatch(session,work.movements);
                     if(response.empty())throw std::runtime_error("TW mixed movement omitted actual native reply");
+                    if(!session.locate_movement_response_run(output.size(),response))
+                        throw std::runtime_error("TW mixed movement sender component identity rejected");
                 }else {
                     std::optional<Source::Reply> reply;
                     if(work.run.kind==Source::Kind::SelectionItem) {

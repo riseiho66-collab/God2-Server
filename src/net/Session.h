@@ -30,6 +30,7 @@ namespace god2::cn {class SharedActorVisibility;}
 namespace god2 {
 
 class TaiwanActorStatusWriteFence;
+class SharedTaiwanMovement;
 
 enum class SessionState {
     Connected, Handshaked, Authenticated, CharacterSelected,
@@ -129,6 +130,51 @@ public:
         explicit WorldResponseWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
         std::shared_ptr<Data> data_;
     };
+    // Opt-in original movement callback sender custody only. Full local write
+    // is not native ACK, ring/reset authority or permission for another move.
+    enum class MovementResponseWriteStatus {Pending,Queued,Written,Failed};
+    class MovementResponseWrite final {
+    public:
+        MovementResponseWrite(const MovementResponseWrite&)=default;
+        MovementResponseWrite& operator=(const MovementResponseWrite&)=default;
+        MovementResponseWriteStatus status() const noexcept;
+        const std::vector<std::uint8_t>& wire() const noexcept;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit MovementResponseWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
+    class MovementResponseOutputOffset final {
+    public:
+        ~MovementResponseOutputOffset() noexcept;
+        MovementResponseOutputOffset(const MovementResponseOutputOffset&)=delete;
+        MovementResponseOutputOffset& operator=(const MovementResponseOutputOffset&)=delete;
+        MovementResponseOutputOffset(MovementResponseOutputOffset&&)=delete;
+        MovementResponseOutputOffset& operator=(MovementResponseOutputOffset&&)=delete;
+    private:
+        friend class Session;
+        MovementResponseOutputOffset(Session&,std::size_t);
+        std::shared_ptr<void> capture_;
+        std::uint64_t nonce_=0,parent_=0;
+        std::size_t old_base_=0;
+    };
+    class MovementResponseInputRun final {
+    public:
+        ~MovementResponseInputRun() noexcept;
+        MovementResponseInputRun(const MovementResponseInputRun&)=delete;
+        MovementResponseInputRun& operator=(const MovementResponseInputRun&)=delete;
+        MovementResponseInputRun(MovementResponseInputRun&&)=delete;
+        MovementResponseInputRun& operator=(MovementResponseInputRun&&)=delete;
+    private:
+        friend class Session;
+        MovementResponseInputRun(Session&,std::span<const RecoveredWorldRecords::Record>);
+        std::shared_ptr<void> capture_;
+        std::uint64_t nonce_=0;
+    };
+    MovementResponseOutputOffset movement_response_output_offset(std::size_t relative_prefix);
+    MovementResponseInputRun movement_response_input_run(std::span<const RecoveredWorldRecords::Record> actual_input_subspan);
     // Immutable actual accepted C1C report, not OS/NLS/cache attestation.
     // No scalar constructor. Equality identifies the original occurrence.
     class NativeTaiwanReceiverSelector {
@@ -549,6 +595,8 @@ public:
         // transport receives revocable weak facades, never pending-entry slots.
         std::function<CommonWorldPublication(Session&,const SharedWorldPresence::Lease&,CommonWorldPublication)>
             common_world_ready_publication_owner;
+        // LAST: selected real TW movement sender evidence; defaults preserve old paths.
+        bool native_movement_response_custody=false;
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,
@@ -568,6 +616,12 @@ public:
     // Pure exact private holder equality only; never status/phase permission.
     bool actor_status_incarnation_matches(const TaiwanActorStatusIncarnationSource::Token&) const noexcept;
     void send_world_records(std::vector<std::uint8_t> logical);
+    bool native_movement_response_custody_enabled() const noexcept;
+    // Exact offset in the original returned callback frame. Never scans for bytes.
+    bool locate_movement_response_run(std::size_t actual_output_offset,
+        std::span<const std::uint8_t> actual_run_wire);
+    // Recorded game thread only; historical sender observation, not authority.
+    std::optional<MovementResponseWrite> movement_response_write_on_game() const;
     // Uses the SAME legacy enqueue/encoding/order/budget path. The actual
     // synchronous world-records game callback alone can create/current this
     // private observation. No new callback, held frame or input barrier.
@@ -797,6 +851,24 @@ public:
 
 private:
     friend class cn::SharedActorVisibility;
+    friend class SharedTaiwanMovement;
+    class MovementStepWrite final {
+    public:
+        struct Data;
+        MovementStepWrite(const MovementStepWrite&)=default;
+        MovementStepWrite& operator=(const MovementStepWrite&)=default;
+    private:
+        friend class Session;
+        friend struct Impl;
+        explicit MovementStepWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
+    std::optional<MovementStepWrite> prepare_movement_response_write(
+        const SharedWorldPresence::Lease&,const RecoveredPosition& before,
+        const RecoveredMovement::Request&,std::uint8_t direction,std::uint8_t native_cell,
+        std::uint64_t scene_revision,std::span<const std::uint8_t> logical_ack,
+        std::span<const std::uint8_t> encoded_frame);
+    bool commit_movement_response_write(const MovementStepWrite&,const RecoveredPosition& actual_after);
     struct NativePkReturnOutputGroup {
         std::shared_ptr<Session> recipient;
         // Private Visibility-issued indivisible81B6F or81B6F+5BEA units.
