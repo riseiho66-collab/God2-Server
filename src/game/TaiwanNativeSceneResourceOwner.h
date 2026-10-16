@@ -1,6 +1,7 @@
 #pragma once
 #include "game/TaiwanNativeMapAsset.h"
 #include "game/TaiwanNativeResourceSelection.h"
+#include "game/OwnedOrdinaryMovementPolicies.h"
 #include <memory>
 #include <vector>
 
@@ -29,6 +30,7 @@ public:
     struct OwnedOrdinary {
         std::shared_ptr<TaiwanMovementRules> rules;
         TaiwanMovementRules::OrdinaryPolicy policy;
+        std::shared_ptr<OwnedOrdinaryMovementPolicies::Binding> binding={};
     };
     struct Input {
         Sources sources;

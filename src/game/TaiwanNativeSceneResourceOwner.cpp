@@ -308,7 +308,7 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
                 // dependency retirement. It owns policy/state, not a factory.
                 const auto& policy=*input.owned_ordinary;
                 auto ordinary=OwnedTaiwanOrdinaryMovementAuthority::adopt(session,presence,lease,
-                    entry->resources,entry->actor_position,entry->actor_direction,policy.rules,policy.policy);
+                    entry->resources,entry->actor_position,entry->actor_direction,policy.rules,policy.policy,policy.binding);
                 if(!ordinary || !ready(*session,lease) || presence->saved_position(lease)!=saved ||
                    !ordinary->retained_current())return false;
                 entry->ordinary_authority=ordinary;entry->actual_authority=std::move(ordinary);

@@ -51,6 +51,8 @@ struct SqliteDatabase::Impl {
     std::unique_ptr<SqliteNativeWorldEntrySnapshotRepository> native_world_entries;
     std::unique_ptr<SqliteNativeEquipmentSnapshotRepository> native_equipment_snapshots;
     std::unique_ptr<SqliteOwnedInventoryRepository> owned_inventory;
+    // Reverse member destruction revokes this repository before connection.
+    std::unique_ptr<SqliteOrdinaryMovementPolicyRepository> ordinary_movement_policies;
     std::unique_ptr<SqliteOwnedBlacklistRepository> blacklist;
     std::unique_ptr<SqliteCompanionRepository> companions;
     std::unique_ptr<SqliteBeastSnapshotRepository> beast_snapshots;
@@ -313,6 +315,24 @@ void SqliteDatabase::migrate() {
 AccountRepository& SqliteDatabase::accounts() {
     if (!migrated_) throw DatabaseError("Migrate database before accessing repositories");
     return *impl_->accounts;
+}
+SqliteOrdinaryMovementPolicyRepository& SqliteDatabase::ordinary_movement_policies() {
+    if(!migrated_||!impl_||impl_->taiwan_skill_import_only||!impl_->connection||
+       !impl_->accounts||!impl_->recovered_characters)
+        throw DatabaseError("Movement policy requires migrated same-Database owners");
+    auto* const db=impl_->connection.get();
+    if(!impl_->accounts->uses_connection(db)||!impl_->recovered_characters->uses_connection(db))
+        throw DatabaseError("Movement policy common identity connection mismatch");
+    if(!impl_->ordinary_movement_policies)
+        impl_->ordinary_movement_policies=std::make_unique<SqliteOrdinaryMovementPolicyRepository>(db);
+    auto& repository=*impl_->ordinary_movement_policies;
+    if(!repository.uses_connection(db)||!repository.lifetime()->available())
+        throw DatabaseError("Movement policy repository connection or lifetime mismatch");
+    return repository;
+}
+void SqliteDatabase::install_ordinary_movement_policy_schema() {
+    (void)ordinary_movement_policies(); // Pure actual-owner/same-connection gate.
+    SqliteOrdinaryMovementPolicyRepository::install_schema(impl_->connection.get());
 }
 NativeAccountSnapshotRepository& SqliteDatabase::account_native_snapshots() {
     if(!migrated_)throw DatabaseError("Migrate database before accessing native account snapshot source");

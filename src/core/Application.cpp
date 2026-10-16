@@ -1031,7 +1031,8 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     &database.native_enemy_display_catalog(),equipment_snapshots,equipment_writer,owned_inventory,owned_inventory_writer,
                     &database.companions(),&owned_companions,owned_deity_skill_source,
                     config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled,hosted_pk,std::move(initial_actor_inputs),
-                    &database.world_displays(),&database.native_npc_display_catalog()};
+                    &database.world_displays(),&database.native_npc_display_catalog(),
+                        &database.ordinary_movement_policies()};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)

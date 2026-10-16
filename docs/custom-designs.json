@@ -8,15 +8,29 @@
       "name": "Owned ordinary Taiwan movement admission and phase reacquisition",
       "authority": "OWNER_AUTHORIZED_CUSTOM_SERVER_POLICY_WITH_QUALIFIED_NATIVE_GEOMETRY_AND_WIRE",
       "implementation": [
-        "src/game/TaiwanNativeSceneResourceOwner.h",
-        "src/game/TaiwanNativeSceneResourceOwner.cpp",
-        "src/game/SharedTaiwanNativeMovementHost.h",
-        "src/game/SharedTaiwanNativeMovementHost.cpp",
-        "src/scripting/TaiwanMovementRules.h",
-        "src/scripting/TaiwanMovementRules.cpp",
-        "src/game/OwnedTaiwanOrdinaryMovementAuthority.h",
+        "scripts/tw/owned_ordinary_movement.lua",
+        "src/core/Application.cpp",
+        "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+        "src/core/SharedTaiwanNativeWorldHostPlan.h",
+        "src/core/SharedWorldHostPlan.h",
+        "src/db/Database.h",
+        "src/db/OrdinaryMovementPolicyRepository.h",
+        "src/db/ServerDataDictionary.cpp",
+        "src/db/SqliteDatabase.cpp",
+        "src/db/SqliteDatabase.h",
+        "src/db/SqliteOrdinaryMovementPolicyRepository.cpp",
+        "src/db/SqliteOrdinaryMovementPolicyRepository.h",
+        "src/game/OwnedOrdinaryMovementPolicies.cpp",
+        "src/game/OwnedOrdinaryMovementPolicies.h",
+        "src/game/OwnedOrdinaryMovementPolicy.h",
         "src/game/OwnedTaiwanOrdinaryMovementAuthority.cpp",
-        "scripts/tw/owned_ordinary_movement.lua"
+        "src/game/OwnedTaiwanOrdinaryMovementAuthority.h",
+        "src/game/SharedTaiwanNativeMovementHost.cpp",
+        "src/game/SharedTaiwanNativeMovementHost.h",
+        "src/game/TaiwanNativeSceneResourceOwner.cpp",
+        "src/game/TaiwanNativeSceneResourceOwner.h",
+        "src/scripting/TaiwanMovementRules.cpp",
+        "src/scripting/TaiwanMovementRules.h"
       ],
       "native_gap": "Original server5D token/timing/reset/complete path/live NPC-object rules remain unrecovered. Client cursor/reset/debug dataflow is not server authority.",
       "rules": {
@@ -25,7 +39,9 @@
         "admission": "Lua custom expected-sequence/adjacency/zero/actual ready-player occupancy/retainedgrid diagonal-corner admission; full5D request-index echo explicitly CUSTOM.",
         "custody": "ActualweakSession/fullLease/phase/battlegeneration/resources/fullreadypopulation/registryepoch/onceTicket/exactrevision+1; tokenbucket stagespreCAS andpublishesonceaftersolecommonCAS. No second position writer/send/ACK claim.",
         "phase": "Actual customHost first postbattle movement retiresoldincarnation andrequiresreal freshInput/newscene generation; no publicreset/rebase. Complete reset/transfer/nativebattle scene coverage OPEN.",
-        "lifetime": "Retire typedleaf before callbacks; actualnewEntryaffected; copied Inputcallbacks drain beforepurefinalEntry/Slot/phase/privateleaf fences afterlast SQLobserver."
+        "lifetime": "Retire typedleaf before callbacks; actualnewEntryaffected; copied Inputcallbacks drain beforepurefinalEntry/Slot/phase/privateleaf fences afterlast SQLobserver.",
+        "database_policy439": "Actual same-Database movement_rules full typed own read; immutable whole-version cache/private observations; actual Application Context and both host source forms select real Input data -> concrete leaf binding; per-authorize refresh; staged effective policy/fraction credit only after soleCAS, no live sequence reset.",
+        "mysql_policy439": "Actual typed one-load full owned table snapshot -> complete fresh MySQL8.0.17+ CHECK/PK/ASCII/no-pad schema and decimal INSERT string. Source only, not full backend/export/import/atomic publication."
       },
       "activation": false,
       "production_activated": false,
@@ -34,9 +50,9 @@
       "native_client_acceptance": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
-      "document": "docs/research/tw-owned-ordinary-movement-authority-source-20261016.md",
+      "document": "docs/research/tw-owned-ordinary-movement-policy-db-source-20261016.md",
       "reason": "Replace missing externally fabricated ordinary permit dependency with an actual game-owned leaf while preserving native evidence and sole shared settlement.",
-      "replacement": "Recover originalserver token/rate/reset/path; integrate allscene/Main/sender frame custody andtypedDBpolicy repository/versionedreload, then full centralized acceptance."
+      "replacement": "Recover original server movement/path/reset/fullscene/Main/senderACK; finish all-system typedDB/MySQL backend/full consistent lossless export/atomic publication/import then centralized acceptance."
     },
     {
       "id": "CUSTOM-0037",

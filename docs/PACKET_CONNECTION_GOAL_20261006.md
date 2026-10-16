@@ -6705,3 +6705,24 @@ native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.5070 GPU allowed
 whenbeneficial; noGPUused.
 
 Details: docs/research/tw-owned-ordinary-movement-authority-source-20261016.md
+
+## Round439 — Whole-version ordinary movement DB policy (2026-10-16)
+
+Round439 connects CUSTOM0150 actual same-Database movement_rules reader to LAST
+Application Context and both actual Sources/StoredSources selected InputSource,
+then real ResourceOwner leaf Binding. Whole-table typed version validation,
+private immutable snapshot and per-authorize refresh; live rate/fraction credit
+staged until sole commonCAS, no sequence/pose/revision reset. English10columns,
+per-tableChineseTXT/dictionary124/fullCHECK MySQL8.0.17+ counterpart and actual
+owned snapshot-string source only. No rows/defaults/DDL/load/export executed.
+Manual438/native/CN preserved; no Main/ACK/fullscene/fullroute/MySQLbackend or
+wholeDB atomic export/import claim. V75pins176=156same13updated7added;
+canonical827;CPP20=14existing6new/newLua0/newprojectPY0/CMake0. Partialsource+1,
+fullroutes0/countsunchanged/whole%unknown. FullTW100first/commonCN/fourWS/allDB
+objective ACTIVE. Preserve453Traditional/clientBIN/maxHPpoison10th/907/common64/
+coins99999999999stack99nativelevels/saves/fonts/IME/auth/text/EnglishDBidentifiers/
+per-tableChineseTXT/typedreload/MySQL8losslessexport. PHASE1no build/tests/product/
+native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.5070GPUauthorized
+whenbeneficial; noGPUused.
+
+Details: docs/research/tw-owned-ordinary-movement-policy-db-source-20261016.md

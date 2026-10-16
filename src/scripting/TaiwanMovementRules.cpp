@@ -59,9 +59,7 @@ namespace god2 {
 // CUSTOM-0150 owned ordinary admission is explicitly separate from recovered
 // native direction/raw-cell predicates and from original-server5D evidence.
 bool TaiwanMovementRules::valid_ordinary_policy(const OrdinaryPolicy& policy) noexcept {
-    return policy.version>0 && policy.step_interval_us>=1 && policy.step_interval_us<=60000000 &&
-        policy.burst_steps>=1 && policy.burst_steps<=39 && policy.initial_credit_steps>=1 &&
-        policy.initial_credit_steps<=policy.burst_steps && policy.first_sequence<40;
+    return policy.valid();
 }
 bool TaiwanMovementRules::supports_owned_ordinary() const {
     if(thread_!=std::this_thread::get_id())throw std::logic_error("TW movement Lua owner mismatch");

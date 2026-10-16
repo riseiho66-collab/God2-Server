@@ -20,6 +20,7 @@
 
 namespace god2 {
 class NativeSkillCatalog;
+class OrdinaryMovementPolicyRepository;
 class NativeWorldEntrySnapshotRepository;
 class SqliteNativeCharacterSummarySnapshotRepository;
 class SqliteNativeWorldEntrySnapshotRepository;
@@ -129,6 +130,8 @@ struct SharedWorldHostPlan {
         // through Application game-owner drain; no placement defaults or DDL.
         SqliteWorldDisplayRepository* world_displays=nullptr;
         const NativeNpcDisplayCatalog* native_npc_displays=nullptr;
+        // LAST CUSTOM-0150 borrowed actual same-Database policy reader; no DDL.
+        OrdinaryMovementPolicyRepository* ordinary_movement_policies=nullptr;
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in

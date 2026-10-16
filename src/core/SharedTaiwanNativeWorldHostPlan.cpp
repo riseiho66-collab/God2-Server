@@ -4,6 +4,7 @@
 #include "game/OwnedTaiwanInitialActorSceneSource.h"
 #include "game/OwnedTaiwanInitialNpcDisplaySource.h"
 #include "db/SqliteWorldDisplayRepository.h"
+#include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanNativeRecordHandlerSource.h"
 #include "handlers/RecoveredOwnedCompanions.h"
 #include <algorithm>
@@ -19,6 +20,50 @@ namespace {
 using Plan=SharedTaiwanNativeWorldHostPlan;
 using Context=SharedWorldHostPlan::Context;
 using OwnedPkSources=SharedWorldHostPlan::OwnedPkSources;
+// CUSTOM-0150 typed data selection into the actual selected resource input.
+// The original provider still owns all native scene/material/current values.
+struct DatabaseOrdinaryMovementInput {
+    const std::thread::id thread=std::this_thread::get_id();
+    const std::shared_ptr<TaiwanMovementRules> rules;
+    const std::shared_ptr<OwnedOrdinaryMovementPolicies::Binding> binding;
+    const SharedTaiwanNativeMovementHost::InputSource original;
+    bool busy=false,poisoned=false;
+    std::optional<SharedTaiwanNativeMovementHost::Input> read(Session& session,
+        const SharedTaiwanNativeMovementScene::FactoryScope& scope) {
+        if(thread!=std::this_thread::get_id())throw std::logic_error("DB movement input game owner mismatch");
+        if(busy) {poisoned=true;throw std::logic_error("DB movement input reentry rejected");}
+        busy=true;poisoned=false;
+        struct Reset {bool& busy;~Reset(){busy=false;}} reset{busy};
+        auto actual=original(session,scope);
+        if(poisoned || !binding->available())throw std::runtime_error("DB movement input revoked");
+        if(!actual)return std::nullopt;
+        if(actual->authority || actual->owned_ordinary)
+            throw std::invalid_argument("DB movement policy cannot replace an existing authority");
+        const auto observed=binding->refresh();
+        actual->owned_ordinary.emplace(TaiwanNativeSceneResourceOwner::OwnedOrdinary{
+            rules,observed.policy(),binding});
+        if(poisoned || !binding->current(observed))throw std::runtime_error("DB movement policy selection revoked");
+        // Moving Input retains its real callbacks; existing actual Host drains
+        // copied callbacks before its final pure Slot/phase/installed-leaf fence.
+        return actual;
+    }
+};
+SharedTaiwanNativeMovementHost::InputSource database_ordinary_movement_input(
+    const Context& context,std::string profile,std::size_t max_profiles,
+    std::shared_ptr<TaiwanMovementRules> rules,SharedTaiwanNativeMovementHost::InputSource original) {
+    if(!context.common_world || !context.common_world->presence() || !context.ordinary_movement_policies ||
+       !rules || !original || !rules->supports_owned_ordinary())
+        throw std::invalid_argument("DB ordinary movement requires actual common Context, rules and resources");
+    auto policies=OwnedOrdinaryMovementPolicies::create(*context.ordinary_movement_policies,max_profiles);
+    auto binding=policies->bind(std::move(profile));
+    auto state=std::make_shared<DatabaseOrdinaryMovementInput>(DatabaseOrdinaryMovementInput{
+        std::this_thread::get_id(),std::move(rules),std::move(binding),std::move(original)});
+    return [state=std::move(state)](Session& session,const SharedTaiwanNativeMovementScene::FactoryScope& scope) {
+        const auto held=state; // Retain actual callback/dependencies across observers.
+        return held->read(session,scope);
+    };
+}
+
 // Private callable target types let the final stored-host assembly verify the
 // currently selected offer AND qualifier, rather than an earlier bank marker.
 struct SceneActorEntryBinding {
@@ -906,6 +951,20 @@ SharedTaiwanNativeWorldHostPlan::Sources::with_actor_status_incarnations(const C
     if(!context.common_world||sources.actor_status_incarnations)
         throw std::invalid_argument("TW actor incarnations require a fresh explicit actual host binding");
     sources.actor_status_incarnations=TaiwanActorStatusIncarnationSource::create(context.common_world->presence());
+    return sources;
+}
+SharedTaiwanNativeWorldHostPlan::Sources
+SharedTaiwanNativeWorldHostPlan::Sources::with_database_owned_ordinary_movement(
+    const Context& context,std::string profile,std::size_t max_profiles,Sources sources) {
+    sources.movement_resources=database_ordinary_movement_input(context,std::move(profile),max_profiles,
+        sources.movement_rules,std::move(sources.movement_resources));
+    return sources;
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_database_owned_ordinary_movement(
+    const Context& context,std::string profile,std::size_t max_profiles,StoredSources sources) {
+    sources.movement_resources=database_ordinary_movement_input(context,std::move(profile),max_profiles,
+        sources.movement_rules,std::move(sources.movement_resources));
     return sources;
 }
 SharedTaiwanNativeWorldHostPlan::Sources

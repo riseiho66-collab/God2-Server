@@ -10,6 +10,7 @@ class NativeCharacterSummarySnapshotRepository;
 class NativeWorldEntrySnapshotRepository;
 class NativeEquipmentSnapshotRepository;
 class OwnedInventoryRepository;
+class OrdinaryMovementPolicyRepository;
 // Synchronous API. The owner serializes calls on the game executor, not network callbacks.
 // Repository references are valid only for the lifetime of the database.
 class Database {
@@ -20,6 +21,11 @@ public:
     virtual AccountRepository& accounts() = 0;
     virtual CharacterRepository& characters() = 0;
     virtual RecoveredCharacterRepository& recovered_characters() = 0;
+    // CUSTOM-0150 optional typed shared configuration; access never installs
+    // schema/data or invents a native movement policy for unsupported backends.
+    virtual OrdinaryMovementPolicyRepository& ordinary_movement_policies() {
+        throw UnsupportedDatabaseError("Ordinary movement policy storage is unavailable for this database backend");
+    }
     // Optional common read-only delivery source. No schema install/import or
     // implicit profile/entitlement data. Backends opt in independently.
     virtual NativeAccountSnapshotRepository& account_native_snapshots() {

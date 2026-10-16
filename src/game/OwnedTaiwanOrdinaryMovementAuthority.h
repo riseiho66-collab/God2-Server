@@ -1,5 +1,6 @@
 #pragma once
 #include "game/SharedTaiwanNativeMovementScene.h"
+#include "game/OwnedOrdinaryMovementPolicies.h"
 #include <chrono>
 
 namespace god2 {
@@ -16,8 +17,11 @@ public:
     static std::shared_ptr<OwnedTaiwanOrdinaryMovementAuthority> adopt(
         const std::shared_ptr<Session>&,std::shared_ptr<SharedWorldPresence>,
         const Lease&,const Scene::Resources&,RecoveredPosition,std::uint8_t,
-        std::shared_ptr<TaiwanMovementRules>,TaiwanMovementRules::OrdinaryPolicy);
+        std::shared_ptr<TaiwanMovementRules>,TaiwanMovementRules::OrdinaryPolicy,
+        std::shared_ptr<OwnedOrdinaryMovementPolicies::Binding> binding={});
     ~OwnedTaiwanOrdinaryMovementAuthority() override;
+    OwnedTaiwanOrdinaryMovementAuthority(const OwnedTaiwanOrdinaryMovementAuthority&)=delete;
+    OwnedTaiwanOrdinaryMovementAuthority& operator=(const OwnedTaiwanOrdinaryMovementAuthority&)=delete;
     std::optional<Scene::Permit> authorize(const Scene::Candidate&) override;
     // Pure game-affine revocation, including during a caught nested observer.
     // Dependencies stay retained until normal destruction; there is no reset.
@@ -31,7 +35,7 @@ private:
     OwnedTaiwanOrdinaryMovementAuthority(const std::shared_ptr<Session>&,
         std::shared_ptr<SharedWorldPresence>,const Lease&,Scene::Resources,
         RecoveredPosition,std::uint8_t,std::shared_ptr<TaiwanMovementRules>,
-        TaiwanMovementRules::OrdinaryPolicy);
+        TaiwanMovementRules::OrdinaryPolicy,std::shared_ptr<OwnedOrdinaryMovementPolicies::Binding>);
     void owner() const;
     bool bound() const;
     bool candidate_current(const Scene::Candidate&) const;
@@ -48,6 +52,8 @@ private:
     const Scene::Resources resources_;
     const std::shared_ptr<TaiwanMovementRules> rules_;
     const TaiwanMovementRules::OrdinaryPolicy policy_;
+    TaiwanMovementRules::OrdinaryPolicy committed_policy_;
+    const std::shared_ptr<OwnedOrdinaryMovementPolicies::Binding> binding_;
     const std::uint64_t battle_generation_;
     RecoveredPosition position_;
     std::uint8_t direction_,expected_sequence_;

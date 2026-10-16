@@ -549,7 +549,22 @@ constexpr std::array<D::SourceLocation,1> sources_121{{
 constexpr std::array<D::SourceLocation,1> sources_122{{
     {"src/db/SqliteWorldDisplayRepository.cpp",34},
 }};
-constexpr std::array<D::Table,123> dictionary{{
+constexpr std::array<D::SourceLocation,1> movement_rule_sources{{
+    {"src/db/SqliteOrdinaryMovementPolicyRepository.cpp",24},
+}};
+constexpr std::array<D::Column,10> movement_rule_columns{{
+    {"profile_key","設定代號","唯一 ASCII 小寫代號；首字母 a 至 z，其餘限小寫字母、數字、底線，長度 1 至 48。",D::ValueKind::Text},
+    {"config_version","整批設定版本","全表相同的正整數版本，最高 9223372036854775807；修改參數時同交易遞增。",D::ValueKind::Integer},
+    {"step_interval_us","每步補充間隔","補充一步額度的微秒數，1 至 60000000；CUSTOM-0150 設定，非原廠公式證明。",D::ValueKind::Integer},
+    {"burst_steps","額度上限","最大可累積步數，1 至 39。",D::ValueKind::Integer},
+    {"initial_credit_steps","初始移動額度","新實際權限建立時的步數額度，1 至 burst_steps；熱載入不重設。",D::ValueKind::Integer},
+    {"first_sequence","第一個預期索引","新實際權限選用的起始索引，0 至 39；熱載入不重設。",D::ValueKind::Integer},
+    {"block_players","阻擋其他人物佔用格","整數 0 或 1，是否啟用目的格人物阻擋規則。",D::ValueKind::Integer},
+    {"forbid_corner_cut","禁止斜走穿角","整數 0 或 1，是否要求斜走相關側格可通行。",D::ValueKind::Integer},
+    {"allow_zero","允許原地步驟","整數 0 或 1，是否允許座標不變的請求；其他權限條件仍適用。",D::ValueKind::Integer},
+    {"design_id","規則來源識別","文字固定 CUSTOM-0150，自訂備援政策不冒充原廠規則。",D::ValueKind::Text},
+}};
+constexpr std::array<D::Table,124> dictionary{{
     {"account_native_character_summaries","帳號原生角色摘要快照","保留客戶端交付的帳號原生角色摘要快照；快照是交付證據，不是第二份角色、背包或裝備權威。",D::Storage::NativeDelivery,D::Domain::Account,D::Installation::ExplicitExtension,sources_0,std::span<const D::Column>{}},
     {"account_native_character_summary_rows","帳號原生角色摘要列","保留客戶端交付的帳號原生角色摘要列；快照是交付證據，不是第二份角色、背包或裝備權威。",D::Storage::NativeDelivery,D::Domain::Account,D::Installation::ExplicitExtension,sources_1,std::span<const D::Column>{}},
     {"account_native_snapshots","帳號原生交付封包快照","保留客戶端交付的帳號原生交付封包快照；快照是交付證據，不是第二份角色、背包或裝備權威。",D::Storage::NativeDelivery,D::Domain::Account,D::Installation::ExplicitExtension,sources_2,std::span<const D::Column>{}},
@@ -607,6 +622,7 @@ constexpr std::array<D::Table,123> dictionary{{
     {"diagnostic_quest_journal","舊診斷任務紀錄","保存舊診斷用途的舊診斷任務紀錄；不得混稱原生玩法規則或正式玩家權限。",D::Storage::Diagnostic,D::Domain::Quest,D::Installation::VersionedMigration,sources_54,std::span<const D::Column>{}},
     {"diagnostic_town_guide_progress","舊城鎮引導進度","保存舊診斷用途的舊城鎮引導進度；不得混稱原生玩法規則或正式玩家權限。",D::Storage::Diagnostic,D::Domain::Quest,D::Installation::VersionedMigration,sources_55,std::span<const D::Column>{}},
     {"diagnostic_town_guide_reward","舊城鎮引導獎勵收據","保存舊診斷用途的舊城鎮引導獎勵收據；不得混稱原生玩法規則或正式玩家權限。",D::Storage::Diagnostic,D::Domain::Quest,D::Installation::VersionedMigration,sources_56,std::span<const D::Column>{}},
+    {"movement_rules","一般移動設定","CUSTOM-0150 明確選用的共用移動政策設定；無遊戲缺省，不是角色存檔、封包或原廠公式。",D::Storage::Authoritative,D::Domain::World,D::Installation::ExplicitExtension,movement_rule_sources,movement_rule_columns},
     {"native_armor_rows","原生防具定義列","保存原生防具定義原列與來源；與武器及一般道具分表，不等同新權威平衡設定。",D::Storage::NativeSource,D::Domain::Inventory,D::Installation::VersionedMigration,sources_57,std::span<const D::Column>{}},
     {"native_armor_sources","原生防具來源","保留原生資源來源的原生防具來源；完整原始位元組及來源不得改寫，不直接授予玩家權限。",D::Storage::NativeSource,D::Domain::Inventory,D::Installation::VersionedMigration,sources_58,std::span<const D::Column>{}},
     {"native_companion_metadata","原生同伴中介資料","保留原生資源來源的原生同伴中介資料；完整原始位元組及來源不得改寫，不直接授予玩家權限。",D::Storage::NativeSource,D::Domain::Companion,D::Installation::VersionedMigration,sources_59,std::span<const D::Column>{}},

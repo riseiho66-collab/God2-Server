@@ -1,5 +1,6 @@
 #pragma once
 #include "db/Database.h"
+#include "db/SqliteOrdinaryMovementPolicyRepository.h"
 #include "relations53/GuildRelations53FactoryDraft.h"
 #include "db/GuildSuccessionSqliteMigrationsDraft.h"
 #include "db/EffectiveGuildAdmissionRepositoryDraft.h"
@@ -82,6 +83,10 @@ public:
     AccountRepository& accounts() override;
     CharacterRepository& characters() override;
     RecoveredCharacterRepository& recovered_characters() override;
+    // Exact same-Database lazy configuration reader; no SQL/DDL on access.
+    SqliteOrdinaryMovementPolicyRepository& ordinary_movement_policies() override;
+    // Explicit fresh empty CUSTOM-0150 schema, never an automatic migration.
+    void install_ordinary_movement_policy_schema();
     NativeAccountSnapshotRepository& account_native_snapshots() override;
     SqliteNativeAccountSnapshotRepository& native_account_snapshot_writer();
     NativeCharacterSummarySnapshotRepository& native_character_summaries() override;

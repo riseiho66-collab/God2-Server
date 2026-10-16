@@ -32,18 +32,23 @@ struct OwnedTaiwanOrdinaryMovementAuthority::Ticket {
     const RecoveredPosition after;
     const std::uint64_t credit_us;
     const Clock::time_point clock;
+    const TaiwanMovementRules::OrdinaryPolicy effective_policy;
+    const std::optional<OwnedOrdinaryMovementPolicies::Observation> observation;
     Ticket(Scene::Candidate input,SharedWorldPresence::ReadyPopulation witness,
         std::vector<SharedWorldPresence::ReadyCharacter> actual,RecoveredPosition next,
-        std::uint64_t credit,Clock::time_point sampled)
+        std::uint64_t credit,Clock::time_point sampled,TaiwanMovementRules::OrdinaryPolicy policy,
+        std::optional<OwnedOrdinaryMovementPolicies::Observation> observed)
         :candidate(std::move(input)),population(std::move(witness)),rows(std::move(actual)),
-         after(next),credit_us(credit),clock(sampled) {}
+         after(next),credit_us(credit),clock(sampled),effective_policy(policy),observation(std::move(observed)) {}
 };
 OwnedTaiwanOrdinaryMovementAuthority::OwnedTaiwanOrdinaryMovementAuthority(
     const std::shared_ptr<Session>& session,std::shared_ptr<SharedWorldPresence> presence,
     const Lease& lease,Scene::Resources resources,RecoveredPosition position,std::uint8_t direction,
-    std::shared_ptr<TaiwanMovementRules> rules,TaiwanMovementRules::OrdinaryPolicy policy)
+    std::shared_ptr<TaiwanMovementRules> rules,TaiwanMovementRules::OrdinaryPolicy policy,
+    std::shared_ptr<OwnedOrdinaryMovementPolicies::Binding> binding)
     :connection_(session),presence_(std::move(presence)),lease_(lease),resources_(std::move(resources)),
-     rules_(std::move(rules)),policy_(policy),battle_generation_(session->battle_generation()),
+     rules_(std::move(rules)),policy_(policy),committed_policy_(policy),binding_(std::move(binding)),
+     battle_generation_(session->battle_generation()),
      position_(position),direction_(direction),expected_sequence_(policy.first_sequence),
      publication_revision_(resources_.actual_initial_scene_generation),
      credit_us_(std::uint64_t(policy.initial_credit_steps)*policy.step_interval_us),clock_(Clock::now()) {}
@@ -62,7 +67,7 @@ bool OwnedTaiwanOrdinaryMovementAuthority::retained_current() const {
 }
 bool OwnedTaiwanOrdinaryMovementAuthority::bound() const {
     const auto session=connection_.lock();
-    return !failed_ && session && !session->closing() && session->id()==lease_.session &&
+    return !failed_ && (!binding_ || binding_->available()) && session && !session->closing() && session->id()==lease_.session &&
         session->account_id==lease_.account && session->character_id==lease_.character &&
         session->state()==SessionState::InWorld && session->recovered_world_ready() &&
         session->battle_generation()==battle_generation_ &&
@@ -95,6 +100,7 @@ bool OwnedTaiwanOrdinaryMovementAuthority::candidate_current(const Scene::Candid
 }
 bool OwnedTaiwanOrdinaryMovementAuthority::retained(const std::shared_ptr<const Ticket>& ticket) const {
     return ticket && pending_==ticket && candidate_current(ticket->candidate) &&
+        (!binding_ || (ticket->observation && binding_->current(*ticket->observation))) &&
         presence_->retained_population_current(ticket->population);
 }
 bool OwnedTaiwanOrdinaryMovementAuthority::population_current(
@@ -123,17 +129,23 @@ bool OwnedTaiwanOrdinaryMovementAuthority::population_current(
 std::shared_ptr<OwnedTaiwanOrdinaryMovementAuthority> OwnedTaiwanOrdinaryMovementAuthority::adopt(
     const std::shared_ptr<Session>& session,std::shared_ptr<SharedWorldPresence> presence,
     const Lease& lease,const Scene::Resources& images,RecoveredPosition position,std::uint8_t direction,
-    std::shared_ptr<TaiwanMovementRules> rules,TaiwanMovementRules::OrdinaryPolicy policy) {
+    std::shared_ptr<TaiwanMovementRules> rules,TaiwanMovementRules::OrdinaryPolicy policy,
+    std::shared_ptr<OwnedOrdinaryMovementPolicies::Binding> binding) {
     if(!session || !presence || !rules || !TaiwanMovementRules::valid_ordinary_policy(policy) ||
        !rules->supports_owned_ordinary() || direction>7 || position.area!=lease.position.area ||
        position.scene!=lease.position.scene || !images.actual_resource_generation ||
        !images.actual_initial_scene_generation || images.cell_source()!=Scene::CellSource::ComposedMode2 ||
        !images.complete())return {};
     auto result=std::shared_ptr<OwnedTaiwanOrdinaryMovementAuthority>(new OwnedTaiwanOrdinaryMovementAuthority(
-        session,std::move(presence),lease,images,position,direction,std::move(rules),policy));
+        session,std::move(presence),lease,images,position,direction,std::move(rules),policy,std::move(binding)));
     Operation operation(*result);
     try {
         if(!result->bound())return {};
+        std::optional<OwnedOrdinaryMovementPolicies::Observation> observation;
+        if(result->binding_) {
+            observation=result->binding_->refresh();
+            if(observation->policy()!=policy || !result->bound() || !result->binding_->current(*observation))return {};
+        }
         const auto population=result->presence_->observe_ready_population();
         if(!population || !result->bound() || !result->presence_->retained_population_current(*population))return {};
         bool own=false;
@@ -141,22 +153,29 @@ std::shared_ptr<OwnedTaiwanOrdinaryMovementAuthority> OwnedTaiwanOrdinaryMovemen
             if(own || row.position!=position)return {};
             own=true;
         }
-        return own && result->bound() && result->presence_->retained_population_current(*population)?result:
+        return own && result->bound() && (!result->binding_ || result->binding_->current(*observation)) &&
+            result->presence_->retained_population_current(*population)?result:
             std::shared_ptr<OwnedTaiwanOrdinaryMovementAuthority>{};
     }catch(...) {result->retire();throw;}
 }
 std::optional<OwnedTaiwanOrdinaryMovementAuthority::Scene::Permit>
 OwnedTaiwanOrdinaryMovementAuthority::authorize(const Scene::Candidate& input) {
+    const auto self=shared_from_this(); // Keep this leaf alive across DB/Lua/population observers.
     Operation operation(*this);
     try {
         const auto candidate=input; // No borrowed public request survives an observer.
         if(pending_ || !candidate_current(candidate) ||
            publication_revision_==std::numeric_limits<std::uint64_t>::max() ||
            position_.revision==std::numeric_limits<std::uint64_t>::max()) {retire();return std::nullopt;}
+        std::optional<OwnedOrdinaryMovementPolicies::Observation> observation;
+        auto effective_policy=policy_;
+        if(binding_) {observation=binding_->refresh();effective_policy=observation->policy();}
+        const auto policy_current=[&] {return !binding_ || (observation && binding_->current(*observation));};
+        if(!candidate_current(candidate) || !policy_current()) {retire();return std::nullopt;}
         const auto prepared=rules_->prepare(candidate.step.request,position_,direction_,candidate.step.native_cell);
-        if(!prepared || !same_step(*prepared,candidate.step) || !candidate_current(candidate)) {retire();return std::nullopt;}
+        if(!prepared || !same_step(*prepared,candidate.step) || !candidate_current(candidate) || !policy_current()) {retire();return std::nullopt;}
         const auto population=presence_->observe_ready_population();
-        if(!population || !candidate_current(candidate) || !presence_->retained_population_current(*population)) {
+        if(!population || !candidate_current(candidate) || !policy_current() || !presence_->retained_population_current(*population)) {
             retire();return std::nullopt;
         }
         const auto observed=population->characters();
@@ -175,25 +194,30 @@ OwnedTaiwanOrdinaryMovementAuthority::authorize(const Scene::Candidate& input) {
             const auto vertical=resources_.read(position_.x,candidate.step.request.y);
             sides_clear=horizontal && vertical && *horizontal && *vertical;
         }
-        if(!own || !candidate_current(candidate) || !presence_->retained_population_current(*population)) {
+        if(!own || !candidate_current(candidate) || !policy_current() || !presence_->retained_population_current(*population)) {
             retire();return std::nullopt;
         }
-        const auto token=rules_->owned_ordinary_token(policy_,position_,candidate.step.request,
+        const auto token=rules_->owned_ordinary_token(effective_policy,position_,candidate.step.request,
             expected_sequence_,occupied,sides_clear);
-        if(!token || !candidate_current(candidate) || !presence_->retained_population_current(*population)) {
+        if(!token || !candidate_current(candidate) || !policy_current() || !presence_->retained_population_current(*population)) {
             retire();return std::nullopt;
         }
         const auto sampled=Clock::now();
         if(sampled<clock_) {retire();return std::nullopt;}
         const auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(sampled-clock_).count();
-        const std::uint64_t cap=std::uint64_t(policy_.burst_steps)*policy_.step_interval_us;
+        const std::uint64_t cap=std::uint64_t(committed_policy_.burst_steps)*committed_policy_.step_interval_us;
         if(elapsed<0 || credit_us_>cap) {retire();return std::nullopt;}
-        const auto available=credit_us_+std::min<std::uint64_t>(static_cast<std::uint64_t>(elapsed),cap-credit_us_);
-        if(available<policy_.step_interval_us) {retire();return std::nullopt;}
+        const auto old_available=credit_us_+std::min<std::uint64_t>(static_cast<std::uint64_t>(elapsed),cap-credit_us_);
+        const std::uint64_t new_cap=std::uint64_t(effective_policy.burst_steps)*effective_policy.step_interval_us;
+        // Preserve earned fractional steps across LIVE policy replacement. The
+        // checked policy domain bounds the product by39*60000000^2 (<uint64).
+        const auto available=std::min(new_cap,old_available*effective_policy.step_interval_us/
+            committed_policy_.step_interval_us);
+        if(available<effective_policy.step_interval_us) {retire();return std::nullopt;}
         const RecoveredPosition after{position_.area,position_.scene,candidate.step.request.x,
             candidate.step.request.y,position_.revision+1};
         auto ticket=std::make_shared<const Ticket>(candidate,*population,std::move(rows),after,
-            available-policy_.step_interval_us,sampled);
+            available-effective_policy.step_interval_us,sampled,effective_policy,std::move(observation));
         // CUSTOM-0150 complete logical5D uses explicit Lua custom token. This
         // does not recover native server token/echo/timing/reset or ACK receipt.
         const std::weak_ptr<OwnedTaiwanOrdinaryMovementAuthority> weak=shared_from_this();
@@ -239,6 +263,7 @@ bool OwnedTaiwanOrdinaryMovementAuthority::publish(
         position_=ticket->after;direction_=ticket->candidate.step.direction;++publication_revision_;
         expected_sequence_=static_cast<std::uint8_t>((ticket->candidate.step.request.sequence+1)%40);
         credit_us_=ticket->credit_us;clock_=ticket->clock;
+        committed_policy_=ticket->effective_policy; // No sequence/pose/revision/initial-credit reset.
         if(!bound() || !presence_->retained_population_current(ticket->population)) {retire();return false;}
         return true;
     }catch(...) {retire();throw;}
