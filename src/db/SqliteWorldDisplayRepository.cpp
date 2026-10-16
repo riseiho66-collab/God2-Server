@@ -146,9 +146,10 @@ struct SqliteWorldDisplayRepository::ReadScope {
     bool owns=false,finished=false;
     explicit ReadScope(const SqliteWorldDisplayRepository& owner)
         :source(owner),changes(sqlite3_total_changes64(owner.db_)) {}
-    void begin(){
+    void begin(bool require_borrowed=false){
         // The Scope is already constructed before BEGIN or any fence can throw.
         if(sqlite3_get_autocommit(source.db_)){
+            if(require_borrowed)throw DatabaseError("World display requires caller read transaction");
             sqlite_detail::execute(source.db_,"BEGIN");owns=true;
         }
         fence();
@@ -204,10 +205,10 @@ void world_display_scene_namespaces(sqlite3* db,bool npcs,bool enemies) {
 }
 std::shared_ptr<const SqliteWorldDisplayRepository::SceneReadset::Data>
 SqliteWorldDisplayRepository::capture_scene(const NativeNpcDisplayCatalog& npcs,const NativeEnemyDisplayCatalog& enemies,
-        std::uint16_t area,std::uint16_t scene,bool isolated) const {
+        std::uint16_t area,std::uint16_t scene,bool isolated,bool require_borrowed) const {
     if(area>=17||scene>1023||!npcs.uses_connection(db_)||!enemies.uses_connection(db_))
         throw DatabaseError("World display scene requires exact same connection and selectors");
-    ReadScope scope(*this);scope.begin();
+    ReadScope scope(*this);scope.begin(require_borrowed);
     world_display_scene_namespaces(db_,false,false);scope.fence();
     auto rows=load_rows_impl(area,scene,isolated,true);scope.fence();
     auto levels=load_levels_impl(area,scene,isolated,true);scope.fence();
@@ -249,6 +250,23 @@ bool SqliteWorldDisplayRepository::current_scene(const SceneReadset& value,
         Operation operation(*this);
         const auto fresh=capture_scene(npcs,enemies,retained->area,retained->scene,retained->isolated);
         return !poisoned_.load()&&retained->issuer==identity_&&*fresh==*retained;
+    }catch(...){return false;}
+}
+bool SqliteWorldDisplayRepository::current_scene_in_scope(sqlite3* connection,const SceneReadset& value,
+        const NativeNpcDisplayCatalog& npcs,const NativeEnemyDisplayCatalog& enemies) const noexcept {
+    const auto retained=value.data_; // Own the old immutable values before SQL.
+    if(!retained||retained->issuer!=identity_)return false;
+    try{
+        Operation operation(*this);
+        if(connection!=db_||sqlite3_get_autocommit(db_)||!uses_catalogs(npcs,enemies))return false;
+        const auto changes=sqlite3_total_changes64(db_);
+        bool matched=false;
+        {
+            const auto fresh=capture_scene(npcs,enemies,retained->area,retained->scene,retained->isolated,true);
+            matched=fresh&&*fresh==*retained;
+        } // Fresh value destruction precedes the final borrowed-snapshot fence.
+        return matched&&thread_==std::this_thread::get_id()&&!poisoned_.load()&&busy_.load()&&
+            retained->issuer==identity_&&!sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==changes;
     }catch(...){return false;}
 }
 std::uint16_t SqliteWorldDisplayRepository::SceneReadset::area() const noexcept{return data_->area;}

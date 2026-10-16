@@ -63,6 +63,10 @@ public:
     // native cache generation, world completeness or gameplay authority.
     bool current_scene(const SceneReadset&,const NativeNpcDisplayCatalog&,
         const NativeEnemyDisplayCatalog&) const noexcept;
+    // Strictly borrow the caller's already active same-connection snapshot.
+    // Never begin, commit or roll back a transaction on this path.
+    bool current_scene_in_scope(sqlite3*,const SceneReadset&,const NativeNpcDisplayCatalog&,
+        const NativeEnemyDisplayCatalog&) const noexcept;
     static const char* schema() noexcept;
     static const char* level_schema() noexcept;
     // Immutable insert: conflicting instance records are rejected, never replaced.
@@ -75,7 +79,7 @@ private:
     std::vector<StoredWorldDisplay> load_rows_impl(std::uint16_t,std::uint16_t,bool,bool main) const;
     std::vector<StoredMonsterLevel> load_levels_impl(std::uint16_t,std::uint16_t,bool,bool main) const;
     std::shared_ptr<const SceneReadset::Data> capture_scene(const NativeNpcDisplayCatalog&,
-        const NativeEnemyDisplayCatalog&,std::uint16_t,std::uint16_t,bool) const;
+        const NativeEnemyDisplayCatalog&,std::uint16_t,std::uint16_t,bool,bool require_borrowed=false) const;
     sqlite3* db_;
     // Application constructs this repository inside its serial game thread.
     // Legacy public reads/writes keep their old thread behavior when no new

@@ -5107,6 +5107,16 @@
         "src/handlers/OwnedTaiwanPkRoomBackend.h"
       ],
       "native_gap": "Actual full-current actor/resource/text/complete-selection issuer, final strand consume/visibility publication and durable release/recovery remain incomplete.",
+      "initial_actor_npc_joint436": {
+        "classification": "ACTUAL_SELECTED_INITIAL_ACTOR_NPC_JOINT_SAVED_VALUE_SOURCE_WITHIN_CUSTOM0133",
+        "source": "Actual private NPC readset/lifecycle receipt reaches both actor final Saved-owned read transactions; exact borrowed sameDB full NPC comparison after actor/role/EQ in same snapshot.",
+        "limits": "ABA/fullNPCcoverage/history/finalgameIO/Main/fullroutes remain OPEN.",
+        "actual_selected_initial_actor_NPC_joint_read_source_connected": true,
+        "legacy_saved_current_body_unchanged": true,
+        "default_activated": false,
+        "whole_route_complete": false,
+        "build_tests_runtime_SQL_activation_deployment": false
+      },
       "initial_npc_display435": {
         "classification": "ACTUAL_STORED_SELECTED_INITIAL_NPC_DISPLAY_SOURCE_WITHIN_CUSTOM0133",
         "source": "Actual sameDatabase SceneReadset and NPC catalog at genuine initial72 boundaries; full21B matching and owning DB value consumed through real initial recipe/Current.",

@@ -15,6 +15,7 @@
 
 namespace god2 {
 class SqliteDatabase;
+class TaiwanInitialNpcSceneObservation;
 class SqliteAccountRepository;
 class SqliteRecoveredCharacterRepository;
 class SqliteNativeWorldEntrySnapshotRepository;
@@ -135,6 +136,14 @@ public:
         std::span<const OwnedTaiwanPkReturnRoleTextSource::Observation>,
         std::span<const OwnedTaiwanPkReturnRoleTextSource::EndpointObservation>,
         std::span<const ProfileEquipment> profiles={}) const;
+    // Actual initial actor/role/equipment/NPC values share ONE final saved
+    // read transaction. The private NPC proof cannot be forged or rebased.
+    bool current_with_role_text_and_initial_npc(const Readset&,
+        const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>&,
+        std::span<const OwnedTaiwanPkReturnRoleTextSource::Observation>,
+        std::span<const OwnedTaiwanPkReturnRoleTextSource::EndpointObservation>,
+        std::span<const ProfileEquipment>,
+        const std::shared_ptr<const TaiwanInitialNpcSceneObservation>&) const;
     // Borrow the actual room connection/transaction. No BEGIN/COMMIT, Session,
     // Presence observer, provider, live Current or new observation in this cut.
     bool stored_current_in_scope(sqlite3*,const Readset&,std::span<const ProfileEquipment> profiles={}) const;

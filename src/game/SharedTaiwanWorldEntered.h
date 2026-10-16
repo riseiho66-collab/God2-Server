@@ -6,6 +6,7 @@
 
 namespace god2 {
 class TaiwanInitialActorEndpoints;
+class TaiwanInitialNpcSceneObservation;
 // Explicit actual scene supplier. This does not construct native scene replies,
 // choose peers/resources, replace frozen TW handlers, or grant gameplay rules.
 class SharedTaiwanWorldEntered {
@@ -75,6 +76,9 @@ public:
         // and initial queue release; nullopt fails, an empty vector is explicit.
         OutwardDecision outward_decision=OutwardDecision::Supplied;
         std::shared_ptr<const OutwardProvider> outward_provider{};
+        // LAST: private actual selected NPC source lifetime/readset receipt.
+        // This pure game-owner metadata never enters Session frame custody.
+        std::shared_ptr<const TaiwanInitialNpcSceneObservation> initial_npc_observation{};
         Native(ReplyDecision,std::vector<std::uint8_t>,std::vector<std::size_t>,
             std::vector<cn::SharedActorVisibility::InitialTaiwanActor>,
             std::vector<cn::SharedActorVisibility::OutwardRecipient>,Current,Install,Cleanup);

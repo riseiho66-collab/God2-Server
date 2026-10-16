@@ -1,4 +1,5 @@
 #include "game/OwnedTaiwanInitialNpcDisplaySource.h"
+#include "game/TaiwanInitialNpcSceneObservation.h"
 #include "protocol/RecoveredNpcRecord.h"
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include <algorithm>
@@ -30,6 +31,7 @@ struct OwnedTaiwanInitialNpcDisplaySource::Owner {
     const NativeEnemyDisplayCatalog& enemies;
     const Entered::Source genuine;
     const std::thread::id thread=std::this_thread::get_id();
+    const std::shared_ptr<std::atomic<bool>> live=std::make_shared<std::atomic<bool>>(true);
     bool running=false,poisoned=false;
     Owner(std::shared_ptr<SharedWorldPresence> p,SqliteWorldDisplayRepository& r,
             const NativeNpcDisplayCatalog& n,const NativeEnemyDisplayCatalog& e,Entered::Source source)
@@ -38,7 +40,10 @@ struct OwnedTaiwanInitialNpcDisplaySource::Owner {
         Owner& owner;bool entered=false;
         explicit Call(Owner& value):owner(value) {
             if(owner.thread!=std::this_thread::get_id())return;
-            if(owner.running){owner.poisoned=true;return;}
+            if(owner.running){
+                owner.live->store(false,std::memory_order_release);
+                owner.poisoned=true;return;
+            }
             if(!owner.poisoned){owner.running=true;entered=true;}
         }
         ~Call(){if(entered)owner.running=false;}
@@ -49,6 +54,8 @@ struct OwnedTaiwanInitialNpcDisplaySource::State {
     const Entered::Scope scope;
     const std::weak_ptr<Session> connection;
     const SqliteWorldDisplayRepository::SceneReadset readset;
+    const std::shared_ptr<std::atomic<bool>> scene_live=std::make_shared<std::atomic<bool>>(true);
+    std::shared_ptr<const TaiwanInitialNpcSceneObservation> observation;
     // The returned Native is a distinct object. Its callbacks capture State;
     // this immutable original never captures State or creates that cycle.
     std::shared_ptr<const Entered::Native> original;
@@ -60,9 +67,13 @@ struct OwnedTaiwanInitialNpcDisplaySource::State {
         if(owner->thread!=std::this_thread::get_id())std::terminate();
         try{cleanup();}catch(...){}
     }
+    void cancel() noexcept {
+        scene_live->store(false,std::memory_order_release);
+        cancelled=true;
+    }
     void cleanup(Entered::Native* unpublished=nullptr) {
         if(owner->thread!=std::this_thread::get_id())std::terminate();
-        cancelled=true; // Revoke before any genuine callback/destructor/reentry.
+        cancel(); // Revoke the private receipt before callbacks/destructors/reentry.
         if(std::exchange(cleaned,true))return;
         if(original&&original->cleanup)original->cleanup(scope);
         else if(unpublished&&unpublished->cleanup)unpublished->cleanup(scope);
@@ -70,6 +81,8 @@ struct OwnedTaiwanInitialNpcDisplaySource::State {
     bool pure() const noexcept {
         try {
             if(owner->thread!=std::this_thread::get_id()||owner->poisoned||cancelled||
+               !observation||!observation->retained()||!scope.actor_input||
+               !scope.population||!observation->matches_scope(scope.lease,*scope.population,scope.actor_input)||
                !owner->repository.uses_catalogs(owner->npcs,owner->enemies)||
                !scope.population||scope.population->joining().lease!=scope.lease||
                readset.area()!=scope.entry.area||readset.scene()!=scope.entry.scene||readset.isolated_test()||
@@ -83,7 +96,9 @@ struct OwnedTaiwanInitialNpcDisplaySource::State {
                     actual->recovered_world_ready()&&actual->recovered_client_language()==scope.tail_language;
             } // Last temporary strong Session dies before the final pure fence.
             return bound&&!cancelled&&!owner->poisoned&&
-                owner->presence->retained_initial_population_current(*scope.population)&&!cancelled&&!owner->poisoned;
+                owner->presence->retained_initial_population_current(*scope.population)&&
+                observation->matches_scope(scope.lease,*scope.population,scope.actor_input)&&
+                !cancelled&&!owner->poisoned;
         }catch(...){return false;}
     }
     bool scene_current() const noexcept {
@@ -124,7 +139,8 @@ std::optional<Entered::Native> OwnedTaiwanInitialNpcDisplaySource::supply(
     if(owner->thread!=std::this_thread::get_id())throw std::logic_error("Initial NPC source game owner mismatch");
     Owner::Call call(*owner);if(!call.entered)return {};
     const auto scope=supplied_scope;
-    if(!scope.population||scope.population->joining().lease!=scope.lease||
+    if(!scope.actor_input||!scope.actor_input->initial_population()||!scope.population||
+       *scope.actor_input->initial_population()!=*scope.population||scope.population->joining().lease!=scope.lease||
        scope.entry.area!=scope.lease.position.area||scope.entry.scene!=scope.lease.position.scene||
        !owner->presence->retained_initial_population_current(*scope.population)||
        session.closing()||session.id()!=scope.lease.session||session.account_id!=scope.lease.account||
@@ -134,6 +150,12 @@ std::optional<Entered::Native> OwnedTaiwanInitialNpcDisplaySource::supply(
     // scene to clean up; no isolated/test or guessed empty-scene fallback.
     auto readset=owner->repository.observe_scene(owner->npcs,owner->enemies,scope.entry.area,scope.entry.scene,false);
     const auto state=std::make_shared<State>(owner,scope,session,std::move(readset));
+    // Mint only here, before genuine Source. The receipt owns immutable values
+    // and weak affine owners, never State, callbacks, Session or full Profile.
+    state->observation=std::shared_ptr<const TaiwanInitialNpcSceneObservation>(
+        new TaiwanInitialNpcSceneObservation(state->readset,owner->repository,owner->npcs,owner->enemies,
+            scope.lease,*scope.population,scope.actor_input,scope.actor_input->source(),
+            std::shared_ptr<const void>(owner),owner->live,state->scene_live));
     if(!state->pure())return {};
     auto supplied=owner->genuine(session,state->scope);if(!supplied)return {};
     try{state->original=std::make_shared<const Entered::Native>(std::move(*supplied));}
@@ -145,7 +167,7 @@ std::optional<Entered::Native> OwnedTaiwanInitialNpcDisplaySource::supply(
         ~CleanupGuard(){if(!delivered)try{state->cleanup();}catch(...){}}
     } cleanup_guard{state,delivered};
     const auto original=state->original;
-    if(!original->current||!original->install||!original->cleanup||
+    if(original->initial_npc_observation||!original->current||!original->install||!original->cleanup||
        !state->live(Entered::Check::AfterSupply))return {};
     if((original->outward_decision==Entered::OutwardDecision::Supplied&&original->outward_provider)||
        (original->outward_decision==Entered::OutwardDecision::AfterInitialPublication&&
@@ -186,6 +208,7 @@ std::optional<Entered::Native> OwnedTaiwanInitialNpcDisplaySource::supply(
     // exact visibility audience. Missing/empty rows never prove completeness.
     Entered::Native result=*original;
     result.logical=std::move(logical);
+    result.initial_npc_observation=state->observation;
     result.current=[state](Entered::Check check,const Entered::Scope& value){
         Owner::Call call(*state->owner);
         return call.entered&&same_scope(state->scope,value)&&state->live(check);
@@ -204,9 +227,9 @@ std::optional<Entered::Native> OwnedTaiwanInitialNpcDisplaySource::supply(
             ->std::optional<std::vector<Visibility::OutwardRecipient>> {
             Owner::Call call(*state->owner);if(!call.entered)return {};
             // Latch before any callback copy, allocation or live observer.
-            if(std::exchange(state->outward_started,true)){state->cancelled=true;return {};}
+            if(std::exchange(state->outward_started,true)){state->cancel();return {};}
             bool committed=false;
-            struct Attempt {State& state;bool& committed;~Attempt(){if(!committed)state.cancelled=true;}} attempt{*state,committed};
+            struct Attempt {State& state;bool& committed;~Attempt(){if(!committed)state.cancel();}} attempt{*state,committed};
             if(!same_scope(state->scope,value)||!state->same_connection(actual)||!state->installed)return {};
             std::optional<std::vector<Visibility::OutwardRecipient>> selected;
             {

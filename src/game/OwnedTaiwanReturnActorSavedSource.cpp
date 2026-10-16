@@ -1,4 +1,5 @@
 #include "game/OwnedTaiwanReturnActorSavedSource.h"
+#include "game/TaiwanInitialNpcSceneObservation.h"
 #include "db/SqliteNativeWorldEntrySnapshotRepository.h"
 #include "db/SqliteNativeEquipmentSnapshotRepository.h"
 #include "db/SqliteOwnedInventoryRepository.h"
@@ -406,6 +407,54 @@ bool OwnedTaiwanReturnActorSavedSource::current_with_role_text(const Readset& va
             fence(changes,false);scope.finish(changes);
         }
         if(!registry_current(retained))return false;fence(changes,true);return true;
+    }catch(const std::exception&){return false;}
+}
+bool OwnedTaiwanReturnActorSavedSource::current_with_role_text_and_initial_npc(const Readset& value,
+        const std::shared_ptr<OwnedTaiwanPkReturnRoleTextSource>& role,
+        std::span<const OwnedTaiwanPkReturnRoleTextSource::Observation> texts,
+        std::span<const OwnedTaiwanPkReturnRoleTextSource::EndpointObservation> endpoints,
+        std::span<const ProfileEquipment> profiles,
+        const std::shared_ptr<const TaiwanInitialNpcSceneObservation>& npc) const {
+    try{
+        Operation operation(*this);
+        // Own inputs before any live/SQLite observer can replace the caller's
+        // public value or release its backing vectors and shared owner.
+        const Readset retained=value;const auto role_owner=role;const auto npc_owner=npc;
+        const std::vector<OwnedTaiwanPkReturnRoleTextSource::Observation> text_rows(texts.begin(),texts.end());
+        const std::vector<OwnedTaiwanPkReturnRoleTextSource::EndpointObservation> endpoint_rows(endpoints.begin(),endpoints.end());
+        const std::vector<ProfileEquipment> profile_rows(profiles.begin(),profiles.end());
+        if(!identity_current(retained)||!retained.data_->initial||!npc_owner||
+           !npc_owner->matches_source(this,*retained.data_->initial)||
+           (!role_owner&&(!text_rows.empty()||!endpoint_rows.empty())))return false;
+        {
+            // The private NPC mint receives only the actual PopulationInput.
+            // Bind its ORIGINAL saved readset, not another observation from the
+            // same issuer/population. Drop this temporary owner before any live
+            // or SQL observer; never call Saved's reentry-sensitive public APIs.
+            const auto input_owner=npc_owner->actor_input_.lock();
+            const auto input=std::static_pointer_cast<const PopulationInput>(input_owner);
+            if(!input||input.get()!=npc_owner->actor_input_address_||input->source().get()!=this||
+               npc_owner->saved_source_.owner_before(input->source())||
+               input->source().owner_before(npc_owner->saved_source_)||
+               input->readset()!=retained||!input->initial_population()||
+               *input->initial_population()!=*retained.data_->initial)return false;
+        }
+        for(const auto& profile:profile_rows)if(!profile_shape(profile)||profile.data_->saved!=retained)return false;
+        const auto changes=sqlite3_total_changes64(db_);fence(changes,true);
+        if(role_owner&&!role_owner->owns_presence(presence_))return false;
+        fence(changes,true);
+        for(const auto& row:retained.materials()){if(!row_live_current(retained,row.actor))return false;fence(changes,true);}
+        {
+            ReadScope scope(*this);scope.begin(changes);
+            if(!stored(retained,changes)||(role_owner&&!role_owner->stored_current_in_scope(db_,text_rows,endpoint_rows)))return false;
+            if(!profiles_stored(retained,profile_rows,changes))return false;
+            // This proof borrows exactly this owned Saved read scope. Its full
+            // NPC/level/catalog comparison has no live game observer or commit.
+            if(!npc_owner->stored_current_in_scope(db_))return false;
+            fence(changes,false);scope.finish(changes);
+        }
+        if(!registry_current(retained)||!npc_owner->matches_source(this,*retained.data_->initial))return false;
+        fence(changes,true);return npc_owner->retained();
     }catch(const std::exception&){return false;}
 }
 bool OwnedTaiwanReturnActorSavedSource::stored_current_in_scope(sqlite3* connection,const Readset& value,

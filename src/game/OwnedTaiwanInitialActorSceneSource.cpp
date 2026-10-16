@@ -1,5 +1,6 @@
 #include "game/OwnedTaiwanInitialActorSceneSource.h"
 #include "game/SharedNativeActorNameSource.h"
+#include "game/TaiwanInitialNpcSceneObservation.h"
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include <algorithm>
 #include <array>
@@ -114,10 +115,16 @@ struct OwnedTaiwanInitialActorSceneSource::State {
         return true;
         }catch(...){return false;}
     }
+    bool npc_current() const noexcept {
+        // Before genuine adoption there is no Native yet. Thereafter receipt
+        // absence, substitution, cleanup or owner poison rejects every cut.
+        return !original||(original->initial_npc_observation&&scope.population&&
+            original->initial_npc_observation->matches_scope(scope.lease,*scope.population,scope.actor_input));
+    }
     bool pure_body() const noexcept {
         try {
             if(owner->thread!=std::this_thread::get_id()||owner->poisoned||cancelled||
-               !scope.actor_input||!scope.population||!scope.actor_input->initial_population()||
+               !npc_current()||!scope.actor_input||!scope.population||!scope.actor_input->initial_population()||
                *scope.actor_input->initial_population()!=*scope.population||
                scope.population->joining().lease!=scope.lease||
                !scope.actor_input->population_current(owner->presence)||!owner->profiles->owns_presence(owner->presence)||
@@ -135,7 +142,7 @@ struct OwnedTaiwanInitialActorSceneSource::State {
         // pure_body's temporary strong Session is dropped before this final cut.
         const bool okay=pure_body();
         return okay&&!cancelled&&!owner->poisoned&&scope.actor_input->population_current(owner->presence)&&
-            scope.actor_endpoints->retained()&&!cancelled&&!owner->poisoned;
+            scope.actor_endpoints->retained()&&npc_current()&&!cancelled&&!owner->poisoned;
     }
     bool genuine_current(Entered::Check check) const {
         const auto material=original;
@@ -175,8 +182,11 @@ struct OwnedTaiwanInitialActorSceneSource::State {
         if(!genuine_current(check))return false;
         // Every temporary Profile/Session/provider copy is gone. Qualify ALL
         // frozen roles/equipment together after every actual live observer.
-        return pure()&&scope.actor_input->source()->current_with_role_text(scope.actor_input->readset(),
-            scope.actor_input->role_text_source(),outward?outward->roles:roles,{},outward?outward->equipment:equipment)&&pure();
+        // The same Saved-owned SQL snapshot compares actor/role/equipment AND
+        // the frozen NPC rows/levels/catalogs after all genuine live observers.
+        return pure()&&scope.actor_input->source()->current_with_role_text_and_initial_npc(scope.actor_input->readset(),
+            scope.actor_input->role_text_source(),outward?outward->roles:roles,{},outward?outward->equipment:equipment,
+            original->initial_npc_observation)&&pure();
     }
     bool outward_ready() const noexcept {
         bool okay=false;
@@ -474,8 +484,9 @@ std::optional<Entered::Native> OwnedTaiwanInitialActorSceneSource::supply(
         for(const auto& actor:state->actors)if(!state->verify(actor,Profiles::Check::Retained)||!state->outward_ready())return {};
         for(const auto& actor:frozen->actors)if(!state->verify(actor,Profiles::Check::Retained)||!state->outward_ready())return {};
         if(!state->genuine_current(Entered::Check::OutwardPublish)||!state->outward_ready()||
-           !state->scope.actor_input->source()->current_with_role_text(state->scope.actor_input->readset(),
-                state->scope.actor_input->role_text_source(),frozen->roles,{},frozen->equipment)||!state->outward_ready())return {};
+           !state->scope.actor_input->source()->current_with_role_text_and_initial_npc(state->scope.actor_input->readset(),
+                state->scope.actor_input->role_text_source(),frozen->roles,{},frozen->equipment,
+                state->original->initial_npc_observation)||!state->outward_ready())return {};
         for(const auto& actor:frozen->actors)if(!state->actor_current(actor))return {};
         state->outward=frozen; // No allocation, callback or partial actor prefix.
         if(!state->pure())return {};

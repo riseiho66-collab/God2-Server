@@ -6643,3 +6643,24 @@ losslessexport fullDB scope retained. PHASE1no build/tests/product/parser/native
 VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
 
 Details: docs/research/tw-initial-npc-display-source-20261016.md
+
+## Round436 — Actual initial actor and NPC joint read (2026-10-16)
+
+Round436 connects the selected initial actor/role/EQ and NPC full SceneReadset
+inside one final Saved-owned readtransaction afterall genuine/Profile observers.
+Private actualNPC receipt ownsvalues/weakowners/purelifetimes; cancel/reentry
+revokes beforecallbacks, Native LASTmetadata, exactScope/initial/input/source
+identity purefences. Both actor lastcuts use newjoint API; strict borrowedNPC
+read requires exactsameconnection/privateissuer/currenttransaction andcannot
+BEGIN/COMMIT/ROLLBACK. Expectedversions frozen/no rebase. Legacy Saved current,
+PK/Session/421/429 preserved; heldinstall stillpure. Jointselectedsavedvaluecut
+sourceconnected; ABA/fullNPCplacements/history/finalgameIO/allwriters/fanoutACK/
+Main/movement/fullinventory remain OPEN. V72pins158=150same7updated1new;
+canonical809;8CPP=7existing1new/no newprojectPY. Fullroutes0/countsunchanged/
+whole%unknown; fullTW100-first/commonCN/fourWS/allDBgoal ACTIVE. Preserve453
+Traditional/clientBIN/maxHPpoison10th/907/common64/coin99999999999/stack99/
+nativelevels/saves/fonts/IME/auth/text/English+per-tableChineseTXT/typedreload/
+MySQL8backendlosslessexport. PHASE1no build/tests/product/parser/native/VM/codec/
+gameDBSQL/schema/migrate/import/activate/deploy.
+
+Details: docs/research/tw-initial-actor-npc-joint-source-20261016.md
