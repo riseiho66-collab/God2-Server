@@ -4,6 +4,41 @@
   "inventory_complete": false,
   "designs": [
     {
+      "id": "CUSTOM-0150",
+      "name": "Owned ordinary Taiwan movement admission and phase reacquisition",
+      "authority": "OWNER_AUTHORIZED_CUSTOM_SERVER_POLICY_WITH_QUALIFIED_NATIVE_GEOMETRY_AND_WIRE",
+      "implementation": [
+        "src/game/TaiwanNativeSceneResourceOwner.h",
+        "src/game/TaiwanNativeSceneResourceOwner.cpp",
+        "src/game/SharedTaiwanNativeMovementHost.h",
+        "src/game/SharedTaiwanNativeMovementHost.cpp",
+        "src/scripting/TaiwanMovementRules.h",
+        "src/scripting/TaiwanMovementRules.cpp",
+        "src/game/OwnedTaiwanOrdinaryMovementAuthority.h",
+        "src/game/OwnedTaiwanOrdinaryMovementAuthority.cpp",
+        "scripts/tw/owned_ordinary_movement.lua"
+      ],
+      "native_gap": "Original server5D token/timing/reset/complete path/live NPC-object rules remain unrecovered. Client cursor/reset/debug dataflow is not server authority.",
+      "rules": {
+        "selection": "LAST explicit owned_ordinary policy+sameLua; exclusive supplied native Authority alternative; actual selected immutable ComposedMode2 and genuine Current required.",
+        "policy": "All8scalar choices required by ctor: version/step_interval_us/burst_steps/initial_credit_steps/first_sequence/block_players/forbid_corner_cut/allow_zero. No gameplaydefaults. Version>0,interval1..60000000us,burst1..39,initial1..burst,index0..39 are CUSTOM validation ranges.",
+        "admission": "Lua custom expected-sequence/adjacency/zero/actual ready-player occupancy/retainedgrid diagonal-corner admission; full5D request-index echo explicitly CUSTOM.",
+        "custody": "ActualweakSession/fullLease/phase/battlegeneration/resources/fullreadypopulation/registryepoch/onceTicket/exactrevision+1; tokenbucket stagespreCAS andpublishesonceaftersolecommonCAS. No second position writer/send/ACK claim.",
+        "phase": "Actual customHost first postbattle movement retiresoldincarnation andrequiresreal freshInput/newscene generation; no publicreset/rebase. Complete reset/transfer/nativebattle scene coverage OPEN.",
+        "lifetime": "Retire typedleaf before callbacks; actualnewEntryaffected; copied Inputcallbacks drain beforepurefinalEntry/Slot/phase/privateleaf fences afterlast SQLobserver."
+      },
+      "activation": false,
+      "production_activated": false,
+      "schema_installed": false,
+      "deployment": false,
+      "native_client_acceptance": false,
+      "tests": [],
+      "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
+      "document": "docs/research/tw-owned-ordinary-movement-authority-source-20261016.md",
+      "reason": "Replace missing externally fabricated ordinary permit dependency with an actual game-owned leaf while preserving native evidence and sole shared settlement.",
+      "replacement": "Recover originalserver token/rate/reset/path; integrate allscene/Main/sender frame custody andtypedDBpolicy repository/versionedreload, then full centralized acceptance."
+    },
+    {
       "id": "CUSTOM-0037",
       "name": "Owned ordinary-bag whole-stack move and swap",
       "authority": "CUSTOM_SERVER_POLICY_WITH_NATIVE_WIRE",

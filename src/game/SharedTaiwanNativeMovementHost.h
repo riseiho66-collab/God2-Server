@@ -3,7 +3,9 @@
 
 namespace god2 {
 // Actual common-host TW native resource/controller composition, game-affine.
-// Native source Current/Authority/full5D remain actual issuer inputs.
+// Native Current/resources remain actual issuer inputs. Explicit CUSTOM-0150
+// may select the concrete owned ordinary authority via LAST Input metadata;
+// supplied native Authority is preserved and never replaced implicitly.
 class SharedTaiwanNativeMovementHost final:public std::enable_shared_from_this<SharedTaiwanNativeMovementHost> {
 public:
     using Lease=SharedWorldPresence::Lease;

@@ -25,6 +25,11 @@ public:
     };
     using ResourceCurrent=std::function<bool(Scene::Check,const Scene::Scope&,
         const Scene::Resources&,const Sources&)>;
+    // CUSTOM-0150 scalar policy + the same owned geometry Lua. No permit supplier.
+    struct OwnedOrdinary {
+        std::shared_ptr<TaiwanMovementRules> rules;
+        TaiwanMovementRules::OrdinaryPolicy policy;
+    };
     struct Input {
         Sources sources;
         std::size_t max_hmd_plain_bytes,max_rom_plain_bytes;
@@ -38,6 +43,10 @@ public:
         // pump events, send or perform another common position CAS.
         ResourceCurrent current;
         std::shared_ptr<Scene::Authority> authority;
+        // LAST explicit exclusive alternative to supplied native Authority.
+        // Actual original selected resources/Current remain mandatory. No default
+        // rate/seed/policy or implicit fallback; ordinary CUSTOM mode only.
+        std::optional<OwnedOrdinary> owned_ordinary;
     };
     static std::shared_ptr<TaiwanNativeSceneResourceOwner> create(
         std::shared_ptr<SharedWorldPresence>,std::size_t actual_session_capacity);
@@ -52,6 +61,9 @@ public:
     // Exact stored pointer+Lease release; works after common identity clears.
     // Never releases common Presence/Visibility or a successor generation.
     bool remove(Session&,const Lease&);
+    // CUSTOM-0150 pure exact installed-leaf fence after caller-owned temporary
+    // callbacks drain. No source/SQL observer, refresh or new installation.
+    bool owned_ordinary_retained_current(Session&,const Lease&) const;
     Scene::MaterialSource material_source();
     SharedTaiwanMovementSource::Factory factory();
     // Hosting owner may propagate a rejected caught nested operation before

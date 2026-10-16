@@ -53,3 +53,36 @@ std::optional<TaiwanMovementRules::Step> TaiwanMovementRules::prepare(
     return Step{request,static_cast<std::uint8_t>(direction),native_cell};
 }
 }
+
+namespace god2 {
+
+// CUSTOM-0150 owned ordinary admission is explicitly separate from recovered
+// native direction/raw-cell predicates and from original-server5D evidence.
+bool TaiwanMovementRules::valid_ordinary_policy(const OrdinaryPolicy& policy) noexcept {
+    return policy.version>0 && policy.step_interval_us>=1 && policy.step_interval_us<=60000000 &&
+        policy.burst_steps>=1 && policy.burst_steps<=39 && policy.initial_credit_steps>=1 &&
+        policy.initial_credit_steps<=policy.burst_steps && policy.first_sequence<40;
+}
+bool TaiwanMovementRules::supports_owned_ordinary() const {
+    if(thread_!=std::this_thread::get_id())throw std::logic_error("TW movement Lua owner mismatch");
+    sol::object function=vm_->rules["owned_ordinary_token"];
+    return function.get_type()==sol::type::function;
+}
+std::optional<std::uint8_t> TaiwanMovementRules::owned_ordinary_token(const OrdinaryPolicy& policy,
+    const RecoveredPosition& before,const RecoveredMovement::Request& request,
+    std::uint8_t expected_sequence,bool destination_occupied,bool diagonal_sides_clear) {
+    if(thread_!=std::this_thread::get_id())throw std::logic_error("TW movement Lua owner mismatch");
+    if(!valid_ordinary_policy(policy) || expected_sequence>=40 ||
+       !RecoveredNativeMovement::ordinary_request(request) || !supports_owned_ordinary())return std::nullopt;
+    Limit limit(vm_->state.lua_state());sol::protected_function rule=vm_->rules["owned_ordinary_token"];
+    auto result=rule(request.sequence,expected_sequence,int(request.x)-before.x,int(request.y)-before.y,
+        policy.allow_zero,policy.block_players,destination_occupied,policy.forbid_corner_cut,diagonal_sides_clear);
+    if(!result.valid() || result.return_count()!=1)throw std::runtime_error("TW owned ordinary token result shape invalid");
+    sol::object value=result.get<sol::object>();
+    if(value.get_type()==sol::type::nil)return std::nullopt;
+    if(!value.is<lua_Integer>())throw std::runtime_error("TW owned ordinary token must be an integer");
+    const auto token=value.as<lua_Integer>();
+    if(token<0 || token>255)throw std::runtime_error("TW owned ordinary token out of range");
+    return static_cast<std::uint8_t>(token);
+}
+}

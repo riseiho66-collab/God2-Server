@@ -6683,3 +6683,25 @@ SQL/schema/migrate/import/activate/deploy. Fullauthority/phase/reset/ACK/scene/
 Main/allwriters/fanout/fullroute inventory/configreload/MySQL remain OPEN.
 
 Details: docs/research/tw-native-movement-cursor-recovery-20261016.md
+
+## Round438 — Actual owned ordinary movement authority (2026-10-16)
+
+Round438 connects CUSTOM0150 actual owned ordinary movement leaf inside real
+selected-resource put: explicit scalar policy + same Lua/complete composedscene,
+private oneuse ticket/fullready population/phase/battle generation/clockcredit;
+sole commonCAS remains outside. Actual Host custombattle epoch change retires
+oldcontroller/resources thenreacquires realInput with freshscene generation;
+no oldauthority reset/rebase/native fallback. Explicit callbackdrain thenpure
+Entry/Slot/leaf fences afterlastobservers. Native authority mode/CN preserved.
+Policy has required8scalar ctor, no gameplaydefaults; native5D/rate/reset facts
+not fabricated. DB policy repository/reload/Main/fullscene/fullphase/ACK/affineIO/
+allwriter/fanout/fullinventory/MySQL remain OPEN. V74pins169=160same9new source
+pins/canonical816;CPP8=6existing2new/Lua1/newprojectPY0/CMake0. Partialsource+1,
+fullroutes0/countsunchanged/whole%unknown. FullTW100first/commonCN/fourWS/allDB
+objective ACTIVE. Preserve453Traditional/clientBIN/maxHPpoison10th/907/common64/
+coins99999999999stack99nativelevels/saves/fonts/IME/auth/text/EnglishDBidentifiers/
+per-tableChineseTXT/typedreload/MySQL8losslessexport. PHASE1no build/tests/product/
+native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.5070 GPU allowed
+whenbeneficial; noGPUused.
+
+Details: docs/research/tw-owned-ordinary-movement-authority-source-20261016.md
