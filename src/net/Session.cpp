@@ -889,6 +889,134 @@ struct Session::Impl {
     // is not delivery: only the actual game callback marks this delivered.
     // Last-drop closes/revokes without recursively posting another notification;
     // the existing game-vault teardown owns real affine cancellation callbacks.
+    // Outward-only pure frame domain. No Profile, Scope, saved input, game
+    // callback, pending-entry ticket or PK plan is retained by this context.
+    struct OutwardStatusFrame {
+        enum class Phase {Preparing,Held,Publishing,Published,Released,Written,Revoked};
+        const std::shared_ptr<ActorStatusPublicationPlanIdentity> identity;
+        const std::shared_ptr<const CommonWorldIdentity> common;
+        const Session* const recipient_address;
+        const std::weak_ptr<Session> recipient_owner;
+        const SharedWorldPresence::Lease recipient;
+        const std::uint64_t battle;
+        const TaiwanActorStatusPublication::ActorUnit actor;
+        const std::shared_ptr<std::vector<std::uint8_t>> frame;
+        const std::vector<std::uint8_t> encoded;
+        const TaiwanActorStatusPublication::FrameSeal seal;
+        const std::shared_ptr<Reservation> reservation;
+        std::atomic<Phase> phase{Phase::Preparing};
+        std::atomic<bool> present{false};
+        OutwardStatusFrame(std::shared_ptr<ActorStatusPublicationPlanIdentity> plan,
+                std::shared_ptr<const CommonWorldIdentity> ready,const std::shared_ptr<Session>& session,
+                ActorStatusOutputInput input,std::uint64_t generation,
+                std::shared_ptr<std::vector<std::uint8_t>> bytes,TaiwanActorStatusPublication::FrameSeal proof,
+                std::shared_ptr<Reservation> budget)
+            :identity(std::move(plan)),common(std::move(ready)),recipient_address(session.get()),recipient_owner(session),
+             recipient(std::move(input.recipient)),battle(generation),actor(std::move(input.actor)),
+             frame(std::move(bytes)),encoded(*frame),seal(std::move(proof)),reservation(std::move(budget)){}
+        bool retained() const noexcept {
+            const auto value=phase.load();const auto& data=seal.data_;
+            if(value==Phase::Revoked||value==Phase::Written||!identity->active.load()||
+               !common||common->account!=recipient.account||common->character!=recipient.character||
+               common->generation!=recipient.generation||!frame||encoded!=*frame||
+               !reservation||!reservation->charged||reservation->count!=1||reservation->bytes!=frame->size()||
+               actor.recipient()!=recipient||actor.source().session==recipient.session||!actor.retained()||
+               !data||data->plan!=identity||data->recipient_address!=recipient_address||data->recipient_id!=recipient.session||
+               data->ordinal!=0||data->logical_size!=RecoveredRemoteActor::logical_size+RecoveredTaiwanActorOverride::logical_size||
+               data->recipient_owner.owner_before(recipient_owner)||recipient_owner.owner_before(data->recipient_owner)||
+               data->frame.get()!=frame.get()||data->frame.owner_before(frame)||frame.owner_before(data->frame)||
+               data->units.size()!=1||data->units[0].offset!=0||data->units[0].actor!=actor||!data->retained())return false;
+            return identity->active.load()&&phase.load()==value;
+        }
+        bool matches(const Session& session) const noexcept {
+            const auto actual=session.weak_from_this();
+            return recipient_address==&session&&recipient.session==session.id()&&
+                !recipient_owner.owner_before(actual)&&!actual.owner_before(recipient_owner);
+        }
+        void revoke() noexcept {
+            auto value=phase.load();
+            while(value!=Phase::Written&&value!=Phase::Revoked&&
+                  !phase.compare_exchange_weak(value,Phase::Revoked)){}
+            identity->active.store(false);
+        }
+        ~OutwardStatusFrame(){revoke();}
+    };
+    struct OutwardStatusWrite {
+        const std::shared_ptr<OutwardStatusFrame> frame;
+        explicit OutwardStatusWrite(std::shared_ptr<OutwardStatusFrame> value):frame(std::move(value)){}
+        ~OutwardStatusWrite(){
+            frame->present.store(false);
+            if(frame->phase.load()!=OutwardStatusFrame::Phase::Written)frame->revoke();
+        }
+    };
+    // GAME ONLY. The ready vault owns the forwarding callbacks after adoption.
+    // This box is never captured by a strand/finish/async-write task.
+    struct OutwardPublicationSubmission {
+        const std::thread::id thread=std::this_thread::get_id();
+        CommonWorldPublication actual;
+        bool started=false,finished=false;
+        bool publish() {
+            if(thread!=std::this_thread::get_id())std::terminate();
+            if(started||finished)return false;started=true;
+            bool accepted=false;
+            {const auto callback=std::move(actual.publish);if(callback)accepted=callback();}
+            return accepted&&!finished; // Actual publisher destructor already ran.
+        }
+        void complete(bool accepted) {
+            if(thread!=std::this_thread::get_id())std::terminate();
+            if(finished)return;finished=true;
+            auto callback=std::move(actual.queued);actual.publish={};
+            if(callback)callback(accepted);
+        }
+        ~OutwardPublicationSubmission(){
+            if(thread!=std::this_thread::get_id())std::terminate();
+            if(!finished)try{complete(false);}catch(...){}
+        }
+    };
+    struct OutwardQueuedDelivery {
+        const std::weak_ptr<Session> session;
+        const std::shared_ptr<OutwardStatusFrame> frame;
+        std::atomic<bool> delivered{false};
+        OutwardQueuedDelivery(std::weak_ptr<Session> actual,std::shared_ptr<OutwardStatusFrame> value)
+            :session(std::move(actual)),frame(std::move(value)){}
+        ~OutwardQueuedDelivery(){
+            if(!delivered.load()){
+                frame->revoke();
+                if(const auto actual=session.lock())try{actual->close();}catch(...){}
+            }
+        }
+    };
+    // Actual posted tasks alone own this once guard. Its functions are ONLY
+    // weak ready-vault facades; the game-affine submission box is absent here.
+    struct OutwardStatusAttempt {
+        const std::weak_ptr<Session> session;
+        const std::shared_ptr<OutwardStatusFrame> frame;
+        const asio::any_io_executor game;
+        CommonWorldPublication publication;
+        std::atomic<bool> armed{false},finished{false};
+        OutwardStatusAttempt(std::weak_ptr<Session> actual,std::shared_ptr<OutwardStatusFrame> value,asio::any_io_executor executor)
+            :session(std::move(actual)),frame(std::move(value)),game(std::move(executor)){}
+        void complete(bool accepted) noexcept {
+            if(!armed.load()||finished.exchange(true))return;
+            if(!accepted)frame->revoke();
+            try {
+                auto queued=std::move(publication.queued);const auto actual=session.lock();
+                if(!queued||!actual)throw std::logic_error("Ready publication completion facade unavailable");
+                const auto delivery=std::make_shared<OutwardQueuedDelivery>(session,frame);
+                actual->impl_->post_status_work(game,[queued=std::move(queued),accepted,delivery] {
+                    const auto phase=delivery->frame->phase.load();
+                    const bool granted=accepted&&(phase==OutwardStatusFrame::Phase::Released||
+                        phase==OutwardStatusFrame::Phase::Written);
+                    delivery->delivered.store(true);try{queued(granted);}catch(...){}
+                });
+            }catch(...){frame->revoke();if(const auto actual=session.lock())try{actual->close();}catch(...){}}
+        }
+        void abort() noexcept {
+            frame->revoke();if(const auto actual=session.lock())try{actual->close();}catch(...){}
+            complete(false);
+        }
+        ~OutwardStatusAttempt(){if(armed.load()&&!finished.load())abort();}
+    };
     struct InitialEntryQueuedDelivery {
         const std::weak_ptr<Session> session;
         std::atomic<bool> delivered{false};
@@ -1093,6 +1221,7 @@ struct Session::Impl {
         std::optional<TaiwanActorStatusWriteFence::Writer> status_writer{}; // Existing queue lifetime position.
         std::optional<TaiwanActorStatusPublication::FrameSeal> status_seal{}; // Existing pure exact frame version.
         std::shared_ptr<InitialEntryQueueTicket> initial_entry{}; // LAST: exact initial cohort membership.
+        std::shared_ptr<OutwardStatusWrite> outward_status{}; // LAST: distinct ready whole86 status publication.
     };
     std::deque<Write> writes;
     template<class Executor,class Body>
@@ -1147,6 +1276,56 @@ struct Session::Impl {
             queued.bytes.get()==bytes.get()&&!queued.bytes.owner_before(bytes)&&!bytes.owner_before(queued.bytes)&&
             member->frame.get()==bytes.get()&&!member->frame.owner_before(bytes)&&!bytes.owner_before(member->frame)&&
             member->status_seal==seal&&member->retained_status();
+    }
+    // Atomic/private transport identity only. Safe on GAME or strand; never
+    // read public account/character fields or the strand deque on game.
+    bool outward_status_transport_current(const std::shared_ptr<OutwardStatusFrame>& frame) const noexcept {
+        if(!frame)return false;
+        const auto common=common_world_identity.load();
+        return frame->matches(owner)&&!owner.closing()&&owner.recovered_world_ready()&&
+            owner.state()==SessionState::InWorld&&owner.battle_generation()==frame->battle&&
+            common==frame->common&&!common.owner_before(frame->common)&&!frame->common.owner_before(common)&&
+            !common_entry_identity.load()&&frame->retained();
+    }
+    bool outward_status_held_current(const std::shared_ptr<OutwardStatusFrame>& frame,
+            OutwardStatusFrame::Phase phase) const noexcept {
+        return outward_status_transport_current(frame)&&frame->present.load()&&frame->phase.load()==phase;
+    }
+    // Strand-only complete actual marker/buffer/budget/holder identity.
+    bool outward_status_queued(const std::shared_ptr<OutwardStatusWrite>& marker,
+            const std::shared_ptr<ActiveWriteContinuation>& holder,OutwardStatusFrame::Phase phase,
+            std::size_t& index) const noexcept {
+        if(!marker||!holder||!outward_status_held_current(marker->frame,phase))return false;
+        std::size_t seen=0,at=0;
+        for(const auto& queued:writes){
+            if(queued.outward_status==marker){
+                const auto& frame=marker->frame;const auto held=queued.pending_return_continuation.lock();
+                if(++seen!=1||!queued.held||queued.world_entry||queued.return_output||queued.status_seal||queued.initial_entry||
+                   queued.bytes.get()!=frame->frame.get()||queued.bytes.owner_before(frame->frame)||frame->frame.owner_before(queued.bytes)||
+                   queued.reservation!=frame->reservation||queued.reservation.owner_before(frame->reservation)||
+                   frame->reservation.owner_before(queued.reservation)||held!=holder||held.owner_before(holder)||holder.owner_before(held)||
+                   holder->frame.get()!=frame->frame.get()||holder->frame.owner_before(frame->frame)||frame->frame.owner_before(holder->frame))return false;
+                index=at;
+            }
+            ++at;
+        }
+        return seen==1&&outward_status_held_current(marker->frame,phase);
+    }
+    bool outward_status_released_current(const std::shared_ptr<OutwardStatusWrite>& marker,
+            const TaiwanActorStatusPublication::FrameSeal& seal,
+            const std::shared_ptr<std::vector<std::uint8_t>>& bytes) const noexcept {
+        if(!marker||closing||close_requested.load()||writes.empty())return false;
+        const auto& frame=marker->frame;const auto& queued=writes.front();
+        return outward_status_transport_current(frame)&&frame->present.load()&&
+            frame->phase.load()==OutwardStatusFrame::Phase::Released&&frame->seal==seal&&queued.outward_status==marker&&
+            !queued.held&&!queued.world_entry&&!queued.return_output&&!queued.status_seal&&!queued.initial_entry&&
+            queued.reservation==frame->reservation&&!queued.reservation.owner_before(frame->reservation)&&
+            !frame->reservation.owner_before(queued.reservation)&&
+            queued.bytes.get()==bytes.get()&&!queued.bytes.owner_before(bytes)&&!bytes.owner_before(queued.bytes)&&
+            frame->frame.get()==bytes.get()&&!frame->frame.owner_before(bytes)&&!bytes.owner_before(frame->frame);
+    }
+    void retire_outward_status_writes() noexcept {
+        for(const auto& queued:writes)if(queued.outward_status)queued.outward_status->frame->revoke();
     }
     void retire_initial_status_writes() noexcept {
         for(const auto& queued:writes)if(queued.initial_entry&&queued.initial_entry->member->identity->status)
@@ -1219,6 +1398,8 @@ struct Session::Impl {
             throw std::invalid_argument("Common world cleanup owner requires the explicit lifecycle factory");
         if(character_handlers.common_world_publication_owner && !character_handlers.common_world_cleanup_owner)
             throw std::invalid_argument("Common world publication requires the game-owned lifecycle vault");
+        if(character_handlers.common_world_ready_publication_owner && !character_handlers.common_world_cleanup_owner)
+            throw std::invalid_argument("Ready common publication requires the actual game-owned lifecycle vault");
         if(!character_routes.empty() && (mode!=ProtocolMode::God2LegacyCharacterListCandidate ||
            (!character_handlers.list && !character_handlers.native_list)))
             throw std::invalid_argument("Character routes require authenticated login list mode");
@@ -3507,6 +3688,12 @@ struct Session::Impl {
             }
         }
         auto bytes = writes.front().bytes;
+        const auto outward_marker=writes.front().outward_status;
+        const auto outward_seal=outward_marker?std::optional<TaiwanActorStatusPublication::FrameSeal>{outward_marker->frame->seal}:
+            std::optional<TaiwanActorStatusPublication::FrameSeal>{};
+        if(outward_marker&&!outward_status_released_current(outward_marker,*outward_seal,bytes)){
+            outward_marker->frame->revoke();fail("Outward status frame lost exact released source");return;
+        }
         const auto initial_ticket=writes.front().initial_entry;
         const bool initial_status=initial_ticket&&bool(initial_ticket->member->identity->status);
         const auto initial_seal=initial_status?initial_ticket->member->status_seal:
@@ -3524,11 +3711,14 @@ struct Session::Impl {
         active_write_continuation=continuation;
         owner.invalidate_actor_status_writes(); // Final exhaustive socket sink.
         auto completion=
-            [self = owner.shared_from_this(), bytes,marked,continuation,status_seal,initial_ticket,initial_status,initial_seal](const asio::error_code& ec, std::size_t transferred) {
+            [self = owner.shared_from_this(), bytes,marked,continuation,status_seal,initial_ticket,initial_status,initial_seal,outward_marker,outward_seal](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 const bool owned_completion=bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
                 try {
+                if(outward_marker&&!s.outward_status_released_current(outward_marker,*outward_seal,bytes)){
+                    outward_marker->frame->revoke();s.fail("Outward status completion lost exact frame");return;
+                }
                 // Both domains retain their pure exact markers/seals directly,
                 // even when failure already cleared the FIFO.
                 if(initial_status&&!s.initial_entry_released_current(initial_ticket,initial_seal,bytes)){
@@ -3552,6 +3742,9 @@ struct Session::Impl {
                     if(output)Session::fail_native_pk_return_output(output);return;
                 }
                 if (ec) { s.fail(ec.message()); return; }
+                if(outward_marker&&transferred!=bytes->size()){
+                    outward_marker->frame->revoke();s.fail("Outward status completion was not whole");return;
+                }
                 if(initial_status&&transferred!=bytes->size()){
                     initial_ticket->member->identity->revoke();s.fail("Initial status completion was not a whole frame");return;
                 }
@@ -3670,6 +3863,15 @@ struct Session::Impl {
                 if(status_seal&&!Session::actor_status_frame_matches(status_seal,bytes,*self,marked->ordinal,*output->plan)){
                     Session::fail_native_pk_return_output(output);return;
                 }
+                if(outward_marker){
+                    if(!s.outward_status_released_current(outward_marker,*outward_seal,bytes)){
+                        outward_marker->frame->revoke();s.fail("Outward status retired before completion accounting");return;
+                    }
+                    auto released=OutwardStatusFrame::Phase::Released;
+                    if(!outward_marker->frame->phase.compare_exchange_strong(released,OutwardStatusFrame::Phase::Written)){
+                        outward_marker->frame->revoke();s.fail("Outward status completion repeated");return;
+                    }
+                }
                 if(initial_status){
                     if(!s.initial_entry_released_current(initial_ticket,initial_seal,bytes)){
                         initial_ticket->member->identity->revoke();s.fail("Initial status retired before completion accounting");return;
@@ -3683,6 +3885,7 @@ struct Session::Impl {
                 const auto completed_input_lease=s.writes.front().owned_input_lease;
                 s.write_bytes -= s.writes.front().bytes->size();
                 s.writes.pop_front();
+                if(outward_marker)outward_marker->frame->identity->active.store(false); // Actual full write only.
                 if(initial_status){
                     const auto& context=initial_ticket->member->identity->status;
                     if(context->next.load()==context->frame_count.load()){
@@ -3711,6 +3914,7 @@ struct Session::Impl {
                 if(marked&&publication->progress[marked->recipient]->next.load()==output->recipients[marked->recipient]->frames.size())
                     s.complete_native_pk_return_publication_recipient(continuation->work,marked->recipient);
                 }catch(...) {
+                    if(outward_marker){outward_marker->frame->revoke();s.fail("Outward status completion failed");return;}
                     if(initial_status){
                         initial_ticket->member->identity->revoke();s.fail("Initial status completion failed");return;
                     }
@@ -3725,6 +3929,8 @@ struct Session::Impl {
             // This is the final pure version cut immediately before socket initiation.
             auto bound=asio::bind_executor(strand,std::move(handler));
             const auto buffer=asio::buffer(*bytes);
+            if(outward_marker&&!outward_status_released_current(outward_marker,*outward_seal,bytes))
+                throw std::logic_error("Outward owned-status retired before async_write");
             if(initial_status&&!initial_entry_released_current(initial_ticket,initial_seal,bytes))
                 throw std::logic_error("Initial owned-status retired before async_write");
             const auto sealed_output=marked?marked->cohort.lock():nullptr;
@@ -3736,6 +3942,7 @@ struct Session::Impl {
         if(status_writer)initiate(retain_actor_status_writer(status_writer,std::move(completion)));
         else initiate(std::move(completion)); // Exact original plain handler without a ticket.
         }catch(...) {
+            if(outward_marker){outward_marker->frame->revoke();fail("Outward status write initiation failed");return;}
             if(initial_status){
                 initial_ticket->member->identity->revoke();fail("Initial status write initiation failed");return;
             }
@@ -3748,6 +3955,7 @@ struct Session::Impl {
         }
     }
     void close() {
+        retire_outward_status_writes();
         retire_initial_status_writes(); // Pure revoke BEFORE any cleanup/queue removal, including Released.
         owner.retire_actor_status_incarnation();
         owner.invalidate_actor_status_writes();
@@ -3772,6 +3980,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        retire_outward_status_writes();
         retire_initial_status_writes();
         owner.retire_actor_status_incarnation();
         [[maybe_unused]] const auto status_admission=owner.begin_actor_status_writer();
@@ -4576,7 +4785,11 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
 }
 void Session::send_common_world_records_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
-    std::function<bool()> publish,std::function<void(bool)> queued) {
+    std::function<bool()> publish,std::function<void(bool)> queued,std::optional<ActorStatusOutputInput> status) {
+    if(status){
+        send_actor_status_output(std::move(logical),account,character,generation,
+            std::move(publish),std::move(queued),std::move(*status));return;
+    }
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(!queued)throw std::invalid_argument("Common world publication completion required");
@@ -4646,6 +4859,128 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
             });
         }catch(...) {s.fail("Common world publication encoding failed");finish(false);}
     });
+}
+std::size_t Session::common_world_publication_capacity() noexcept {return max_writes;}
+void Session::send_actor_status_output(std::vector<std::uint8_t> logical,
+        std::uint64_t account,std::uint64_t character,std::uint64_t generation,
+        std::function<bool()> publish,std::function<void(bool)> queued,ActorStatusOutputInput input) {
+    if(impl_->common_ready_thread==std::thread::id{}||impl_->common_ready_thread!=std::this_thread::get_id())
+        throw std::logic_error("Typed outward publication requires actual game owner");
+    [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
+    invalidate_actor_status_writes();
+    if(!queued)throw std::invalid_argument("Typed outward completion required");
+    // Allocate empty BEFORE moving actual callbacks, so an allocation failure
+    // can still complete the original caller on its real game owner.
+    std::shared_ptr<Impl::OutwardPublicationSubmission> submission;
+    try {submission=std::make_shared<Impl::OutwardPublicationSubmission>();}
+    catch(...){try{queued(false);}catch(...){}close();return;}
+    submission->actual={std::move(publish),std::move(queued)};publish={};queued={};
+    std::shared_ptr<Impl::OutwardStatusAttempt> attempt;
+    try {
+        const auto self=shared_from_this();const auto common=impl_->common_world_identity.load();
+        const auto battle=battle_generation();const auto& recipient=input.recipient;
+        constexpr auto actor_size=RecoveredRemoteActor::logical_size;
+        constexpr auto replay_size=RecoveredTaiwanActorOverride::logical_size;
+        if(!submission->actual.publish||!impl_->character_handlers.common_world_ready_publication_owner||
+           !common||common->account!=account||common->character!=character||common->generation!=generation||
+           recipient.session!=id()||recipient.account!=account||recipient.character!=character||recipient.generation!=generation||
+           closing()||state()!=SessionState::InWorld||!recovered_world_ready()||impl_->common_entry_identity.load()||
+           account_id!=account||character_id!=character||impl_->mode!=ProtocolMode::God2CharacterConnection||
+           input.actor.recipient()!=recipient||input.actor.source().session==recipient.session||
+           logical.size()!=actor_size+replay_size||logical!=input.actor.logical()||!input.actor.retained())
+            throw std::invalid_argument("Typed outward requires exact ready recipient and private whole86 actor");
+        const auto actor=RecoveredRemoteActor::parse_logical(std::span<const std::uint8_t>(logical).first(actor_size));
+        const auto replay=RecoveredTaiwanActorOverride::parse_logical(std::span<const std::uint8_t>(logical).subspan(actor_size));
+        if(!actor||!replay||actor->identity()!=input.actor.source().actor_handle||replay->identity()!=actor->identity())
+            throw std::invalid_argument("Typed outward whole6F/EA identity mismatch");
+        const auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(logical));
+        const auto identity=std::make_shared<ActorStatusPublicationPlanIdentity>();
+        const auto seal_data=std::make_shared<TaiwanActorStatusPublication::FrameSeal::Data>(
+            identity,self,0,logical.size(),bytes,
+            std::vector<TaiwanActorStatusPublication::FrameSeal::Data::Unit>{{0,input.actor}});
+        if(!seal_data->retained())throw std::logic_error("Typed outward status retired while framing");
+        const auto budget=impl_->budget;
+        auto reservation=std::make_shared<Reservation>(budget,bytes->size(),1,false);
+        bool charged=false;
+        {
+            std::lock_guard lock(budget->mutex);
+            if(budget->bytes<=max_buffer&&budget->count<max_writes&&bytes->size()<=max_buffer-budget->bytes){
+                budget->bytes+=bytes->size();++budget->count;reservation->charged=true;charged=true;
+            }
+        }
+        if(!charged)throw std::length_error("Typed outward reservation exhausted");
+        const auto frame=std::make_shared<Impl::OutwardStatusFrame>(identity,common,self,std::move(input),battle,
+            bytes,TaiwanActorStatusPublication::FrameSeal(seal_data),reservation);
+        const auto marker=std::make_shared<Impl::OutwardStatusWrite>(frame);
+        const auto holder=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
+        attempt=std::make_shared<Impl::OutwardStatusAttempt>(weak_from_this(),frame,impl_->game);
+        if(!impl_->outward_status_transport_current(frame))throw std::logic_error("Typed outward source retired before vault adoption");
+        // The factory owns real callbacks on game. This call/its failure handler
+        // share the submission once box, so queued(false) cannot run twice.
+        auto owned=impl_->character_handlers.common_world_ready_publication_owner(*this,frame->recipient,
+            {[submission]{return submission->publish();},[submission](bool accepted){submission->complete(accepted);}});
+        if(!owned.publish||!owned.queued||submission->finished)
+            throw std::logic_error("Ready owner did not retain a complete actual publication");
+        attempt->publication=std::move(owned);attempt->armed.store(true);
+        // Detach ALL strong affine payload before the first IO post. Only
+        // weak-vault facades inside Attempt cross transport executors.
+        submission.reset();
+        if(!impl_->outward_status_transport_current(frame))throw std::logic_error("Typed outward source retired after vault callback copies");
+        impl_->post_status_work(impl_->strand,[self,frame,marker,holder,attempt] {
+            auto& s=*self->impl_;
+            try {
+                if(s.closing||s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted||
+                   !s.outward_status_transport_current(frame)||frame->phase.load()!=Impl::OutwardStatusFrame::Phase::Preparing||
+                   s.write_bytes>max_buffer||s.writes.size()>=max_writes||frame->frame->size()>max_buffer-s.write_bytes||
+                   !s.terminal_write_allowed())throw std::logic_error("Typed outward queue admission refused");
+                Impl::Write value{frame->frame,frame->reservation,false,true};
+                value.pending_return_continuation=holder;value.outward_status=marker;
+                s.append_write(std::move(value));s.write_bytes+=frame->frame->size();frame->present.store(true);
+                auto preparing=Impl::OutwardStatusFrame::Phase::Preparing;
+                if(!frame->phase.compare_exchange_strong(preparing,Impl::OutwardStatusFrame::Phase::Held))
+                    throw std::logic_error("Typed outward frame installed twice");
+                std::size_t index=0;
+                if(!s.outward_status_queued(marker,holder,Impl::OutwardStatusFrame::Phase::Held,index))
+                    throw std::logic_error("Typed outward actual held marker missing");
+                s.post_status_work(s.game,[self,frame,marker,holder,attempt] {
+                    bool accepted=false;
+                    try {
+                        auto held=Impl::OutwardStatusFrame::Phase::Held;
+                        accepted=self->impl_->outward_status_held_current(frame,held)&&
+                            frame->phase.compare_exchange_strong(held,Impl::OutwardStatusFrame::Phase::Publishing);
+                        if(accepted)accepted=self->impl_->outward_status_held_current(frame,Impl::OutwardStatusFrame::Phase::Publishing)&&
+                            attempt->publication.publish()&&
+                            self->impl_->outward_status_held_current(frame,Impl::OutwardStatusFrame::Phase::Publishing);
+                        auto publishing=Impl::OutwardStatusFrame::Phase::Publishing;
+                        accepted=accepted&&frame->phase.compare_exchange_strong(publishing,Impl::OutwardStatusFrame::Phase::Published);
+                    }catch(...){}
+                    try {self->impl_->post_status_work(self->impl_->strand,[self,frame,marker,holder,attempt,accepted] {
+                        auto& s=*self->impl_;
+                        try {
+                            std::size_t index=0;
+                            if(!accepted||!s.outward_status_queued(marker,holder,Impl::OutwardStatusFrame::Phase::Published,index))
+                                throw std::logic_error("Typed outward publication refused");
+                            // Whole single-frame proof immediately before ANY
+                            // release; no callback/allocation occurs in this cut.
+                            auto published=Impl::OutwardStatusFrame::Phase::Published;
+                            if(!frame->phase.compare_exchange_strong(published,Impl::OutwardStatusFrame::Phase::Released))
+                                throw std::logic_error("Typed outward repeated release");
+                            s.writes[index].held=false;
+                            if(!index)s.write(holder->work);
+                            if(frame->phase.load()!=Impl::OutwardStatusFrame::Phase::Released&&
+                               frame->phase.load()!=Impl::OutwardStatusFrame::Phase::Written)
+                                throw std::logic_error("Typed outward retired during write handoff");
+                            attempt->complete(true); // Local queue release, never native ACK.
+                        }catch(...){frame->revoke();s.fail("Typed outward release failed");attempt->abort();}
+                    });}catch(...){frame->revoke();attempt->abort();}
+                });
+            }catch(...){frame->revoke();s.fail("Typed outward held insertion failed");attempt->abort();}
+        });
+    }catch(...){
+        if(submission)try{submission->complete(false);}catch(...){}
+        if(attempt&&attempt->armed.load())attempt->abort();
+        else close();
+    }
 }
 void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     std::weak_ptr<NativeBattleSkillPublicationOwner> source) {

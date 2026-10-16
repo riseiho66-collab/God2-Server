@@ -3,9 +3,10 @@
 #include "game/SharedTaiwanWorldEntered.h"
 
 namespace god2 {
-// CUSTOM-0133 initial-only full actor adapter. The genuine supplier still owns
+// CUSTOM-0133 initial-scene full actor adapter. The genuine supplier still owns
 // the exact ordered selection, other scene records, install and cleanup.
-// No default audience, early clear, outward actor or native ACK is authored.
+// Directed outward units follow real local publication; no default audience,
+// early clear or native ACK is authored.
 class OwnedTaiwanInitialActorSceneSource final {
     struct Owner;
     struct State;

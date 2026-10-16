@@ -127,7 +127,11 @@ public:
         std::shared_ptr<god2::SharedNativeActorNameSource> common_name_source;
     };
     using Native=std::variant<Taiwan,Mainland>;
-    struct OutwardRecipient {Lease lease;Native native;};
+    struct OutwardRecipient {
+        Lease lease;Native native;
+        // Publication-local optional proof; movement/removal models remain unchanged.
+        std::optional<TaiwanActorStatusPublication::ActorUnit> actor_status{};
+    };
     enum class OutwardCheck {Prepare,BeforePublish};
     // The actual issuer owns the complete ordered observer set, visibility,
     // native resources/appearance/text and this source's current generation.

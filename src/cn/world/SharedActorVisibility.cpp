@@ -1122,7 +1122,19 @@ bool SharedActorVisibility::common_name_current(const Lease& original_source,con
         !taiwan_pk_departed(source)&&!taiwan_pk_departed(recipient);
 }
 struct SharedActorVisibility::OutwardState {
-    struct Delivery {Key key;Native native;std::vector<god2cn::Bytes> records;bool issued=false,published=false,released=false;};
+    struct Delivery {
+        Key key;Native native;std::vector<god2cn::Bytes> records;bool issued=false,published=false,released=false;
+        std::optional<TaiwanActorStatusPublication::ActorUnit> actor_status{};
+        bool status_current(const Lease& source,const Lease& recipient) const noexcept {
+            if(!actor_status)return true;
+            const auto* tw=std::get_if<Taiwan>(&native);const auto& unit=*actor_status;
+            if(!tw||!unit.retained()||unit.source()!=source||unit.recipient()!=recipient||
+               unit.logical().size()!=RecoveredRemoteActor::logical_size+RecoveredTaiwanActorOverride::logical_size||
+               records.size()!=1||records.front()!=unit.logical())return false;
+            const auto spawn=RecoveredRemoteActor::encode_logical(tw->spawn);
+            return std::equal(spawn.begin(),spawn.end(),unit.logical().begin())&&unit.retained();
+        }
+    };
     Lease source;
     RecoveredPosition position;
     std::map<Key,Entry> staged;
@@ -1247,6 +1259,7 @@ bool SharedActorVisibility::outward_current(const std::shared_ptr<OutwardState>&
     owner();
     if(!state || state->finished || index>=state->deliveries.size()||taiwan_pk_departed(state->source)||
         taiwan_pk_departed(state->bindings[index].recipient()))return false;
+    if(!state->deliveries[index].status_current(state->source,state->bindings[index].recipient()))return false;
     const auto saved=presence_->saved_position(state->source);
     const auto pending=outward_.find(state->source.session);
     if(state->finished||taiwan_pk_departed(state->source)||pending==outward_.end() ||
@@ -1280,7 +1293,8 @@ bool SharedActorVisibility::outward_current(const std::shared_ptr<OutwardState>&
     // from authorizing a stale staged node after that callback.
     const auto still_pending=outward_.find(state->source.session);
     return transport_current&&!state->finished&&!taiwan_pk_departed(binding.source())&&
-        !taiwan_pk_departed(binding.recipient())&&still_pending!=outward_.end()&&still_pending->second.lock()==state;
+        !taiwan_pk_departed(binding.recipient())&&still_pending!=outward_.end()&&still_pending->second.lock()==state&&
+        state->deliveries[index].status_current(binding.source(),binding.recipient());
 }
 void SharedActorVisibility::finish_outward(const std::shared_ptr<OutwardState>& state,bool accepted) {
     owner();if(!state || state->finished)return;
@@ -1346,6 +1360,9 @@ void SharedActorVisibility::publish_outward_initial(const Lease& original_source
         }
         state->position=*position;state->deliveries.reserve(recipients.size());state->bindings.reserve(recipients.size());
         for(auto& recipient:recipients) {
+            if(recipient.actor_status&&(!std::holds_alternative<Taiwan>(recipient.native)||
+               recipient.actor_status->source()!=source||recipient.actor_status->recipient()!=recipient.lease||
+               !recipient.actor_status->retained())){finish_outward(state,false);return;}
             if(!project_common_name(source,recipient.lease,recipient.native)){finish_outward(state,false);return;}
             const auto& native=recipient.native;
             if(recipient.lease.session==source.session || recipient.lease.character==source.character ||
@@ -1375,12 +1392,23 @@ void SharedActorVisibility::publish_outward_initial(const Lease& original_source
                 }
             },native);
             if(!bytes){finish_outward(state,false);return;}
+            // Compare the FINAL projected81 bytes with the complete privately
+            // authored86 unit. No EA parsing or postprojection proof rebase.
+            if(recipient.actor_status){
+                const auto& unit=*recipient.actor_status;
+                if(!unit.retained()||unit.logical().size()!=RecoveredRemoteActor::logical_size+
+                   RecoveredTaiwanActorOverride::logical_size||bytes->size()!=RecoveredRemoteActor::logical_size||
+                   !std::equal(bytes->begin(),bytes->end(),unit.logical().begin())){finish_outward(state,false);return;}
+                *bytes=unit.logical();
+            }
             const Key key{source.session,recipient.lease.session};
             Binding binding(identity_,source,recipient.lease,original_generation+state->bindings.size()+1);
             if(!state->staged.emplace(key,Entry{binding,*position,native}).second){finish_outward(state,false);return;}
             std::vector<god2cn::Bytes> records;records.push_back(std::move(*bytes));
             state->bindings.push_back(binding);
-            state->deliveries.push_back({key,std::move(recipient.native),std::move(records)});
+            state->deliveries.push_back({key,std::move(recipient.native),std::move(records),false,false,false,
+                std::move(recipient.actor_status)});
+            if(!state->deliveries.back().status_current(source,recipient.lease)){finish_outward(state,false);return;}
         }
         // Allocate the actual registry node in a LOCAL map. Allocation/reentry
         // precedes the final fresh registry/generation/quota qualification.
@@ -1395,6 +1423,8 @@ void SharedActorVisibility::publish_outward_initial(const Lease& original_source
             for(const auto& [key,entry]:entries_)if(key.second==delivery.key.second)++occupied;
             if(occupied>=128)quota_current=false;
         }
+        for(std::size_t i=0;i<state->deliveries.size();++i)
+            if(!state->deliveries[i].status_current(source,state->bindings[i].recipient()))quota_current=false;
         if(generation_!=original_generation||source_present||!quota_current||taiwan_pk_departed(source)){
             finish_outward(state,false);return;
         }
@@ -1462,9 +1492,14 @@ void SharedActorVisibility::publish_outward_initial(const Lease& original_source
                 if(!connection){queued(false);return;}
                 using Output=std::decay_t<decltype(output)>;
                 const auto& recipient=state->bindings[i].recipient();
-                if constexpr(std::is_same_v<Output,Taiwan>)
-                    connection->send_common_world_records_with_publication(std::move(delivery.records.front()),recipient.account,
+                if constexpr(std::is_same_v<Output,Taiwan>){
+                    if(delivery.actor_status)
+                        connection->send_common_world_records_with_publication(delivery.records.front(),recipient.account,
+                            recipient.character,recipient.generation,publish,queued,
+                            Session::ActorStatusOutputInput{recipient,*delivery.actor_status});
+                    else connection->send_common_world_records_with_publication(std::move(delivery.records.front()),recipient.account,
                         recipient.character,recipient.generation,publish,queued);
+                }
                 else connection->send_world_batch_with_publication(std::move(delivery.records),publish,queued);
             },delivery.native);
         }

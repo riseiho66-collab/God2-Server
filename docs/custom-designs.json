@@ -5107,6 +5107,17 @@
         "src/handlers/OwnedTaiwanPkRoomBackend.h"
       ],
       "native_gap": "Actual full-current actor/resource/text/complete-selection issuer, final strand consume/visibility publication and durable release/recovery remain incomplete.",
+      "outward_actor_publication434": {
+        "classification": "ACTUAL_DIRECTED_OUTWARD_ACTOR_STATUS_AND_READY_GAME_VAULT_FRAME_CUSTODY_WITHIN_CUSTOM0133",
+        "source": "Frozen same-owner Profile/material/private endpoints after real initial release; directed actor unit through Visibility and actual Session frame; separate ready-recipient game callback vault.",
+        "limits": "Full writer exclusion/generic affineIO/atomicfanout/nativeACK/Main/fullroutes remain OPEN.",
+        "actual_selected_outward_actor_unit_source_connected": true,
+        "actual_ready_publication_game_custody_source_connected": true,
+        "actual_typed_outward_frame_custody_source_connected": true,
+        "default_activated": false,
+        "whole_route_complete": false,
+        "build_tests_runtime_SQL_activation_deployment": false
+      },
       "initial_actor_producer433": {
         "classification": "ACTUAL_INITIAL_INCOMING_FULL_ACTOR_PRODUCER_AND_PRIVATE_MINT_WITHIN_CUSTOM0133",
         "source": "Same Profile/resource/status owners shared with PK; actual initial saved input/private endpoints/genuine ordered scene selection/full temporary profile qualification/private owned unit mint and432frame consumption.",

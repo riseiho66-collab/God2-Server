@@ -6598,3 +6598,26 @@ stack99/nativelevels/saves/fonts/IME/auth/text. PHASE1no build/tests/product/
 parser/native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
 
 Details: docs/research/tw-initial-actor-producer-20261016.md
+
+## Round434 — Typed outward actor publication (2026-10-16)
+
+Round434 connects selected owned outward actor/status production after actual
+install/421clear/427activation/delivery/initialrelease to directed TW ready
+recipients, separate game-owned Application publication vault and typed actual
+Session held/released/front/completion frame custody. Genuine ordered audience,
+Supplied/Deferred once semantics and CN native models retained. Frozen material,
+role/EQ final joint cut, ephemeral Profile/Session custody, no version rebase.
+Actual callbacks remain game-owned; IO weak facades/pure frame proof only.
+Per-recipient bounded fresh nonces; revoke/detach before callback/destructor;
+typed cross-session cleanup failures defer game completion until operation ends.
+Legacy None sender/initial432/PK preserved. No full writer exclusion/affineIO/
+atomic fanout/nativeACK/Main/completeplacements/movement/fullinventory claim.
+V70 pins155=148same7updated/noadds; canonical802;7existingCPP/no newprojectPY.
+Fullroutes0/countsunchanged/whole%unknown; fullTW100-first/commonCN/fourWS/allDB
+goal ACTIVE. Preserve453Traditional/clientBIN/maxHPpoison10th/907/common64/
+coin99999999999/stack99/nativelevels/saves/fonts/IME/auth/text. Full DB rule
+classification/English+per-tableChineseTXT/typedreload/MySQL8backend-lossless
+export remains required. PHASE1no build/tests/product/parser/native/VM/codec/
+gameDBSQL/schema/migrate/import/activate/deploy.
+
+Details: docs/research/tw-outward-actor-publication-20261016.md

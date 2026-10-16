@@ -165,7 +165,20 @@ ScriptTimes script_times(const std::filesystem::path& root) {
 // Only the explicit common-world Application path uses this owner. Network
 // templates/Session copies retain facades, never the real affine callbacks.
 class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifecycleVault> {
-    enum class Operation {Idle,Factory,Preparing,PreparedActor,Ready,Cleanup,Entry,Publication,Movement,Records,Characters};
+    enum class Operation {Idle,Factory,Preparing,PreparedActor,Ready,Cleanup,Entry,Publication,Movement,Records,Characters,ReadyPublication};
+    // All real ready-publication callbacks remain in this game-owned object.
+    // IO facades retain only weak Vault/State identities, never this payload.
+    struct ReadyPublicationState {
+        const std::weak_ptr<Session> session;
+        const SharedWorldPresence::Lease lease;
+        const std::uint64_t battle,nonce;
+        Session::CommonWorldPublication actual;
+        bool revoked=false,started=false,published=false;
+        ReadyPublicationState(Session& peer,SharedWorldPresence::Lease actor,std::uint64_t serial,
+                Session::CommonWorldPublication callbacks)
+            :session(peer.weak_from_this()),lease(std::move(actor)),battle(peer.battle_generation()),
+             nonce(serial),actual(std::move(callbacks)){}
+    };
     struct Slot {
         Session* session;
         std::shared_ptr<const Session::CommonWorldLifecycle> hooks;
@@ -173,6 +186,10 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
         Session::CommonWorldLifecycle::ReadyCompletion pending;
         Session::CommonWorldPublication publication;
         std::uint64_t ready_nonce=0,publication_nonce=0;
+        // LAST: independent ready-recipient domain; preserve the pending slot.
+        std::uint64_t ready_publication_nonce=0;
+        std::map<std::uint64_t,std::shared_ptr<ReadyPublicationState>> ready_publications{};
+        std::optional<bool> deferred_ready_result{};
     };
     const std::thread::id thread_=std::this_thread::get_id();
     const std::size_t capacity_;
@@ -188,10 +205,19 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
     bool entry_reentered_=false;
     bool actor_reentered_=false;
     std::map<std::uint64_t,Slot> slots_;
+    std::shared_ptr<SharedWorldPresence> ready_presence_; // Game-only; cleared by revoke.
+    std::shared_ptr<ReadyPublicationState> active_ready_publication_;
+    std::size_t ready_outstanding_=0,ready_callback_depth_=0;
+    bool ready_reentered_=false,typed_cleanup_=false,draining_ready_=false;
     void owner() const {
         if(thread_!=std::this_thread::get_id())throw std::logic_error("World lifecycle vault game owner mismatch");
     }
     void reject_movement_reentry() {
+        if(operation_==Operation::ReadyPublication) {
+            ready_reentered_=true;
+            if(active_ready_publication_)active_ready_publication_->revoked=true;
+            throw std::logic_error("Ready world publication reentered");
+        }
         if(operation_==Operation::PreparedActor) {
             actor_reentered_=true;
             throw std::logic_error("World lifecycle prepared actor source reentered");
@@ -230,23 +256,59 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
         }
         ~OperationGuard() {vault.operation_=Operation::Idle;vault.active_id_=0;}
     };
+    void drain_ready_results() noexcept {
+        if(thread_!=std::this_thread::get_id())std::terminate();
+        if(closed_||operation_!=Operation::Idle||ready_callback_depth_||draining_ready_)return;
+        draining_ready_=true;
+        struct End {bool& flag;~End(){flag=false;}} end{draining_ready_};
+        for(;;) {
+            Session::CommonWorldLifecycle::ReadyCompletion done;
+            std::weak_ptr<Session> connection;
+            // Detach before every actual callback; never keep an iterator or
+            // reference across a Source completion which can consume slots.
+            for(auto& [id,slot]:slots_)if(slot.deferred_ready_result) {
+                slot.deferred_ready_result.reset();
+                if(slot.pending){connection=slot.session->weak_from_this();done=std::move(slot.pending);break;}
+            }
+            if(!done)return;
+            try {done(false);}catch(...) {if(const auto peer=connection.lock())try{peer->close();}catch(...) {}}
+            if(closed_||operation_!=Operation::Idle)return;
+        }
+    }
+    static void fail_ready_payload(const std::shared_ptr<ReadyPublicationState>& state) noexcept {
+        if(!state)return;state->revoked=true;
+        auto callbacks=std::move(state->actual);state->actual={};
+        try {if(callbacks.queued)callbacks.queued(false);}catch(...) {}
+    }
     void consume(std::uint64_t id) {
         owner();if(closed_)return;
-        OperationGuard guard(*this,Operation::Cleanup,id);
-        const auto found=slots_.find(id);if(found==slots_.end())return;
-        auto slot=std::move(found->second);slots_.erase(found);
-        // Remove the slot before the real callback; even a throw cannot retain
-        // its hooks/cleanup in a late Session facade or consume it twice.
         std::exception_ptr failure;
-        try {if(records_.release)records_.release(*slot.session);}catch(...) {failure=std::current_exception();}
-        try {if(movement_.release)movement_.release(*slot.session);}catch(...) {if(!failure)failure=std::current_exception();}
-        try {if(slot.hooks->cancel)slot.hooks->cancel(*slot.session);}catch(...) {if(!failure)failure=std::current_exception();}
-        try {if(auto cleanup=std::exchange(slot.cleanup,{}))cleanup();}catch(...) {if(!failure)failure=std::current_exception();}
-        // Detach every real callback before invoking it. Callback reentry/late
-        // facades find no slot; cancellation cannot retain affine payloads.
-        auto publication=std::move(slot.publication);auto pending=std::move(slot.pending);
-        try {if(publication.queued)publication.queued(false);}catch(...) {if(!failure)failure=std::current_exception();}
-        try {if(pending)pending(false);}catch(...) {if(!failure)failure=std::current_exception();}
+        std::map<std::uint64_t,std::shared_ptr<ReadyPublicationState>> ready;
+        {
+            OperationGuard guard(*this,Operation::Cleanup,id);
+            const auto found=slots_.find(id);if(found==slots_.end())return;
+            const bool previous_typed=typed_cleanup_;
+            typed_cleanup_=typed_cleanup_||ready_outstanding_||ready_callback_depth_;
+            struct EndTyped {bool& flag;bool prior;~EndTyped(){flag=prior;}} typed{typed_cleanup_,previous_typed};
+            auto slot=std::move(found->second);slots_.erase(found);
+            ready=std::move(slot.ready_publications);
+            if(ready.size()>ready_outstanding_)std::terminate();ready_outstanding_-=ready.size();
+            for(const auto& [nonce,state]:ready)state->revoked=true;
+            // Revoke/remove all ready identities BEFORE real cleanup/reentry.
+            // Original pending-publication and lifecycle order remains intact.
+            try {if(records_.release)records_.release(*slot.session);}catch(...) {failure=std::current_exception();}
+            try {if(movement_.release)movement_.release(*slot.session);}catch(...) {if(!failure)failure=std::current_exception();}
+            try {if(slot.hooks->cancel)slot.hooks->cancel(*slot.session);}catch(...) {if(!failure)failure=std::current_exception();}
+            try {if(auto cleanup=std::exchange(slot.cleanup,{}))cleanup();}catch(...) {if(!failure)failure=std::current_exception();}
+            auto publication=std::move(slot.publication);auto pending=std::move(slot.pending);
+            try {if(publication.queued)publication.queued(false);}catch(...) {if(!failure)failure=std::current_exception();}
+            try {if(pending)pending(false);}catch(...) {if(!failure)failure=std::current_exception();}
+        }
+        // New ready callbacks may complete a DIFFERENT joining Session. Run
+        // them outside Cleanup, then drain any failure recorded during hooks.
+        ++ready_callback_depth_;
+        for(const auto& [nonce,state]:ready)fail_ready_payload(state);
+        --ready_callback_depth_;ready.clear();drain_ready_results();
         if(failure)std::rethrow_exception(failure);
     }
     std::shared_ptr<const Session::CommonWorldLifecycle> create(Session& session) {
@@ -331,6 +393,17 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
                     if(slot==vault->slots_.end() || slot->second.ready_nonce!=nonce || !slot->second.pending)return;
                     if(vault->operation_!=Operation::Idle &&
                        !(vault->operation_==Operation::Ready && vault->active_id_==id)) {
+                        // A new typed ready publication/receiver cleanup may
+                        // fail another joining Source. Retain the real done on
+                        // game and deliver failure after this operation ends.
+                        if(vault->operation_==Operation::ReadyPublication ||
+                           (vault->operation_==Operation::Cleanup&&vault->typed_cleanup_)) {
+                            if(vault->operation_==Operation::ReadyPublication) {
+                                vault->ready_reentered_=true;
+                                if(vault->active_ready_publication_)vault->active_ready_publication_->revoked=true;
+                            }
+                            slot->second.deferred_ready_result=false;return;
+                        }
                         vault->reject_movement_reentry();
                         throw std::logic_error("World lifecycle completion reentered another operation");
                     }
@@ -549,12 +622,156 @@ public:
             found->second.publication=std::move(actual);return facade;
         };
     }
+    bool ready_actor_current(const std::shared_ptr<ReadyPublicationState>& state) const noexcept {
+        try {
+            if(thread_!=std::this_thread::get_id()||closed_||!ready_presence_||!state)return false;
+            bool okay=false;
+            {
+                const auto peer=state->session.lock();
+                const auto slot=slots_.find(state->lease.session);
+                const auto& lease=state->lease;
+                okay=peer&&slot!=slots_.end()&&slot->second.session==peer.get()&&!slot->second.pending&&
+                    !peer->closing()&&peer->id()==lease.session&&peer->account_id==lease.account&&
+                    peer->character_id==lease.character&&peer->state()==SessionState::InWorld&&
+                    peer->battle_generation()==state->battle&&peer->recovered_world_ready()&&
+                    peer->common_world_delivery_current(lease.account,lease.character,lease.generation)&&
+                    ready_presence_->retained_ready_current(lease);
+            } // Drop temporary Session ownership before the final registry cut.
+            return okay&&!closed_&&ready_presence_->retained_ready_current(state->lease);
+        }catch(...){return false;}
+    }
+    bool ready_member_current(const std::shared_ptr<ReadyPublicationState>& state) const noexcept {
+        if(!state||state->revoked||(operation_==Operation::ReadyPublication&&ready_reentered_)||!ready_actor_current(state))return false;
+        const auto slot=slots_.find(state->lease.session);if(slot==slots_.end())return false;
+        const auto found=slot->second.ready_publications.find(state->nonce);
+        return found!=slot->second.ready_publications.end()&&found->second==state&&
+            !state->revoked&&!(operation_==Operation::ReadyPublication&&ready_reentered_);
+    }
+    bool publish_ready(const std::shared_ptr<ReadyPublicationState>& state) {
+        available();bool accepted=false;std::exception_ptr failure;
+        {
+            OperationGuard guard(*this,Operation::ReadyPublication,state->lease.session);
+            ready_reentered_=false;active_ready_publication_=state;
+            struct EndActive {WorldLifecycleVault& vault;~EndActive(){vault.active_ready_publication_.reset();}} active{*this};
+            try {
+                if(state->started||!ready_member_current(state)||!state->actual.publish)state->revoked=true;
+                else {
+                    state->started=true; // Once BEFORE callback copy/allocation/observers.
+                    {
+                        const auto publish=std::make_shared<const std::function<bool()>>(state->actual.publish);
+                        if(ready_member_current(state))accepted=(*publish)();
+                    } // Copied callback destruction also precedes final qualification.
+                    accepted=accepted&&ready_member_current(state);
+                    state->published=accepted;if(!accepted)state->revoked=true;
+                }
+            }catch(...) {state->revoked=true;failure=std::current_exception();}
+        }
+        drain_ready_results();if(failure)std::rethrow_exception(failure);return accepted;
+    }
+    void finish_ready(const std::shared_ptr<ReadyPublicationState>& state,bool accepted) {
+        owner();if(closed_||!state)return;available();
+        const bool granted=accepted&&state->published&&ready_member_current(state);
+        {
+            const auto slot=slots_.find(state->lease.session);if(slot==slots_.end())return;
+            const auto found=slot->second.ready_publications.find(state->nonce);
+            if(found==slot->second.ready_publications.end()||found->second!=state)return;
+            slot->second.ready_publications.erase(found);
+            if(!ready_outstanding_)std::terminate();--ready_outstanding_;
+            state->revoked=true; // Detach/revoke BEFORE any callback/destructor.
+        }
+        std::exception_ptr failure;
+        {
+            ++ready_callback_depth_;
+            struct EndDepth {std::size_t& depth;~EndDepth(){--depth;}} depth{ready_callback_depth_};
+            auto queued=std::move(state->actual.queued);state->actual={};
+            try {if(queued)queued(granted&&ready_actor_current(state));}
+            catch(...) {failure=std::current_exception();}
+        } // Callback and publisher destruction precede deferred failure delivery.
+        drain_ready_results();if(failure)std::rethrow_exception(failure);
+    }
+    std::function<Session::CommonWorldPublication(Session&,const SharedWorldPresence::Lease&,
+        Session::CommonWorldPublication)> ready_publication_owner(std::shared_ptr<SharedWorldPresence> presence) {
+        available();if(!presence||ready_presence_)throw std::invalid_argument("Ready publication requires one actual common Presence");
+        ready_presence_=std::move(presence);
+        const auto weak=std::weak_ptr<WorldLifecycleVault>(shared_from_this());
+        return [weak](Session& session,const SharedWorldPresence::Lease& lease,Session::CommonWorldPublication actual) {
+            const auto self=weak.lock();
+            if(!self) {try{if(actual.queued)actual.queued(false);}catch(...){}throw std::logic_error("Ready publication vault expired");}
+            self->owner();std::shared_ptr<ReadyPublicationState> state;
+            Session::CommonWorldPublication facade;std::exception_ptr failure;
+            try {
+                OperationGuard guard(*self,Operation::ReadyPublication,session.id());
+                self->ready_reentered_=false;
+                struct EndActive {WorldLifecycleVault& vault;~EndActive(){vault.active_ready_publication_.reset();}} active{*self};
+                std::uint64_t previous=0;
+                {
+                    const auto initial=self->slots_.find(session.id());
+                    if(initial==self->slots_.end()||initial->second.session!=&session||initial->second.pending||
+                       !actual.publish||!actual.queued||initial->second.ready_publications.size()>=Session::common_world_publication_capacity()||
+                       initial->second.ready_publication_nonce==std::numeric_limits<std::uint64_t>::max())
+                        throw std::invalid_argument("Ready publication requires exact ready Session and bounded fresh callbacks");
+                    previous=initial->second.ready_publication_nonce;
+                } // No Slot iterator survives facade/payload allocation.
+                const auto nonce=previous+1;
+                state=std::make_shared<ReadyPublicationState>(session,lease,nonce,std::move(actual));
+                self->active_ready_publication_=state;
+                const auto weak_state=std::weak_ptr<ReadyPublicationState>(state);
+                facade.publish=[weak,weak_state] {
+                    const auto vault=weak.lock();if(!vault)return false;vault->owner();
+                    if(vault->closed_)return false;const auto current=weak_state.lock();
+                    return current&&vault->publish_ready(current);
+                };
+                facade.queued=[weak,weak_state](bool accepted) {
+                    const auto vault=weak.lock();if(!vault)return;vault->owner();
+                    if(vault->closed_)return;const auto current=weak_state.lock();if(current)vault->finish_ready(current,accepted);
+                };
+                // Allocate a complete local node BEFORE final fresh lookup.
+                std::map<std::uint64_t,std::shared_ptr<ReadyPublicationState>> candidate;
+                candidate.emplace(nonce,state);auto node=candidate.extract(nonce);
+                if(self->ready_reentered_||!self->ready_actor_current(state))
+                    throw std::logic_error("Ready publication retired during facade allocation");
+                const auto fresh=self->slots_.find(session.id());
+                if(fresh==self->slots_.end()||fresh->second.session!=&session||fresh->second.ready_publication_nonce!=previous||
+                   fresh->second.ready_publications.size()>=Session::common_world_publication_capacity())
+                    throw std::logic_error("Ready publication slot changed during construction");
+                const auto inserted=fresh->second.ready_publications.insert(std::move(node));
+                if(!inserted.inserted)throw std::logic_error("Ready publication nonce already present");
+                fresh->second.ready_publication_nonce=nonce;++self->ready_outstanding_;
+            }catch(...) {failure=std::current_exception();}
+            if(failure) {
+                // This is game-only. Session's submission box provides once
+                // forwarding if its own pre-adoption guard also sees failure.
+                {
+                    ++self->ready_callback_depth_;
+                    struct EndDepth {std::size_t& depth;~EndDepth(){--depth;}} depth{self->ready_callback_depth_};
+                    if(state) {
+                        {
+                            const auto slot=self->slots_.find(state->lease.session);
+                            if(slot!=self->slots_.end()) {
+                                const auto found=slot->second.ready_publications.find(state->nonce);
+                                if(found!=slot->second.ready_publications.end()&&found->second==state) {
+                                    slot->second.ready_publications.erase(found);if(!self->ready_outstanding_)std::terminate();--self->ready_outstanding_;
+                                }
+                            }
+                        } // All iterators die before real callbacks/destructors.
+                        fail_ready_payload(state);
+                    }else {
+                        auto callbacks=std::move(actual);actual={};
+                        try {if(callbacks.queued)callbacks.queued(false);}catch(...) {}
+                    }
+                }
+                self->drain_ready_results();std::rethrow_exception(failure);
+            }
+            self->drain_ready_results();return facade;
+        };
+    }
     void revoke() noexcept {
         if(thread_!=std::this_thread::get_id() || operation_!=Operation::Idle)std::terminate();
         if(closed_)return;
         closed_=true; // Deny every new factory/prepared/ready before real cleanup.
         auto slots=std::move(slots_);
-        slots_.clear();
+        slots_.clear();ready_outstanding_=0;
+        for(auto& [id,slot]:slots)for(const auto& [nonce,state]:slot.ready_publications)state->revoked=true;
         for(auto& [id,slot]:slots) {
             try {if(records_.release)records_.release(*slot.session);}catch(...) {}
             try {if(movement_.release)movement_.release(*slot.session);}catch(...) {}
@@ -563,9 +780,12 @@ public:
             auto publication=std::move(slot.publication);auto pending=std::move(slot.pending);
             try {if(publication.queued)publication.queued(false);}catch(...) {}
             try {if(pending)pending(false);}catch(...) {}
+            for(const auto& [nonce,state]:slot.ready_publications)fail_ready_payload(state);
+            slot.ready_publications.clear();slot.deferred_ready_result.reset();
             slot.hooks.reset();
         }
-        slots.clear();characters_={};records_={};movement_={};factory_={};entry_={}; // All source captures die on game, with DB alive.
+        slots.clear();characters_={};records_={};movement_={};factory_={};entry_={};
+        active_ready_publication_.reset();ready_presence_.reset(); // All affine captures die on game, with DB alive.
     }
 };
 // Game-owned source callbacks borrow movement/storage. Network copies retain
@@ -7515,7 +7735,7 @@ if(guild_officer_runtime && player_guild(session) &&
                        bool(game_handlers.movement)==bool(game_handlers.world_records) ||
                        game_handlers.common_world_lifecycle || game_handlers.common_world_lifecycle_factory ||
                        game_handlers.common_world_cleanup_owner || game_handlers.common_world_lifecycle_abandon ||
-                       game_handlers.common_world_publication_owner)
+                       game_handlers.common_world_publication_owner || game_handlers.common_world_ready_publication_owner)
                         throw std::invalid_argument("Shared world host requires exclusive complete actual Taiwan handlers");
                     if(taiwan_entered_async.entered)
                         common_world_lifetime.vault->install(SharedTaiwanWorldLifecycle::factory_async(
@@ -7540,6 +7760,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     game_handlers.common_world_cleanup_owner=common_world_lifetime.vault->cleanup_owner();
                     game_handlers.common_world_lifecycle_abandon=common_world_lifetime.vault->abandon_facade();
                     game_handlers.common_world_publication_owner=common_world_lifetime.vault->publication_owner();
+                    game_handlers.common_world_ready_publication_owner=common_world_lifetime.vault->ready_publication_owner(common_world->presence());
                     if(taiwan_movement.movement) {
                         if(!taiwan_records.records && (game_handlers.world_records || !game_handlers.movement))
                             throw std::invalid_argument("Explicit native TW movement requires its exclusive movement dispatcher; mixed world records remain separately owned");

@@ -545,6 +545,10 @@ public:
         // Optional shared host revocation monitor; no status/EA authority.
         // Immutable per Session, installed before either listener starts.
         std::shared_ptr<TaiwanActorStatusWriteFence> actor_status_write_fence;
+        // LAST: actual READY recipient only. Real callbacks stay on game;
+        // transport receives revocable weak facades, never pending-entry slots.
+        std::function<CommonWorldPublication(Session&,const SharedWorldPresence::Lease&,CommonWorldPublication)>
+            common_world_ready_publication_owner;
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,
@@ -647,9 +651,15 @@ public:
     // Game-executor caller, actual complete native logical aggregate. The queue
     // holds bytes while the same executor qualifies/publishes common owner state.
     // Completion is once on game, local queue release only, not client receipt.
+    struct ActorStatusOutputInput {
+        SharedWorldPresence::Lease recipient;
+        TaiwanActorStatusPublication::ActorUnit actor;
+    };
     void send_common_world_records_with_publication(std::vector<std::uint8_t> logical,
         std::uint64_t account,std::uint64_t character,std::uint64_t generation,
-        std::function<bool()> publish,std::function<void(bool)> queued);
+        std::function<bool()> publish,std::function<void(bool)> queued,
+        std::optional<ActorStatusOutputInput> status={});
+    static std::size_t common_world_publication_capacity() noexcept;
     // Explicit actual ASYNC common-ready game owner only; an unknown/synchronous
     // owner is rejected. Separate from the frozen world sender.
     // One pending exact common/battle incarnation. Input is held until actual
@@ -817,6 +827,8 @@ private:
     static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;
     static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
     void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);
+    void send_actor_status_output(std::vector<std::uint8_t>,std::uint64_t,std::uint64_t,std::uint64_t,
+        std::function<bool()>,std::function<void(bool)>,ActorStatusOutputInput);
     friend class SharedTaiwanWorldLifecycle;
     bool bind_actor_status_incarnation(TaiwanActorStatusIncarnationSource::Token);
     void retire_actor_status_incarnation() noexcept;
