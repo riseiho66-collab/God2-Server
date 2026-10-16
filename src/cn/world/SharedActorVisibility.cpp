@@ -1898,7 +1898,7 @@ bool SharedActorVisibility::recipient_bound(const Lease& recipient,const Native&
         if(!connection)return false;
         using Output=std::decay_t<decltype(output)>;
         if constexpr(std::is_same_v<Output,Taiwan>)
-            return connection->id()==recipient.session && connection->account_id==recipient.account &&
+            return !connection->closing() && connection->id()==recipient.session && connection->account_id==recipient.account &&
                 connection->character_id==recipient.character && connection->recovered_world_ready() &&
                 (connection->state()==SessionState::InWorld || connection->state()==SessionState::CharacterSelected);
         else
@@ -1914,8 +1914,10 @@ bool SharedActorVisibility::submit(Native& native,std::vector<std::uint8_t> byte
         if(!connection)return false;
         using Output=std::decay_t<decltype(output)>;
         if constexpr(std::is_same_v<Output,Taiwan>) {
+            if(connection->closing())return false;
             connection->send_world_records(std::move(bytes));
-            return connection->recovered_world_ready() && connection->state()!=SessionState::Disconnected;
+            return !connection->closing() && connection->recovered_world_ready() &&
+                connection->state()!=SessionState::Disconnected;
         } else {
             connection->send(std::move(bytes));return !connection->closing();
         }
@@ -2027,7 +2029,7 @@ bool SharedActorVisibility::current(const Binding& original_binding,const Recove
     return std::visit([&](const auto& connection) {
         using Connection=typename std::decay_t<decltype(connection)>::element_type;
         if constexpr(std::is_same_v<Connection,Session>)
-            return connection->id()==binding.recipient().session && connection->account_id==binding.recipient().account &&
+            return !connection->closing() && connection->id()==binding.recipient().session && connection->account_id==binding.recipient().account &&
                 connection->character_id==binding.recipient().character && connection->recovered_world_ready() &&
                 (connection->state()==SessionState::InWorld || connection->state()==SessionState::CharacterSelected);
         else return !connection->closing() && connection->role()==SharedCredentialConnection::Transport::Role::World &&

@@ -1143,8 +1143,13 @@ struct Session::Impl {
             if(!delivered.load())if(const auto owner=session.lock())try{owner->close();}catch(...){}
         }
     };
+    // Pure ready-publication transport fact. GAME cleanup may cancel a
+    // pending handoff; only the final IO cut can commit Released. This is not
+    // a source Current, native ACK, Written or permission for later input.
+    enum class CommonPublicationReleasePhase {Pending,Released,Cancelled};
     // The actual posted tasks alone own this guard. Actual callbacks stay in
     // the game vault; finish contains only its revocable facade and executor.
+    // Genuine ready publications reuse the same pure once/drop guard.
     struct InitialEntryAttempt {
         const std::weak_ptr<Session> session;
         const std::function<void(bool)> finish;
@@ -5396,7 +5401,80 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
 }
 void Session::send_common_world_records_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
-    std::function<bool()> publish,std::function<void(bool)> queued,std::optional<ActorStatusOutputInput> status) {
+    std::function<bool()> publish,std::function<void(bool)> queued,std::optional<ActorStatusOutputInput> status,
+    std::optional<SharedWorldPresence::Lease> publication_recipient) {
+    std::shared_ptr<std::atomic<Impl::CommonPublicationReleasePhase>> release;
+    std::shared_ptr<Impl::InitialEntryAttempt> ready_attempt;
+    std::optional<TaiwanActorStatusWriteFence::Writer> ready_status_writer;
+    if(publication_recipient) {
+        if(status)throw std::invalid_argument("Ready Lease and actor-status publication are mutually exclusive");
+        if(impl_->common_ready_thread==std::thread::id{} || impl_->common_ready_thread!=std::this_thread::get_id())
+            throw std::logic_error("Ready publication requires actual GAME owner");
+        // The new GAME adoption/callback destruction/drain belongs inside the
+        // existing writer monitor, before any allocation or real vault call.
+        ready_status_writer=begin_actor_status_writer();invalidate_actor_status_writes();
+        // Allocate the empty affine box and pure latch BEFORE moving payload.
+        // Failed allocation can still complete the untouched caller on GAME.
+        std::shared_ptr<Impl::OutwardPublicationSubmission> submission;
+        try {
+            submission=std::make_shared<Impl::OutwardPublicationSubmission>();
+            release=std::make_shared<std::atomic<Impl::CommonPublicationReleasePhase>>(
+                Impl::CommonPublicationReleasePhase::Pending);
+        }catch(...){try{if(queued)queued(false);}catch(...){}close();return;}
+        submission->actual={std::move(publish),std::move(queued)};publish={};queued={};
+        CommonWorldPublication owned;
+        try {
+            const auto self=shared_from_this();const auto common=impl_->common_world_identity.load();
+            const auto& recipient=*publication_recipient;
+            if(!submission->actual.publish || !submission->actual.queued ||
+               !impl_->character_handlers.common_world_ready_publication_owner || !common ||
+               recipient.session!=id() || recipient.account!=account || recipient.character!=character ||
+               recipient.generation!=generation || common->account!=account || common->character!=character ||
+               common->generation!=generation || !account || !character || !generation ||
+               account_id!=account || character_id!=character || closing() || !recovered_world_ready() ||
+               state()!=SessionState::InWorld || impl_->common_entry_identity.load() ||
+               impl_->mode!=ProtocolMode::God2CharacterConnection || logical.empty() ||
+               logical.size()>RecoveredWorldFrame::max_logical_size)
+                throw std::invalid_argument("Ready publication requires the actual complete ready recipient and callbacks");
+            // Actual vault checks the FULL supplied Lease against its real
+            // Presence/Session slot, then owns ALL affine captures on GAME.
+            owned=impl_->character_handlers.common_world_ready_publication_owner(*this,recipient,
+                {[submission]{return submission->publish();},[submission,release](bool) {
+                    auto pending=Impl::CommonPublicationReleasePhase::Pending;
+                    release->compare_exchange_strong(pending,Impl::CommonPublicationReleasePhase::Cancelled);
+                    // Preserve true LOCAL release after a later phase/cleanup
+                    // change. Cancel-before-release must instead prevent unhold.
+                    submission->complete(release->load()==Impl::CommonPublicationReleasePhase::Released);
+                }});
+            if(!owned.publish || !owned.queued || submission->finished)
+                throw std::logic_error("Ready vault did not retain complete actual callbacks");
+            const auto finish=[self,queued_facade=owned.queued,release](bool accepted) {
+                if(!accepted) {
+                    auto pending=Impl::CommonPublicationReleasePhase::Pending;
+                    release->compare_exchange_strong(pending,Impl::CommonPublicationReleasePhase::Cancelled);
+                }
+                const auto delivery=std::make_shared<Impl::InitialEntryQueuedDelivery>(self);
+                self->impl_->post_status_work(self->impl_->game,[queued_facade,accepted,delivery] {
+                    delivery->delivered.store(true);
+                    try{queued_facade(accepted);}catch(...){}
+                });
+            };
+            ready_attempt=std::make_shared<Impl::InitialEntryAttempt>(weak_from_this(),finish);
+            publish=std::move(owned.publish);
+            queued=[ready_attempt](bool accepted){ready_attempt->complete(accepted);};
+            submission.reset(); // BEFORE the first IO post: no affine source in transport tasks.
+        }catch(...) {
+            if(release) {
+                auto pending=Impl::CommonPublicationReleasePhase::Pending;
+                release->compare_exchange_strong(pending,Impl::CommonPublicationReleasePhase::Cancelled);
+            }
+            if(submission)try{submission->complete(false);}catch(...){}
+            if(ready_attempt)ready_attempt->abort();
+            else {try{if(owned.queued)owned.queued(false);}catch(...){}close();}
+            return; // Explicit capability never falls back to the legacy owner path.
+        }
+    }
+    try {
     if(status){
         send_actor_status_output(std::move(logical),account,character,generation,
             std::move(publish),std::move(queued),std::move(*status));return;
@@ -5405,7 +5483,11 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
     invalidate_actor_status_writes();
     if(!queued)throw std::invalid_argument("Common world publication completion required");
     auto completion=std::make_shared<std::function<void(bool)>>(std::move(queued));
-    const auto finish=[self=shared_from_this(),completion](bool accepted) {
+    const auto finish=[self=shared_from_this(),completion,release](bool accepted) {
+        if(release && !accepted) {
+            auto pending=Impl::CommonPublicationReleasePhase::Pending;
+            release->compare_exchange_strong(pending,Impl::CommonPublicationReleasePhase::Cancelled);
+        }
         self->impl_->post_status_work(self->impl_->game,[completion,accepted] {
             auto callback=std::move(*completion);
             if(callback)try {callback(accepted);}catch(...) {}
@@ -5429,7 +5511,7 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
     }catch(...) {close();finish(false);return;}
     if(!reservation){close();finish(false);return;}
     impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,
-        account,character,common,publish=std::move(publish),finish]() mutable {
+        account,character,common,publish=std::move(publish),finish,release]() mutable {
         auto& s=*self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
         if(s.closing || !common() || s.mode!=ProtocolMode::God2CharacterConnection ||
@@ -5447,13 +5529,13 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
             const auto held_continuation=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
             s.append_write({bytes,std::move(reservation),false,true});s.write_bytes+=bytes->size();
             s.writes.back().pending_return_continuation=held_continuation;
-            s.post_status_work(s.game,[self,bytes,held_continuation,account,character,common,publish=std::move(publish),finish]() mutable {
+            s.post_status_work(s.game,[self,bytes,held_continuation,account,character,common,publish=std::move(publish),finish,release]() mutable {
                 bool accepted=false;
                 try {
                     accepted=common() && self->account_id==account && self->character_id==character &&
                         publish() && common() && self->account_id==account && self->character_id==character;
                 }catch(...) {}
-                self->impl_->post_status_work(self->impl_->strand,[self,bytes,held_continuation,common,accepted,finish] {
+                self->impl_->post_status_work(self->impl_->strand,[self,bytes,held_continuation,common,accepted,finish,release] {
                     auto& s=*self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                     if(!accepted || s.closing || !common() || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
@@ -5463,6 +5545,14 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
                     if(held==s.writes.end() || !held->held) {
                         s.fail("Common world held frame missing");finish(false);return;
                     }
+                    if(release) {
+                        auto pending=Impl::CommonPublicationReleasePhase::Pending;
+                        if(!release->compare_exchange_strong(pending,Impl::CommonPublicationReleasePhase::Released)) {
+                            s.fail("Ready publication cancelled before actual queue release");finish(false);return;
+                        }
+                    }
+                    // No callback/allocation between this pure release CAS and
+                    // unhold. A later write/post failure preserves Released.
                     held->held=false;
                     if(held==s.writes.begin())s.write(held_continuation->work);
                     finish(true); // Published before IO release; local queue only.
@@ -5470,6 +5560,10 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
             });
         }catch(...) {s.fail("Common world publication encoding failed");finish(false);}
     });
+    }catch(...) {
+        if(ready_attempt)ready_attempt->abort(); // Post/alloc throw cancels pending before preserving old rethrow.
+        throw;
+    }
 }
 std::size_t Session::common_world_publication_capacity() noexcept {return max_writes;}
 void Session::send_actor_status_output(std::vector<std::uint8_t> logical,

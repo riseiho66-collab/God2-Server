@@ -718,7 +718,13 @@ public:
     void send_common_world_records_with_publication(std::vector<std::uint8_t> logical,
         std::uint64_t account,std::uint64_t character,std::uint64_t generation,
         std::function<bool()> publish,std::function<void(bool)> queued,
-        std::optional<ActorStatusOutputInput> status={});
+        std::optional<ActorStatusOutputInput> status={},
+        std::optional<SharedWorldPresence::Lease> publication_recipient={});
+    // LAST genuine ready Lease opts the untyped native publication into the
+    // actual GAME vault. Required for the spectator source; never fabricate a
+    // Lease from scalar IDs or fall back when this explicit capability fails.
+    // It is exclusive with ActorStatusOutputInput. Queue release is historical,
+    // not Written/native ACK; IO owns only weak facades and a pure phase latch.
     static std::size_t common_world_publication_capacity() noexcept;
     // Explicit actual ASYNC common-ready game owner only; an unknown/synchronous
     // owner is rejected. Separate from the frozen world sender.

@@ -28,7 +28,7 @@ bool SharedMovementPublication::bound(const Recipient& recipient,const Recovered
         if(!connection)return false;
         using Output=std::decay_t<decltype(output)>;
         if constexpr(std::is_same_v<Output,Taiwan>)
-            return connection->id()==recipient.lease.session &&
+            return !connection->closing() && connection->id()==recipient.lease.session &&
                 connection->account_id==recipient.lease.account && connection->character_id==recipient.lease.character &&
                 connection->recovered_world_ready() && (connection->state()==SessionState::InWorld ||
                     connection->state()==SessionState::CharacterSelected);
@@ -103,8 +103,9 @@ bool SharedMovementPublication::deliver(Prepared& prepared,const RecoveredPositi
     const auto saved=presence_->saved_position(prepared.source_);
     if(!saved || *saved!=after)return false;
     if(!visibility_->complete_movement_set(prepared.source_,prepared.before_,after,prepared.bindings_))return false;
-    // Qualify every actual recipient before the first queue write. No callbacks
-    // run between these checks and the serial sends; socket work stays asynchronous.
+    // Qualify every actual recipient before the first queue write. Per-recipient
+    // advance may invoke observers between sends; this is not atomic fanout.
+    // A rejected suffix never retries or rolls back the already submitted prefix.
     for(const auto& delivery:prepared.deliveries_)
         if(!bound(delivery.recipient,after) || !visibility_->current(delivery.binding,prepared.before_,after))return false;
     for(auto& delivery:prepared.deliveries_) {
@@ -113,8 +114,10 @@ bool SharedMovementPublication::deliver(Prepared& prepared,const RecoveredPositi
             if(!connection)return false;
             using Output=std::decay_t<decltype(output)>;
             if constexpr(std::is_same_v<Output,Taiwan>) {
+                if(connection->closing())return false;
                 connection->send_world_records(std::move(delivery.bytes));
-                return connection->recovered_world_ready() && connection->state()!=SessionState::Disconnected;
+                return !connection->closing() && connection->recovered_world_ready() &&
+                    connection->state()!=SessionState::Disconnected;
             } else {
                 connection->send(std::move(delivery.bytes));return !connection->closing();
             }

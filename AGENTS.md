@@ -1611,3 +1611,22 @@ DBfields/per-tableChineseTXT; actualMySQL8backend/fullconsistentlosslessexport/
 fullconstraints/atomicpub/import andremainingtypedDBdomains remainrequired.
 PHASE1no build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/export/
 activate/deploy.5070GPUauthorizedwhenbeneficialunused.
+
+Round445 actualTW sharedmovement/visibility closes7missingchecks: qualification,
+pre/postsend andfinalCurrent afterobservers. Synchronousbudgetclose setsclosing
+beforeoldphase cleanup, so failedsubmission cannot advanceexpectedmodel. Native
+bytes/CN/phase/committedprefix unchanged; no retry/rollback/secondCAS/ACK. Corrected
+false noobserverbetweensends comment; fullatomicfanout/iteratorreentry remainOPEN.
+ActualSpectator completeLease -> existingGAMEreadyvault actualcallbacks; empty
+oncebox beforemove, weakfacades/purePending-Released-Cancelled atomic onlyonIO. Normalearlyclose
+source destruction gap repaired; no deployedMaincrash claim. Historical local
+release recordedbeforeunhold, surviveslaterCurrent/cleanup without reactivation.
+Cap-only outerwriter monitorsnewprelude beforealloc/vaultobservers; notallwriterproof.
+FiveexistingCPP/no newCPP/Lua/projectPY/CMake; fullroutes0/countsunchanged/whole%null.
+FullTW100first/commonCN/fourbinaryWS/allDB goalACTIVE/INCOMPLETE. NativeMain/full
+scene/phase/variant/allwriters/affineIO/fanout/clientACK/fullinventory/typedDBdomains/
+MySQL8backend/fullconsistentlosslessexport/fullconstraints/atomicpub/import OPEN.
+Preserve453Traditional/clientBIN/maxHPpoison10th/custom126150/907/shared64/coin
+99999999999/stack99/nativelevels/saves/fonts/IME/auth/text/EnglishDBfields/per-table
+ChineseTXT. PHASE1no build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/
+import/export/activate/deploy.5070GPUauthorizedwhenbeneficialunused.

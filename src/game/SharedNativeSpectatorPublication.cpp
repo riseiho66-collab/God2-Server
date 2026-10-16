@@ -303,7 +303,8 @@ struct SharedNativeSpectatorPublication::State:std::enable_shared_from_this<Stat
             std::visit([&](const auto& c) {
                 using C=typename std::decay_t<decltype(c)>::element_type;
                 if constexpr(std::is_same_v<C,Session>)c->send_common_world_records_with_publication(std::move(out->taiwan_logical),
-                    entry->lease.account,entry->lease.character,entry->lease.generation,approve,complete);
+                    entry->lease.account,entry->lease.character,entry->lease.generation,approve,complete,
+                    std::nullopt,entry->lease); // Genuine ready recipient: actual GAME vault, no scalar fallback.
                 else c->send_world_batch_with_publication(std::move(out->mainland_records),approve,complete);
             },actual);
         }catch(...) {out->submitting=false;entry->terminal=true;throw;}
