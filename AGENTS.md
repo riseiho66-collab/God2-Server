@@ -1570,3 +1570,23 @@ Preserve453Traditional/clientBIN/maxHPpoison10th/custom126150/907/shared64/coin
 ChineseTXT. No build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/
 export/activation/deployment.5070GPUauthorizedwhenbeneficialunused. GoalACTIVE;
 do not reinstate historical441 stop without a new human stop request.
+
+Round443 connects actualApplication GAME scheduled policy reload to sameContext
+registered CUSTOM0150 cache. REQUIRED explicitpositive interval, boundedowner
+capacity, checkeddeadline/clock, onedueload perpoll/no catchup. Actualexisting50ms
+Scheduler polls; pure Binding::observe replaces all3 actualinput/adopt/authorize
+SQL refreshcalls. Startup strictload only;442clean InvalidSnapshot oldwhole
+retention preserved. FatalSQL/transaction/revocation/reentry/allocation retires
+cache andallregistered authority BEFORE Schedulerlogger, permanentlyno retry.
+Normalstop/lateRAII withdraws beforelistener/vault/gameownerdrain; DBoutlivescache.
+OriginalLua/ticket/current/clock/credit/sequence/pose/soleCAS unchanged. Validnew
+wholeversion takes effectatnextscheduledreload thennextauthorizedoperation.
+V79pins179=172same7updated/canonical835;7existingCPP/no newCPP/Lua/projectPY/
+CMake. Partialsource+1/fullroutes0/countsunchanged/whole%unknown. GeneralallDB
+reload/nativeMain/fullscene/ACK/allwriters/affineIO/fanout/fullinventory/MySQL8
+backend/fullconsistentlosslessexport/fullconstraints/atomicpub/import remainOPEN.
+FullTW100first/commonCN/fourbinaryWS/all-systemDB goalACTIVE/INCOMPLETE. Preserve
+453Traditional/clientBIN/maxHPpoison10th/custom126150/907/shared64/coin99999999999/
+stack99/nativelevels/saves/fonts/IME/auth/text/EnglishDBfields/per-tableChineseTXT.
+PHASE1 no build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/
+export/activate/deploy.5070GPUauthorizedwhenbeneficialunused.

@@ -6,6 +6,7 @@
 #include "db/GuildOfficerSqliteMigrations.h"
 #include "core/Application.h"
 #include "core/SharedWorldHostPlan.h"
+#include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "db/NativeWorldEntrySnapshotRepository.h"
 #include "db/NativeCharacterSummarySnapshotRepository.h"
@@ -962,6 +963,10 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
             const GuildRelations53FlagsDraft flags53{config.owned_guild_membership_enabled,config.owned_guild_announcements_enabled,config.owned_guild_officers_enabled,config.owned_guild_succession_enabled,config.owned_guild_relations53_enabled};
             const auto migrations=configured_guild_relations53(config.database,flags53);
             SqliteDatabase database(config.database,migrations,config.taiwan_skill_profile);database.initialize();database.migrate();
+            // CUSTOM-0150 actual GAME owner, after Database and before every
+            // Context supplier. No policy load occurs without explicit selection.
+            const auto ordinary_policy_reloads=world_plan?
+                std::make_shared<OwnedOrdinaryMovementPolicyReloads>(config.max_sessions):nullptr;
             // Actual helper outlives Context suppliers and game-owned drains.
             RecoveredOwnedCompanions owned_companions(database.companions());
             // One same-repository host on this game owner, retained through all
@@ -1032,7 +1037,7 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     &database.companions(),&owned_companions,owned_deity_skill_source,
                     config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled,hosted_pk,std::move(initial_actor_inputs),
                     &database.world_displays(),&database.native_npc_display_catalog(),
-                        &database.ordinary_movement_policies()};
+                        &database.ordinary_movement_policies(),ordinary_policy_reloads};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
@@ -9374,7 +9379,14 @@ if(guild_officer_runtime && player_guild(session) &&
             auto known=script_times(config.script_root);
             unsigned ticks=0;
             auto trade_checked=std::chrono::steady_clock::now();
+            // Declared after native/listener owners: retire scheduled cache
+            // authority before their drain on every later exceptional unwind.
+            struct OrdinaryPolicyReloadGuard {
+                const std::shared_ptr<OwnedOrdinaryMovementPolicyReloads> owner;
+                ~OrdinaryPolicyReloadGuard(){if(owner)owner->stop();}
+            } ordinary_policy_reload_guard{ordinary_policy_reloads};
             auto scheduler=std::make_shared<Scheduler>(game.get_executor(),std::chrono::milliseconds(50),[&] {
+                if(ordinary_policy_reloads)ordinary_policy_reloads->poll(std::chrono::steady_clock::now());
                 if(party_preview_transport)party_preview_transport->settle(); // Pending has no native timeout.
                 world.update(0.05f);
                 const auto clock_now=std::chrono::steady_clock::now();
@@ -9411,6 +9423,7 @@ if(guild_officer_runtime && player_guild(session) &&
             bool stopping=false;
             auto stop=[&] {
                 if(stopping) return;
+                if(ordinary_policy_reloads)ordinary_policy_reloads->stop();
                 if(hosted_pk)hosted_pk_lifetime.stop(); // Offers BEFORE backend/vault/scheduler/network.
                 if(party_preview_transport)party_preview_transport->stop(); // Before scheduler/network and borrowed game teardown.
                 guild_delivery_lifetime->store(false);

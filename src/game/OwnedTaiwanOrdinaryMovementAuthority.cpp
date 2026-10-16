@@ -143,7 +143,7 @@ std::shared_ptr<OwnedTaiwanOrdinaryMovementAuthority> OwnedTaiwanOrdinaryMovemen
         if(!result->bound())return {};
         std::optional<OwnedOrdinaryMovementPolicies::Observation> observation;
         if(result->binding_) {
-            observation=result->binding_->refresh();
+            observation=result->binding_->observe();
             if(observation->policy()!=policy || !result->bound() || !result->binding_->current(*observation))return {};
         }
         const auto population=result->presence_->observe_ready_population();
@@ -169,7 +169,7 @@ OwnedTaiwanOrdinaryMovementAuthority::authorize(const Scene::Candidate& input) {
            position_.revision==std::numeric_limits<std::uint64_t>::max()) {retire();return std::nullopt;}
         std::optional<OwnedOrdinaryMovementPolicies::Observation> observation;
         auto effective_policy=policy_;
-        if(binding_) {observation=binding_->refresh();effective_policy=observation->policy();}
+        if(binding_) {observation=binding_->observe();effective_policy=observation->policy();}
         const auto policy_current=[&] {return !binding_ || (observation && binding_->current(*observation));};
         if(!candidate_current(candidate) || !policy_current()) {retire();return std::nullopt;}
         const auto prepared=rules_->prepare(candidate.step.request,position_,direction_,candidate.step.native_cell);

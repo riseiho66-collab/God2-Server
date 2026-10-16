@@ -21,6 +21,7 @@
 namespace god2 {
 class NativeSkillCatalog;
 class OrdinaryMovementPolicyRepository;
+class OwnedOrdinaryMovementPolicyReloads;
 class NativeWorldEntrySnapshotRepository;
 class SqliteNativeCharacterSummarySnapshotRepository;
 class SqliteNativeWorldEntrySnapshotRepository;
@@ -132,6 +133,9 @@ struct SharedWorldHostPlan {
         const NativeNpcDisplayCatalog* native_npc_displays=nullptr;
         // LAST CUSTOM-0150 borrowed actual same-Database policy reader; no DDL.
         OrdinaryMovementPolicyRepository* ordinary_movement_policies=nullptr;
+        // LAST CUSTOM-0150 actual Application GAME scheduler owner. Same-cache
+        // registration only; legacy plans may leave it absent. No input SQL.
+        std::shared_ptr<OwnedOrdinaryMovementPolicyReloads> ordinary_movement_policy_reloads{};
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in

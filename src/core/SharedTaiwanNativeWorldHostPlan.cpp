@@ -39,7 +39,7 @@ struct DatabaseOrdinaryMovementInput {
         if(!actual)return std::nullopt;
         if(actual->authority || actual->owned_ordinary)
             throw std::invalid_argument("DB movement policy cannot replace an existing authority");
-        const auto observed=binding->refresh();
+        const auto observed=binding->observe();
         actual->owned_ordinary.emplace(TaiwanNativeSceneResourceOwner::OwnedOrdinary{
             rules,observed.policy(),binding});
         if(poisoned || !binding->current(observed))throw std::runtime_error("DB movement policy selection revoked");
@@ -49,13 +49,16 @@ struct DatabaseOrdinaryMovementInput {
     }
 };
 SharedTaiwanNativeMovementHost::InputSource database_ordinary_movement_input(
-    const Context& context,std::string profile,std::size_t max_profiles,
+    const Context& context,std::string profile,std::size_t max_profiles,std::chrono::milliseconds reload_interval,
     std::shared_ptr<TaiwanMovementRules> rules,SharedTaiwanNativeMovementHost::InputSource original) {
-    if(!context.common_world || !context.common_world->presence() || !context.ordinary_movement_policies ||
+    if(!context.common_world || !context.common_world->presence() || !context.ordinary_movement_policies || !context.ordinary_movement_policy_reloads ||
        !rules || !original || !rules->supports_owned_ordinary())
         throw std::invalid_argument("DB ordinary movement requires actual common Context, rules and resources");
     auto policies=OwnedOrdinaryMovementPolicies::create(*context.ordinary_movement_policies,max_profiles);
     auto binding=policies->bind(std::move(profile));
+    // Initial strict load/binding succeeded. Register exactly this owning cache;
+    // future input/authorize observations never execute repository SQL.
+    context.ordinary_movement_policy_reloads->attach(policies,reload_interval);
     auto state=std::make_shared<DatabaseOrdinaryMovementInput>(DatabaseOrdinaryMovementInput{
         std::this_thread::get_id(),std::move(rules),std::move(binding),std::move(original)});
     return [state=std::move(state)](Session& session,const SharedTaiwanNativeMovementScene::FactoryScope& scope) {
@@ -955,15 +958,15 @@ SharedTaiwanNativeWorldHostPlan::Sources::with_actor_status_incarnations(const C
 }
 SharedTaiwanNativeWorldHostPlan::Sources
 SharedTaiwanNativeWorldHostPlan::Sources::with_database_owned_ordinary_movement(
-    const Context& context,std::string profile,std::size_t max_profiles,Sources sources) {
-    sources.movement_resources=database_ordinary_movement_input(context,std::move(profile),max_profiles,
+    const Context& context,std::string profile,std::size_t max_profiles,std::chrono::milliseconds reload_interval,Sources sources) {
+    sources.movement_resources=database_ordinary_movement_input(context,std::move(profile),max_profiles,reload_interval,
         sources.movement_rules,std::move(sources.movement_resources));
     return sources;
 }
 SharedTaiwanNativeWorldHostPlan::StoredSources
 SharedTaiwanNativeWorldHostPlan::StoredSources::with_database_owned_ordinary_movement(
-    const Context& context,std::string profile,std::size_t max_profiles,StoredSources sources) {
-    sources.movement_resources=database_ordinary_movement_input(context,std::move(profile),max_profiles,
+    const Context& context,std::string profile,std::size_t max_profiles,std::chrono::milliseconds reload_interval,StoredSources sources) {
+    sources.movement_resources=database_ordinary_movement_input(context,std::move(profile),max_profiles,reload_interval,
         sources.movement_rules,std::move(sources.movement_resources));
     return sources;
 }

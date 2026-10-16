@@ -121,9 +121,11 @@ public:
         static Sources with_owned_inventory_movement(const SharedWorldHostPlan::Context&,Sources);
         // CUSTOM-0150 same-Database whole-version policy selection. Call on
         // actual game Context; real resource supplier must select no authority.
+        // Explicit positive interval registers this exact cache with the real
+        // Application scheduler; there is no guessed timing default/input SQL.
         static Sources with_database_owned_ordinary_movement(
             const SharedWorldHostPlan::Context&,std::string profile_key,
-            std::size_t max_profiles,Sources);
+            std::size_t max_profiles,std::chrono::milliseconds reload_interval,Sources);
         Sources(SharedTaiwanWorldEntrySource::NativeSource native_entry,
             SharedTaiwanWorldEntered::Source native_entered,
             std::shared_ptr<TaiwanMovementRules> rules,
@@ -187,7 +189,7 @@ public:
         static StoredSources with_owned_inventory_movement(const SharedWorldHostPlan::Context&,StoredSources);
         static StoredSources with_database_owned_ordinary_movement(
             const SharedWorldHostPlan::Context&,std::string profile_key,
-            std::size_t max_profiles,StoredSources);
+            std::size_t max_profiles,std::chrono::milliseconds reload_interval,StoredSources);
         // Actual same-Context scene inputs -> complete entry producer -> the
         // existing stored-entry issuer/CAS path. Call inside StoredSourceFactory.
         // Does not load NPC bytes, install a catalog, infer opaque2A or opt Main in.
