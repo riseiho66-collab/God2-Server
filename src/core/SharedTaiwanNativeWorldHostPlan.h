@@ -260,6 +260,9 @@ public:
         // state. No caller-supplied status callback or lazy observation mint.
         // The actual install/cleanup and incarnation remain mandatory; complete
         // writer exclusion/private byte permits are separate unfinished work.
+        // The same Profile/resource/status owners also author the actual ordered
+        // initial incoming actors; the genuine scene still owns selection and
+        // every opaque/NPC record. No default Main or outward transport follows.
         static StoredSources with_owned_pk_return_owned_status(const SharedWorldHostPlan::Context&,
             std::shared_ptr<const TaiwanNativeActorResourceBank>,TaiwanCustomFullActorProfile::Policy,
             OwnedTaiwanPkReturnSceneSource::Selection,TaiwanNativeActorResourceSource::Configuration,
@@ -325,6 +328,9 @@ public:
         std::shared_ptr<const TaiwanNativeDrvDoll> scene_drv_doll_bank_;
         std::shared_ptr<const void> scene_entry_binding_;
         bool return_profiles_installed_=false;
+        // Private one-shot request from the actual owned-clear recipe only.
+        // External status/profile recipes keep their original initial source.
+        bool initial_profiles_requested_=false;
         void require_profile_entry_binding() const;
     };
     using StoredSourceFactory=std::function<StoredSources(const SharedWorldHostPlan::Context&)>;

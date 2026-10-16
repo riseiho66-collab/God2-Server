@@ -6571,3 +6571,30 @@ saves/fonts/IME/auth/text/CNfourWS. PHASE1 no builds/tests/product/parser/
 native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
 
 Details: docs/research/tw-initial-status-frame-transport-20261016.md
+
+## Round433 — Actual initial actor producer and private mint (2026-10-16)
+
+Round433 connects the actual owned initial incoming full actor producer and
+private ActorUnit mint to432 frame transport. One ProfileOwner and same actual
+resource/status/profile-scope owners serve PK and initial. Private one-shot
+request onlyfromowned-clear recipe; genericexternalrecipes preserve initial.
+Outer savedInput/endpoints -> initialproducer ->421statusinstall -> genuine
+Source sees one augmentedScope. Genuine orderedselection/NPC/opaque/current/
+install/cleanup remain required. Everyactual6F raworqualifiedprojection matches
+beforeauthoring; exactsavedrow/EQ/resources/status/role/private430 receipts.
+SameactoradjacentEA mustmatchprivateclear; insertifabsent; preserveunrelatedEA;
+rejectnonadjacentselectedEA; preserveallotherbytes/order andupdateoffsets. Long-lived state freezesmaterial/
+role/unit andweakSession, neverfullProfile/strongjoiningSession cycle. Current
+uses ephemeral sameownerProfile withsamecapturedmaterials, comparesfullbytes/
+originalrole/status, dropsalltemporaryowners beforefinaljointsavedcut/purefence.
+Original421begin/real/commit/retire preserved; no newDBunderheldinstall.
+Initialselectedincoming sourceconnected, butoutwardtypedtransport/affineIO/
+allwriter exclusion/fanout/nativeACK/placements/movement/Main/fullinventory/
+configreload/MySQLremainOPEN. V69pins155=150same3updated2new; canonical800;
+5CPP=3existing2new/no newprojectPY/noCMakechange. Fullroutes0/countsunchanged/
+whole%unknown; fullTW100-first/commonCN/fourWS/allDBgoal remainsACTIVE.
+Preserve453Traditional/clientBIN/maxHPpoison10th/907/common64/coin99999999999/
+stack99/nativelevels/saves/fonts/IME/auth/text. PHASE1no build/tests/product/
+parser/native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.
+
+Details: docs/research/tw-initial-actor-producer-20261016.md

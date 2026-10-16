@@ -14,6 +14,7 @@ namespace god2 {
 class Session;
 class SharedTaiwanNativeWorldHostPlan;
 class OwnedTaiwanPkReturnSceneSource;
+class OwnedTaiwanInitialActorSceneSource;
 // CUSTOM-0133 explicit initial-install clear policy. This owned ordinary subset
 // is not recovered native status, complete writer custody or a byte permission.
 class TaiwanActorStatusOwnedSource final {
@@ -81,6 +82,7 @@ public:
 private:
     friend class SharedTaiwanNativeWorldHostPlan;
     friend class OwnedTaiwanPkReturnSceneSource;
+    friend class OwnedTaiwanInitialActorSceneSource;
     friend class TaiwanActorStatusPublication;
     TaiwanActorStatusOwnedSource(const std::shared_ptr<SharedWorldPresence>&,
         std::shared_ptr<TaiwanActorStatusIncarnationSource>,Policy);

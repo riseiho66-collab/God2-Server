@@ -1,6 +1,7 @@
 #include "core/SharedTaiwanNativeWorldHostPlan.h"
 #include "game/TaiwanActorStatusWriteFence.h"
 #include "game/TaiwanActorStatusIncarnationSource.h"
+#include "game/OwnedTaiwanInitialActorSceneSource.h"
 #include "game/SharedTaiwanNativeRecordHandlerSource.h"
 #include "handlers/RecoveredOwnedCompanions.h"
 #include <algorithm>
@@ -688,6 +689,19 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_profiles(
     sources.require_profile_entry_binding();
     auto profiles=TaiwanCustomFullActorProfile::create(context.common_world->presence(),bank,
         sources.scene_drv_doll_bank_,std::move(policy));
+    if(!profiles)throw std::invalid_argument("TW shared actor Profile owner construction failed");
+    if(sources.initial_profiles_requested_) {
+        // Only the actual owned-clear recipe requests this composition. Both
+        // producers retain this SAME ProfileOwner and concrete material owners;
+        // no second resource/status registry or independently defaulted policy.
+        auto initial=OwnedTaiwanInitialActorSceneSource::wrap(context.common_world->presence(),
+            profiles,material,std::move(sources.entered));
+        // The outer input wrapper supplies ONE owned augmented Scope to the
+        // producer, genuine supplier and owned install/cleanup callbacks.
+        sources.entered=with_initial_saved_actor_input(context.common_world->presence(),
+            context.initial_actor_inputs,context.common_world->transports(),context.game,std::move(initial));
+        sources.initial_profiles_requested_=false;
+    }
     auto scene=OwnedTaiwanPkReturnSceneSource::create(context.common_world->presence(),
         context.common_world->transports(),context.common_world->visibility(),std::move(profiles),selection,std::move(material));
     struct Dependencies {
@@ -762,13 +776,16 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::with_owned_pk_return_owned_statu
         TaiwanCustomFullActorProfile::Policy policy,OwnedTaiwanPkReturnSceneSource::Selection selection,
         TaiwanNativeActorResourceSource::Configuration configuration,TaiwanActorStatusOwnedSource::Policy status_policy,
         OwnedPkProfileRecipe recipe,StoredSources sources) {
-    if(!context.common_world||!sources.entered||!sources.actor_status_incarnations)
+    if(!context.common_world||!sources.entered||!sources.actor_status_incarnations||sources.initial_profiles_requested_)
         throw std::invalid_argument("TW owned status requires actual initial scene and host incarnations");
     auto status=TaiwanActorStatusOwnedSource::create(context.common_world->presence(),
         sources.actor_status_incarnations,std::move(status_policy));
     if(!status)throw std::invalid_argument("TW owned status cannot retain the actual host incarnation source");
-    auto real_source=with_initial_saved_actor_input(context.common_world->presence(),
-        context.initial_actor_inputs,context.common_world->transports(),context.game,std::move(sources.entered));
+    // Defer the outer input/endpoint wrapper until the common Profile/material
+    // owner exists. Its augmented Scope then reaches this exact status install
+    // wrapper AND the genuine supplier through the new initial producer.
+    auto real_source=std::move(sources.entered);
+    sources.initial_profiles_requested_=true;
     sources.entered=[status,real_source=std::move(real_source)](
             Session& session,const SharedTaiwanWorldEntered::Scope& scope)
             ->std::optional<SharedTaiwanWorldEntered::Native> {
