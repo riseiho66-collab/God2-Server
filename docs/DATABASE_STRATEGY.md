@@ -4,7 +4,7 @@ This document supersedes the historical accounts/characters-only design example.
 
 ## Current source status
 
-SQLite is the implemented backend. The ordinary migration history reaches49; explicitly qualified guild branches extend50..53. Native delivery, inventory, PK, beast, learning and other storage can be installed through separate explicit extension contracts. The source declaration dictionary contains123 distinct literal table names, including optional, historical and transient migration tables. This is not a live database inventory.
+SQLite is the implemented backend. The ordinary migration history reaches49; explicitly qualified guild branches extend50..53. Native delivery, inventory, PK, beast, learning and other storage can be installed through separate explicit extension contracts. The source declaration dictionary contains124 distinct literal table names, including optional, historical and transient migration tables. This is not a live database inventory.
 
 MySqlDatabase and MySqlMigrationManager remain unsupported. SqliteToMysqlExportTool::export_sql(Database&,path) still refuses full database export until an actual consistent source reader and complete audited schema mappings exist. The new write_mysql80_snapshot path formats a caller-owned typed image; it is not an actual SQLite snapshot reader, migration or target import validation. No live DB was opened or changed for this source phase.
 
@@ -35,6 +35,10 @@ C++20 owns networking, native layout, authoritative state, transactions, checked
 The intended load flow is: one consistent read -> validate the complete candidate -> publish one immutable configuration version. A battle, settlement or transaction retains its selected version through completion. Invalid or incomplete reloads retain the previous complete version; no half-new parameters. Do not issue SQL for each packet or hit. Configuration documents must state whether a change takes effect at reload, next battle/login or service restart. New wire formats and fundamental systems can still require C++ changes.
 
 This reload service and domain-table promotion are not yet implemented. MySQL support requires actual backend repositories and migrations, not simply changing the connection string or converting a dump. SQLite and MySQL must use the same common authoritative tables and gameplay interfaces; incompatible protocol snapshots retain the existing _tw/_cn scope where necessary.
+
+## PET custody field dictionary source (2026-10-17)
+
+The existing character_beast_snapshot_custody table now has all13 physical columns positively described in the runtime dictionary and its own Chinese TXT. It saves PET instance custody and conditional display bytes; it is separate from combat-pet learning, player skills and monster definitions. Previously the table title called custody a write qualification and its known panel/inventory bytes were described as entirely unrecovered. Source-only corrections preserve every physical name, raw BLOB, schema, client/source pin and save. Native149c display evidence distinguishes raw ratio formatting and a separate class12 carried-item scratch from class5 PET metadata; no food formula, cap or reward authority follows. The existing typed MySQL formatter consumes dictionary metadata during readable-comment qualification and still emits COMMENT references to the TXT; no full export/import or backend is claimed. The dictionary remains124 source-declared tables (not installed count), with146 positively described columns across24 tables after this slice.
 
 ## MySQL8.0 export contract
 

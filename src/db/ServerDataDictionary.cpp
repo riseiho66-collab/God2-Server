@@ -94,6 +94,21 @@ constexpr std::array<D::SourceLocation,1> sources_25{{
 constexpr std::array<D::SourceLocation,1> sources_26{{
     {"src/db/SqliteBeastSnapshotRepository.cpp",23},
 }};
+constexpr std::array<D::Column,13> columns_26{{
+    {"character_id","角色編號","共用角色主鍵，參照 recovered_characters.id；不是客戶端 selector 或 actor handle。",D::ValueKind::Integer},
+    {"inventory_slot","神獸實體格位","一般背包零至二十九；另行安裝 equipment v2 後才包含裝備格三十七。",D::ValueKind::Integer},
+    {"selector","神獸面板選取值","零至二五五的獨立面板選取值，同角色唯一；不能假定等於實體格位。",D::ValueKind::Integer},
+    {"bag_revision","持有格位版本","既有持有格位的正整數比對交換版本，範圍一至 signed64 最大值。",D::ValueKind::Integer},
+    {"inventory_metadata","神獸背包顯示資料","完整二十位元組神獸實體資料；class5，保留日期分支與所有未知位元，見同名 TXT 位元對照。",D::ValueKind::Binary},
+    {"panel4c","神獸面板顯示快照","完整十七位元組原生4C資料，含物品鍵、選取值、顯示數值與控制位元；不授予餵食或成長公式。",D::ValueKind::Binary},
+    {"explorationc5","探索面板顯示快照","可空的完整三百零九位元組原生C5資料；原始context和訊息保留，不代表探索計時或獎勵權限。",D::ValueKind::Binary},
+    {"revision","神獸實例版本","持有快照自身的正整數比對交換版本，與 bag_revision 分開；範圍一至 signed64 最大值。",D::ValueKind::Integer},
+    {"origin","資料來源分類","保留既有 NATIVE_OBSERVED、NATIVE_VERIFIED、CUSTOM_DESIGNED 或 CUSTOM_TEST_NOT_NATIVE 原值；不是新的驗收證明。",D::ValueKind::Text},
+    {"evidence_id","來源證據識別","來源證據識別：SQL 長度一至五一二字元，C++ 另限一至五一二位元組；禁止 NUL，不改歷史出處。",D::ValueKind::Text},
+    {"source_sha256","神獸宣告來源雜湊","固定既有 PET 資源來源 SHA-256，保存原始一四七筆宣告的來源身分。",D::ValueKind::Text},
+    {"client_sha256","保存時的客戶端來源雜湊","既有結構固定歷史6bf75ef8來源；不自動改標成149c映像或目前已驗收客戶端。",D::ValueKind::Text},
+    {"design_id","持有功能設計識別","固定 CUSTOM-0085；欄位說明不改既有持有、選取、交易或存檔規則。",D::ValueKind::Text},
+}};
 constexpr std::array<D::SourceLocation,1> sources_27{{
     {"src/db/SqliteOwnedBlacklistRepository.cpp",12},
 }};
@@ -591,7 +606,7 @@ constexpr std::array<D::Table,124> dictionary{{
     {"character_bank_receipts","角色倉庫金錢操作收據","保留已執行操作的角色倉庫金錢操作收據；保留完整收據與版本，歷史本身不授予新的操作權限。",D::Storage::AuditHistory,D::Domain::Inventory,D::Installation::ExplicitExtension,sources_23,std::span<const D::Column>{}},
     {"character_beast_discard_receipts_0085","角色神獸丟棄收據","保留已執行操作的角色神獸丟棄收據；保留完整收據與版本，歷史本身不授予新的操作權限。",D::Storage::AuditHistory,D::Domain::Companion,D::Installation::ExplicitExtension,sources_24,std::span<const D::Column>{}},
     {"character_beast_selection_0085","角色神獸選擇版本","持久保存角色神獸選擇版本；原有約束與寫入資格由來源 repository 定義。",D::Storage::Authoritative,D::Domain::Companion,D::Installation::ExplicitExtension,sources_25,std::span<const D::Column>{}},
-    {"character_beast_snapshot_custody","角色神獸快照寫入資格","持久保存角色神獸快照寫入資格；原有約束與寫入資格由來源 repository 定義。",D::Storage::Authoritative,D::Domain::Companion,D::Installation::ExplicitExtension,sources_26,std::span<const D::Column>{}},
+    {"character_beast_snapshot_custody","角色神獸持有快照","保存既有神獸實體持有、面板選取、完整顯示位元組與版本來源；不是食物效果、戰寵學習或怪物定義。",D::Storage::Authoritative,D::Domain::Companion,D::Installation::ExplicitExtension,sources_26,columns_26},
     {"character_blacklist_entries","角色黑名單與保留列號","持久保存角色黑名單與保留列號；原有約束與寫入資格由來源 repository 定義。",D::Storage::Authoritative,D::Domain::Character,D::Installation::ExplicitExtension,sources_27,std::span<const D::Column>{}},
     {"character_daily_quest_lists","角色日常任務清單","持久保存角色日常任務清單；原有約束與寫入資格由來源 repository 定義。",D::Storage::Authoritative,D::Domain::Quest,D::Installation::VersionedMigration,sources_28,std::span<const D::Column>{}},
     {"character_deities","角色神獸持有列","持久保存角色神獸持有列；原有約束與寫入資格由來源 repository 定義。",D::Storage::Authoritative,D::Domain::Companion,D::Installation::VersionedMigration,sources_29,std::span<const D::Column>{}},

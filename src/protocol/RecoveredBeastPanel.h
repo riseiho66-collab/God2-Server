@@ -44,11 +44,20 @@ struct RecoveredBeastPanel {
         bool operator==(const Snapshot&) const=default;
         std::uint16_t metadata_key() const noexcept {return word(bytes,1);}
         std::uint8_t selector() const noexcept {return bytes[3];}
+        // Native4A0790 control5 formats this BYTE with literal denominator100
+        // using "%d/%d". No clamp, loyalty name or gameplay cap is established.
         std::uint8_t percentage_display_raw() const noexcept {return bytes[4];}
+        // Native4A0903..4A095C builds a NEW fully initialized20-byte display
+        // item from this key: DWORD0=key|0x000C0000 (class DECIMAL12), BYTE18
+        // =logical13, WORD10=((DWORDlogical9>>24)&7)<<13, all other bits zero.
+        // 4A0610 copies all20 to UI+23D604 for control1; distinct from PET class5 metadata;
+        // WORD10 high3 has no qualified palette meaning or storage/grant rule.
         std::uint16_t carried_item_key() const noexcept {return word(bytes,5);}
         // Native4A0700 multiplies this WORD by FLOAT0.01 and formats%6.2f
         // plus ProgramMsg362 percent sign. NOT a qualified lifetime unit.
         std::uint16_t percentage_word_raw() const noexcept {return word(bytes,7);}
+        // Native4A07E0 control6 formats raw low11 / bits11..21 via "%d/%d".
+        // This does not name fatigue, prove numerator<=denominator or a cap.
         std::uint16_t meter_numerator_raw11() const noexcept {return dword(bytes,9)&0x7ff;}
         std::uint16_t meter_denominator_raw11() const noexcept {return (dword(bytes,9)>>11)&0x7ff;}
         // Values0/1/2 select ProgramMsg645/646/647; native initialization

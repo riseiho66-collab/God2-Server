@@ -1,46 +1,59 @@
 character_beast_snapshot_custody
 
-中文名稱：角色神獸快照寫入資格
-用途：持久保存角色神獸快照寫入資格；原有約束與寫入資格由來源 repository 定義。
-儲存分類：Authoritative
-領域分類：Companion
-來源安裝分類：ExplicitExtension
-安裝說明：另行明確安裝的擴充來源；不能只用最高遷移版本判斷是否存在。
+中文名稱：角色神獸持有快照
+用途：CUSTOM-0085 保存既有 PET 神獸實體的持有格位、獨立面板選取值、完整顯示快照及版本來源。
+儲存分類：Authoritative；領域分類：Companion；來源安裝分類：ExplicitExtension。
+這是來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
+神獸 PET 顯示與持有資料不等於戰寵 COM 學習資料、人物技能或怪物定義。
 
-本檔是 C++ 來源宣告說明，不是已安裝資料庫盤點或完整 MySQL 匯出資格。
-所有實體表名與欄位名維持英文；中文是說明，未知欄位不推導單位或公式。
+來源：src/db/SqliteBeastSnapshotRepository.cpp 的 schema、equipment_schema、validate、read 及對應選取／背包／倉庫／交易 writer。
+全部實體表名與十三個欄位仍維持英文；下列中文只作說明，沒有改表、重編碼、拆除 BLOB 或改寫存檔。
 
-來源宣告：
-1. src/db/SqliteBeastSnapshotRepository.cpp:23 [CREATE TABLE]
+英文欄位 → 中文說明、型別與限制
+character_id | INTEGER NOT NULL | 角色編號。參照 recovered_characters.id 的完整共用角色主鍵，不是線路 actor handle。
+inventory_slot | INTEGER NOT NULL | 神獸實體格位。原 custody v1 限一般背包 0..29；另行明確安裝 equipment v2 後才容許裝備格 37。不可把目前來源支援的 37 說成所有舊資料庫已安裝。
+selector | INTEGER NOT NULL | 面板選取值，0..255。同角色的 selector 唯一，和 inventory_slot 分開保存；搬移實體後兩者可以不同，不得直接相等替換。
+bag_revision | INTEGER NOT NULL | 持有格位的 CAS 版本，1..9223372036854775807。原有 scalar 格位的版本，與下列實例 revision 不同。
+inventory_metadata | BLOB NOT NULL | 完整 20 位元組的神獸背包顯示資料；原生類別低六位為 class5，物品鍵需對應正式 PET 來源。部分已知欄位見下方；保留全部原位元組。
+panel4c | BLOB NOT NULL | 完整 17 位元組的原生 4C 面板資料，第一個位元組固定 4C。不是未解的隨機機器碼，也不是可直接改寫的通用成長參數。
+explorationc5 | BLOB 或 NULL | 完整 309 位元組的原生 C5 探索面板資料，第一位元組 C5。NULL 代表此持有快照沒有該顯示材料，不能填成全零 C5；非空時物品鍵／selector 要對應同一神獸。C5 context、狀態、訊息模板等顯示資料不授予探索操作、計時、消耗或獎勵權限。
+revision | INTEGER NOT NULL | 神獸持有快照自身的 CAS 版本，1..9223372036854775807；不可和 bag_revision 混用或自行重設。
+origin | TEXT NOT NULL | 來源分類，保留 NATIVE_OBSERVED、NATIVE_VERIFIED、CUSTOM_DESIGNED 或 CUSTOM_TEST_NOT_NATIVE。分類文字不代表目前原生客戶端已驗收。
+evidence_id | TEXT NOT NULL | 原始來源證據識別。SQL length 要求 1..512 字元，實際 C++ validate 另要求 std::string.size() 為 1..512 位元組，兩者都須符合；禁止 NUL，保留歷史出處。
+source_sha256 | TEXT NOT NULL | 固定原 PET 資源 SHA-256：70a4e7dd1a1f66d7a70f5c5e97c77ef4063904cc473292758c5abd2da7bd8731。一四七筆 PET 宣告的來源身分不等於成長或餵食公式。
+client_sha256 | TEXT NOT NULL | 本結構仍固定歷史來源：6bf75ef8ac1e0f6b2240800ff841d205788bd1b6512149584b5386b10f431e98。下方 native149c 位元流向是獨立消費器證據，不自動改標存量或放寬此 CHECK。
+design_id | TEXT NOT NULL | 固定 CUSTOM-0085，原有持有功能合約；沒有新增神獸取得、升級或消耗規則。
 
-欄位（所有不同的原始宣告；版本差異保留）：
-bag_revision | SQLite 宣告型別：INTEGER | 來源宣告：1
-  背包版本。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-character_id | SQLite 宣告型別：INTEGER | 來源宣告：1
-  角色 ID。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-client_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
-  客戶端 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-design_id | SQLite 宣告型別：TEXT | 來源宣告：1
-  設計識別。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-evidence_id | SQLite 宣告型別：TEXT | 來源宣告：1
-  證據 ID。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-explorationc5 | SQLite 宣告型別：BLOB | 來源宣告：1
-  原始欄位，語義尚未確認；未復原用途，見上述來源路徑/行。 原始二進位資料；內容用途尚未復原。
-inventory_metadata | SQLite 宣告型別：BLOB | 來源宣告：1
-  背包中介資料（內容用途尚未復原）。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。 原始二進位資料；內容用途尚未復原。
-inventory_slot | SQLite 宣告型別：INTEGER | 來源宣告：1
-  背包格位。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-origin | SQLite 宣告型別：TEXT | 來源宣告：1
-  來源類型。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-panel4c | SQLite 宣告型別：BLOB | 來源宣告：1
-  原始欄位，語義尚未確認；未復原用途，見上述來源路徑/行。 原始二進位資料；內容用途尚未復原。
-revision | SQLite 宣告型別：INTEGER | 來源宣告：1
-  版本／修訂號。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-selector | SQLite 宣告型別：INTEGER | 來源宣告：1
-  選擇值。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
-source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
-  來源 SHA-256。英文名稱直譯；完整業務語義／單位／限制仍待來源核對。
+關聯與完整性
+主鍵為 (character_id,inventory_slot)；同角色 selector 唯一。
+(character_id,inventory_slot) 外鍵對應 diagnostic_inventory_slots(character_id,slot)；character_id 也參照 recovered_characters(id)。
+實際 repository 還會核對同一擁有者、既有 count1 持有物、格位版本、物品鍵／來源、其他完整裝備覆層衝突及探索 context。
+character_beast_selection_0085 另保存選取 selector、custody_revision 與選取版本；此表不是選取權限或全域物品定義表。
 
-限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
-本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
-原始客戶端封包、快照、編碼與原列位元組不改寫。
+inventory_metadata 已知位元對照（零起算 offset；小端序 WORD）
+0..1：PET 物品鍵；2 的低六位：class5。
+4..5：低十四位為原生 tooltip 疲勞限制顯示值；高二位為顯示 mode。這不是已恢復的疲勞增加／扣減公式。
+8：mode2 下值 1 參與原生探索中標籤；不可只憑標籤推導活動完成或可移動權限。
+10 的低三位：神獸本體 palette；與下方攜帶物品 scratch 的 WORD10 高三位不同。
+只有 PET 定義 column27 的低 BYTE 日期旗標為零時，9 才顯示完整 BYTE 等級，12..13 才按原值乘 0.01 顯示經驗百分比。
+日期旗標非零時，同一批位元組走原生 packed-date 分支；已知特殊鍵 5232、5350、5351、5380 必須保留原分支，不能全部解成經驗。
+非日期分支下，14..15 在 mode1/2 顯示已過分鐘；其餘 mode 顯示使用次數。只有已過分鐘分支且 WORD16 的 bit15 設定時，WORD16 低十五位另顯示傳送使用次數。
+以上都是條件式顯示語義，不是時間來源、過期、等級上限、EXP 門檻或神獸玩法公式。其他欄位／位元保留原值。
+
+panel4c 已知位元對照（零起算 logical offset，包含 opcode）
+0：4C；1..2：PET 物品鍵；3：面板 selector。
+4：原始 BYTE 顯示值。native4A0790 control5 使用 "%d/%d" 顯示此值及常數 100；原始域仍為 0..255，沒有夾到 100，也沒有證明忠誠命名或遊戲上限。
+5..6：攜帶物品的顯示鍵；7..8：原始 WORD 乘 0.01 的百分比顯示，不能自動認定等於 inventory_metadata 的經驗值。
+9..12 的 DWORD：bit0..10 與 bit11..21 是原始十一位分子／分母；native4A07E0 control6 原樣 "%d/%d" 顯示。bit22..23 是已見三種神獸類型標籤選擇，bit29..31 是面板低三位等級顯示。既有顯示安全核對的非零分母／kind<3 不等於玩法上限，也不新增分子<=分母限制。
+同 DWORD 的 bit27 及特定位元組合控制原生 control7/8 的不同呈現；未解位元保留，不當作自由可寫的玩法參數。
+
+4C 攜帶物品的另外一份 20 位元組 UI scratch（不是本表 inventory_metadata）
+native4A0903..4A095C 先完整初始化：DWORD0=logicalWORD5 | 0x000C0000，class 是十進位 12（0x0C）；BYTE18=logicalBYTE13；WORD10=((logicalDWORD9>>24)&7)<<13；其餘位元為零。
+native4A0610 複製全部 20 位元組供 control1 的圖示顯示；key 為零會清除該圖示。
+WORD10 高三位只證明位元複製，尚不能命名為 palette。它與神獸本體 class5 的 WORD10 低三位是不同類別與位元位置。
+這段原生顯示初始化不授予攜帶物品取得／數量／倉庫保存或餵食成功因果；不把 UI scratch 當另一筆持有物或寫入 inventory_metadata。
+
+未完成範圍與 MySQL 邊界
+C2S6B 餵食效果、消耗、上限、Lua 規則、同交易全讀集 CAS 及原生成功回覆因果仍未接通；S2C6B 是另一條世界物件文字更新，不是餵食成功回覆。
+本欄位字典供既有 typed MySQL formatter 的可讀欄位資格核對；該 formatter 的 SQL COMMENT 仍指向本 TXT，不會因此完成全資料庫讀取、約束轉換、MySQL backend、原子發布或匯入驗收。
+來源核對與新原生位元證據見 docs/research/tw-beast-panel-native-fields-dictionary-source-20261017.md；未執行資料庫、SQL、建置、測試、遷移、匯出或部署。

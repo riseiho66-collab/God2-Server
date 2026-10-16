@@ -3193,6 +3193,17 @@
         "deployment": false,
         "live_save_mutations": false,
         "tests_builds_client_execution": false
+      },
+      "field_dictionary_source444": {
+        "document": "docs/research/tw-beast-panel-native-fields-dictionary-source-20261017.md",
+        "runtime_columns": 13,
+        "actual_existing_formatter_preflight_consumer": true,
+        "native_raw_ratio_and_carried_scratch_qualified": true,
+        "physical_schema_or_saved_values_changed": false,
+        "food_rule_or_causal_reply_recovered": false,
+        "gameplay_rules_changed": false,
+        "client6bf_storage_pin_preserved": true,
+        "global_new_native_byte_credit": 0
       }
     },
     {

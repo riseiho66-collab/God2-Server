@@ -6823,3 +6823,28 @@ PHASE1 no build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/
 export/activate/deploy.5070GPUauthorizedwhenbeneficialunused.
 
 Details: docs/research/tw-movement-policy-scheduled-reload-source-20261017.md
+
+## Round444 — PET native display field and custody dictionary source (2026-10-17)
+
+Round444 actual149c beastpanel staticcut qualifies completeevent table/callers,
+rawBYTE/100 andraw11bit ratio %d/%d formatting, fullyinitializedclassDECIMAL12
+carried20B scratch (key/logical13/packedbits24..26->WORD10high3,unknownsemantics).
+No foodformula/loyalty/fatiguecap/grant/6B->4D causalclaim/globalnativebytecredit.
+Actual runtime ServerDataDictionary beastcustody13columns nowtypedreadable with
+per-tableChineseTXT/sourceDDL/readers/dateguards/selector!=slot/optionalv2slot37.
+ExistingMySQLformatter consumesmetadataatpreflight; SQLCOMMENTstillTXTreference,
+notfullDBexport/backend.124source-declaredtables/146positivecolumns/24tables,
+NOTinstalledcount. AllrawBLOB/sourcepins/6bfstoragevs149cevidence/schema/saves/
+gameplay/writers remain; protocolheaderCOMMENTSONLY/no unusedaccessorframework.
+V80pins180=178oldunchanged1updated1addedexistingheader/canonical838;2existingCPP/
+no newCPP/Lua/projectPY/CMake. Gameplaybranch0/fullroutes0/countsunchanged/whole%null.
+ActualMain2A/Enteredinstall/movement source andD8/6Bauthoritative rules/S2Cremain
+OPEN; boundedreview notglobalabsence. FullTW100first/commonCN/fourbinaryWS/allDB
+goalACTIVE/INCOMPLETE. Preserve453Traditional/clientBIN/maxHPpoison10th/custom126150/
+907/shared64/coin99999999999/stack99/nativelevels/saves/fonts/IME/auth/text/English
+DBfields/per-tableChineseTXT; actualMySQL8backend/fullconsistentlosslessexport/
+fullconstraints/atomicpub/import andremainingtypedDBdomains remainrequired.
+PHASE1no build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/export/
+activate/deploy.5070GPUauthorizedwhenbeneficialunused.
+
+Details: docs/research/tw-beast-panel-native-fields-dictionary-source-20261017.md
