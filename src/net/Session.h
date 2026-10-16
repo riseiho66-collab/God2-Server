@@ -630,9 +630,20 @@ public:
     // into bounded frames at record boundaries; adjacent6F+EA stays indivisible.
     // ALL frames are held before one game publication and released as one cohort.
     // Completion observes whole queue release, never socket/client acceptance.
+    struct InitialActorStatusInput {
+        SharedWorldPresence::Lease recipient;
+        struct Entry {
+            std::size_t aggregate_offset;
+            std::optional<TaiwanActorStatusPublication::ActorUnit> actor;
+        };
+        // Every actual incoming6F boundary in order, including unowned rows.
+        // A present unit is the exact final projected whole86B6F+EA.
+        std::vector<Entry> actors;
+    };
     void send_common_world_entry_with_publication(std::vector<std::uint8_t> logical,
         std::uint64_t account,std::uint64_t character,std::uint64_t generation,
-        std::function<bool()> publish,std::function<void(bool)> queued);
+        std::function<bool()> publish,std::function<void(bool)> queued,
+        std::optional<InitialActorStatusInput> status={});
     // Game-executor caller, actual complete native logical aggregate. The queue
     // holds bytes while the same executor qualifies/publishes common owner state.
     // Completion is once on game, local queue release only, not client receipt.

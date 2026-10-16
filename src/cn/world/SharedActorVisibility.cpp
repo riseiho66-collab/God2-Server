@@ -1563,7 +1563,27 @@ struct SharedActorVisibility::TaiwanInitialPublication::State {
     Lease recipient;
     std::map<Key,Entry> staged;
     std::vector<god2cn::Bytes> records,supplied_records;
+    // Publication-local ordered proof. Entry/native movement/removal models
+    // never retain ActorUnit. Null slots preserve the original actor order.
+    std::vector<Lease> sources;
+    std::vector<std::optional<TaiwanActorStatusPublication::ActorUnit>> actor_status;
     bool published=false;
+    bool status_current() const noexcept {
+        constexpr auto actor_size=RecoveredRemoteActor::logical_size;
+        constexpr auto unit_size=actor_size+RecoveredTaiwanActorOverride::logical_size;
+        if(records.size()!=sources.size() || records.size()!=actor_status.size() ||
+           records.size()!=supplied_records.size() || records.size()!=staged.size())return false;
+        for(std::size_t i=0;i<actor_status.size();++i) {
+            const auto found=staged.find(Key{sources[i].session,recipient.session});
+            if(found==staged.end() || found->second.binding.source()!=sources[i] ||
+               found->second.binding.recipient()!=recipient)return false;
+            const auto& unit=actor_status[i];
+            if(unit && (unit->source()!=sources[i] || unit->recipient()!=recipient ||
+               !unit->retained() || unit->logical().size()!=unit_size || records[i].size()!=actor_size ||
+               !std::equal(records[i].begin(),records[i].end(),unit->logical().begin())))return false;
+        }
+        return true;
+    }
 };
 SharedActorVisibility::TaiwanInitialPublication::TaiwanInitialPublication(std::shared_ptr<State> state)
     :state_(std::move(state)){}
@@ -1572,6 +1592,10 @@ std::span<const god2cn::Bytes> SharedActorVisibility::TaiwanInitialPublication::
 }
 std::span<const god2cn::Bytes> SharedActorVisibility::TaiwanInitialPublication::supplied_records() const {
     return state_->supplied_records;
+}
+std::span<const std::optional<TaiwanActorStatusPublication::ActorUnit>>
+SharedActorVisibility::TaiwanInitialPublication::actor_status() const {
+    return state_->actor_status;
 }
 std::shared_ptr<SharedActorVisibility::TaiwanInitialPublication>
 SharedActorVisibility::prepare_initial_taiwan_recipient(const Lease& recipient,
@@ -1584,6 +1608,7 @@ SharedActorVisibility::prepare_initial_taiwan_recipient(const Lease& recipient,
     auto token=std::shared_ptr<TaiwanInitialPublication>(new TaiwanInitialPublication(state));
     if(!taiwan_initial_current(token,connection,recipient,false))return {};
     state->records.reserve(actors.size());state->supplied_records.reserve(actors.size());
+    state->sources.reserve(actors.size());state->actor_status.reserve(actors.size());
     for(auto& actor:actors) {
         const auto supplied=RecoveredRemoteActor::encode_logical(actor.native.spawn);
         Native projected{actor.native};
@@ -1600,11 +1625,19 @@ SharedActorVisibility::prepare_initial_taiwan_recipient(const Lease& recipient,
            native.movement.x()!=position->x || native.movement.y()!=position->y)return {};
         const auto record=RecoveredRemoteActor::encode_logical(native.spawn);
         if(native.movement.state()!=(std::uint16_t(record[7])|(std::uint16_t(record[8])<<8)))return {};
+        // Name projection precedes proof comparison. A unit for earlier raw
+        // bytes cannot authorize a changed final model, even when its EA agrees.
+        if(actor.actor_status && (actor.actor_status->source()!=actor.source ||
+           actor.actor_status->recipient()!=recipient || !actor.actor_status->retained() ||
+           actor.actor_status->logical().size()!=RecoveredRemoteActor::logical_size+
+               RecoveredTaiwanActorOverride::logical_size ||
+           !std::equal(record.begin(),record.end(),actor.actor_status->logical().begin())))return {};
         Binding binding(identity_,actor.source,recipient,generation_+state->staged.size()+1);
         if(!state->staged.emplace(Key{actor.source.session,recipient.session},
             Entry{binding,*position,Native{std::move(actor.native)}}).second)return {};
         state->records.emplace_back(record.begin(),record.end());
         state->supplied_records.emplace_back(supplied.begin(),supplied.end());
+        state->sources.push_back(actor.source);state->actor_status.push_back(std::move(actor.actor_status));
     }
     if(!taiwan_initial_current(token,connection,recipient,false))return {};
     // Server incarnation lineage only, never a native pool counter or rule.
@@ -1614,6 +1647,7 @@ bool SharedActorVisibility::taiwan_initial_current(const std::shared_ptr<TaiwanI
     const std::shared_ptr<Session>& connection,const Lease& recipient,bool activated) const {
     owner();if(!token || !token->state_ || !connection)return false;
     const auto& state=*token->state_;
+    if(!state.status_current())return false;
     if(taiwan_pk_departed(recipient)||state.identity!=identity_ || state.published || state.connection.lock()!=connection || state.recipient!=recipient ||
        connection->closing() || connection->id()!=recipient.session || connection->account_id!=recipient.account ||
        connection->character_id!=recipient.character || !connection->recovered_world_ready() ||
@@ -1636,7 +1670,8 @@ bool SharedActorVisibility::taiwan_initial_current(const std::shared_ptr<TaiwanI
            entry.binding.recipient()!=recipient || key!=Key{entry.binding.source().session,recipient.session})return false;
     }
     for(const auto& [key,entry]:staged)if(taiwan_pk_departed(entry.binding.source()))return false;
-    return !taiwan_pk_departed(recipient)&&!state.published && state.staged.size()==staged.size(); // Native resources, complete peer policy and scene causality remain with actual issuer.
+    return !taiwan_pk_departed(recipient)&&!state.published && state.staged.size()==staged.size() &&
+        state.status_current(); // Recheck pure units after all actual name/presence observers.
 }
 bool SharedActorVisibility::publish_initial_taiwan(const std::shared_ptr<TaiwanInitialPublication>& token,
     const std::shared_ptr<Session>& connection,const Lease& recipient) {

@@ -795,28 +795,68 @@ struct Session::Impl {
     // Pure actual initial-entry cohort bookkeeping. Queue tickets never own
     // tasks, game callbacks, the cohort or a Session. Task abandonment therefore
     // cannot form a queue/task cycle; removal revokes pre-release membership.
+    struct InitialEntryStatusContext {
+        const std::shared_ptr<ActorStatusPublicationPlanIdentity> identity=std::make_shared<ActorStatusPublicationPlanIdentity>();
+        const Session* const recipient_address;
+        const std::weak_ptr<Session> recipient_owner;
+        const SharedWorldPresence::Lease recipient;
+        std::atomic<std::size_t> frame_count{0},next{0};
+        std::atomic<bool> completed{false};
+        InitialEntryStatusContext(const std::shared_ptr<Session>& session,SharedWorldPresence::Lease lease)
+            :recipient_address(session.get()),recipient_owner(session),recipient(std::move(lease)){}
+        bool current() const noexcept {
+            return identity->active.load()&&!completed.load()&&frame_count.load()!=0;
+        }
+        bool matches(const Session& session) const noexcept {
+            const auto actual=session.weak_from_this();
+            return recipient_address==&session&&recipient.session==session.id()&&
+                !recipient_owner.owner_before(actual)&&!actual.owner_before(recipient_owner);
+        }
+        void retire() noexcept {identity->active.store(false);}
+        ~InitialEntryStatusContext(){retire();}
+    };
     struct InitialEntryIdentity {
         enum class Phase {Preparing,Installed,Publishing,Published,Released};
         std::atomic<Phase> phase{Phase::Preparing};
         std::atomic<bool> revoked{false};
+        const std::shared_ptr<InitialEntryStatusContext> status;
+        explicit InitialEntryIdentity(std::shared_ptr<InitialEntryStatusContext> value={}) noexcept:status(std::move(value)){}
+        void revoke() noexcept {revoked.store(true);if(status)status->retire();}
+        ~InitialEntryIdentity(){if(status)status->retire();}
     };
     struct InitialEntryMember {
         const std::shared_ptr<InitialEntryIdentity> identity;
         const std::size_t ordinal;
         const std::shared_ptr<std::vector<std::uint8_t>> frame;
         const std::vector<std::uint8_t> encoded;
-        std::atomic<bool> present{false};
+        std::atomic<bool> present{false},completed{false};
+        const std::optional<TaiwanActorStatusPublication::FrameSeal> status_seal;
         InitialEntryMember(std::shared_ptr<InitialEntryIdentity> key,std::size_t index,
-            std::shared_ptr<std::vector<std::uint8_t>> bytes)
-            :identity(std::move(key)),ordinal(index),frame(std::move(bytes)),encoded(*frame){}
+            std::shared_ptr<std::vector<std::uint8_t>> bytes,
+            std::optional<TaiwanActorStatusPublication::FrameSeal> seal={})
+            :identity(std::move(key)),ordinal(index),frame(std::move(bytes)),encoded(*frame),status_seal(std::move(seal)){}
+        bool retained_status() const noexcept {
+            const auto& context=identity->status;
+            if(!context)return !status_seal; // Original unowned initial path.
+            if(identity->revoked.load()||!context->current()||ordinal>=context->frame_count.load()||
+               !frame||encoded!=*frame)return false;
+            if(!status_seal)return true; // This complete frame has no owned units.
+            const auto& data=status_seal->data_;
+            if(!data||data->plan!=context->identity||data->recipient_address!=context->recipient_address||
+               data->recipient_id!=context->recipient.session||data->ordinal!=ordinal||
+               data->recipient_owner.owner_before(context->recipient_owner)||context->recipient_owner.owner_before(data->recipient_owner)||
+               data->frame.get()!=frame.get()||data->frame.owner_before(frame)||frame.owner_before(data->frame))return false;
+            for(const auto& unit:data->units)if(unit.actor.recipient()!=context->recipient)return false;
+            return data->retained()&&context->current()&&!identity->revoked.load();
+        }
     };
     struct InitialEntryQueueTicket {
         const std::shared_ptr<InitialEntryMember> member;
         explicit InitialEntryQueueTicket(std::shared_ptr<InitialEntryMember> value):member(std::move(value)){}
         ~InitialEntryQueueTicket(){
-            if(member->present.exchange(false)&&
-               member->identity->phase.load()!=InitialEntryIdentity::Phase::Released)
-                member->identity->revoked.store(true);
+            const bool present=member->present.exchange(false);
+            if((present&&member->identity->phase.load()!=InitialEntryIdentity::Phase::Released)||
+               (member->identity->status&&!member->completed.load()))member->identity->revoke();
         }
     };
     struct InitialEntryCohort {
@@ -839,7 +879,8 @@ struct Session::Impl {
                 const auto& member=members[i];const auto& holder=holders[i];
                 if(!member||member->identity!=identity||member->ordinal!=i||!member->present.load()||
                    !member->frame||member->encoded!=*member->frame||!holder||holder->frame!=member->frame||
-                   holder->frame.owner_before(member->frame)||member->frame.owner_before(holder->frame))return false;
+                   holder->frame.owner_before(member->frame)||member->frame.owner_before(holder->frame)||
+                   !member->retained_status())return false;
             }
             return !identity->revoked.load()&&identity->phase.load()==expected;
         }
@@ -1089,6 +1130,27 @@ struct Session::Impl {
             ++index;
         }
         return seen==cohort->members.size()&&cohort->held_current(phase);
+    }
+    // Strand-only released frame proof. Earlier completed frames may already
+    // be gone; this must never demand the old entire held cohort.
+    bool initial_entry_released_current(const std::shared_ptr<InitialEntryQueueTicket>& ticket,
+            const std::optional<TaiwanActorStatusPublication::FrameSeal>& seal,
+            const std::shared_ptr<std::vector<std::uint8_t>>& bytes) const noexcept {
+        if(!ticket||!ticket->member||closing||close_requested.load()||writes.empty())return false;
+        const auto& member=ticket->member;const auto& identity=member->identity;const auto& status=identity->status;
+        const auto& queued=writes.front();
+        return status&&status->matches(owner)&&!identity->revoked.load()&&status->current()&&
+            identity->phase.load()==InitialEntryIdentity::Phase::Released&&
+            status->next.load()==member->ordinal&&member->ordinal<status->frame_count.load()&&
+            member->present.load()&&!member->completed.load()&&queued.initial_entry==ticket&&
+            !queued.held&&!queued.world_entry&&!queued.return_output&&!queued.status_seal&&
+            queued.bytes.get()==bytes.get()&&!queued.bytes.owner_before(bytes)&&!bytes.owner_before(queued.bytes)&&
+            member->frame.get()==bytes.get()&&!member->frame.owner_before(bytes)&&!bytes.owner_before(member->frame)&&
+            member->status_seal==seal&&member->retained_status();
+    }
+    void retire_initial_status_writes() noexcept {
+        for(const auto& queued:writes)if(queued.initial_entry&&queued.initial_entry->member->identity->status)
+            queued.initial_entry->member->identity->revoke();
     }
     // Network strand only; set by the exact marked Write's success completion,
     // then captured as immutable owned data into the account selection game job.
@@ -3445,6 +3507,13 @@ struct Session::Impl {
             }
         }
         auto bytes = writes.front().bytes;
+        const auto initial_ticket=writes.front().initial_entry;
+        const bool initial_status=initial_ticket&&bool(initial_ticket->member->identity->status);
+        const auto initial_seal=initial_status?initial_ticket->member->status_seal:
+            std::optional<TaiwanActorStatusPublication::FrameSeal>{};
+        if(initial_status&&!initial_entry_released_current(initial_ticket,initial_seal,bytes)){
+            initial_ticket->member->identity->revoke();fail("Initial status frame lost exact released cohort");return;
+        }
         const auto status_seal=writes.front().status_seal;
         const auto status_writer=writes.front().status_writer;
         // The completion owns the active buffer even when fail() clears the queue.
@@ -3455,12 +3524,16 @@ struct Session::Impl {
         active_write_continuation=continuation;
         owner.invalidate_actor_status_writes(); // Final exhaustive socket sink.
         auto completion=
-            [self = owner.shared_from_this(), bytes,marked,continuation,status_seal](const asio::error_code& ec, std::size_t transferred) {
+            [self = owner.shared_from_this(), bytes,marked,continuation,status_seal,initial_ticket,initial_status,initial_seal](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 const bool owned_completion=bool(s.owned_response_input_hold.load()) || s.owned_input_retired.load();
                 try {
-                // The handler owns the seal directly even if failure cleared the FIFO.
+                // Both domains retain their pure exact markers/seals directly,
+                // even when failure already cleared the FIFO.
+                if(initial_status&&!s.initial_entry_released_current(initial_ticket,initial_seal,bytes)){
+                    initial_ticket->member->identity->revoke();s.fail("Initial status completion lost exact frame");return;
+                }
                 const auto sealed_output=marked?marked->cohort.lock():nullptr;
                 if(status_seal&&(!sealed_output||status_seal!=marked->frame->status_seal||
                    !Session::actor_status_frame_matches(status_seal,bytes,*self,marked->ordinal,*sealed_output->plan))){
@@ -3479,6 +3552,9 @@ struct Session::Impl {
                     if(output)Session::fail_native_pk_return_output(output);return;
                 }
                 if (ec) { s.fail(ec.message()); return; }
+                if(initial_status&&transferred!=bytes->size()){
+                    initial_ticket->member->identity->revoke();s.fail("Initial status completion was not a whole frame");return;
+                }
                 if(marked&&(!publication||!output||s.writes.front().return_output!=marked||s.writes.front().held||
                    s.writes.front().bytes!=bytes||bytes!=marked->frame->bytes||transferred!=bytes->size()||
                    s.writes.front().status_seal!=status_seal||status_seal!=marked->frame->status_seal||
@@ -3594,9 +3670,25 @@ struct Session::Impl {
                 if(status_seal&&!Session::actor_status_frame_matches(status_seal,bytes,*self,marked->ordinal,*output->plan)){
                     Session::fail_native_pk_return_output(output);return;
                 }
+                if(initial_status){
+                    if(!s.initial_entry_released_current(initial_ticket,initial_seal,bytes)){
+                        initial_ticket->member->identity->revoke();s.fail("Initial status retired before completion accounting");return;
+                    }
+                    auto expected=initial_ticket->member->ordinal;
+                    if(!initial_ticket->member->identity->status->next.compare_exchange_strong(expected,expected+1)){
+                        initial_ticket->member->identity->revoke();s.fail("Initial status completion ordinal changed");return;
+                    }
+                    initial_ticket->member->completed.store(true);
+                }
                 const auto completed_input_lease=s.writes.front().owned_input_lease;
                 s.write_bytes -= s.writes.front().bytes->size();
                 s.writes.pop_front();
+                if(initial_status){
+                    const auto& context=initial_ticket->member->identity->status;
+                    if(context->next.load()==context->frame_count.load()){
+                        context->completed.store(true);context->retire(); // LAST actual frame completion, not queue release.
+                    }
+                }
                 if(marked){
                     auto expected=marked->ordinal;
                     if(!publication->progress[marked->recipient]->next.compare_exchange_strong(expected,marked->ordinal+1)){
@@ -3619,6 +3711,9 @@ struct Session::Impl {
                 if(marked&&publication->progress[marked->recipient]->next.load()==output->recipients[marked->recipient]->frames.size())
                     s.complete_native_pk_return_publication_recipient(continuation->work,marked->recipient);
                 }catch(...) {
+                    if(initial_status){
+                        initial_ticket->member->identity->revoke();s.fail("Initial status completion failed");return;
+                    }
                     if(continuation->work){if(const auto output=continuation->work->data->output.lock())
                         Session::fail_native_pk_return_output(output);return;}
                     if(owned_completion || s.owned_response_input_hold.load() || s.owned_input_retired.load()) {s.fail_owned_input("Owned bootstrap FIFO completion failed");return;}
@@ -3630,6 +3725,8 @@ struct Session::Impl {
             // This is the final pure version cut immediately before socket initiation.
             auto bound=asio::bind_executor(strand,std::move(handler));
             const auto buffer=asio::buffer(*bytes);
+            if(initial_status&&!initial_entry_released_current(initial_ticket,initial_seal,bytes))
+                throw std::logic_error("Initial owned-status retired before async_write");
             const auto sealed_output=marked?marked->cohort.lock():nullptr;
             if(status_seal&&(!sealed_output||status_seal!=marked->frame->status_seal||
                !Session::actor_status_frame_matches(status_seal,bytes,owner,marked->ordinal,*sealed_output->plan)))
@@ -3639,6 +3736,9 @@ struct Session::Impl {
         if(status_writer)initiate(retain_actor_status_writer(status_writer,std::move(completion)));
         else initiate(std::move(completion)); // Exact original plain handler without a ticket.
         }catch(...) {
+            if(initial_status){
+                initial_ticket->member->identity->revoke();fail("Initial status write initiation failed");return;
+            }
             if(continuation&&continuation->work){if(const auto output=continuation->work->data->output.lock())
                 Session::fail_native_pk_return_output(output);return;}
             if(marked){if(const auto output=marked->cohort.lock())Session::fail_native_pk_return_output(output);return;}
@@ -3648,6 +3748,7 @@ struct Session::Impl {
         }
     }
     void close() {
+        retire_initial_status_writes(); // Pure revoke BEFORE any cleanup/queue removal, including Released.
         owner.retire_actor_status_incarnation();
         owner.invalidate_actor_status_writes();
         if(const auto final=native_pk_return_finalisation_history.load();final&&!final->returned_notified.load())
@@ -3671,6 +3772,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        retire_initial_status_writes();
         owner.retire_actor_status_incarnation();
         [[maybe_unused]] const auto status_admission=owner.begin_actor_status_writer();
         owner.invalidate_actor_status_writes();
@@ -4240,7 +4342,7 @@ bool Session::common_world_entry_current(std::uint64_t account,std::uint64_t cha
 }
 void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
-    std::function<bool()> publish,std::function<void(bool)> queued) {
+    std::function<bool()> publish,std::function<void(bool)> queued,std::optional<InitialActorStatusInput> status) {
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(impl_->common_ready_thread!=std::this_thread::get_id())
@@ -4257,6 +4359,32 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
     std::optional<std::vector<RecoveredTaiwanServerRecords::Record>> records;
     try {records=RecoveredTaiwanServerRecords::read_aggregate(logical);}catch(...) {}
     if(!records) {try {queued(false);}catch(...) {}close();return;}
+    const auto status_current=[&] {
+        if(!status)return true; // Frozen no-input sender remains supported.
+        const auto& recipient=status->recipient;
+        if(recipient.session!=id()||recipient.account!=account||recipient.character!=character||
+           recipient.generation!=generation)return false;
+        std::size_t index=0;
+        for(std::size_t i=0;i<records->size();++i){
+            const auto& record=(*records)[i];if(record.opcode!=0x6f)continue;
+            if(index>=status->actors.size()||status->actors[index].aggregate_offset!=record.offset)return false;
+            const auto& unit=status->actors[index++].actor;if(!unit)continue;
+            constexpr auto actor_size=RecoveredRemoteActor::logical_size;
+            constexpr auto override_size=RecoveredTaiwanActorOverride::logical_size;
+            if(record.bytes.size()!=actor_size||i+1>=records->size()||(*records)[i+1].opcode!=0xea||
+               (*records)[i+1].offset!=record.offset+actor_size||(*records)[i+1].bytes.size()!=override_size||
+               unit->recipient()!=recipient||unit->source().session==recipient.session||
+               unit->logical().size()!=actor_size+override_size||
+               !std::equal(unit->logical().begin(),unit->logical().end(),logical.begin()+record.offset)||
+               !unit->retained())return false;
+            const auto actor=RecoveredRemoteActor::parse_logical(record.bytes);
+            const auto replay=RecoveredTaiwanActorOverride::parse_logical((*records)[i+1].bytes);
+            if(!actor||!replay||actor->identity()!=unit->source().actor_handle||
+               replay->identity()!=actor->identity())return false;
+        }
+        return index==status->actors.size();
+    };
+    if(!status_current()){try {queued(false);}catch(...) {}close();return;}
     CommonWorldPublication owned;
     try {owned=impl_->character_handlers.common_world_publication_owner(*this,{std::move(publish),std::move(queued)});}
     catch(...) {close();return;}
@@ -4279,23 +4407,32 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
             self->common_world_entry_current(account,character,generation) &&
             self->state()==SessionState::InWorld && self->common_world_delivery_current(account,character,generation);
     };
-    if(!before()){close();finish(false);return;}
+    if(!before()||!status_current()){close();finish(false);return;}
     std::shared_ptr<Impl::InitialEntryAttempt> attempt;
     try {
         attempt=std::make_shared<Impl::InitialEntryAttempt>(weak_from_this(),finish);
-        const auto identity=std::make_shared<Impl::InitialEntryIdentity>();
+        const auto status_context=status?std::make_shared<Impl::InitialEntryStatusContext>(shared_from_this(),status->recipient):nullptr;
+        const auto identity=std::make_shared<Impl::InitialEntryIdentity>(status_context);
         std::vector<std::shared_ptr<Impl::InitialEntryMember>> members;
         std::vector<std::shared_ptr<Impl::ActiveWriteContinuation>> holders;
         std::vector<std::uint8_t> part;part.reserve(RecoveredWorldFrame::max_logical_size);
-        std::size_t charge=0;
+        std::vector<TaiwanActorStatusPublication::FrameSeal::Data::Unit> status_units;
+        std::size_t charge=0,actor_index=0;
         const auto flush=[&] {
             if(part.empty())return;
             if(members.size()>=max_writes)throw std::length_error("Initial aggregate exceeds frame budget");
             auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(part));
             if(bytes->size()>max_buffer-charge)throw std::length_error("Initial aggregate exceeds byte budget");
-            const auto member=std::make_shared<Impl::InitialEntryMember>(identity,members.size(),bytes);
+            std::optional<TaiwanActorStatusPublication::FrameSeal> seal;
+            if(!status_units.empty()){
+                const auto data=std::make_shared<TaiwanActorStatusPublication::FrameSeal::Data>(status_context->identity,
+                    shared_from_this(),members.size(),part.size(),bytes,std::move(status_units));
+                if(!data->retained())throw std::logic_error("Initial owned-status retired during exact framing");
+                seal=TaiwanActorStatusPublication::FrameSeal(data);
+            }
+            const auto member=std::make_shared<Impl::InitialEntryMember>(identity,members.size(),bytes,std::move(seal));
             const auto holder=std::make_shared<Impl::ActiveWriteContinuation>(nullptr,bytes);
-            members.push_back(member);holders.push_back(holder);charge+=bytes->size();part.clear();
+            members.push_back(member);holders.push_back(holder);charge+=bytes->size();part.clear();status_units.clear();
         };
         for(std::size_t i=0;i<records->size();++i){
             const auto& record=(*records)[i];std::size_t size=record.bytes.size();
@@ -4305,10 +4442,16 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
                 size+=(*records)[++i].bytes.size();
             if(size>RecoveredWorldFrame::max_logical_size)throw std::length_error("Initial record unit exceeds frame");
             if(part.size()>RecoveredWorldFrame::max_logical_size-size)flush();
+            if(status&&record.opcode==0x6f){
+                const auto& unit=status->actors[actor_index++].actor;
+                if(unit)status_units.push_back({part.size(),*unit});
+            }
             part.insert(part.end(),logical.begin()+record.offset,logical.begin()+record.offset+size);
         }
         flush();
-        if(members.empty()||!before())throw std::logic_error("Initial aggregate source retired during framing");
+        if(status_context)status_context->frame_count.store(members.size());
+        if(members.empty()||!before()||!status_current()||
+           (status&&actor_index!=status->actors.size()))throw std::logic_error("Initial aggregate source retired during framing");
         const auto budget=impl_->budget;
         // Allocate uncharged OUTSIDE the mutex. An allocation/new-handler may
         // reenter close and release older tickets without deadlocking this lock.
@@ -4334,6 +4477,9 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
             value.initial_entry=std::make_shared<Impl::InitialEntryQueueTicket>(cohort->members[i]);
             prepared.push_back(std::move(value));
         }
+        if(!before()||!status_current())throw std::logic_error("Initial status retired after queue preparation");
+        for(const auto& member:cohort->members)if(!member->retained_status())
+            throw std::logic_error("Initial exact status frame retired before queue handoff");
         impl_->post_status_work(impl_->strand,[self=shared_from_this(),cohort,attempt,prepared=std::move(prepared),before,after,
                 account,character,publish=std::move(owned.publish)]() mutable {
             auto& s=*self->impl_;
@@ -4422,9 +4568,9 @@ void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t>
                             if(!first)s.write(std::move(carried));
                             attempt->complete(true); // WHOLE queue release only; no socket/native ACK.
                         }catch(...){s.fail("Pending common entry aggregate release failed");attempt->abort();}
-                    });}catch(...){cohort->identity->revoked.store(true);attempt->abort();}
+                    });}catch(...){cohort->identity->revoke();attempt->abort();}
                 });
-            }catch(...){cohort->identity->revoked.store(true);s.fail("Pending common entry aggregate insertion failed");attempt->abort();}
+            }catch(...){cohort->identity->revoke();s.fail("Pending common entry aggregate insertion failed");attempt->abort();}
         });
     }catch(...){if(attempt)attempt->abort();else{close();finish(false);}}
 }

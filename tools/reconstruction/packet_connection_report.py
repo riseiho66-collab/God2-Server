@@ -266,6 +266,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_initial_saved_input429', {}).get('source_paths', [])) |
                    set(ledger.get('tw_initial_endpoints430', {}).get('source_paths', [])) |
                    set(ledger.get('tw_initial_status_transport_audit431', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_initial_status_transport432', {}).get('source_paths', [])) |
                    set(ledger.get('tw_full_actor_profile411', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_operator402', {}).get('source_paths', [])) |
                    set(ledger.get('tw_installed453_import401', {}).get('source_paths', [])) |
@@ -512,6 +513,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_initial_saved_input429': ledger.get('tw_initial_saved_input429'),
         'tw_initial_endpoints430': ledger.get('tw_initial_endpoints430'),
         'tw_initial_status_transport_audit431': ledger.get('tw_initial_status_transport_audit431'),
+        'tw_initial_status_transport432': ledger.get('tw_initial_status_transport432'),
         'tw_full_actor_profile411': ledger.get('tw_full_actor_profile411'),
         'tw_installed453_operator402': ledger.get('tw_installed453_operator402'),
         'tw_installed453_import401': ledger.get('tw_installed453_import401'),

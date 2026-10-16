@@ -300,9 +300,14 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
             if(!population_bound(state,false)) {fail(state);return;}
             state->incoming=visibility->prepare_initial_taiwan_recipient(lease,session.shared_from_this(),std::move(material.incoming));
             if(!state->incoming || !current(state,false,Entered::Check::AfterSupply)) {fail(state);return;}
-            const auto records=state->incoming->records();const auto supplied=state->incoming->supplied_records();
+            // Retain the exact publication across vector allocation and Current
+            // cancellation; no borrowed span may outlive its actual owner.
+            const auto initial_publication=state->incoming;
+            const auto records=initial_publication->records();const auto supplied=initial_publication->supplied_records();
+            const auto statuses=initial_publication->actor_status();
             std::size_t incoming_index=0;
-            if(records.size()!=material.incoming_offsets.size() || supplied.size()!=records.size()) {fail(state);return;}
+            if(records.size()!=material.incoming_offsets.size() || supplied.size()!=records.size() ||
+               statuses.size()!=records.size()) {fail(state);return;}
             // Walk the full aggregate, not only supplier-designated slices.
             // A6F inside opaque record payload is not a record boundary; an
             // actual6F boundary cannot be hidden, duplicated or omitted.
@@ -322,7 +327,39 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
             // the equal-sized common-name projections; all other bytes remain.
             for(std::size_t i=0;i<records.size();++i)
                 std::copy(records[i].begin(),records[i].end(),material.logical.begin()+material.incoming_offsets[i]);
-            if(!current(state,false,Entered::Check::BeforeQueue)) {fail(state);return;}
+            std::optional<Session::InitialActorStatusInput> initial_status;
+            if(native_records) {
+                initial_status.emplace(Session::InitialActorStatusInput{lease,{}});
+                initial_status->actors.reserve(records.size());
+                std::size_t actor_index=0;
+                for(std::size_t i=0;i<native_records->size();++i) {
+                    const auto& boundary=(*native_records)[i];
+                    if(boundary.opcode!=0x6f)continue;
+                    if(actor_index>=statuses.size() || boundary.offset!=material.incoming_offsets[actor_index]) {
+                        fail(state);return;
+                    }
+                    const auto& unit=statuses[actor_index];
+                    if(unit) {
+                        constexpr auto actor_size=RecoveredRemoteActor::logical_size;
+                        constexpr auto override_size=RecoveredTaiwanActorOverride::logical_size;
+                        constexpr auto unit_size=actor_size+override_size;
+                        // Match real parsed adjacency and the WHOLE final unit
+                        // after name splice. Never rebase a proof or infer one
+                        // from raw EA bytes or a null/legacy status slot.
+                        if(i+1>=native_records->size() || (*native_records)[i+1].opcode!=0xea ||
+                           (*native_records)[i+1].offset!=boundary.offset+actor_size ||
+                           (*native_records)[i+1].bytes.size()!=override_size ||
+                           unit->recipient()!=lease || !unit->retained() || unit->logical().size()!=unit_size ||
+                           boundary.offset>material.logical.size() || unit_size>material.logical.size()-boundary.offset ||
+                           !std::equal(unit->logical().begin(),unit->logical().end(),material.logical.begin()+boundary.offset)) {
+                            fail(state);return;
+                        }
+                    }
+                    initial_status->actors.push_back({boundary.offset,unit});++actor_index;
+                }
+                if(actor_index!=statuses.size()) {fail(state);return;}
+            }
+            if(!current(state,false,Entered::Check::BeforeQueue) || state->incoming!=initial_publication) {fail(state);return;}
             // Every asynchronous callback carries only revocable weak tokens.
             // Native ownership remains in pending until game cleanup/cancel.
             std::weak_ptr<SceneOwner> weak_owner=shared_from_this();std::weak_ptr<Pending> weak_state=state;
@@ -339,7 +376,7 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
                 // local publication only, never a fabricated queue/native ACK.
                 queued(publication());
             }else session.send_common_world_entry_with_publication(std::move(material.logical),
-                lease.account,lease.character,lease.generation,std::move(publication),std::move(queued));
+                lease.account,lease.character,lease.generation,std::move(publication),std::move(queued),std::move(initial_status));
         }catch(...) {supplying=false;fail(state);throw;}
     }
 };

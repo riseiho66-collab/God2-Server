@@ -5107,6 +5107,17 @@
         "src/handlers/OwnedTaiwanPkRoomBackend.h"
       ],
       "native_gap": "Actual full-current actor/resource/text/complete-selection issuer, final strand consume/visibility publication and durable release/recovery remain incomplete.",
+      "initial_status_transport432": {
+        "classification": "TYPED_INITIAL_STATUS_CONSUMPTION_AND_ACTUAL_FRAME_SOURCE_WITHIN_CUSTOM0133",
+        "source": "Actual Visibility ordered incoming proof, final Entered projected whole86 and actual Session initial identity/frame/held release/completion cuts; private initial context distinct from PK.",
+        "limits": "Full initial Profile/material/private mint bridge and outward transport/allwriter exclusion/affineIO/ACK/Main/complete routes remain OPEN. No original formula/opcode/native byte credit.",
+        "typed_initial_consumption_source_connected": true,
+        "actual_initial_unit_mint_connected": false,
+        "default_activated": false,
+        "whole_route_complete": false,
+        "owner_resumed": true,
+        "build_tests_runtime_SQL_activation_deployment": false
+      },
       "initial_status_transport_audit431": {
         "classification": "READONLY_SOURCE_AUDIT_OF_INITIAL_STATUS_TRANSPORT_WITHIN_CUSTOM0133",
         "source": "Actual initial held validator rejects PK status_seal; socket checks require PK marker/plan; full initial/outward unit/typed frame context and qualified mint bridge remain absent.",

@@ -1362,3 +1362,23 @@ movement/Main/configreload/MySQL OPEN. Preserve453Traditional/clientBIN/maxHP
 poison10th/907/common64coin99999999999stack99nativelevels/saves/fonts/IME/auth/
 text/CNfourWS. PHASE1 no build/test/product/parser/native/VM/codec/gameDBSQL/
 schema/migrate/import/activate/deploy; no newprojectPY. Owner pause after431.
+
+Owner resume (2026-10-16, Round432) explicitly revokes the stop after431.
+Continue the unchanged fullTW100-first/commonCN/fourWS/all-systemDB objective;
+431 pause remains historical. No automatic stop after432 is requested.
+Round432 connects typed initial ActorUnit consumption at actual Visibility,
+Entered and Session framing/held-cohort/final-write/completion boundaries.
+LAST optional incoming proof slots preserve all6F ordering including legacy
+nulls. Full source/recipient leases and final projected whole86B6F+EA must
+match; no raw EA mint or proof rebasing. Private initial frame context is
+separate from PK; retain it through actual queued marker/completion after
+release, revoke on failure and finish only after actual last completion.
+Full initial Profile/material/private initial mint bridge remains OPEN;
+only actual mint caller remains Ready-only PKScene. Outward typed transport,
+affineIO/all-writer exclusion/fanout/nativeACK/placements/movement/Main and
+DBrepositories/reload/MySQL8backend-losslessexport remain OPEN. SourceV68
+pins153=148unchanged5updated/canonical796; 5existingCPP/no newprojectPY.
+Full routes added0/counts unchanged/whole%unknown. Preserve453Traditional/
+clientBIN/maxHPpoison10th/907/common64/coin99999999999/stack99/nativelevels/
+saves/fonts/IME/auth/text/CNfourWS. PHASE1 no builds/tests/product/parser/
+native/VM/codec/gameDBSQL/schema/migrate/import/activate/deploy.

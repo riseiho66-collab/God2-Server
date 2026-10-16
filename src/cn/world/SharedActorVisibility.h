@@ -223,7 +223,12 @@ public:
     // Transfers prepared nodes only; never sends, writes saves or pumps events.
     bool publish_initial(const std::shared_ptr<InitialPublication>&,
         const std::shared_ptr<SharedCredentialConnection>&,const Lease&);
-    struct InitialTaiwanActor {Lease source;Taiwan native;};
+    struct InitialTaiwanActor {
+        Lease source;Taiwan native;
+        // LAST: one directed initial publication only. Never attach this proof
+        // to the long-lived Taiwan model or derive it from an EA record.
+        std::optional<TaiwanActorStatusPublication::ActorUnit> actor_status{};
+    };
     class TaiwanInitialPublication {
     public:
         // Only supplied complete native6F records enter the initial reply.
@@ -233,6 +238,10 @@ public:
         // Aggregate issuers must match these actual boundaries before replacing
         // them with records(); offsets/other opaque records are never invented.
         std::span<const god2cn::Bytes> supplied_records() const;
+        // One slot per ordered actual incoming actor, including legacy nulls.
+        // Present units already match the final projected81-byte model; the
+        // Entered sender must additionally match its actual adjacent EA bytes.
+        std::span<const std::optional<TaiwanActorStatusPublication::ActorUnit>> actor_status() const;
     private:
         friend class SharedActorVisibility;
         struct State;
