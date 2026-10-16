@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,13 @@ namespace god2 {
 // CUSTOM-0150 configuration only; no player save, wire image or native claim.
 class OrdinaryMovementPolicyRepository {
 public:
+    // Recoverable candidate-content rejection ONLY. load() may emit this
+    // after its own read transaction/statements have ended and all ownership
+    // fences passed. SQL, lifetime, reentry and allocation failures stay fatal.
+    class InvalidSnapshot final:public std::runtime_error {
+    public:
+        using std::runtime_error::runtime_error;
+    };
     struct Row {
         std::string profile_key;
         OwnedOrdinaryMovementPolicy policy;

@@ -273,6 +273,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_initial_actor_npc_joint436', {}).get('source_paths', [])) |
                    set(ledger.get('tw_native_movement_cursor437', {}).get('source_paths', [])) |
                    set(ledger.get('tw_legacy_joint_movement_custody441', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_movement_policy_invalid_reload442', {}).get('source_paths', [])) |
                    set(ledger.get('tw_owned_ordinary_movement_custody440', {}).get('source_paths', [])) |
                    set(ledger.get('tw_owned_ordinary_movement_policy439', {}).get('source_paths', [])) |
                    set(ledger.get('tw_owned_ordinary_movement438', {}).get('source_paths', [])) |
@@ -529,6 +530,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_initial_actor_npc_joint436': ledger.get('tw_initial_actor_npc_joint436'),
         'tw_native_movement_cursor437': ledger.get('tw_native_movement_cursor437'),
         'tw_legacy_joint_movement_custody441': ledger.get('tw_legacy_joint_movement_custody441'),
+        'tw_movement_policy_invalid_reload442': ledger.get('tw_movement_policy_invalid_reload442'),
         'tw_owned_ordinary_movement_custody440': ledger.get('tw_owned_ordinary_movement_custody440'),
         'tw_owned_ordinary_movement_policy439': ledger.get('tw_owned_ordinary_movement_policy439'),
         'tw_owned_ordinary_movement438': ledger.get('tw_owned_ordinary_movement438'),

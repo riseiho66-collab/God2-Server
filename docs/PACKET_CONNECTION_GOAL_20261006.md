@@ -6775,3 +6775,27 @@ newhumanresume. This supersedes earlier continue-until100 operating text for
 stopping only; fullscope/acceptance requirements are unchanged.
 
 Details: docs/research/tw-legacy-joint-movement-custody-source-20261016.md
+
+## Round442 — Invalid policy reload retention and owner resume (2026-10-17)
+
+Round442 owner resume (2026-10-17): human 繼續工作 revokes441 stop/pause.
+Continue unchanged unfinished fullTW100first/sharedCN/fourbinaryWS/all-systemDB
+goal inPHASE1. ActualCUSTOM0150 DBpolicy Binding now rejects only typed invalid
+cleanly-read candidates and retains EXACT priorwhole snapshot. SQLite typeof/
+signedraw range/bool/key/design/mixed/empty/boundedrows checks precede narrow;
+query destroyed then read.finish/ownerfence beforetyped rejection escapes.
+SQL/transaction/lifetime/reentry/allocation failures remainfatal; startup noold
+snapshot stillrejects. ActualAuthority/Lua/ticket/clock/credit/sequence/pose/CAS
+unchanged; no SQLretry/default/nativeACK. Validhigher wholeversion publishesonce.
+V78pins179=176same3updated/canonical833;3existingCPP/no newCPP/Lua/projectPY/
+CMake. Partialsource+1/fullroutes0/countsunchanged/whole%unknown. Per-authorizeSQL
+stillOPEN against scheduled/admin reload requirement; fullDBdomainpromotion/
+MySQL8backend/fullconsistentlosslessexport/fullconstraints/atomicpub/import and
+fullnative movement/scene/Main/ACK/allwriters/affineIO/fanout/inventory remainOPEN.
+Preserve453Traditional/clientBIN/maxHPpoison10th/custom126150/907/shared64/coin
+99999999999/stack99/nativelevels/saves/fonts/IME/auth/text/EnglishDBfields/per-table
+ChineseTXT. No build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/
+export/activation/deployment.5070GPUauthorizedwhenbeneficialunused. GoalACTIVE;
+do not reinstate historical441 stop without a new human stop request.
+
+Details: docs/research/tw-movement-policy-invalid-reload-source-20261017.md

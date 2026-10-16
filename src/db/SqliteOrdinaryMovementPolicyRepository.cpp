@@ -1,6 +1,7 @@
 #include "db/SqliteOrdinaryMovementPolicyRepository.h"
 #include "db/SqliteSupport.h"
 #include <limits>
+#include <exception>
 #include <utility>
 
 namespace god2 {
@@ -11,9 +12,15 @@ bool profile_key_valid(const std::string& key) noexcept {
         if(!((value>='a'&&value<='z')||(value>='0'&&value<='9')||value=='_'))return false;
     return true;
 }
+template<class T> T policy_number(sqlite_detail::Statement& query,int column) {
+    const auto value=query.integer(column);
+    if(value<0 || static_cast<std::uint64_t>(value)>std::numeric_limits<T>::max())
+        throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy integer out of range");
+    return static_cast<T>(value);
+}
 bool strict_boolean(sqlite_detail::Statement& query,int column) {
     const auto value=query.integer(column);
-    if(value!=0&&value!=1)throw DatabaseError("Movement policy boolean must be integer zero or one");
+    if(value!=0&&value!=1)throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy boolean must be integer zero or one");
     return value==1;
 }
 }
@@ -128,36 +135,50 @@ OrdinaryMovementPolicyRepository::Snapshot SqliteOrdinaryMovementPolicyRepositor
         if(duplicate)throw DatabaseError("Movement policy table namespace is ambiguous");
     }
     read.fence();Snapshot result{0,{}};
-    {
+    std::exception_ptr invalid;
+    try {
         sqlite_detail::Statement query(db_,
             "SELECT profile_key,config_version,step_interval_us,burst_steps,initial_credit_steps,"
-            "first_sequence,block_players,forbid_corner_cut,allow_zero,design_id "
+            "first_sequence,block_players,forbid_corner_cut,allow_zero,design_id,"
+            "typeof(profile_key),typeof(config_version),typeof(step_interval_us),typeof(burst_steps),"
+            "typeof(initial_credit_steps),typeof(first_sequence),typeof(block_players),"
+            "typeof(forbid_corner_cut),typeof(allow_zero),typeof(design_id) "
             "FROM main.movement_rules ORDER BY profile_key COLLATE BINARY");
         read.fence();
         for(;;) {
             read.fence();const bool present=query.row();read.fence();if(!present)break;
-            if(result.rows.size()>=max_profiles)throw DatabaseError("Movement policy profile bound exceeded");
+            if(result.rows.size()>=max_profiles)throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy profile bound exceeded");
+            // typeof tags are owned TEXT results. A malformed stored class is
+            // candidate content; Statement/SQLite failures remain DatabaseError.
+            for(int column=0;column<10;++column)
+                if(query.text(10+column)!=(column==0 || column==9 ? "text" : "integer"))
+                    throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy storage class invalid");
             auto key=query.text(0);
             if(!profile_key_valid(key)||(!result.rows.empty()&&result.rows.back().profile_key>=key))
-                throw DatabaseError("Movement policy profile key is invalid or duplicated");
-            const auto version=query.number<std::uint64_t>(1);
-            const auto interval=query.number<std::uint32_t>(2);
-            const auto burst=query.number<std::uint8_t>(3);
-            const auto credit=query.number<std::uint8_t>(4);
-            const auto first=query.number<std::uint8_t>(5);
+                throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy profile key is invalid or duplicated");
+            const auto version=policy_number<std::uint64_t>(query,1);
+            const auto interval=policy_number<std::uint32_t>(query,2);
+            const auto burst=policy_number<std::uint8_t>(query,3);
+            const auto credit=policy_number<std::uint8_t>(query,4);
+            const auto first=policy_number<std::uint8_t>(query,5);
             const bool players=strict_boolean(query,6),corners=strict_boolean(query,7),zero=strict_boolean(query,8);
-            if(query.text(9)!="CUSTOM-0150")throw DatabaseError("Movement policy design identity mismatch");
+            if(query.text(9)!="CUSTOM-0150")throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy design identity mismatch");
             OwnedOrdinaryMovementPolicy policy(version,interval,burst,credit,first,players,corners,zero);
             if(!policy.valid()||version>static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
-                throw DatabaseError("Movement policy scalar range invalid");
+                throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy scalar range invalid");
             if(result.rows.empty())result.version=version;
-            else if(result.version!=version)throw DatabaseError("Movement policy snapshot has mixed configuration versions");
+            else if(result.version!=version)throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy snapshot has mixed configuration versions");
             result.rows.push_back(Row{std::move(key),policy});
         }
-    }
-    read.fence();
-    if(result.rows.empty())throw DatabaseError("Movement policy requires explicit nonempty configuration");
-    read.finish();operation.fence();return result;
+    }catch(const OrdinaryMovementPolicyRepository::InvalidSnapshot&) {
+        invalid=std::current_exception();
+    } // Statement destroyed before ending this actual read transaction.
+    read.fence();read.finish();operation.fence();
+    // Only a cleanly ended, still-owned read may expose recoverable rejection.
+    // A failing finish/fence supersedes invalid content and remains fatal.
+    if(invalid)std::rethrow_exception(invalid);
+    if(result.rows.empty())throw OrdinaryMovementPolicyRepository::InvalidSnapshot("Movement policy requires explicit nonempty configuration");
+    return result;
 }
 
 std::string SqliteOrdinaryMovementPolicyRepository::mysql80_schema() {return R"MYSQL(

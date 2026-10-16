@@ -70,31 +70,39 @@ void OwnedOrdinaryMovementPolicies::refresh_snapshot() {
     const auto self=shared_from_this(); // Retain across the virtual repository observer.
     Operation operation(*this);
     if(!available())throw std::runtime_error("ordinary movement policy repository revoked before load");
-    auto candidate=repository_.load(max_profiles_);
-    if(!available() || poisoned_)throw std::runtime_error("ordinary movement policy load revoked");
-    if(!candidate.version || candidate.version>std::uint64_t(std::numeric_limits<std::int64_t>::max()) ||
-       candidate.rows.empty() || candidate.rows.size()>max_profiles_)
-        throw std::runtime_error("ordinary movement policy snapshot shape invalid");
-    std::string previous;
-    for(const auto& row:candidate.rows) {
-        if(!valid_profile(row.profile_key) || (!previous.empty() && row.profile_key<=previous) ||
-           !row.policy.valid() || row.policy.version!=candidate.version)
-            throw std::runtime_error("ordinary movement policy snapshot row invalid");
-        previous=row.profile_key;
-    }
-    if(snapshot_) {
-        if(candidate.version<snapshot_->value.version)
-            throw std::runtime_error("ordinary movement policy version rollback rejected");
-        if(candidate.version==snapshot_->value.version) {
-            if(candidate.rows!=snapshot_->value.rows)
-                throw std::runtime_error("ordinary movement policy same-version mutation rejected");
-            if(!available() || poisoned_)throw std::runtime_error("ordinary movement policy load revoked");
-            return;
+    const auto retained=snapshot_;
+    try {
+        auto candidate=repository_.load(max_profiles_);
+        if(!available() || poisoned_)throw std::runtime_error("ordinary movement policy load revoked");
+        if(!candidate.version || candidate.version>std::uint64_t(std::numeric_limits<std::int64_t>::max()) ||
+           candidate.rows.empty() || candidate.rows.size()>max_profiles_)
+            throw OrdinaryMovementPolicyRepository::InvalidSnapshot("ordinary movement policy snapshot shape invalid");
+        std::string previous;
+        for(const auto& row:candidate.rows) {
+            if(!valid_profile(row.profile_key) || (!previous.empty() && row.profile_key<=previous) ||
+               !row.policy.valid() || row.policy.version!=candidate.version)
+                throw OrdinaryMovementPolicyRepository::InvalidSnapshot("ordinary movement policy snapshot row invalid");
+            previous=row.profile_key;
         }
+        if(snapshot_) {
+            if(candidate.version<snapshot_->value.version)
+                throw OrdinaryMovementPolicyRepository::InvalidSnapshot("ordinary movement policy version rollback rejected");
+            if(candidate.version==snapshot_->value.version) {
+                if(candidate.rows!=snapshot_->value.rows)
+                    throw OrdinaryMovementPolicyRepository::InvalidSnapshot("ordinary movement policy same-version mutation rejected");
+                if(!available() || poisoned_)throw std::runtime_error("ordinary movement policy load revoked");
+                return;
+            }
+        }
+        const auto prepared=std::make_shared<const SnapshotData>(std::move(candidate));
+        if(!available() || poisoned_)throw std::runtime_error("ordinary movement policy publication revoked");
+        snapshot_=prepared; // One whole immutable publication; no callback or SQL follows.
+    }catch(const OrdinaryMovementPolicyRepository::InvalidSnapshot&) {
+        // CUSTOM-0150: reject only a cleanly read invalid candidate. Keep the
+        // EXACT old whole snapshot, including its observation identity. Never
+        // mask reentry/revocation, retry SQL, or manufacture startup defaults.
+        if(!retained || snapshot_!=retained || !available() || poisoned_)throw;
     }
-    const auto prepared=std::make_shared<const SnapshotData>(std::move(candidate));
-    if(!available() || poisoned_)throw std::runtime_error("ordinary movement policy publication revoked");
-    snapshot_=prepared; // One whole immutable publication; no callback or SQL follows.
 }
 std::size_t OwnedOrdinaryMovementPolicies::find(const std::string& profile) const {
     const auto& rows=snapshot_->value.rows;
