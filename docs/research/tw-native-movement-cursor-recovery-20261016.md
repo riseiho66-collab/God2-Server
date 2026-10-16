@@ -1,0 +1,31 @@
+# Native Taiwan movement cursor and reply recovery — Round437
+
+Static current-build recovery extends the earlier direction-only span through the complete 0x102700 producer, its actual callers, reset/seed and reply dataflow. It recovers client behavior; it does not supply the missing original server authority. No gameplay implementation or complete bidirectional route is added.
+
+Both exact source identities are retained: mapped TW image SHA256 149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763 and original PE SHA256 5fcf8cbfaf31d2635b4541886336293249cde61c0877de6f5a435cc2b9559fde. The bounded original-file RVA mapping and every retained range are checked byte for byte. Addresses below are TW RVAs. Full evidence is external to Desktop/God2 at C:/Users/risei/.codex/artifact-archives/god2-server/20261016/round437-native-walk-ack-recovery; the accompanying actual-source audit is round437-walk-authority-source-review in the same archive.
+
+## Request cursor and complete producer
+
+The old 0x102700..0x1027B2 citation covers only the direction-classification prefix. The complete function ends after ret 0x14 at 0x1028E8 (exclusive end0x1028EB). At 0x10253F and0x1025EB, the actual callers load BYTE world+0x236, push it as the fifth argument, and call this producer at0x102558/0x102608. The producer passes that value through0x68950 to0x15790, whose body offset4 becomes logical2E offset5. The opaque final body byte remains unwritten stack residue and has no recovered gameplay meaning.
+
+At0x102864 the producer calls0x68950 whose actual enqueue is conditional on nonzero world+0x15396840, before0x102877 calls0x1036B0 to push the point. If push fails it calls0x101F90 and returns failure; these observations do not prove a successful network flush or original server admission. After successful push it performs the further original actor updates through0x103CF0/0x102210. A server must not infer client local-queue success solely from receipt of2E.
+
+Ring reset0x103640 clears count/read/write bytes at+0x234/+0x235/+0x236. Full0x103680 uses (write+1)%40==read, reserving one slot:40 storage slots hold at most39 pending points. Push0x1036B0 stores an8-byte point, increments count and advances write modulo40. Pop0x103700 returns without writing its output when empty; otherwise it returns signed16 X/Y, decrements count and advances read modulo40.
+
+Five recovered reset paths clear then push exactly one seed, leaving write=1. Four seeds explicitly load world+0x224/+0x228 (calls at0x6C41D/0x1008BA/0x10120F/0x101578). The fifth path resets at0x1021D6 then pushes the existing stack-local point at0x1021E3; its broader point-selection semantics remain open. Do not describe all five as loading the current world coordinates, or promote these client reset paths into universal server first-index/reset policy.
+
+## Full5D byte and missing authority
+
+The qualified direct world+0x231 disp32 references are initialization to zero at0x678D8, the reply body-byte store at0x6930A and a debug-gated numeric display read at0x67BA9. The debug read is controlled by0x5B5BB4 and calls0x32BB0. This bounded static search does not prove global absence of aliased or computed-offset references.
+
+The5D consumer0x692FA..0x69345 stores that byte, calls0x103700 without comparing it to a request cursor, then invokes0x6CC00 without checking pop success. Consequently, neither the reset seed nor write-cursor provenance proves original server5D echo, permission, timing, queue identity or reset policy. Keep the full arbitrary BYTE as a mandatory qualified authority output. The historical ack(sequence) helper remains a diagnostic fixture and custom echo policy; its implementation is unchanged.
+
+Actual source review found the current concrete TaiwanNativeSceneResourceOwner::State::Authority delegates to the supplied actual_authority. Its ticket is custody around another authority, not the missing timing/reset/token leaf. The legacy RecoveredMovementService has custom initial-slot/sequence/echo behavior and its own common-position commit; calling its move_committed from Scene::Authority would cause a second position mutation. No such adaptation is installed. A future documented TW custom leaf must own phase/reset/sequence/timing and actual immutable scene state, preserve the sole common CAS and distinguish admitted-prefix publication from actual sender5D socket completion. CN native rules remain independent.
+
+## Accounting and continuation
+
+Two existing C++ protocol headers receive comments only; native decoder, fixture encoder and gameplay behavior remain unchanged. V73 retains all158 previous pins unchanged and adds these two already-existing headers as provenance pins (160 total). The canonical source closure grows809 to811 with this document and the contract. There is no new project Python, Lua, CMake or packet format. No unique native-byte union credit is asserted because this round does not establish the global instruction/data interval union. Counts remain C2S evidence156/S2C supported lengths252/parser77 (50 source/11 control/16 unconnected), pending groups12; added full routes0 and whole percentage unknown.
+
+Next work remains the actual movement authority/phase/reset ingress and sender completion custody, complete selected scene placements and Main hosting, generic affine IO/all-writer exclusion/atomic fanout, full route inventory, typed whole-version DB reload and MySQL8 backend/lossless export/full constraints/atomic publication/import. Preserve common C++/Lua/SQLite authority, TW/CN/four binary WS,453 shared Traditional-primary client-BIN skills/maxHP poison tenth/custom126150/original907/common64/coin99999999999/stack99/native levels/saves/fonts/IME/auth/text and all-system game-rule DB classification with English identifiers/per-table Chinese TXT. Goal remains ACTIVE.
+
+The owner authorized using the5070 GPU when useful. These bounded reads/disassemblies/hashes need no GPU; no benchmark, driver or dependency installation is performed. PHASE1 still permits only source/static recovery/accounting and forbids builds/tests/product/native execution/VM/codec/gameDBSQL/schema/migration/import/activation/deployment. No QA copy or large output is created under Desktop/God2.

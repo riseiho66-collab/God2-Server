@@ -1459,3 +1459,18 @@ Traditional/clientBIN/maxHPpoison10th/907/common64/coin99999999999/stack99/
 nativelevels/saves/fonts/IME/auth/text/English+per-tableChineseTXT/typedreload/
 MySQL8backendlosslessexport. PHASE1no build/tests/product/parser/native/VM/codec/
 gameDBSQL/schema/migrate/import/activate/deploy.
+
+Round437 recovers the complete TW102700 producer tail, real write-cursor ingress,
+reset+single-seed(write1), reserved-slot ring39 and bounded5D+231 debug dataflow.
+Client request-send invocation precedes local ring push; server full5D token/echo/timing/
+reset authority remains OPEN. Actual leaf still supplied externally; legacy
+CUSTOM movement commit cannot be reused inside sole commonCAS. Header comments
+only, no new gameplay/partial/full routes/packet counts or global native-byte
+union credit. V73 pins160=158unchanged2newexistingheaders/canonical811. Goal
+ACTIVE/TW100 first/commonCN/fourWS/all-systemDB. Preserve453Traditional/clientBIN/
+maxHPpoison10th/907/common64/coin99999999999/stack99/nativelevels/saves/fonts/IME/
+auth/text/English identifiers/per-tableChineseTXT/typedreload/MySQL8losslessexport.
+Owner5070 GPU compute is authorized when useful; no GPU used for this bounded
+static task and no change to PHASE1no build/tests/product/native/VM/codec/gameDB
+SQL/schema/migrate/import/activate/deploy. Fullauthority/phase/reset/ACK/scene/
+Main/allwriters/fanout/fullroute inventory/configreload/MySQL remain OPEN.

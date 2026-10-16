@@ -4,7 +4,12 @@
 
 namespace god2 {
 // TW15790 writes coordinates/index, queues6 bytes including an unwritten tail.
-// Native ring1036B0 has40 slots. Ordinary branch only: the old parser/policies
+// Native ring1036B0 has40 slots, with one slot reserved (39 pending max).
+// Both native102558/102608 callers supply the pre-push write cursor+236.
+// The recovered reset-then-one-seed paths leave that cursor at1; this is
+// client state, not a server admission/reset rule or5D echo contract.
+// See docs/research/tw-native-movement-cursor-recovery-20261016.md.
+// Ordinary branch only: the old parser/policies
 // remain unchanged; no modulo reduction, zero-tail requirement or echo builder.
 struct RecoveredNativeMovement {
     static bool ordinary_request(const RecoveredMovement::Request& request) noexcept {

@@ -73,6 +73,9 @@ struct RecoveredMovement {
             request.sequence,request.opaque_tail,0});
     }
 
+    // Diagnostic fixture only: echo is a historical CUSTOM server policy.
+    // Native5D stores an arbitrary BYTE, then pops the front pending point;
+    // client write-cursor provenance does not prove original server echo.
     static AckFrame ack(std::uint8_t sequence) noexcept {
         return seal(AckFrame{5,0,0x5d,sequence,0});
     }

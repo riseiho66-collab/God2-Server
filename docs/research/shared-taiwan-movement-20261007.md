@@ -102,3 +102,11 @@ Previous goal turn was progress: actual TW Session entry/tail/cleanup extension
 was sealed. This round executes only static native reading/disassembly/source
 accounting. No build, tests, Lua, resource loading, server/client execution,
 production database access, deployment, font or conversion change occurs.
+
+## Round437 correction (2026-10-16)
+
+The cited102700..1027B2 range is the direction-classification prefix only;
+the complete producer ends after1028E8. Actual callers pass pre-push write+236;
+request-send invocation precedes local point push. Reset followed by one seed leaves
+write1. This is client behavior, not original server5D echo/reset authority.
+See tw-native-movement-cursor-recovery-20261016.md for bounded exact evidence.
