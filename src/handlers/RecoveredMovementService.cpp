@@ -638,6 +638,20 @@ RecoveredMovementService::OwnedCommittedMove RecoveredMovementService::move_comm
         expected_equipment.source_record.append(marker);
     }
     if(!pose_current(old))throw std::invalid_argument("Owned movement before pose became stale");
+    // CUSTOM-0095: the actual normal-entry batch owns ONE durable final pose,
+    // with the original ACK/path/queue recipe frozen before the sole joint CAS.
+    // This private receipt is separate from shared-world per-step/full-Lease
+    // custody; no intermediate persisted poses or native5D grant are invented.
+    std::optional<Session::NormalMovementBatchWrite> response_write;
+    if(session.owned_normal_movement_response_custody_enabled()) {
+        std::vector<Session::NormalMovementBatchWrite::Destination> destinations;
+        destinations.reserve(prepared.path.size());
+        for(const auto& step:prepared.path)destinations.push_back({step.x,step.y});
+        response_write=session.prepare_normal_movement_response_write(*initialization,*before,
+            expected_equipment,requests,old.slot,prepared.next.slot,destinations,prepared.response);
+        if(!response_write || !active_current(old))
+            throw std::invalid_argument("Owned movement original batch response custody rejected");
+    }
     // Only this pure OLD owner predicate runs inside the joint transaction.
     // No current_location, repository reader, callback, send or SQL reentry.
     const auto committed=custody.move_position_from_current(*before,entry->actor_handle,
@@ -657,6 +671,12 @@ RecoveredMovementService::OwnedCommittedMove RecoveredMovementService::move_comm
     }
     if(!pose_current(prepared.next) || !custody.committed_current(*committed) || !pose_current(prepared.next))
         throw std::runtime_error("Owned movement committed but ACK delivery became stale");
+    // Seal only the actual private joint receipt after complete current checks
+    // and local queue publication. Failure terminates this durable prefix;
+    // there is no retry, rollback, second CAS or synthesized per-step receipt.
+    if(response_write && (!session.commit_normal_movement_response_write(*response_write,*committed,
+            *prepared.next.saved) || !active_current(prepared.next)))
+        throw std::runtime_error("Owned movement committed but original batch custody became stale");
     return OwnedCommittedMove({std::move(prepared.response),old.saved,*prepared.next.saved,
         prepared.displaced_steps,std::move(prepared.path)},*committed);
 }

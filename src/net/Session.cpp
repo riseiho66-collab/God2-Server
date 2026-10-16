@@ -207,11 +207,40 @@ struct Session::MovementStepWrite::Data {
          before(old),expected_after(next),request(input),battle(generation),scene_revision(scene),record_index(index),phase(state),
          direction(facing),native_cell(cell),logical(ack),frame(bytes) {}
 };
+// A genuine normal owner commits one WHOLE batch, with one saved/native
+// revision increment. This is deliberately separate from Core per-step CAS.
+struct Session::NormalMovementBatchWrite::Data {
+    const std::weak_ptr<Session> session;
+    const std::shared_ptr<const void> occurrence;
+    const NormalWorldInitialization initialization;
+    const SqliteOwnedEquipmentTransaction::Before before;
+    const NativeEquipmentSnapshot expected_equipment;
+    const std::vector<RecoveredMovement::Request> requests;
+    const std::vector<std::size_t> record_indices;
+    const std::vector<Destination> displaced_path;
+    const std::uint8_t old_slot,new_slot;
+    const std::uint64_t battle;
+    const SessionState phase;
+    const std::vector<std::uint8_t> wire;
+    bool committed=false; // Game only; frozen before the original sender cut.
+    std::optional<std::size_t> offset;
+    Data(std::weak_ptr<Session> owner,std::shared_ptr<const void> scope,NormalWorldInitialization init,
+        SqliteOwnedEquipmentTransaction::Before old,NativeEquipmentSnapshot expected,
+        std::vector<RecoveredMovement::Request> input,std::vector<std::size_t> indices,
+        std::vector<Destination> path,std::uint8_t previous,std::uint8_t next,
+        std::uint64_t generation,SessionState state,std::vector<std::uint8_t> bytes)
+        :session(std::move(owner)),occurrence(std::move(scope)),initialization(std::move(init)),
+         before(std::move(old)),expected_equipment(std::move(expected)),requests(std::move(input)),
+         record_indices(std::move(indices)),displaced_path(std::move(path)),old_slot(previous),new_slot(next),
+         battle(generation),phase(state),wire(std::move(bytes)) {}
+};
 struct Session::MovementResponseWrite::Data {
     const std::thread::id game_thread=std::this_thread::get_id();
     const std::weak_ptr<Session> session;
     const std::shared_ptr<const void> occurrence,common,world;
-    const SharedWorldPresence::Lease lease;
+    const std::optional<SharedWorldPresence::Lease> lease;
+    const std::optional<NormalWorldInitialization> initialization;
+    const std::vector<std::shared_ptr<const NormalMovementBatchWrite::Data>> normal_batches;
     const std::uint64_t battle;
     const SessionState phase;
     const std::vector<std::shared_ptr<const MovementStepWrite::Data>> steps;
@@ -223,6 +252,12 @@ struct Session::MovementResponseWrite::Data {
          std::span<const std::uint8_t> bytes)
         :session(std::move(owner)),occurrence(std::move(scope)),common(std::move(identity)),world(std::move(delivery)),
          lease(actual),battle(generation),phase(state),steps(std::move(components)),wire(bytes.begin(),bytes.end()) {}
+    Data(std::weak_ptr<Session> owner,std::shared_ptr<const void> scope,NormalWorldInitialization init,
+         std::shared_ptr<const void> delivery,std::uint64_t generation,SessionState state,
+         std::vector<std::shared_ptr<const NormalMovementBatchWrite::Data>> batches,
+         std::span<const std::uint8_t> bytes)
+        :session(std::move(owner)),occurrence(std::move(scope)),world(std::move(delivery)),
+         initialization(std::move(init)),normal_batches(std::move(batches)),battle(generation),phase(state),wire(bytes.begin(),bytes.end()) {}
 };
 Session::MovementResponseWriteStatus Session::MovementResponseWrite::status() const noexcept {return data_->status.load();}
 const std::vector<std::uint8_t>& Session::MovementResponseWrite::wire() const noexcept {return data_->wire;}
@@ -670,6 +705,10 @@ struct Session::Impl {
         const std::shared_ptr<const void> common;
         const std::span<const RecoveredWorldRecords::Record> original_records;
         std::vector<std::shared_ptr<MovementStepWrite::Data>> steps;
+        std::vector<std::shared_ptr<NormalMovementBatchWrite::Data>> normal_batches;
+        std::optional<NormalWorldInitialization> normal_initialization;
+        const bool normal_mode;
+        std::size_t run_first_batch=0,normal_assigned=0;
         std::vector<std::size_t> run_records;
         std::optional<SharedWorldPresence::Lease> lease;
         std::optional<std::size_t> last_registered_record;
@@ -678,8 +717,8 @@ struct Session::Impl {
         std::atomic<bool> poisoned{false};
         bool active=true;
         MovementCollector(std::shared_ptr<const void> identity,std::span<const RecoveredWorldRecords::Record> original,
-            std::size_t capacity):common(std::move(identity)),original_records(original) {
-            steps.reserve(capacity);run_records.reserve(capacity);
+            std::size_t capacity,bool normal):common(std::move(identity)),original_records(original),normal_mode(normal) {
+            steps.reserve(capacity);normal_batches.reserve(capacity);run_records.reserve(capacity);
         }
     };
     std::shared_ptr<MovementCollector> movement_collector; // Game callback only.
@@ -1463,6 +1502,11 @@ struct Session::Impl {
            (mode!=ProtocolMode::God2CharacterConnection || !has_world_handler() ||
             (!character_handlers.common_world_lifecycle && !character_handlers.common_world_lifecycle_factory)))
             throw std::invalid_argument("Movement response custody requires actual TW common world handlers");
+        if(character_handlers.owned_normal_movement_response_custody &&
+           (character_handlers.native_movement_response_custody || mode!=ProtocolMode::God2CharacterConnection ||
+            !character_handlers.world_records || character_handlers.common_world_lifecycle ||
+            character_handlers.common_world_lifecycle_factory))
+            throw std::invalid_argument("Normal movement custody requires exclusive actual normal world owner");
         if(character_handlers.movement && character_handlers.world_records)
             throw std::invalid_argument("Recovered world handlers are mutually exclusive");
         if((character_handlers.world_ready || has_world_handler()) &&
@@ -3213,7 +3257,8 @@ struct Session::Impl {
         Impl& state;
         std::shared_ptr<MovementCollector> collector;
         explicit MovementCallbackScope(Impl& actual,std::span<const RecoveredWorldRecords::Record> records):state(actual) {
-            if(!state.character_handlers.native_movement_response_custody)return;
+            if(!state.character_handlers.native_movement_response_custody &&
+               !state.character_handlers.owned_normal_movement_response_custody)return;
             if(observed_movement_callback || state.movement_collector) {
                 if(observed_movement_poison)*observed_movement_poison=true;
                 if(state.movement_collector)state.movement_collector->poisoned=true;
@@ -3228,7 +3273,7 @@ struct Session::Impl {
                 return std::holds_alternative<RecoveredMovement::Request>(record);
             });
             collector=std::make_shared<MovementCollector>(state.common_world_identity.load(),records,
-                static_cast<std::size_t>(capacity));
+                static_cast<std::size_t>(capacity),state.character_handlers.owned_normal_movement_response_custody);
             state.movement_collector=collector;
             observed_movement_callback=&state.owner;observed_movement_poison=&collector->poisoned;
         }
@@ -3236,6 +3281,7 @@ struct Session::Impl {
             if(!collector)return {};
             if(collector->poisoned || collector->run_nonce || collector->offset_scope_nonce || !collector->active)
                 throw std::runtime_error("Movement response scope incomplete or poisoned");
+            if(collector->normal_mode)return finish_normal(accepted,response);
             if(collector->steps.empty())return {}; // Preserve unregistered legacy acceptance, without proof.
             if(!accepted || !collector->lease || collector->assigned!=collector->steps.size() ||
                state.common_world_identity.load().get()!=collector->common.get() || state.owner.closing() ||
@@ -3271,6 +3317,52 @@ struct Session::Impl {
                state.world_delivery_identity.load().get()!=data->world.get() ||
                state.common_entry_identity.load() || !state.owner.recovered_world_ready())
                 throw std::runtime_error("Movement response final source cut retired");
+            state.latest_movement_response.store(data);return attempt;
+        }
+        std::shared_ptr<MovementResponseAttempt> finish_normal(bool accepted,std::span<const std::uint8_t> response) {
+            if(collector->normal_batches.empty())return {}; // Unregistered non-movement remains unattested.
+            if(!accepted || !collector->normal_initialization || collector->lease || !collector->steps.empty() ||
+               collector->normal_assigned!=collector->normal_batches.size() || collector->common ||
+               state.common_world_identity.load() || state.common_entry_identity.load() ||
+               state.owner.closing() || !state.owner.recovered_world_ready())
+                throw std::runtime_error("Normal movement original callback incomplete or retired");
+            const auto init=*collector->normal_initialization;
+            const auto init_data=init.data_;
+            if(!init_data || !init_data->entry || state.normal_initialization.load()!=init_data ||
+               state.normal_entry.load()!=init_data->entry || !init.entry_written() ||
+               init_data->entry->session.lock().get()!=&state.owner ||
+               init_data->entry->account!=state.owner.account_id || init_data->entry->character!=state.owner.character_id)
+                throw std::runtime_error("Normal movement original initialization retired");
+            std::vector<std::shared_ptr<const NormalMovementBatchWrite::Data>> frozen;
+            frozen.reserve(collector->normal_batches.size());
+            std::size_t index=0;
+            for(std::size_t offset=0;offset<response.size();) {
+                if(response.size()-offset<2)throw std::runtime_error("Normal movement response boundary truncated");
+                const auto length=std::size_t(response[offset])+256u*response[offset+1];
+                if(length<4 || length>response.size()-offset)throw std::runtime_error("Normal movement response boundary invalid");
+                if(index<collector->normal_batches.size() && collector->normal_batches[index]->offset==offset) {
+                    const auto batch=collector->normal_batches[index];
+                    if(!batch->committed || length!=5 || batch->wire.empty() || batch->wire.size()>response.size()-offset ||
+                       batch->occurrence!=collector->occurrence || batch->session.lock().get()!=&state.owner ||
+                       !batch->initialization.same_initialization(init) ||
+                       !std::equal(batch->wire.begin(),batch->wire.end(),response.begin()+static_cast<std::ptrdiff_t>(offset)))
+                        throw std::runtime_error("Normal movement original whole-batch frames mismatch");
+                    frozen.push_back(batch);++index;offset+=batch->wire.size();
+                } else offset+=length;
+            }
+            if(index!=collector->normal_batches.size())throw std::runtime_error("Normal movement batches are not exact boundaries");
+            // Later work in this same callback may legitimately enter battle.
+            // Keep the original normal INIT and each historical batch, while
+            // the whole sender records its ACTUAL final phase/delivery cut.
+            const auto data=std::make_shared<MovementResponseWrite::Data>(state.owner.weak_from_this(),collector->occurrence,
+                init,state.world_delivery_identity.load(),state.owner.battle_generation(),state.owner.state(),std::move(frozen),response);
+            const auto attempt=std::make_shared<MovementResponseAttempt>(data);
+            if(!state.movement_transport_current(attempt) || state.owner.state()!=data->phase ||
+               state.owner.battle_generation()!=data->battle || state.normal_initialization.load()!=init_data ||
+               state.normal_entry.load()!=init_data->entry || !init.entry_written() ||
+               state.world_delivery_identity.load().get()!=data->world.get() || state.common_world_identity.load() ||
+               state.common_entry_identity.load() || !state.owner.recovered_world_ready())
+                throw std::runtime_error("Normal movement final original sender cut retired");
             state.latest_movement_response.store(data);return attempt;
         }
         ~MovementCallbackScope() {
@@ -3646,12 +3738,12 @@ struct Session::Impl {
                     }
                 }
             } catch(const std::exception& error) {
-                if(s.character_handlers.native_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
+                if(s.character_handlers.native_movement_response_custody || s.character_handlers.owned_normal_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
                    s.normal_callback_admission_capture ||
                    (s.normal_response_callback_capture && s.normal_response_callback_capture->receipt->armed.load()))accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason={}",s.id,error.what());
             } catch(...) {
-                if(s.character_handlers.native_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
+                if(s.character_handlers.native_movement_response_custody || s.character_handlers.owned_normal_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
                    s.normal_callback_admission_capture ||
                    (s.normal_response_callback_capture && s.normal_response_callback_capture->receipt->armed.load()))accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason=unknown",s.id);
@@ -4364,8 +4456,11 @@ void Session::send(Packet packet) {
 bool Session::native_movement_response_custody_enabled() const noexcept {
     return impl_->character_handlers.native_movement_response_custody;
 }
+bool Session::owned_normal_movement_response_custody_enabled() const noexcept {
+    return impl_->character_handlers.owned_normal_movement_response_custody;
+}
 Session::MovementResponseOutputOffset::MovementResponseOutputOffset(Session& session,std::size_t relative_prefix) {
-    if(!session.native_movement_response_custody_enabled())return;
+    if(!session.native_movement_response_custody_enabled() && !session.owned_normal_movement_response_custody_enabled())return;
     if(observed_movement_callback!=&session) {
         if(observed_movement_poison)observed_movement_poison->store(true);
         throw std::logic_error("Movement output offset requires actual callback");
@@ -4389,7 +4484,7 @@ Session::MovementResponseOutputOffset::~MovementResponseOutputOffset() noexcept 
 }
 Session::MovementResponseInputRun::MovementResponseInputRun(Session& session,
     std::span<const RecoveredWorldRecords::Record> input) {
-    if(!session.native_movement_response_custody_enabled())return;
+    if(!session.native_movement_response_custody_enabled() && !session.owned_normal_movement_response_custody_enabled())return;
     if(observed_movement_callback!=&session) {
         if(observed_movement_poison)observed_movement_poison->store(true);
         throw std::logic_error("Movement input run requires actual callback");
@@ -4417,17 +4512,28 @@ Session::MovementResponseInputRun::MovementResponseInputRun(Session& session,
             collector->poisoned=true;throw std::invalid_argument("Movement input run contains foreign command");
         }
     }
-    if(collector->run_records.empty() || collector->assigned!=collector->steps.size()) {
+    if(collector->run_records.empty() ||
+       (collector->normal_mode ? collector->normal_assigned!=collector->normal_batches.size() : collector->assigned!=collector->steps.size())) {
         collector->poisoned=true;throw std::invalid_argument("Movement input run has no actual ordered Core steps");
     }
     capture_=collector;nonce_=++collector->next_scope_nonce;collector->run_nonce=nonce_;
-    collector->run_first_step=collector->steps.size();collector->last_registered_record=*first+input.size()-1;
+    collector->run_first_step=collector->steps.size();collector->run_first_batch=collector->normal_batches.size();
+    collector->last_registered_record=*first+input.size()-1;
 }
 Session::MovementResponseInputRun::~MovementResponseInputRun() noexcept {
     if(!capture_)return;
     const auto collector=std::static_pointer_cast<Impl::MovementCollector>(capture_);
     if(collector->thread!=std::this_thread::get_id()) {collector->poisoned=true;return;}
     if(!collector->active || collector->run_nonce!=nonce_) {collector->poisoned=true;return;}
+    if(collector->normal_mode) {
+        if(collector->normal_batches.size()!=collector->run_first_batch+1 ||
+           collector->normal_assigned!=collector->normal_batches.size())collector->poisoned=true;
+        else {
+            const auto& batch=collector->normal_batches.back();
+            if(!batch->committed || !batch->offset || batch->record_indices!=collector->run_records)collector->poisoned=true;
+        }
+        collector->run_nonce=0;collector->run_records.clear();return;
+    }
     if(collector->steps.size()-collector->run_first_step!=collector->run_records.size() ||
        collector->assigned!=collector->steps.size())collector->poisoned=true;
     for(std::size_t index=collector->run_first_step;index<collector->steps.size();++index)
@@ -4498,9 +4604,99 @@ bool Session::commit_movement_response_write(const MovementStepWrite& write,cons
        actual_after!=data->expected_after)return reject();
     data->committed=true;return true; // Game-only marker, never another position writer.
 }
+std::optional<Session::NormalMovementBatchWrite> Session::prepare_normal_movement_response_write(
+    const NormalWorldInitialization& initialization,const SqliteOwnedEquipmentTransaction::Before& before,
+    const NativeEquipmentSnapshot& expected_equipment,std::span<const RecoveredMovement::Request> requests,
+    std::uint8_t old_slot,std::uint8_t new_slot,
+    std::span<const NormalMovementBatchWrite::Destination> displaced_path,std::span<const std::uint8_t> whole_ack) {
+    if(!owned_normal_movement_response_custody_enabled())return {};
+    if(observed_movement_callback!=this) {
+        if(observed_movement_poison)observed_movement_poison->store(true);
+        return {};
+    }
+    const auto collector=impl_->movement_collector;
+    const auto reject=[&]() -> std::optional<NormalMovementBatchWrite> {if(collector)collector->poisoned=true;return {};};
+    if(!collector || !collector->normal_mode || !collector->active || collector->poisoned || !collector->run_nonce ||
+       collector->thread!=std::this_thread::get_id() || collector->normal_batches.size()!=collector->run_first_batch ||
+       collector->normal_assigned!=collector->normal_batches.size() || !collector->steps.empty() || collector->lease ||
+       collector->common || impl_->common_world_identity.load() || impl_->common_entry_identity.load() ||
+       requests.empty() || requests.size()!=collector->run_records.size() || requests.size()>max_buffer/5 ||
+       whole_ack.size()!=requests.size()*5 || old_slot>=40 || new_slot>=40 ||
+       !before.inventory || !before.equipment || !initialization.entry_written() ||
+       !normal_world_initialization_current_on_game(initialization) || closing() || !recovered_world_ready() ||
+       (state()!=SessionState::CharacterSelected && state()!=SessionState::InWorld) ||
+       before.inventory->root.account_id!=account_id || before.inventory->root.id!=character_id ||
+       !NativeEquipmentSnapshot::same_root(before.inventory->root,before.equipment->root) ||
+       (collector->normal_initialization && !collector->normal_initialization->same_initialization(initialization)))return reject();
+    const auto limit=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    if(!before.equipment->position.revision || before.equipment->position.revision>=limit ||
+       !before.equipment->revision || before.equipment->revision>=limit || !before.inventory->revision)return reject();
+    if(!collector->normal_batches.empty()) {
+        const auto previous=collector->normal_batches.back();
+        if(!previous->committed || !previous->offset || previous->new_slot!=old_slot || previous->phase!=state() ||
+           previous->battle!=battle_generation() || previous->expected_equipment!=*before.equipment ||
+           *previous->before.inventory!=*before.inventory)return reject();
+    }
+    auto x=before.equipment->position.x,y=before.equipment->position.y;
+    auto slot=old_slot;std::size_t path_index=0;
+    for(std::size_t index=0;index<requests.size();++index) {
+        const auto& request=requests[index];
+        const auto* original=std::get_if<RecoveredMovement::Request>(&collector->original_records[collector->run_records[index]]);
+        slot=static_cast<std::uint8_t>((slot+1)%40);
+        const auto ack=RecoveredMovement::ack(request.sequence);
+        if(!original || !Impl::same_movement_request(request,*original) || request.sequence!=slot ||
+           !std::equal(ack.begin(),ack.end(),whole_ack.begin()+static_cast<std::ptrdiff_t>(index*5)))return reject();
+        if(x!=request.x || y!=request.y) {
+            if(path_index>=displaced_path.size() || displaced_path[path_index]!=NormalMovementBatchWrite::Destination{request.x,request.y})return reject();
+            ++path_index;
+        }
+        x=request.x;y=request.y;
+    }
+    if(slot!=new_slot || path_index!=displaced_path.size())return reject();
+    auto expected=*before.equipment;
+    expected.position.x=x;expected.position.y=y;++expected.position.revision;++expected.revision;
+    constexpr std::string_view marker=";CUSTOM-0095:ordinary-move-preserves-material";
+    if(expected.source_record.find(marker)==std::string::npos) {
+        if(expected.source_record.size()>2048-marker.size())return reject();
+        expected.source_record.append(marker);
+    }
+    if(expected!=expected_equipment)return reject();
+    const auto data=std::make_shared<NormalMovementBatchWrite::Data>(weak_from_this(),collector->occurrence,initialization,
+        before,expected_equipment,std::vector<RecoveredMovement::Request>(requests.begin(),requests.end()),collector->run_records,
+        std::vector<NormalMovementBatchWrite::Destination>(displaced_path.begin(),displaced_path.end()),old_slot,new_slot,
+        battle_generation(),state(),std::vector<std::uint8_t>(whole_ack.begin(),whole_ack.end()));
+    // All copies/allocations precede the caller's sole joint SQL COMMIT. There
+    // is no DB owner, callback, common lease or invented intermediate revision.
+    collector->normal_batches.push_back(data);collector->normal_initialization=initialization;
+    return NormalMovementBatchWrite(data);
+}
+bool Session::commit_normal_movement_response_write(const NormalMovementBatchWrite& write,
+    const SqliteOwnedEquipmentTransaction::Committed& committed,const RecoveredPosition& published_after) {
+    if(!owned_normal_movement_response_custody_enabled() || observed_movement_callback!=this) {
+        if(observed_movement_poison)observed_movement_poison->store(true);
+        return false;
+    }
+    const auto collector=impl_->movement_collector;
+    const auto reject=[&] {if(collector)collector->poisoned=true;return false;};
+    const auto data=write.data_;
+    if(!collector || !collector->normal_mode || !collector->active || collector->poisoned || !collector->run_nonce ||
+       collector->thread!=std::this_thread::get_id() || !data ||
+       collector->normal_batches.size()!=collector->run_first_batch+1 || collector->normal_batches.back()!=data ||
+       collector->normal_assigned!=collector->run_first_batch || data->committed || data->offset ||
+       data->occurrence!=collector->occurrence || data->record_indices!=collector->run_records ||
+       data->session.lock().get()!=this || !collector->normal_initialization ||
+       !data->initialization.same_initialization(*collector->normal_initialization) ||
+       !normal_world_initialization_current_on_game(data->initialization) || !data->initialization.entry_written() ||
+       closing() || !recovered_world_ready() || state()!=data->phase || battle_generation()!=data->battle ||
+       impl_->common_world_identity.load() || impl_->common_entry_identity.load() ||
+       data->before.inventory->root.account_id!=account_id || data->before.inventory->root.id!=character_id ||
+       committed.inventory().snapshot()!=*data->before.inventory || committed.equipment().snapshot()!=data->expected_equipment ||
+       published_after!=data->expected_equipment.position)return reject();
+    data->committed=true;return true; // Actual private joint receipt, never a second writer or ACK.
+}
 bool Session::locate_movement_response_run(std::size_t actual_output_offset,
     std::span<const std::uint8_t> actual_run_wire) {
-    if(!native_movement_response_custody_enabled())return true;
+    if(!native_movement_response_custody_enabled() && !owned_normal_movement_response_custody_enabled())return true;
     if(observed_movement_callback!=this) {
         if(observed_movement_poison)observed_movement_poison->store(true);
         return false;
@@ -4512,6 +4708,20 @@ bool Session::locate_movement_response_run(std::size_t actual_output_offset,
        actual_output_offset>max_buffer || collector->output_base>max_buffer-actual_output_offset)return reject();
     actual_output_offset+=collector->output_base;
     if(actual_run_wire.size()>max_buffer-actual_output_offset)return reject();
+    if(collector->normal_mode) {
+        if(collector->normal_batches.size()!=collector->run_first_batch+1 ||
+           collector->normal_assigned!=collector->run_first_batch)return reject();
+        const auto batch=collector->normal_batches.back();
+        if(!batch->committed || batch->offset || batch->occurrence!=collector->occurrence ||
+           batch->record_indices!=collector->run_records || batch->requests.size()!=collector->run_records.size() ||
+           batch->wire.size()!=actual_run_wire.size() ||
+           !std::equal(batch->wire.begin(),batch->wire.end(),actual_run_wire.begin()))return reject();
+        if(collector->normal_assigned) {
+            const auto previous=collector->normal_batches[collector->normal_assigned-1];
+            if(!previous->offset || actual_output_offset<*previous->offset+previous->wire.size())return reject();
+        }
+        batch->offset=actual_output_offset;++collector->normal_assigned;return true;
+    }
     const auto count=actual_run_wire.size()/5;
     if(collector->assigned!=collector->run_first_step || collector->steps.size()<collector->run_first_step ||
        count!=collector->run_records.size() || count!=collector->steps.size()-collector->run_first_step)return reject();
@@ -4530,7 +4740,7 @@ bool Session::locate_movement_response_run(std::size_t actual_output_offset,
     collector->assigned+=count;return true;
 }
 std::optional<Session::MovementResponseWrite> Session::movement_response_write_on_game() const {
-    if(!native_movement_response_custody_enabled())return {};
+    if(!native_movement_response_custody_enabled() && !owned_normal_movement_response_custody_enabled())return {};
     const auto data=impl_->latest_movement_response.load();
     if(!data || data->game_thread!=std::this_thread::get_id() || data->session.lock().get()!=this)return {};
     return MovementResponseWrite(data); // Historical observation; no current permission inferred.

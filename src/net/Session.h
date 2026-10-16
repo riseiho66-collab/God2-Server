@@ -1,6 +1,7 @@
 #pragma once
 
 #include "protocol/Packet.h"
+#include "db/SqliteOwnedEquipmentTransaction.h"
 #include "game/TaiwanActorStatusWriteFence.h"
 #include "game/TaiwanActorStatusIncarnationSource.h"
 #include "game/TaiwanActorStatusPublication.h"
@@ -31,6 +32,7 @@ namespace god2 {
 
 class TaiwanActorStatusWriteFence;
 class SharedTaiwanMovement;
+class RecoveredMovementService;
 
 enum class SessionState {
     Connected, Handshaked, Authenticated, CharacterSelected,
@@ -597,6 +599,9 @@ public:
             common_world_ready_publication_owner;
         // LAST: selected real TW movement sender evidence; defaults preserve old paths.
         bool native_movement_response_custody=false;
+        // LAST: genuine normal-entry CUSTOM-0095 whole-batch sender custody.
+        // Exclusive with common-lease custody; no synthetic shared lease.
+        bool owned_normal_movement_response_custody=false;
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,
@@ -617,6 +622,7 @@ public:
     bool actor_status_incarnation_matches(const TaiwanActorStatusIncarnationSource::Token&) const noexcept;
     void send_world_records(std::vector<std::uint8_t> logical);
     bool native_movement_response_custody_enabled() const noexcept;
+    bool owned_normal_movement_response_custody_enabled() const noexcept;
     // Exact offset in the original returned callback frame. Never scans for bytes.
     bool locate_movement_response_run(std::size_t actual_output_offset,
         std::span<const std::uint8_t> actual_run_wire);
@@ -852,6 +858,30 @@ public:
 private:
     friend class cn::SharedActorVisibility;
     friend class SharedTaiwanMovement;
+    friend class RecoveredMovementService;
+    class NormalMovementBatchWrite final {
+    public:
+        struct Destination {
+            std::uint16_t x,y;
+            bool operator==(const Destination&) const=default;
+        };
+        struct Data;
+        NormalMovementBatchWrite(const NormalMovementBatchWrite&)=default;
+        NormalMovementBatchWrite& operator=(const NormalMovementBatchWrite&)=default;
+    private:
+        friend class Session;
+        friend struct Impl;
+        explicit NormalMovementBatchWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
+        std::shared_ptr<Data> data_;
+    };
+    std::optional<NormalMovementBatchWrite> prepare_normal_movement_response_write(
+        const NormalWorldInitialization&,const SqliteOwnedEquipmentTransaction::Before&,
+        const NativeEquipmentSnapshot& expected_equipment,std::span<const RecoveredMovement::Request>,
+        std::uint8_t old_slot,std::uint8_t new_slot,
+        std::span<const NormalMovementBatchWrite::Destination> displaced_path,
+        std::span<const std::uint8_t> whole_ack);
+    bool commit_normal_movement_response_write(const NormalMovementBatchWrite&,
+        const SqliteOwnedEquipmentTransaction::Committed&,const RecoveredPosition& published_after);
     class MovementStepWrite final {
     public:
         struct Data;

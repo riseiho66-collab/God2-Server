@@ -181,6 +181,13 @@ std::optional<std::vector<std::uint8_t>> RecoveredWorldService::handle(
     // Native bootstrap retains CharacterSelected; Session gates the completed
     // tail and the movement service validates its own world-ready binding.
     if (session.state() == SessionState::InBattle || !movement_) return std::nullopt;
+    if(session.owned_normal_movement_response_custody_enabled()) {
+        // CUSTOM-0095 bind this exact original2E+Tick input and original ACK run.
+        const auto sender_run=session.movement_response_input_run(records);
+        auto reply=movement_(session,moves);
+        if(reply.empty() || !session.locate_movement_response_run(0,reply))return std::nullopt;
+        return reply; // One joint batch, no synthetic per-request persisted versions.
+    }
     auto reply = movement_(session, moves);
     if (reply.empty()) return std::nullopt;
     return reply;

@@ -1528,3 +1528,25 @@ Traditional/clientBIN/maxHPpoison10th/custom126150/907/common64/coin99999999999/
 stack99/nativelevels/saves/fonts/IME/auth/text/EnglishDBfields/per-tableChineseTXT.
 PHASE1no build/tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/
 activate/deploy.5070authorizedwhenbeneficialunused.
+
+Round441 connects actualnormal CUSTOM0095 onejoint batch preCAS receipt ->
+actualprivateCommitted/fullcurrent/localpublish -> original2E+Tick run/wholeACK
+-> existing Session originalresponse/FIFO/directfullasyncwrite custody source.
+GenuineNormalInitialization/fullbeforebanks/expectedafter/slots/path/requests;
+NO fakecommonLease/per-requestpersistedrevision/secondCAS/nativeACK/barrier.
+Actual App838 worldplan exclusion andWholeBaghandler lifecycle exclusion prove
+normal andCore440 paths exclusive, correcting prior broad interception wording;
+historical440 evidence retained. C24+2E mixed stillpre-mutationreject. Native440
+prepare/commit/FIFO/write/completion unchanged. V77pins179=174same3updated2added;
+canonical831;CPP5existing/newCPP0/newLua0/newprojectPY0/CMake0. Partialsource+1,
+fullroutes0/countsunchanged/whole%unknown. FullTW100first/commonCN/fourWS/allDB
+objective INCOMPLETE; source/native/Main/fullscene/ACK/allwriters/affineIO/fanout/
+fullinventory/MySQLbackend-fullconsistentlosslessexport-fullconstraints-atomic
+publication-import remainOPEN. Preserve453Traditional/clientBIN/maxHPpoison10th/
+custom126150/907/common64/coin99999999999/stack99/nativelevels/saves/fonts/IME/auth/
+text/EnglishDBfields/per-tableChineseTXT. PHASE1no build/tests/product/native/VM/
+codec/gameDBSQL/schema/migrate/import/activate/deploy.5070authorizedunused.
+LATEST OWNER: 這輪結束後停止工作. Finish441 publication/staticinventory then
+pause the existing unfinished goal andSTOP; do not begin442 orcontinuewithout
+newhumanresume. This supersedes earlier continue-until100 operating text for
+stopping only; fullscope/acceptance requirements are unchanged.

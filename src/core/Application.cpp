@@ -8859,6 +8859,9 @@ if(guild_officer_runtime && player_guild(session) &&
                        !game_handlers.world_entry || !game_handlers.world_ready || !game_handlers.world_records ||
                        game_handlers.movement || game_handlers.common_world_lifecycle_factory)
                         throw std::invalid_argument("Whole bag moves require complete exclusive actual normal-entry TW handlers");
+                    // CUSTOM-0095 normal initialization + one joint batch receipt.
+                    // This branch is exclusive with world_plan; no common Lease is made.
+                    game_handlers.owned_normal_movement_response_custody=true;
                     // Exact same migrated Database connection; both explicit
                     // custody schemas/material must already exist. No installer.
                     whole_bag_moves->transaction=std::make_shared<SqliteOwnedEquipmentTransaction>(

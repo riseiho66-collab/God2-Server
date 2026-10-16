@@ -46,7 +46,8 @@
         "lifetime": "Retire typedleaf before callbacks; actualnewEntryaffected; copied Inputcallbacks drain beforepurefinalEntry/Slot/phase/privateleaf fences afterlast SQLobserver.",
         "database_policy439": "Actual same-Database movement_rules full typed own read; immutable whole-version cache/private observations; actual Application Context and both host source forms select real Input data -> concrete leaf binding; per-authorize refresh; staged effective policy/fraction credit only after soleCAS, no live sequence reset.",
         "mysql_policy439": "Actual typed one-load full owned table snapshot -> complete fresh MySQL8.0.17+ CHECK/PK/ASCII/no-pad schema and decimal INSERT string. Source only, not full backend/export/import/atomic publication.",
-        "sender_custody440": "Actual Core preCAS private step/commit afterrealworld+peers -> exact actualinput/run/parent output offsets -> Session actualcallback sealed historicalwholeframe -> pure LASTFIFO/direct full async_write receipt; no nativeACK/inputhold/reset/secondCAS; intercepted legacy2E remainunattested."
+        "sender_custody440": "Actual Core preCAS private step/commit afterrealworld+peers -> exact actualinput/run/parent output offsets -> Session actualcallback sealed historicalwholeframe -> pure LASTFIFO/direct full async_write receipt; no nativeACK/inputhold/reset/secondCAS; intercepted legacy2E remainunattested.",
+        "normal_topology441": "ActualApplication rejects whole_bag_moves withworld_plan/commonlifecycle. Normal0095 andthisCore440 areexclusive realowners, not an activeinterception ofthisCore. Normal441 usesgenuineINIT/singlejointbatch, not commonLease. Historical440 descriptions preserved; no fullrouteclaim."
       },
       "activation": false,
       "production_activated": false,
@@ -3762,18 +3763,19 @@
       "name": "Atomic ordinary TW movement with owned-material retention",
       "authority": "CUSTOM_SERVER_PERSISTENCE_POLICY",
       "implementation": [
-        "src/db/SqliteOwnedEquipmentTransaction.h",
+        "src/core/Application.cpp",
+        "src/core/Config.cpp",
+        "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
         "src/db/SqliteOwnedEquipmentTransaction.cpp",
+        "src/db/SqliteOwnedEquipmentTransaction.h",
         "src/game/SharedTaiwanMovement.cpp",
         "src/game/SharedTaiwanMovementSource.cpp",
         "src/game/SharedTaiwanNativeMovementHost.cpp",
-        "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
-        "src/handlers/RecoveredMovementService.h",
         "src/handlers/RecoveredMovementService.cpp",
-        "src/core/Application.cpp",
-        "src/core/Config.cpp",
-        "src/net/Session.h",
-        "src/net/Session.cpp"
+        "src/handlers/RecoveredMovementService.h",
+        "src/handlers/RecoveredWorldService.cpp",
+        "src/net/Session.cpp",
+        "src/net/Session.h"
       ],
       "native_gap": "Original server inventory-witness lifecycle across ordinary walking is not recovered. This policy retains qualified full material; it does not claim a fresh native afterstate capture.",
       "rules": {
@@ -3781,7 +3783,8 @@
         "retention": "Complete existing inventory, all instance IDs/acquisitions/aliases/counts/revisions and full1215+DA15 bytes unchanged. Only common x/y/position revision and matching equipment witness position/revision advance. Original sourceSHA retained; provenance marker appended once within2048B.",
         "transaction": "One actual same-connection BEGIN IMMEDIATE; full expected tuples/common roots/no pending battle, ten main source tables/TEMP NOCASE guards. Two observing Current calls before writes; exact position SQL CAS then native witness stage. Closed full reads after writes, no external callbacks after staged position. Joint immutable tokens preallocated before single durable COMMIT.",
         "delivery": "Complete actual5D and peer projection prepared before mutation. Require current durable same-writer receipt/current Session/lease/position before original scene publication and peer delivery. Failure preserves durable prefix. No producer/default5D or invented reply.",
-        "compatibility": "Null/default and borrowed movement APIs retain existing behavior; opt-in passes actual transaction strongly through host/source/controller. No CN/web/frozen feature rewrite."
+        "compatibility": "Null/default and borrowed movement APIs retain existing behavior; opt-in passes actual transaction strongly through host/source/controller. No CN/web/frozen feature rewrite.",
+        "normal_joint_sender_custody441": "Actualexclusive normalInitialization wholebatch beforeonejointCOMMIT -> privateCommitted/fullcurrent/localqueue -> exactoriginalinput/wholeACK -> samepureSessionFIFO/fullwrite receipt; oneposition+equipmentrevision increment forwholebatch, no inventedcommonLease/intermediateversions/nativeACK/inputhold. Existing rule/ACK unchanged."
       },
       "reason": "Connect ordinary walking to subsequent owned-bag requests without leaving the existing native delivery witness at an obsolete saved position.",
       "activation": "PHASE1 existing common Sources/StoredSources opt-in and default-off world.owned_whole_bag_moves normal-entry Main joint movement. Actual Session/entry/actor and positive full bank pose required; full batch final position committed once with witness. Initial populations, schema installation, runtime and deployment remain unselected. Passive actual joint mutation aftertuple and exact original callback-response observation now share the same default-off Main profile; Pending retains existing admission and Written is local socket completion only.",
@@ -3804,7 +3807,8 @@
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
       "deferred_qualification": "Genuine full custody/material issuance, original server witness lifecycle and all movement/transfer variants, operational Main, original-native acceptance, complete TW denominator and remaining gameplay routes.",
-      "replacement": "Replace labelled persistence policy only with independently qualified original lifecycle, preserving full source material/common identities/saves through an explicit reversible change."
+      "replacement": "Replace labelled persistence policy only with independently qualified original lifecycle, preserving full source material/common identities/saves through an explicit reversible change.",
+      "document": "docs/research/tw-legacy-joint-movement-custody-source-20261016.md"
     },
     {
       "id": "CUSTOM-0096",
