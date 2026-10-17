@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """CUSTOM-0068 immutable qualify, schema43->44 clone stage and explicit apply.
 
 Do not run a mode until root authorizes it. Stage modifies only a new owned
@@ -80,7 +82,7 @@ def qualify():
     require(isinstance(terminal,dict) and terminal and all(row.get("pid_exists") is False for row in terminal.values()),"Native cleanup incomplete")
     ui=result["ui"]
     require(ui["accepted"] is True and ui["desktop_unchanged"] is True and ui["all_clients_closed"] is True,"UI scope failed")
-    require([(row["identity"],row["language"]) for row in ui["final"]["native"]]==[(4,950),(5,936)],"TW/CN owner coverage absent")
+    require([(row["identity"],row["language"]) for row in ui["final"]["native"]]==[(4,950),(5,936)],"TW CP950/CP936 owner coverage absent")
     foreign=[event for event in ui["events"] if event["operation"]=="foreign_committed"]
     armor=[event for event in ui["events"] if event["operation"]=="armor_committed"]
     med=[event for event in ui["events"] if event["operation"] in ("0x63","0x64","0x65")]

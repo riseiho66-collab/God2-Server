@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """CUSTOM-0080 immutable post-install proof and one-record metadata update.
 Relocate to tools/operations only after candidate QA has terminated.
 """

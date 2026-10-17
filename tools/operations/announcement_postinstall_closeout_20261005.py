@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """Publish immutable announcement0079 post-install proof; metadata-only update."""
 import copy
 import hashlib

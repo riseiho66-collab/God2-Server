@@ -34,8 +34,6 @@ from unicorn.x86_const import (UC_X86_REG_EAX, UC_X86_REG_EBX, UC_X86_REG_EBP,
 
 RESOURCE, ACTOR, WORLD = 0x3800000, 0x3700000, 0x4000000
 BASE, SP, BODY = routes.BASE, routes.SP, routes.BODY
-CLASSIC = Path('C:/God2Evidence/classic-20260820/files/'
-               'God2-Classic-Server-Formal-Handoff-20260820-020345/ServerSource')
 GAME_SHA = '70a4e7dd1a1f66d7a70f5c5e97c77ef4063904cc473292758c5abd2da7bd8731'
 GAME_DECODED_SHA = '75c3c37947a64b0917fbf8e546884d9bf893fe6a606d3e2b8f3b1857966b1815'
 ROW_SHA = {3793: '964b81209c07c02fccd13ab70067aab13ab55fbfa82ead479ce0db536e128562',
@@ -170,7 +168,7 @@ class CurrentNpcSpawnTests(unittest.TestCase):
         self.run_to(vm, 0x6a68b, stop)
         return vm
 
-    def test_retained_provenance_and_current_dispatch(self):
+    def test_current_dispatch(self):
         self.assertEqual(struct.unpack_from('<I', self.image, 0x1324 + 4*0x72)[0], BASE + 0x127c)
         self.assertEqual(self.image[0x127c:0x1282], b'\xb8\x15\0\0\0\xc3')
         self.assertEqual(struct.unpack_from('<I', self.image, 0x6b5d4 + 4*0x72)[0], BASE + 0x6a68b)
@@ -178,21 +176,6 @@ class CurrentNpcSpawnTests(unittest.TestCase):
         # Section-dispatch match calls this exact current loader.
         self.assertEqual(self.image[0x56272:0x56277], b'\xbe\x2c\xa1\x58\0')
         self.assertEqual(0x562b8 + struct.unpack_from('<i', self.image, 0x562b4)[0], 0x570f0)
-        for placement in self.atlas['placements']:
-            fields = placement['source_fields']
-            for key in ('provenance', 'consumer_evidence'):
-                evidence = placement[key]
-                self.assertEqual(hashlib.sha256((CLASSIC / evidence['file']).read_bytes()).hexdigest(),
-                                 evidence['sha256'])
-            frame = bytes.fromhex(re.search(r'\b[0-9A-F]{48}\b', fields['admin_note'])[0])
-            self.assertEqual(frame[-1], sum(b + 0x3c for b in frame[:-1]) & 255)
-            record = self.logical(fields['observed_client_entity_handle'])
-            self.assertEqual(record, frame[2:23])
-            self.assertEqual(hashlib.sha256(record).hexdigest(), fields['application_message_sha256'].lower())
-            self.assertFalse(placement['runtime_eligible'])
-            self.assertIsNone(placement['map']['current_area'])
-            self.assertIsNone(placement['map']['current_scene'])
-            self.assertEqual(fields['map_id'], 170015007)
 
     def test_current_data_real_loader_and_resource_boundary(self):
         npc = self.atlas['current_templates']

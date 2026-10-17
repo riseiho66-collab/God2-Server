@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """Qualified native discard promotion; executable only, never restore old saves."""
 import argparse,json
 from tools.operations import native_peer_pose_release_20261002 as lifecycle

@@ -62,28 +62,12 @@ def fixtures(kind):
 class RecoveryCliBlackboxTests(unittest.TestCase):
     def prepare(self, folder, kind, decoded=None):
         base = Path(folder)
-        client, classic, xjz = (base / name for name in ('client', 'classic', 'xjz'))
-        for root in (client, classic, xjz):
-            root.mkdir()
+        client = base / 'client'
+        client.mkdir()
         for relative, plain in (fixtures(kind) if decoded is None else decoded).items():
             path = client / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(csvz(plain))
-        for root, paths in ((classic, companions.CLASSIC_FILES), (xjz, companions.XJZ_FILES)):
-            for relative in paths:
-                path = root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text('Synthetic legacy fixture\n', encoding='utf-8')
-        for root, relative, anchor in (
-            (classic, 'src/God2.ClassicServer.Runtime/PhysicalSkillDamageRuntime.cs', 'No community-measured physical'),
-            (classic, 'src/God2.ClassicServer.Runtime/MagicSkillDamageRuntime.cs', 'No community-measured magic'),
-            (xjz, 'evidence-combat-formula-v0.md', 'packet_evidence_boundary'),
-            (xjz, 'cpp/xjz_evidence_repository.hpp', 'GetSkillBookTemplate('),
-            (xjz, 'cpp/xjz_evidence_models.hpp', 'struct SkillBookTemplate'),
-        ):
-            path = root / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('Synthetic anchor: ' + anchor, encoding='utf-8')
         cwd = REPO
         output = base / 'output' / (kind + '.json')
         if kind == 'combat_skills':
@@ -97,8 +81,6 @@ class RecoveryCliBlackboxTests(unittest.TestCase):
         args = [sys.executable, '-m', 'tools.strike_lab.recover_' + kind,
                 '--client' if kind == 'quests' else '--client-root', str(client),
                 '--output', str(output)]
-        if kind in ('combat_skills', 'companions'):
-            args.extend(['--classic-root', str(classic), '--xjz-root', str(xjz)])
         return args, cwd, client, output
 
     def run_cli(self, args, cwd):

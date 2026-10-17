@@ -3,10 +3,8 @@ from contextlib import redirect_stderr
 import io
 import json
 from pathlib import Path
-import sqlite3
 import sys
 import unittest
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -14,9 +12,6 @@ from tools.strike_lab import recover_monsters as monsters
 from tools.strike_lab.omega_assets import decode_csvz
 
 CLIENT = ROOT.parent / 'God2'
-CLASSIC = Path('C:/God2Evidence/classic-20260820/files/'
-               'God2-Classic-Server-Formal-Handoff-20260820-020345/ServerSource')
-XJZ = ROOT / 'artifacts/legacy-evidence/xjz-20260820/files/XJZ-Server-Cpp/server_implementation'
 REQUIRED_UNKNOWN = {
     'level', 'hp', 'mp', 'constitution', 'strength', 'intelligence', 'speed',
     'physical_attack', 'physical_defense', 'magical_attack', 'magical_defense',
@@ -31,7 +26,7 @@ LEGACY_UNKNOWN = {
 class MonsterRecoveryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.result = monsters.build_monsters(CLIENT, CLASSIC, XJZ)
+        cls.result = monsters.build_monsters(CLIENT)
 
     def test_every_current_client_row_is_byte_identical(self):
         for table in self.result['definition_tables']:
@@ -90,39 +85,6 @@ class MonsterRecoveryTests(unittest.TestCase):
                          [215, 215])
         self.assert_unknown_contract(self.result)
 
-    def test_existing_synthetic_drop_fixture_never_promoted(self):
-        fixture_path = CLASSIC / ('tests/God2.RecoveredDatabaseImporter.Tests/Fixtures/'
-                                  'native-writer-monster-drop.jsonl')
-        fixtures = [json.loads(line) for line in fixture_path.read_text(encoding='utf-8').splitlines()
-                    if line.strip()]
-        self.assertEqual(len(fixtures), 1)
-        self.assertEqual(fixtures[0]['evidenceRefs'][0]['evidenceId'], 'SELFTEST-SE-17')
-        self.assertEqual(fixtures[0]['observedClientRate'], 0.12)
-        self.assertEqual(fixtures[0]['defaultDisabledRate'], 0)
-        self.assertIsNone(fixtures[0]['authoritativeRate'])
-        read_source = monsters.read_source
-
-        # Feed the existing SELFTEST through each retained legacy JSON boundary.
-        for relative in monsters.CLASSIC_JSON[1:]:
-            def fixture_source(root, path):
-                if Path(root) == CLASSIC and path == relative:
-                    raw, source = read_source(root, path)
-                    data = json.loads(raw)
-                    data['records'].extend(fixtures)
-                    data['recordCount'] = len(data['records'])
-                    raw = json.dumps(data).encode('ascii')
-                    return raw, {**source, 'sha256': monsters.digest(raw), 'size': len(raw)}
-                return read_source(root, path)
-
-            with self.subTest(source=relative), patch.object(monsters, 'read_source', fixture_source):
-                result = monsters.build_monsters(CLIENT, CLASSIC, XJZ)
-                legacy = next(entry for entry in result['legacy_json']
-                              if entry['source']['file'] == relative)
-                self.assertEqual(legacy['raw_records'][-1], fixtures[0])
-                self.assertEqual(legacy['authority'],
-                                 'legacy_claim_only; no current-client identity promotion')
-                self.assert_unknown_contract(result)
-                self.assertEqual(result['definition_tables'], self.result['definition_tables'])
 
     def test_no_visual_position_or_legacy_claim_promoted(self):
         self.assertEqual(self.result['spawn_instances'], [])
@@ -131,10 +93,7 @@ class MonsterRecoveryTests(unittest.TestCase):
                 self.assertFalse(row['runtime_eligible'])
                 self.assertIn('level', row['unknown_fields'])
                 self.assertNotIn('spawn_x', row['known_fields'])
-        claim = self.result['legacy_json'][2]['raw_records'][0]
-        self.assertEqual(claim['level'], 6)
-        self.assertIsNone(claim['maximumHp'])
-        self.assertFalse(claim['runtimeEligible'])
+
 
     def test_rejects_header_changes_duplicate_ids_and_bad_start(self):
         raw = decode_csvz((CLIENT / monsters.CLIENT_TABLES[0]).read_bytes())
@@ -145,27 +104,15 @@ class MonsterRecoveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 monsters.parse_definition(invalid, 'field')
 
-    def test_sqlite_read_only_and_denominators(self):
-        path = XJZ / 'xjz_evidence.sqlite'
-        connection = sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True)
-        try:
-            with self.assertRaises(sqlite3.OperationalError):
-                connection.execute('CREATE TABLE forbidden_recovery_write (id INTEGER)')
-            for table, audit in self.result['xjz_audit']['tables'].items():
-                count = connection.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0]
-                self.assertEqual(audit['source_rows'], count)
-        finally:
-            connection.close()
 
     def test_deterministic_complete_import(self):
-        again = monsters.build_monsters(CLIENT, CLASSIC, XJZ)
+        again = monsters.build_monsters(CLIENT)
         self.assertEqual(json.dumps(self.result, sort_keys=True), json.dumps(again, sort_keys=True))
 
     def test_output_cannot_overwrite_any_original_source(self):
-        for root in (CLIENT, CLASSIC, XJZ):
+        for root in (CLIENT,):
             with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                monsters.main(['--client', str(CLIENT), '--classic', str(CLASSIC),
-                               '--xjz', str(XJZ), '--output', str(root / 'forbidden.json')])
+                monsters.main(['--client', str(CLIENT), '--output', str(root / 'forbidden.json')])
 
 
 if __name__ == '__main__':

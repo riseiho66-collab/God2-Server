@@ -1,4 +1,6 @@
-"""NEW armor-preserving original TW/CN dual-owner trade UI on a new, owned hidden desktop and port2598.
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
+"""NEW armor-preserving original TW CP950/CP936 dual-owner trade UI on a new, owned hidden desktop and port2598.
 
 No foreground activation, screenshots, process-memory writes or packet injection.
 Only disposable copies have their port changed. Saves are an isolated backup.

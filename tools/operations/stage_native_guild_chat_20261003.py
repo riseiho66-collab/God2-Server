@@ -40,7 +40,7 @@ def qualify():
     counts={'guild_name_update':10,'channel_selection':10,'producer':144,'consumer':80,'dispatch':4,'guild_clear_selected_lifecycle':2,'native_options_and_filter_controls':2}
     p=read(ROOT/c['native_evidence']);require(p['counts']==counts and sha(ROOT/c['native_evidence'])==c['native_evidence_sha256'],'Pinned252 native cases required')
     run=read(ROOT/gate['run']);ui=run['ui']
-    require(run['accepted'] is True and run['runner_exit']==0 and run['candidate_sha256']==c['candidate_sha256'],'Actual original TW/CN acceptance required')
+    require(run['accepted'] is True and run['runner_exit']==0 and run['candidate_sha256']==c['candidate_sha256'],'Actual original TW CP950/CP936 acceptance required')
     for key in ('source_files_unchanged','candidate_unchanged','all_owned_processes_closed','private_files_unchanged','all_private_images_closed',
         'guild_harness_unchanged','frozen_party_harness_unchanged','exclusive_2598_released','runtime_sources_unchanged','frozen_files_unchanged',
         'protected_processes_preserved','desktop_owner_unchanged'):

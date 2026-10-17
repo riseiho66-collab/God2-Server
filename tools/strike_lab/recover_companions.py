@@ -13,13 +13,6 @@ SECTIONS = ('ItemType', 'GOD', 'PET', 'COM', 'NCP', 'GodLevel',
             'FightPetSkill', 'NewFightPet2Skill')
 FAMILY_LABELS = {'GOD': '\u795e\u4ed9\u540d', 'PET': '\u795e\u7378',
                  'COM': '\u7d19\u5a03\u5a03\u5408\u6210\u6230\u5bf5', 'NCP': '\u4e8c\u4ee3\u5bf5'}
-CLASSIC_FILES = (
-    'tools/God2.GameplayContentRecovery/OfficialImmortalCatalogExporter.cs',
-    'tools/God2.GameplayContentRecovery/OfficialBattlePetCatalogExporter.cs',
-    'src/God2.ClassicServer.Runtime/PetLifecycleRuntime.cs',
-)
-XJZ_FILES = ('evidence-combat-pet-v0.md', 'evidence-god-acquisition-rule-v0.md',
-             'evidence-combat-pet-skill-feed-unlock-rule-v0.md')
 # Each mapping is accepted only with an exact current-client message match.
 MESSAGE_CLAIMS = {
     508: ('immortal', 'release_notice', '\u795e\u4ed9\u300e%s\u300f\u5df2\u89e3\u653e'),
@@ -132,7 +125,7 @@ def message_claims(section):
     return claims
 
 
-def build_companions(client_root, classic_root, xjz_root):
+def build_companions(client_root):
     sources = {}
     decoded = {}
     for relative in (GAME, MESSAGES):
@@ -157,26 +150,19 @@ def build_companions(client_root, classic_root, xjz_root):
                                'source_file': GAME,
                                'basis': 'ItemType column 2 section tag and column 3 Chinese label; inspect row descriptions too',
                                'record_count': len(sections[tag]['records'])})
-    legacy = []
-    for label, root, paths in (('classic', classic_root, CLASSIC_FILES), ('xjz', xjz_root, XJZ_FILES)):
-        for path in paths:
-            raw = read_source(root, path)
-            legacy.append({'root_label': label, 'path': path, 'sha256': digest(raw),
-                           'size': len(raw), 'authority': 'reference_only_not_current_rules'})
     return {
         'schema': 'god2-companion-evidence-v1', 'sources': sources,
         'qualification': 'Definition and message-text extraction only; no server or client integration',
         'encoding': 'cp950 display only; raw bytes are authoritative; escaped undecodable bytes are not repaired',
         'classification': classification, 'sections': sections,
         'transition_and_restriction_evidence': message_claims(parse_sections(decoded[MESSAGES], ('SystemMessage',))['SystemMessage']),
-        'legacy_references': legacy,
         'field_policy': 'Zero-based positional fields. No COM/NCP skill-column, flag, requirement, formula or relationship interpretation without consumer proof.',
         'unknown': ['GOD ownership and skill relationships', 'COM/NCP skill-slot relationships and requirements',
                     'summon/growth/fusion packets and formulas', 'PET transport versus other subtype semantics'],
         'next_hooks': [
-            'Inspect Classic OfficialImmortalCatalogExporter.Parse for GOD identity fields, then verify against current client consumer.',
+            'Trace the current Taiwan client GOD loader and identity fields before assigning semantics.',
             'Trace current gamedata COM/NCP loader tail fields to FightPetSkill/NewFightPet2Skill consumers before binding skills.',
-            'Trace current SystemMessage consumers for imported message IDs before implementing mutations; Classic PetLifecycleRuntime transaction contracts are reference entry points.',
+            'Trace current Taiwan SystemMessage consumers for imported message IDs before implementing mutations.',
         ],
     }
 
@@ -188,16 +174,14 @@ def serialize(result):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--client-root', type=Path, required=True)
-    parser.add_argument('--classic-root', type=Path, required=True)
-    parser.add_argument('--xjz-root', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--check', action='store_true', help='Compare existing artifact without writing')
     args = parser.parse_args()
     # Never allow CLI output into a source tree, including symlink aliases.
     target = args.output.resolve()
-    if any(target.is_relative_to(root.resolve()) for root in (args.client_root, args.classic_root, args.xjz_root)):
+    if target.is_relative_to(args.client_root.resolve()):
         parser.error('Output must be outside all source roots')
-    result = build_companions(args.client_root, args.classic_root, args.xjz_root)
+    result = build_companions(args.client_root)
     output = serialize(result)
     if args.check:
         if args.output.read_bytes() != output:

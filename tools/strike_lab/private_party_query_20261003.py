@@ -1,4 +1,4 @@
-"""Two original TW/CN clients, native59 position query, owned hidden desktop only.
+"""Two original TW CP950/CP936 clients, native59 position query, owned hidden desktop only.
 
 Port-only disposable client copies, read-only observation, window-local input.
 No screenshots, memory writes, packet injection or input-desktop switching.

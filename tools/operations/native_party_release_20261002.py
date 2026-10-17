@@ -1,4 +1,4 @@
-"""Scoped party promotion after TW/CN native UI and owned TCP acceptance.
+"""Scoped party promotion after TW CP950/CP936 native UI and owned TCP acceptance.
 
 Reuse executable-only managed lifecycle; never overwrite live player saves.
 """

@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """Exact executable-only promotion, using existing save-preserving lifecycle."""
 import argparse,json
 from pathlib import Path
@@ -35,7 +37,7 @@ def qualify(_receipt=None):
         require([(e['control'],e['mask']) for e in ui['events']]==expected,'Incomplete UI option coverage')
         for event in ui['events']:require(event['after']==event['before']^event['mask'],'Wrong native toggle')
         require(ui['events'][-1]['after']==ui['original_flags'],'Option bits not restored')
-        if page==936:require(data.get('harness_unchanged') and data['harness_sha256']==managed.sha(script),'CN harness changed')
+        if page==936:require(data.get('harness_unchanged') and data['harness_sha256']==managed.sha(script),'TW CP936 harness changed')
         values.append(data)
     require(frozen.hashes()==read(frozen.BASELINE)['source_sha256'],'Frozen chat baseline changed')
     return {'accepted':True,'tw':values[0],'cn':values[1]}

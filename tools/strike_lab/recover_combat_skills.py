@@ -10,8 +10,6 @@ from .omega_assets import decode_csvz
 SOURCE = 'Data2/Patch/Comm/gamedata.csvZ'
 MENU_SOURCE = 'Data/Patch/Skill.csvZ'
 MAX_BYTES = 64 * 1024 * 1024
-CLASSIC = Path('C:/God2Evidence/classic-20260820/files/God2-Classic-Server-Formal-Handoff-20260820-020345/ServerSource')
-XJZ = Path('artifacts/legacy-evidence/xjz-20260820/files/XJZ-Server-Cpp/server_implementation')
 # Anchored literal labels in description columns, not trailing numeric fields.
 LABELS = {
     'mp_cost': r'\u4f7f\u7528\u6d88\u8017\s+([0-9]+)\s+MP',
@@ -105,17 +103,7 @@ def parse_skills(decoded):
             'definitions': definitions}
 
 
-def evidence(root, relative, anchor, conclusion):
-    raw = source_bytes(root / relative)
-    lines = raw.decode('utf-8-sig').splitlines()
-    hits = [i + 1 for i, line in enumerate(lines) if anchor in line]
-    if not hits:
-        raise ValueError('Missing legacy evidence anchor: ' + anchor)
-    return {'path': relative, 'sha256': digest(raw), 'anchor': anchor,
-            'anchor_lines': hits, 'conclusion': conclusion}
-
-
-def build_catalog(client_root, classic_root=CLASSIC, xjz_root=XJZ):
+def build_catalog(client_root):
     sources, decoded = {}, {}
     root = Path(client_root).resolve()
     for relative in (SOURCE, MENU_SOURCE):
@@ -132,23 +120,11 @@ def build_catalog(client_root, classic_root=CLASSIC, xjz_root=XJZ):
         raise ValueError('Unexpected menu table')
     menu_rows = [record(raw, line, offset) for line, offset, raw in indexed_lines(menu)
                  if raw.split(b',')[0].isdigit()]
-    legacy = [
-        evidence(Path(classic_root), 'src/God2.ClassicServer.Runtime/PhysicalSkillDamageRuntime.cs',
-                 'No community-measured physical', 'Community coefficients are not current server authority.'),
-        evidence(Path(classic_root), 'src/God2.ClassicServer.Runtime/MagicSkillDamageRuntime.cs',
-                 'No community-measured magic', 'Legacy evaluator depends on community coefficients; not ported.'),
-        evidence(Path(xjz_root), 'evidence-combat-formula-v0.md', 'packet_evidence_boundary',
-                 'Document explicitly leaves final combat equations unresolved.'),
-        evidence(Path(xjz_root), 'cpp/xjz_evidence_repository.hpp', 'GetSkillBookTemplate(',
-                 'Concrete legacy metadata lookup hook; no current-client runtime ID mapping proved.'),
-        evidence(Path(xjz_root), 'cpp/xjz_evidence_models.hpp', 'struct SkillBookTemplate',
-                 'Legacy metadata contract; current source rows take precedence over legacy counts.'),
-    ]
     return {'schema_version': 1, 'scope': 'current_client_definition_extraction_only',
             'encoding': 'cp950 strict; raw bytes retained', 'sources': sources,
             'column_index_base': 0, 'line_index_base': 1,
             'authority': 'No combat, casting, learning, targeting or EXP rule is enabled.',
-            'skills': result, 'menu_raw_records': menu_rows, 'legacy_evidence': legacy,
+            'skills': result, 'menu_raw_records': menu_rows,
             'counts': {'skill_books': len(result['definitions']), 'menu_rows': len(menu_rows),
                        **{key: sum(key in row['description_claims'] for row in result['definitions'])
                           for key in LABELS}},
@@ -158,7 +134,7 @@ def build_catalog(client_root, classic_root=CLASSIC, xjz_root=XJZ):
                 'Book item ID to runtime skill/action ID, learned levels and cast validation are not recovered.',
                 'Description MP/range/scope is not server validation or proven target geometry.',
                 'Damage, hit, defense, critical, element, randomization and EXP equations are not recovered.'],
-            'next_hook': 'lookup_definition(catalog, item_id) returns source-backed metadata. Main can adapt it to the legacy GetSkillBookTemplate(int32_t item_id) boundary; runtime skill-ID mapping and authoritative cast rules still require consumer evidence.'}
+            'next_hook': 'lookup_definition(catalog, item_id) returns source-backed metadata. Runtime skill-ID mapping and authoritative cast rules still require current Taiwan client consumer evidence.'}
 
 
 def lookup_definition(catalog, item_id):
@@ -178,12 +154,10 @@ def serialize(catalog):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--client-root', required=True, type=Path)
-    parser.add_argument('--classic-root', type=Path, default=CLASSIC)
-    parser.add_argument('--xjz-root', type=Path, default=XJZ)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--item-id', type=int)
     args = parser.parse_args()
-    catalog = build_catalog(args.client_root, args.classic_root, args.xjz_root)
+    catalog = build_catalog(args.client_root)
     # Restrict generated writes to the lane-owned artifact, never source assets.
     target = Path(__file__).resolve().parents[2] / 'artifacts/world-atlas/combat-skills.json'
     if args.output.resolve() != target.resolve():

@@ -26,7 +26,7 @@ def qualify():
     require(sha(ROOT/'tests/research/test_native_guild_panel_server_20261003.py')==tcp['test_sha256'] and sha(HERE/'tcp-v04.log')==tcp['log_sha256'],'TCP source/log changed')
     require('Ran 12 tests' in (HERE/'tcp-v04.log').read_text('utf-8'),'All panel/leave/stale/order TCP tests required')
     run=read(ROOT/'artifacts/playtests/private-native-guild-panel-20261003-04/run-result.json');ui=run['ui']
-    require(run['accepted'] and run['candidate_sha256']==sha(CANDIDATE) and run['runner_exit']==0,'TW/CN live acceptance required')
+    require(run['accepted'] and run['candidate_sha256']==sha(CANDIDATE) and run['runner_exit']==0,'TW CP950/CP936 live acceptance required')
     for key in ('source_files_unchanged','candidate_unchanged','all_owned_processes_closed','private_files_unchanged','all_private_images_closed','runtime_sources_unchanged','frozen_files_unchanged','protected_processes_preserved','desktop_owner_unchanged','exclusive_2598_released'):
         require(run.get(key) is True,'Live guard missing: '+key)
     events=ui['native_panel_events'];require(len(events)==2 and {e['locale'] for e in events}=={950,936},'Both client locales required')

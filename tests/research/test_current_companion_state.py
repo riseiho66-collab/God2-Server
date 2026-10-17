@@ -7,7 +7,6 @@ bytes or explicit synthetic memory probes, never invented gameplay records.
 import hashlib
 import json
 from pathlib import Path
-import re
 import struct
 import sys
 import unittest
@@ -116,36 +115,21 @@ class CurrentCompanionStateTests(unittest.TestCase):
         self.assertEqual(len(nonstack), len(allowed))
         return expected
 
-    def test_historical_source_frame_and_original_record_boundaries(self):
-        provenance = json.loads((ROOT / 'tests/fixtures/recovered-world-entry.json').read_text())
-        source = Path(provenance['legacy_source']).read_bytes()
-        self.assertEqual(hashlib.sha256(source).hexdigest(), provenance['legacy_source_sha256'])
-
-        def field(name):
-            return bytes.fromhex(re.search(name + r'\s*=\s*Convert.FromHexString\(\s*"([0-9A-F]+)',
-                                            source.decode())[1])
-
-        stream = field(provenance['legacy_stream_field'])
-        self.assertEqual(hashlib.sha256(stream).hexdigest(), provenance['legacy_stream_sha256'])
-        wire = stream[473:1225]
-        self.assertEqual(hashlib.sha256(wire).hexdigest(),
-                         '32cea8e0a2765036c4dd495179abfd045baaa51a2dfefbb0fe8f33d00ff171ef')
-        key = field(provenance['legacy_key_field'])
-        plain, previous = bytearray(wire), provenance['legacy_initial_feedback']
-        for i in range(2, len(plain)):
-            previous = key[(i - 2) & 255] ^ ((plain[i] + 3 - previous) & 255)
-            plain[i] = previous
-        self.assertEqual(struct.unpack_from('<H', plain)[0], len(plain))
-        self.assertEqual(sum(b + 60 for b in plain[:-1]) & 255, plain[-1])
-        vm, at = self.vm(), 2
+    def test_historical_fixture_hash_and_original_record_boundaries(self):
+        fixture = json.loads((ROOT / 'tests/fixtures/recovered-world-state.json').read_text())
+        prefix = bytes.fromhex(fixture['logical_hex'])
+        self.assertEqual(hashlib.sha256(prefix).hexdigest(), fixture['logical_sha256'])
+        self.assertEqual(len(HISTORICAL_RECORD), RECORD_SIZE)
+        logical = prefix + HISTORICAL_RECORD
+        vm, at = self.vm(), 0
         for opcode, length in ((0x2b, 21), (0x2c, 61), (0x24, 17), (0x39, 17),
                                (0x22, 25), (0x31, 29)):
-            self.assertEqual(plain[at], opcode)
+            self.assertEqual(logical[at], opcode)
             target = struct.unpack_from('<I', self.image, 0x1324 + 4 * opcode)[0]
             self.assertEqual(self.call(vm, target - BASE), length)
             at += length
-        self.assertEqual(at, 172)
-        self.assertEqual(plain[143:172], HISTORICAL_RECORD)
+        self.assertEqual(at, len(logical))
+        self.assertEqual(logical[len(prefix):], HISTORICAL_RECORD)
         self.assertEqual(decode_deity_status(HISTORICAL_RECORD).opaque_13_16, b'\x04\x01\0\0')
         self.check_native(vm, state_with_keys([0x10, 0x11, 0x12]), HISTORICAL_RECORD)
 

@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """NEW full20 foreign bank transport plus accepted armor12/MED20 regression.
 
 No foreground activation, screenshots, process-memory writes or packet injection.

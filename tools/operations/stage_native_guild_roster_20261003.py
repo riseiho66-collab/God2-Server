@@ -25,7 +25,7 @@ def qualify():
     tcp=read(HERE/'tcp-v02.json');require(tcp['state']=='PASSED' and tcp['exit']==0 and tcp['candidate_sha256']==sha(CANDIDATE),'ActualTCP proof required')
     require(sha(ROOT/'tests/research/test_native_guild_roster_server_20261003.py')==tcp['test_sha256'] and sha(HERE/'tcp-v02.log')==tcp['log_sha256'],'TCP source/log changed')
     run=read(ROOT/'artifacts/playtests/private-native-guild-roster-20261003-01/run-result.json');ui=run['ui']
-    require(run['accepted'] and run['candidate_sha256']==sha(CANDIDATE) and run['runner_exit']==0,'TW/CN live acceptance required')
+    require(run['accepted'] and run['candidate_sha256']==sha(CANDIDATE) and run['runner_exit']==0,'TW CP950/CP936 live acceptance required')
     for key in ('source_files_unchanged','candidate_unchanged','all_owned_processes_closed','private_files_unchanged','all_private_images_closed','runtime_sources_unchanged','frozen_files_unchanged','protected_processes_preserved','desktop_owner_unchanged','exclusive_2598_released'):
         require(run.get(key) is True,'Live guard missing: '+key)
     events=ui['native_roster_cache_events'];require(len(events)==5,'Five original-client cache observations required')

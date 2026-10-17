@@ -1,4 +1,6 @@
-"""NEW CUSTOM0069 full20 two original TW/CN clients; source-only preparation.
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
+"""NEW CUSTOM0069 full20 two original TW CP950/CP936 clients; source-only preparation.
 
 No foreground activation, screenshots, process-memory writes or packet injection.
 Only disposable copies have their port changed. Saves are an isolated backup.

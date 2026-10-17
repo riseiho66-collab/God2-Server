@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """CUSTOM-0071 release helper with frozen build/native/current-client gates.
 
 Fail closed unless the exact root-approved candidate/source/test/UI proofs match.
@@ -277,7 +279,7 @@ def ui_gate(result,sources):
     require(ui["scenario_counts"]==fixture["expected_counts"]==counts and fixture["source_contract"]==sources and
         fixture["candidate_sha256"]==PIN and fixture["formal_owned_weapon_transfers_enabled"] is False,"Actual fixed coverage/config contract differs")
     owners=fixture["owners"]
-    require({owner["identity"]:(owner["account"],owner["page"]) for owner in owners}==OWNER_CONTRACT,"Actual TW/CN owners differ")
+    require({owner["identity"]:(owner["account"],owner["page"]) for owner in owners}==OWNER_CONTRACT,"Actual TW CP950/CP936 owners differ")
     definitions={};coverage=set();cancels=set();med=set();refusals=set();receipts=set();seen={key:0 for key in counts};relogin=None
     for owner in owners:
         require(len(owner["phases"])==2,"Two fixture generations required")

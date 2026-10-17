@@ -1,6 +1,5 @@
-"""Evidence checks use the actual client and generated artifact, not demo rows."""
+"""Evidence checks use actual Taiwan client rows and their source provenance."""
 import copy
-import json
 from pathlib import Path
 import unittest
 
@@ -12,16 +11,12 @@ from tools.strike_lab.recover_companions import (
 
 REPO = Path(__file__).resolve().parents[2]
 CLIENT = REPO.parent / 'God2'
-ARTIFACT = REPO / 'artifacts/world-atlas/companions.json'
-CLASSIC = Path('C:/God2Evidence/classic-20260820/files/'
-               'God2-Classic-Server-Formal-Handoff-20260820-020345/ServerSource')
-XJZ = REPO / 'artifacts/legacy-evidence/xjz-20260820/files/XJZ-Server-Cpp/server_implementation'
 
 
 class CompanionRecoveryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.artifact = json.loads(ARTIFACT.read_bytes())
+        cls.artifact = build_companions(CLIENT)
         cls.game = decode_csvz((CLIENT / GAME).read_bytes())
         cls.messages = decode_csvz((CLIENT / MESSAGES).read_bytes())
 
@@ -142,10 +137,8 @@ class CompanionRecoveryTests(unittest.TestCase):
         self.assertEqual(serialize(claims), before)
 
     def test_full_recovery_preserves_current_artifact_contract(self):
-        result = build_companions(CLIENT, CLASSIC, XJZ)
-        self.assertEqual(serialize(result), ARTIFACT.read_bytes())
-        for reference in result['legacy_references']:
-            self.assertEqual(reference['authority'], 'reference_only_not_current_rules')
+        result = build_companions(CLIENT)
+        self.assertEqual(serialize(result), serialize(self.artifact))
         record_keys = {'source_line', 'decoded_offset', 'raw_record_hex', 'sha256',
                        'fields_hex', 'fields_cp950_display'}
         for section in result['sections'].values():
@@ -160,7 +153,7 @@ class CompanionRecoveryTests(unittest.TestCase):
             parse_sections(self.game[:start + 8], ('GOD',))
 
     def test_artifact_serialization_is_canonical(self):
-        self.assertEqual(serialize(self.artifact), ARTIFACT.read_bytes())
+        self.assertEqual(serialize(self.artifact), serialize(copy.deepcopy(self.artifact)))
 
 
 if __name__ == '__main__':

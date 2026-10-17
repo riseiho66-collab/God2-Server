@@ -1,4 +1,6 @@
-"""NEW whole armor bank transport and MED regression; original hidden TW/CN clients.
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
+"""NEW whole armor bank transport and MED regression; original hidden TW CP950/CP936 clients.
 
 No foreground activation, screenshots, process-memory writes or packet injection.
 Only disposable copies have their port changed. Saves are an isolated backup.

@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """CUSTOM-0069 immutable qualify, schema44->45 clone stage and explicit apply.
 
 Do not run a mode until root authorizes it. Stage modifies only a new owned
@@ -94,7 +96,7 @@ def qualify():
     ui=result["ui"]
     require(ui["accepted"] is True and ui["desktop_unchanged"] is True and ui["all_clients_closed"] is True and
         ui.get("unrelated_saved_rows_preserved") is True,"UI scope failed")
-    require([(row["identity"],row["language"]) for row in ui["final"]["native"]]==[(4,950),(5,936)],"TW/CN owner coverage absent")
+    require([(row["identity"],row["language"]) for row in ui["final"]["native"]]==[(4,950),(5,936)],"TW CP950/CP936 owner coverage absent")
     require(ui.get("scenario_counts")==UI_COUNTS,"Exact live two-direction scenario counts differ")
     for operation,count in UI_COUNTS.items():require(sum(event["operation"]==operation for event in ui["events"])==count,"Actual UI event coverage differs: "+operation)
     settlements=[event for event in ui["events"] if event["operation"]=="settle"]
@@ -127,7 +129,7 @@ def qualify():
     expected_terminal={str(pid) for pid in old_pids+new_pids+[result["server_pid"],result["runner_pid"]]}
     require(len(expected_terminal)==6 and set(terminal)==expected_terminal,"All six owned PID terminal proofs required")
     require([(row["identity"],row["native"]["language"],row["native"]["pid"]) for row in relogin["native"]]==
-        [(4,950,new_pids[0]),(5,936,new_pids[1])],"Actual new-PID TW/CN observations differ")
+        [(4,950,new_pids[0]),(5,936,new_pids[1])],"Actual new-PID TW CP950/CP936 observations differ")
     wallets={row[0]:row[1] for row in relogin["after"]["character_trade_wallets"]}
     for observation in relogin["native"]:
         owner=observation["identity"];cells=observation["full50"]

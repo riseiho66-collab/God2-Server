@@ -39,7 +39,7 @@ def qualify():
     for path,digest in r["frozen_files_after"].items():require(sha(Path(path))==digest,"Native evidence changed: "+path)
     require(r["owned_pid_terminal"] and all(v["pid_exists"] is False for v in r["owned_pid_terminal"].values()),"Native cleanup incomplete")
     u=r["ui"];require(u["accepted"] is True and u["desktop_unchanged"] and u["all_clients_closed"],"UI scope failed")
-    require([(n["identity"],n["language"]) for n in u["final"]["native"]]==[(4,950),(5,936)],"TW/CN owner coverage absent")
+    require([(n["identity"],n["language"]) for n in u["final"]["native"]]==[(4,950),(5,936)],"TW CP950/CP936 owner coverage absent")
     armor=[e for e in u["events"] if e["operation"]=="armor_committed"]
     med=[e for e in u["events"] if e["operation"] in ("0x63","0x64","0x65")]
     require(len(armor)==12 and len(med)==20,"Actual mutation coverage differs")

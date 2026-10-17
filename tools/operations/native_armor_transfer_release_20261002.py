@@ -184,14 +184,14 @@ def run01_gate(data):
     events=u['events'];require(len(events)==28 and u.get('actual_mutations')==24 and u.get('actual_refusals')==4,'Native28/24 counts differ')
     for identity,page in ((4,950),(5,936)):
         own=[e for e in events if (e.get('identity'),e.get('page'))==(identity,page)]
-        require(len(own)==14 and sum(e.get('refusal') is True for e in own)==2,'Each TW/CN owner needs12mutations+2refusals')
+        require(len(own)==14 and sum(e.get('refusal') is True for e in own)==2,'Each TW CP950/CP936 owner needs12mutations+2refusals')
         require(sum(e.get('kind')=='28' and not e.get('refusal',False) for e in own)==10 and
                 sum(e.get('kind')=='24' and not e.get('refusal',False) for e in own)==2,'Each native opcode direction coverage differs')
         for e in own:
             require('refusal' not in e or type(e['refusal']) is bool,'Refusal flag must be a native boolean')
             require(e.get('other_owner_unchanged') is True and e.get('unrelated_tables_unchanged') is True and e.get('full20_conserved') is True,'Owner or instance conservation failed')
             require(native_saved_matches(e['after']['native'],e['after']['saved']),'Native event differs from full20 durable state')
-    relog=u['relogin'];require(len(relog)==2 and {(e['identity'],e['page']) for e in relog}=={(4,950),(5,936)},'TW/CN relogin coverage missing')
+    relog=u['relogin'];require(len(relog)==2 and {(e['identity'],e['page']) for e in relog}=={(4,950),(5,936)},'TW CP950/CP936 relogin coverage missing')
     for e in relog:
         require(e.get('owner34_full20_restored') is True and e.get('durable_revisions_unchanged') is True and
                 set(e['saved'])=={str(i) for i in range(34)} and
@@ -220,7 +220,7 @@ def run02_gate(data):
     initial,final=u['initial'],u['final']
     identities=[(e['identity'],e['language']) for e in final['native']]
     require(identities==[(4,950),(5,936)] and
-            [(e['identity'],e['language']) for e in initial['native']]==identities,'Bank TW/CN owners differ')
+            [(e['identity'],e['language']) for e in initial['native']]==identities,'Bank TW CP950/CP936 owners differ')
     require(len(initial['instances'])==2 and initial['instances']==u['final_instances'],
             'Bank changed complete armor/weapon/gem metadata, revisions or native state')
     tables={'character_armor_slot_metadata','character_weapon_slot_metadata','character_teleport_gem_metadata'}

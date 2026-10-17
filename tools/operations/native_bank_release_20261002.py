@@ -67,7 +67,7 @@ def native_gate():
         require(u.get(key) is True,'Missing native worker guard: '+key)
     require(u['rendered_pixels_tested'] is False,'Native observation scope changed')
     expected=['NPC37_bank_open','deposit61','withdraw62','close39','NPC37_bank_open','withdraw62']*2
-    require([e['operation'] for e in u['events']]==expected,'Incomplete TW/CN native bank flow')
+    require([e['operation'] for e in u['events']]==expected,'Incomplete TW CP950/CP936 native bank flow')
     require({r['language'] for r in u['initial']['native']}=={950,936},'Both native languages required')
     npcs=u.get('qualified_native_npc',[])
     require(len(npcs)==2 and all(n['identity']==3793 and n['renderer_active'] is True and

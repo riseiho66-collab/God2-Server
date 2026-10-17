@@ -515,7 +515,7 @@ def worker(args):
         require(client['handle'], 'READONLY_PROCESS_HANDLE_REQUIRED')
         client['ui'] = base.peer.find_ui(client['handle'], identity, (0, 3, 4))
         language, sub = struct.unpack('<HH', base.peer.exact(client['handle'], 0x59dfd8, 4))
-        require(language == 4 and ((sub == 2) == (page == 936)), 'NATIVE_TW_CN_LOCALE_MISMATCH')
+        require(language == 4 and ((sub == 2) == (page == 936)), 'NATIVE_TW_CP950_CP936_LOCALE_MISMATCH')
         current = snapshot(database, identity)
         wait_until(lambda:len([line for line in text_log().splitlines() if contract['restore_marker'] in line and
             re.search(r'\bcharacter=' + str(identity) + r'\b',line)]) > restore_before,

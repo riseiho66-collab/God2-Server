@@ -1,4 +1,6 @@
-"""NEW full20 original TW/CN trade with native registered actor held-press.
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
+"""NEW full20 original TW CP950/CP936 trade with native registered actor held-press.
 
 No foreground activation, screenshots, process-memory writes or packet injection.
 Only disposable copies have their port changed. Saves are an isolated backup.

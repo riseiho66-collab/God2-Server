@@ -1,4 +1,4 @@
-"""Two current port-only clients on an owned hidden desktop, per-exe TW/CN locale.
+"""Two current port-only clients on an owned hidden desktop, per-exe TW CP950/CP936 locale.
 
 The existing launcher-supported LEProc/per-image profile selects each language.
 No global launcher setting/profile/client is changed. All saves and characters

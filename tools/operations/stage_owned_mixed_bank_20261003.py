@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """CUSTOM-0070 immutable qualify, schema45->46 clone stage and explicit apply.
 
 Do not run a mode until root authorizes it. Stage modifies only a new owned
@@ -211,7 +213,7 @@ def ui_gate(result,sources):
     require(qualified["current_client_sha256"]==sha(managed.CLIENT) and qualified["weapon_source_rows"]==1259 and qualified["weapon_records_sha256"]==WEAPON_CACHE_PIN and len(qualified["regions"])==28,"Actual native code/source qualification absent")
     require(ui.get("matrix_counts")=={"4":UI_COUNTS,"5":UI_COUNTS},"Each language actual36pair/12empty/12deposit/12withdraw coverage missing")
     languages={4:950,5:936}
-    require([(row["identity"],row["language"]) for row in ui["final"]["native"]]==list(languages.items()),"TW/CN owner coverage absent")
+    require([(row["identity"],row["language"]) for row in ui["final"]["native"]]==list(languages.items()),"TW CP950/CP936 owner coverage absent")
     mixed=[event for event in ui["events"] if event["operation"]=="mixed_committed"]
     transports=[event for event in ui["events"] if event["operation"]=="transport_committed"]
     require(len(mixed)==96 and len(transports)==48,"Exact actual operation count differs")

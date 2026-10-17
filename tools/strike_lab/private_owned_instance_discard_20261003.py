@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """NEW CUSTOM0071 whole owned typed27 discard UI acceptance; preparation only.
 
 No foreground activation, screenshots, process-memory writes or packet injection.
@@ -476,7 +478,7 @@ def worker(args):
             c['hwnd']=wait_until(lambda:base.peer.window_for(process.pid),35,'OWNED_WINDOW_MISSING');hwnd=c['hwnd'];time.sleep(12);click(hwnd,512,464);time.sleep(4)
             bound='RECOVERED_ACCOUNT_BOUND account_id='+str(c['account']);previous=log.read_text('utf-8',errors='replace').count(bound);click(hwnd,437,232);type_ascii(hwnd,owner['username']);click(hwnd,437,263);type_ascii(hwnd,'labtest2345');click(hwnd,452,304)
             wait_until(lambda:log.read_text('utf-8',errors='replace').count(bound)>previous,35,'PRIVATE_LOGIN_FAILED');time.sleep(4);click(hwnd,330,145);click(hwnd,452,413);time.sleep(4);click(hwnd,330,150);click(hwnd,452,376);time.sleep(4);click(hwnd,452,370);time.sleep(12)
-            c['handle']=base.peer.kernel.OpenProcess(0x1010,False,process.pid);require(c['handle'],'READONLY_PROCESS_HANDLE_REQUIRED');c['ui']=base.peer.find_ui(c['handle'],c['identity'],(0,3,4));lang,sub=struct.unpack('<HH',exact(c,0x59dfd8,4));require(lang==4 and (sub==2)==(c['page']==936),'TW_CN_NATIVE_LANGUAGE_REQUIRED')
+            c['handle']=base.peer.kernel.OpenProcess(0x1010,False,process.pid);require(c['handle'],'READONLY_PROCESS_HANDLE_REQUIRED');c['ui']=base.peer.find_ui(c['handle'],c['identity'],(0,3,4));lang,sub=struct.unpack('<HH',exact(c,0x59dfd8,4));require(lang==4 and (sub==2)==(c['page']==936),'TW_CP950_CP936_NATIVE_LANGUAGE_REQUIRED')
             lines=[line for line in log.read_text('utf-8',errors='replace').splitlines() if bound+';' in line];c['session']=int(re.search(r'session_id=(\d+)',lines[-1]).group(1));wait_until(lambda:consistent(c),10,'INITIAL_FULL50_FULL20_NOT_PROJECTED');return c
         for owner in fixture['owners']:launch(owner)
         result['initial']={'db':saved(database),'native':[snap(c) for c in clients]};save(True)

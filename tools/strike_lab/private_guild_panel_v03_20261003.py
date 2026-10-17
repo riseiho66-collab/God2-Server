@@ -1,4 +1,4 @@
-"""Two original TW/CN clients, native guild chat on disposable owned membership.
+"""Two original TW CP950/CP936 clients, native guild chat on disposable owned membership.
 
 Port-only disposable client copies, read-only observation, window-local input.
 No screenshots, memory writes, packet injection or input-desktop switching.

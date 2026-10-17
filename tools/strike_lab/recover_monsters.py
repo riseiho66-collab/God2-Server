@@ -1,27 +1,13 @@
-"""Deterministic monster definition extraction and bounded legacy evidence audit."""
+"""Deterministic Taiwan client monster definition extraction; no gameplay activation."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
-import sqlite3
 
 from .omega_assets import decode_csvz
 from .world_atlas import digest
 
 LIMIT = 16 * 1024 * 1024
 CLIENT_TABLES = ('Data2/Patch/eny.csvZ', 'Data2/Patch/FightEny.csvZ')
-CLASSIC_JSON = (
-    'db/imports/official/monsters/monsters.official.json',
-    'db/imports/official/spawns/spawns.official.json',
-    'db/imports/live/monsters/monsters.verified.latest.json',
-)
-CLASSIC_CODE = (
-    'database/schema/295_add_monster_spawn_drop_design_candidates.sql',
-    'database/schema/299_apply_first_wave_monster_spawn_server_design.sql',
-    'src/God2.ClassicServer.Persistence/MariaDbCanonicalCatalogRepositories.cs',
-)
-CAPTURE_TABLES = ('monster_stat_capture', 'monster_skill_capture',
-                  'map_encounter_sample', 'monster_drop_sample')
 UNKNOWN = ('server_template_id', 'level', 'hp', 'mp', 'damage', 'defense',
            'map', 'spawn_x', 'spawn_y', 'spawn_count', 'respawn', 'drops',
            'constitution', 'strength', 'intelligence', 'speed',
@@ -107,91 +93,34 @@ def parse_definition(decoded, kind):
             'records_imported': len(rows), 'records': rows}
 
 
-def audit_json(root, relative, retain_records=True):
-    raw, source = read_source(root, relative)
-    data = json.loads(raw)
-    records = data['records']
-    if not isinstance(records, list) or data['recordCount'] != len(records):
-        raise ValueError('Legacy record denominator mismatch')
-    result = {'source': source, 'declared_records': data['recordCount'],
-              'observed_records': len(records),
-              'metadata': {k: v for k, v in data.items() if k != 'records'},
-              'authority': 'legacy_claim_only; no current-client identity promotion'}
-    if retain_records:
-        result['raw_records'] = records
-    return result
-
-
-def audit_xjz(root):
-    path = (Path(root).resolve() / 'xjz_evidence.sqlite').resolve()
-    if not path.is_relative_to(Path(root).resolve()):
-        raise ValueError('Database escapes input root')
-    # URI read-only mode also fails if the source is absent; never creates a DB.
-    connection = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
-    try:
-        connection.execute('PRAGMA query_only=ON')
-        connection.row_factory = sqlite3.Row
-        results = {}
-        for table in ('monster_visual_template',) + CAPTURE_TABLES:
-            count = connection.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0]
-            entry = {'source_rows': count}
-            if table in CAPTURE_TABLES:
-                if count > 32767:
-                    raise ValueError('Capture table exceeds import bound')
-                records = [dict(r) for r in connection.execute('SELECT * FROM ' + table)]
-                entry['raw_records'] = sorted(records, key=lambda r: json.dumps(r, sort_keys=True))
-                entry['authority'] = 'legacy_sample; unbound to current definitions'
-            results[table] = entry
-        with path.open('rb') as stream:
-            sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
-        return {'source': {'file': 'xjz_evidence.sqlite', 'sha256': sha256},
-                'mode': 'ro', 'tables': results}
-    finally:
-        connection.close()
-
-
-def build_monsters(client, classic, xjz):
+def build_monsters(client):
     tables = []
     for relative, kind in zip(CLIENT_TABLES, ('field', 'battle')):
         raw, source = read_source(client, relative)
         tables.append({'source': source, **parse_definition(decode_csvz(raw), kind)})
-    legacy = [audit_json(classic, p, i != 0) for i, p in enumerate(CLASSIC_JSON)]
-    code = []
-    for relative in CLASSIC_CODE:
-        raw, source = read_source(classic, relative)
-        code.append({'source': source, 'raw_utf8': raw.decode('utf-8-sig'),
-                     'authority': 'legacy_design_or_consumer; not official placement evidence'})
-    xjz_audit = audit_xjz(xjz)
     return {
         'schema': 'god2-monster-evidence-v1',
         'qualification': 'Definition extraction only; no runtime/server/client integration',
         'policy': 'Current client definitions win. No implicit field-index/battle-code join. '
-                  'Position-labelled visual columns remain uninterpreted, never spawn coordinates. '
-                  'Legacy SQL is retained verbatim, never executed or promoted.',
+                  'Position-labelled visual columns remain uninterpreted, never spawn coordinates.',
         'counts': {'field_definitions': tables[0]['records_imported'],
                    'battle_definitions': tables[1]['records_imported'],
-                   'classic_template_source_rows': legacy[0]['observed_records'],
-                   'classic_spawn_candidate_source_rows': legacy[1]['observed_records'],
-                   'classic_level_claim_source_rows': legacy[2]['observed_records'],
                    'spawn_instances_imported': 0, 'runtime_integrated': 0},
-        'definition_tables': tables, 'legacy_json': legacy, 'legacy_code': code,
-        'xjz_audit': xjz_audit, 'spawn_instances': [], 'unknown_fields': list(UNKNOWN),
-        'next_hook': {'source': CLASSIC_CODE[2],
-                      'query_contains': 'FROM `god2_game`.`monster_spawns` WHERE `enabled`=1',
-                      'required_evidence': 'Read-only export of that query with each row source policy; '
-                      'prove map/template bindings before creating C++/Lua spawn instances.'},
+        'definition_tables': tables, 'spawn_instances': [], 'unknown_fields': list(UNKNOWN),
+        'next_hook': {'required_evidence': 'Trace current Taiwan client monster consumers and prove '
+                      'map/template bindings before creating C++/Lua spawn instances.'},
     }
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('client', 'classic', 'xjz', 'output'):
+    for name in ('client', 'output'):
         parser.add_argument('--' + name, type=Path, required=True)
     args = parser.parse_args(argv)
     output = args.output.resolve()
-    if any(output.is_relative_to(root.resolve()) for root in (args.client, args.classic, args.xjz)):
-        parser.error('Output must be outside all original/legacy roots')
-    result = build_monsters(args.client, args.classic, args.xjz)
+    if output.is_relative_to(args.client.resolve()):
+        parser.error('Output must be outside the original Taiwan client root')
+    result = build_monsters(args.client)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + '\n',
                       encoding='ascii', newline='\n')

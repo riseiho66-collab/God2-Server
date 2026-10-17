@@ -6,7 +6,6 @@ This tests field consumption, not resource presence, live world or appearance.
 import hashlib
 import json
 from pathlib import Path
-import re
 import struct
 import subprocess
 import unittest
@@ -40,24 +39,8 @@ class CurrentWorldEntryTests(unittest.TestCase):
         return bytes.fromhex(subprocess.check_output(
             [str(self.binary),'--dump',str(local_id)],text=True,timeout=5).strip())
 
-    def test_retained_source_checksum_record_and_hashes(self):
+    def test_retained_body_hash_and_current_record_size(self):
         f=self.fixture
-        source=Path(f['legacy_source']).read_bytes()
-        self.assertEqual(hashlib.sha256(source).hexdigest(),f['legacy_source_sha256'])
-        def constant(name):
-            match=re.search(name+r'\s*=\s*Convert.FromHexString\(\s*"([0-9A-F]+)',source.decode())
-            self.assertIsNotNone(match)
-            return bytes.fromhex(match.group(1))
-        stream=constant(f['legacy_stream_field']);key=constant(f['legacy_key_field'])
-        self.assertEqual(hashlib.sha256(stream).hexdigest(),f['legacy_stream_sha256'])
-        offset=f['source_frame_offset'];wire=stream[offset:offset+f['source_frame_size']]
-        self.assertEqual(hashlib.sha256(wire).hexdigest(),f['source_frame_sha256'])
-        plain=bytearray(wire);previous=f['legacy_initial_feedback']
-        for i in range(2,len(plain)):
-            previous=key[(i-2)&255]^((plain[i]+3-previous)&255);plain[i]=previous
-        self.assertEqual(plain[-1],sum(b+0x3c for b in plain[:-1])&255)
-        start=f['decoded_record_offset']
-        self.assertEqual(plain[start:start+f['logical_record_size']],b'\x2a'+self.body)
         self.assertEqual(hashlib.sha256(self.body).hexdigest(),f['body_sha256'])
         size_fn=struct.unpack_from('<I',self.image,0x1324+4*0x2a)[0]-routes.BASE
         self.assertEqual(self.image[size_fn:size_fn+6],b'\xb8\x25\x00\x00\x00\xc3')

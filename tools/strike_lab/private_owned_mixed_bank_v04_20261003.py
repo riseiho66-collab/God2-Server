@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """NEW CUSTOM0070 native65 six-family custody UI acceptance; preparation only.
 
 No foreground activation, screenshots, process-memory writes or packet injection.

@@ -1,4 +1,6 @@
-"""Armor source-only Application startup and original TW/CN regression.
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
+"""Armor source-only Application startup and original TW CP950/CP936 regression.
 
 NEW wrapper reuses the frozen original bank-swap20 UI workflow verbatim. Bank
 acceptance is existing-gameplay regression, NOT armor equip/unequip acceptance.

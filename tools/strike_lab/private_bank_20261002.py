@@ -1,4 +1,4 @@
-"""Original TW/CN bank money UI on a new, owned hidden desktop and port2598.
+"""Original TW CP950/CP936 bank money UI on a new, owned hidden desktop and port2598.
 
 No foreground activation, screenshots, process-memory writes or packet injection.
 Only disposable copies have their port changed. Saves are an isolated backup.

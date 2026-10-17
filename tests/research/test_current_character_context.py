@@ -7,9 +7,7 @@ execute unmodified. Synthetic state is not a live world acceptance claim.
 import hashlib
 import os
 from pathlib import Path
-import re
 import shutil
-import sqlite3
 import struct
 import subprocess
 import tempfile
@@ -25,16 +23,6 @@ ROOT, BASE, SP, NET = routes.ROOT, routes.BASE, routes.SP, routes.NET
 MAIN, CONTEXT_PAGE, CLOCK = 0x3800000, 0x4000000, 0x4100000
 RETURN = routes.STACK + 0x3ff0
 CONTEXT = CONTEXT_PAGE + 4096 - 124
-CLASSIC = Path('C:/God2Evidence/classic-20260820/files/'
-               'God2-Classic-Server-Formal-Handoff-20260820-020345/ServerSource')
-LEGACY = (
-    ('OfficialClientLoginProtocolFrames.cs',
-     'bee45cfe9d1d775f8886aef23edd8dc74a1645a6381e47f2242597ca42cff890',
-     'CharacterCreationBootstrapDecodedTemplate'),
-    ('OfficialClientWorldProtocolFrames.cs',
-     'cb65fa7a8873b0d299a1727d4a388072494c2323168669a5dddad3dc39311bca',
-     'CurrentCreateProfilePlayerSpawnDecoded'),
-)
 
 
 def build_fixture(directory):
@@ -254,36 +242,7 @@ class CurrentCharacterContextTests(unittest.TestCase):
         # Only the opcode is mapped; any attempted body access fails.
         self.run_to(vm, 0x68b4c, 0x6b517)
 
-    def test_retained_classic_templates_are_exact_but_not_current_world_schemas(self):
-        for filename, digest, symbol in LEGACY:
-            with self.subTest(symbol=symbol):
-                source = (CLASSIC / 'src/God2.ClassicServer.Runtime' / filename).read_bytes()
-                self.assertEqual(hashlib.sha256(source).hexdigest(), digest)
-                match = re.search(symbol + r'\s*=\s*Convert.FromHexString\(\s*"([0-9A-F]+)"',
-                                  source.decode('utf-8-sig'))
-                self.assertIsNotNone(match)
-                plain = bytes.fromhex(match.group(1))
-                self.assertEqual(plain[:3], b'\x80\x00\x1f')
-                self.assertEqual(len(plain), 128)
-                self.assertEqual(sum(value + 0x3c for value in plain[:-1]) & 255, plain[-1])
-                self.assertEqual(self.cpp(plain[2:-1]), plain[3:-1])
-                self.continuation(plain[3:-1])
-                if symbol == 'CurrentCreateProfilePlayerSpawnDecoded':
-                    # Retained literal differs from the adjacent capture-hash
-                    # claim. Pin what is actually present, not the stale claim.
-                    self.assertEqual(hashlib.sha256(plain).hexdigest(),
-                                     '59d0625cf2a013da19891bd43d8f47124de7ba2f384569e240bb676062df8456')
-                    self.assertNotEqual(hashlib.sha256(plain).hexdigest(),
-                                        'ccc098f41f68d2c2836951935fba067900ceb93a9ff98433fe9e3b2392e8caf8')
 
-    def test_xjz_has_no_retained_login_create_or_profile_packet_samples(self):
-        path = (ROOT / 'artifacts/legacy-evidence/xjz-20260820/files/'
-                'XJZ-Server-Cpp/server_implementation/xjz_evidence.sqlite')
-        with sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True) as db:
-            db.execute('PRAGMA query_only=ON')
-            for table in ('account_login_sync_sample', 'character_create_sample',
-                          'character_profile_sync_sample'):
-                self.assertEqual(db.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0], 0)
 
 
 if __name__ == '__main__':

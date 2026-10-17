@@ -1,3 +1,5 @@
+# Legacy receipt identifiers retain their schema spelling; both cases are the
+# Taiwan client using Traditional CP950 or Simplified CP936, not regional protocols.
 """Source-only EQU/TEQ promotion. No armor instances or equipment route grants.
 
 Migrate/import in place after a no-player stop. Never replace the live database
@@ -174,7 +176,7 @@ def qualify():
                 (e['after']['native']['identity'],e['after']['native']['language'])) for e in mutations),
             'Native UI mutations incomplete')
     languages={e['native']['language'] for e in ui['events'] if e['operation']=='NPC37_bank_open'}
-    require(languages=={950,936},'Both TW and CN native UI regression required')
+    require(languages=={950,936},'Both Traditional/Simplified TW native UI regression required')
     return info
 
 

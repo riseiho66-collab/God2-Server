@@ -1,4 +1,4 @@
-"""Two original TW/CN clients, prefix/selected native party chat and59 query.
+"""Two original TW CP950/CP936 clients, prefix/selected native party chat and59 query.
 
 Port-only disposable client copies, read-only observation, window-local input.
 No screenshots, memory writes, packet injection or input-desktop switching.

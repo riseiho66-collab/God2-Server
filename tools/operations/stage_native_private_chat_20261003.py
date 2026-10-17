@@ -1,4 +1,4 @@
-"""CUSTOM0074 executable-only release after original TW/CN own-server proof."""
+"""CUSTOM0074 executable-only release after original TW CP950/CP936 own-server proof."""
 import argparse,json,re,shutil,subprocess,sys,time
 import psutil
 from pathlib import Path
