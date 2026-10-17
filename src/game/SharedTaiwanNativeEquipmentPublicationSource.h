@@ -1,7 +1,7 @@
 #pragma once
 #include "db/SqliteNativeEquipmentSnapshotRepository.h"
 #include "db/SqliteOwnedEquipmentTransaction.h"
-#include "cn/world/SharedActorVisibility.h"
+#include "shared/world/SharedActorVisibility.h"
 #include <memory>
 #include <thread>
 
@@ -14,33 +14,33 @@ class SharedTaiwanNativeEquipmentPublicationSource final:
 public:
     static std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> create(
         SqliteNativeEquipmentSnapshotRepository&,AccountRepository&,RecoveredCharacterRepository&,
-        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,
         SqliteNativeEquipmentSnapshotRepository::Committed);
     // Joint canonical inventory/native snapshot receipt. Every held-DA source
     // reread qualifies BOTH whole populations in one consistent storage scope.
     static std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> create(
         std::shared_ptr<SqliteOwnedEquipmentTransaction>,AccountRepository&,RecoveredCharacterRepository&,
-        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,
         SqliteOwnedEquipmentTransaction::Committed);
     // CUSTOM-0092 explicit three-population receipt. Every held publication
     // requalifies the complete stored entry as well as inventory/equipment.
     static std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> create(
         std::shared_ptr<SqliteOwnedEquipmentTransaction>,AccountRepository&,RecoveredCharacterRepository&,
-        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,
         SqliteOwnedEquipmentTransaction::EntryCommitted);
-    void publish(const cn::SharedActorVisibility::Binding&,
-        cn::SharedActorVisibility::TaiwanAppearanceCompletion);
+    void publish(const shared::SharedActorVisibility::Binding&,
+        shared::SharedActorVisibility::TaiwanAppearanceCompletion);
 private:
     SharedTaiwanNativeEquipmentPublicationSource(SqliteNativeEquipmentSnapshotRepository&,
         AccountRepository&,RecoveredCharacterRepository&,std::shared_ptr<SharedWorldPresence>,
-        std::shared_ptr<cn::SharedActorVisibility>,SqliteNativeEquipmentSnapshotRepository::Committed);
+        std::shared_ptr<shared::SharedActorVisibility>,SqliteNativeEquipmentSnapshotRepository::Committed);
     void owner() const;
-    std::optional<cn::SharedActorVisibility::TaiwanAppearanceAfterState> current(const SharedWorldPresence::Lease&);
+    std::optional<shared::SharedActorVisibility::TaiwanAppearanceAfterState> current(const SharedWorldPresence::Lease&);
     SqliteNativeEquipmentSnapshotRepository& repository_;
     AccountRepository& accounts_;
     RecoveredCharacterRepository& characters_;
     std::shared_ptr<SharedWorldPresence> presence_;
-    std::shared_ptr<cn::SharedActorVisibility> visibility_;
+    std::shared_ptr<shared::SharedActorVisibility> visibility_;
     SqliteNativeEquipmentSnapshotRepository::Committed committed_;
     std::shared_ptr<SqliteOwnedEquipmentTransaction> joint_repository_;
     std::optional<SqliteOwnedEquipmentTransaction::Committed> joint_committed_;

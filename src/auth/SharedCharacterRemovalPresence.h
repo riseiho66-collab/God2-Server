@@ -9,7 +9,6 @@
 namespace god2 {
 // Common saved-state integrity policy, NOT native deletion permission or a
 // rule/reply issuer. Observes actual owner registries on the serial game thread.
-// Host must supply the same SharedWorldPresence used by actual TW/CN preparation
 // and actual legacy World/movement instances, and keep referenced objects alive.
 class SharedCharacterRemovalPresence {
 public:

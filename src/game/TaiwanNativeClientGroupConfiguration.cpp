@@ -20,7 +20,6 @@ std::string_view filename(const TaiwanNativeClientGroupConfiguration::Selection&
 }
 std::vector<std::uint8_t> decode(std::span<const std::uint8_t> source,std::size_t budget) {
     // Independent TW00401D20: 0516/u32-size/extraBYTE, 4096-byte ring,
-    // initial spaces through FED, FEE cursor; no CN/IGSROM02 inference.
     // Selected-0516 failure rejects this source. Native temporary FILE/reopen
     // failure/fallback side effects are deliberately outside the owned subset.
     if(!budget || source.empty())unqualified();
@@ -71,7 +70,6 @@ std::int32_t version_integer(std::string_view line) {
         magnitude=magnitude*10+digit;line.remove_prefix(1);
     }
     // Own subset excludes failed/partial %d. TW failed scan leaves the old
-    // network+650 value; CN's local-integer reset0 is not TW evidence.
     if(!std::all_of(line.begin(),line.end(),token_space))unqualified();
     return static_cast<std::int32_t>(negative?-magnitude:magnitude);
 }

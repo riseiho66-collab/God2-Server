@@ -69,7 +69,7 @@ std::optional<NativeSkillBookSourceRecord> NativeSkillBookSourceCatalog::read(
     source.source_sha256=sha(row,9);source.decoded_sha256=sha(row,10);source.native_image_sha256=sha(row,11);
     source.source_section=text(row,12);source.loader_rva=text(row,13);source.lookup_rva=text(row,14);
     source.row_count=row.integer(15);
-    // Actual source count, not TW381 or CN386 hardcoded into the shared reader.
+    // Actual source count, not a hardcoded build count in the shared reader.
     // This does not pin a particular build/section or prove complete population:
     // the actual provider/import owner must compare all rows/provenance/hash.
     if(row_dataset!=dataset || source.dataset_id!=dataset || source.row_count<1 || source.row_count>32767 ||

@@ -23,7 +23,7 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
     };
     const std::thread::id thread=std::this_thread::get_id();
     const std::shared_ptr<SharedWorldPresence> presence;
-    const std::shared_ptr<cn::SharedActorVisibility> visibility;
+    const std::shared_ptr<shared::SharedActorVisibility> visibility;
     const std::shared_ptr<TaiwanMovementRules> rules;
     const std::size_t capacity;
     const InputSource input_source;
@@ -38,7 +38,7 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
     std::optional<Lease> active_lease;
     Kind operation=Kind::Idle;
     bool closed=false,reentered=false;
-    State(std::shared_ptr<SharedWorldPresence> common,std::shared_ptr<cn::SharedActorVisibility> peers,
+    State(std::shared_ptr<SharedWorldPresence> common,std::shared_ptr<shared::SharedActorVisibility> peers,
         std::shared_ptr<TaiwanMovementRules> native,InputSource source,std::size_t limit,
         std::shared_ptr<SqliteOwnedEquipmentTransaction> custody={})
         :presence(std::move(common)),visibility(std::move(peers)),rules(std::move(native)),
@@ -317,7 +317,7 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
 };
 SharedTaiwanNativeMovementHost::SharedTaiwanNativeMovementHost(std::shared_ptr<State> state):state_(std::move(state)) {}
 std::shared_ptr<SharedTaiwanNativeMovementHost> SharedTaiwanNativeMovementHost::create(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,
     std::shared_ptr<TaiwanMovementRules> rules,std::size_t capacity) {
     if(!presence || !visibility || !visibility->owns_presence(presence) || !rules || !capacity)
         throw std::invalid_argument("TW native movement host requires exact common presence/visibility/native rules/capacity");
@@ -326,7 +326,7 @@ std::shared_ptr<SharedTaiwanNativeMovementHost> SharedTaiwanNativeMovementHost::
     return std::shared_ptr<SharedTaiwanNativeMovementHost>(new SharedTaiwanNativeMovementHost(std::move(state)));
 }
 std::shared_ptr<SharedTaiwanNativeMovementHost> SharedTaiwanNativeMovementHost::create(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,
     std::shared_ptr<TaiwanMovementRules> rules,InputSource source,std::size_t capacity,
     std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody) {
     if(!presence || !visibility || !visibility->owns_presence(presence) || !rules || !source || !capacity)

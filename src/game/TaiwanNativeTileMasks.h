@@ -10,7 +10,6 @@
 #include <vector>
 
 namespace god2 {
-// Actual TW ModelDat/Pass declarations, not IGSROM image objects or CN proof.
 // The prefix caller supplies the actual v1.6 header and TileModel count. This
 // library owns the full decoded input and leaves the placement cursor intact.
 class TaiwanNativeTileMasks final {

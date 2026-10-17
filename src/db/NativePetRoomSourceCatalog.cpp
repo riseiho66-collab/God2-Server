@@ -333,7 +333,7 @@ void NativePetRoomSourceCatalog::import_pinned_source(sqlite3* db) {
     if(!db || !sqlite3_get_autocommit(db))throw DatabaseError("PetRoom source import requires own transaction");
     sqlite_detail::Transaction transaction(db);
     source_schema(db,false);
-    // Common source tables use dataset namespaces. No separate TW/CN content
+    // Common source tables use dataset namespaces. No duplicate content
     // table or common gameplay identity is manufactured from this native key.
     sqlite_detail::execute(db,
         "CREATE TABLE IF NOT EXISTS main.native_raw_item_source_sets("

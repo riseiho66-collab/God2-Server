@@ -77,7 +77,7 @@ struct Fixture {
     std::unique_ptr<SqliteTradeRepository> money;
     std::uint64_t guild{},foreign{};
     const Repo::Proof proof{[]{},[]{}}; // TEST_ONLY world readiness, no gameplay authority minted.
-    explicit Fixture(const std::string& path=":memory:",bool utf16=false,bool cn=false,bool opaque=true) {
+    explicit Fixture(const std::string& path=":memory:",bool utf16=false,bool simplified=false,bool opaque=true) {
         check(sqlite3_open(path.c_str(),&db)==SQLITE_OK);sqlite_detail::execute(db,"PRAGMA foreign_keys=ON");
         if(utf16)sqlite_detail::execute(db,"PRAGMA encoding='UTF-16be'");
         auto migrations=owned_guild_announcement_migrations();check(migrations.size()==50);migrations.push_back({51,"owned_guild_officers_candidate",Repo::officer_schema()});
@@ -91,7 +91,7 @@ struct Fixture {
             std::copy(name.begin(),name.end(),profile.begin());profile[29]=static_cast<std::uint8_t>(i);
             const std::vector<std::uint8_t> bytes(name.begin(),name.end());
             sqlite_detail::Statement character(db,"INSERT INTO recovered_characters(id,account_id,slot,profile,name_bytes,name_codepage) VALUES(?,?,0,?,?,?)");
-            character.bind(1,i);character.bind(2,i);character.bind_blob(3,profile);character.bind_blob(4,bytes);character.bind(5,cn?936:950);character.done();
+            character.bind(1,i);character.bind(2,i);character.bind_blob(3,profile);character.bind_blob(4,bytes);character.bind(5,simplified?936:950);character.done();
             RecoveredRoleLevel::Bytes role{};role[0]=0x22;role[1]=35;role[17]=100;role[21]=50;
             sqlite_detail::Statement r(db,"INSERT INTO character_role_snapshots(character_id,logical,revision,design_id) VALUES(?,?,1,'CUSTOM-0013')");
             r.bind(1,i);r.bind_blob(2,role);r.done();money->provision_wallet(i,i);
@@ -154,8 +154,8 @@ struct WorldFixture:Fixture {
     std::function<void()> on_capture,on_world;
     bool deny_sql=false,deny_after_write=false,wrote=false;
     unsigned after_write_calls=0;
-    WorldFixture(bool cn=false):Fixture(":memory:",false,cn) {
-        for(unsigned i=1;i<=7;++i){owners.emplace(i,Panel::Owner{i,i,i,1,4,3,59,60,static_cast<std::uint16_t>(cn?936:950),1,1});online.insert(i);}
+    WorldFixture(bool simplified=false):Fixture(":memory:",false,simplified) {
+        for(unsigned i=1;i<=7;++i){owners.emplace(i,Panel::Owner{i,i,i,1,4,3,59,60,static_cast<std::uint16_t>(simplified?936:950),1,1});online.insert(i);}
         check(sqlite3_create_function_v2(db,"test_officer_written",0,SQLITE_UTF8,this,
             [](sqlite3_context* c,int,sqlite3_value**){static_cast<WorldFixture*>(sqlite3_user_data(c))->wrote=true;sqlite3_result_int(c,1);},
             nullptr,nullptr,nullptr)==SQLITE_OK);
@@ -196,8 +196,8 @@ struct WorldFixture:Fixture {
         ++negative_cases;const auto before=snapshot(db);check(!service->execute(plan));check(snapshot(db)==before);check(sqlite3_get_autocommit(db)==1);
     }
 };
-void service_lifecycle(bool cn) {
-    begin_case("native-slot-projection-appoint-demote-selfleave");WorldFixture f(cn);
+void service_lifecycle(bool simplified) {
+    begin_case("native-slot-projection-appoint-demote-selfleave");WorldFixture f(simplified);
     check(!f.service->prepare(1,Service::Action::Appoint,1));
     const auto appoint=f.action();check(f.service->execute(appoint));check(!f.service->execute(appoint));
     const auto founder=f.open();check(f.projection->cached_role(1,1)==std::optional<std::uint8_t>{2});
@@ -260,8 +260,8 @@ void consumed_publication_proof() {
             ++calls;if(!sqlite3_get_autocommit(f.db) && f.wrote)f.open();return f.current_world(p,world);});
     const auto before=snapshot(f.db);check(!hostile.execute(plan));check(snapshot(f.db)==before);check(calls>=3);
 }
-void full50_and_duplicates(bool cn) {
-    begin_case(cn?"complete50-mixed-accepted-pending-duplicates-CN":"complete50-mixed-accepted-pending-duplicates-TW");WorldFixture f(cn);
+void full50_and_duplicates(bool simplified) {
+    begin_case(simplified?"complete50-mixed-accepted-pending-duplicates-simplified":"complete50-mixed-accepted-pending-duplicates-traditional");WorldFixture f(simplified);
     sqlite_detail::execute(f.db,"UPDATE owned_guild_governance_0078 SET capacity=50 WHERE guild_id=1");
     for(unsigned i=8;i<=54;++i) {
         sqlite_detail::Statement a(f.db,"INSERT INTO accounts(id,username,password_hash) VALUES(?,?,'PRIVATE_ONLY')");
@@ -269,12 +269,12 @@ void full50_and_duplicates(bool cn) {
         const auto name="OfficerP"+std::to_string(i);const std::vector<std::uint8_t> bytes(name.begin(),name.end());
         std::array<std::uint8_t,40> profile{};std::copy(bytes.begin(),bytes.end(),profile.begin());profile[29]=1;
         sqlite_detail::Statement c(f.db,"INSERT INTO recovered_characters(id,account_id,slot,profile,name_bytes,name_codepage) VALUES(?,?,0,?,?,?)");
-        c.bind(1,i);c.bind(2,i);c.bind_blob(3,profile);c.bind_blob(4,bytes);c.bind(5,cn?936:950);c.done();
+        c.bind(1,i);c.bind(2,i);c.bind_blob(3,profile);c.bind_blob(4,bytes);c.bind(5,simplified?936:950);c.done();
         RecoveredRoleLevel::Bytes role{};role[0]=0x22;role[1]=35;role[17]=100;role[21]=50;
         sqlite_detail::Statement r(f.db,"INSERT INTO character_role_snapshots(character_id,logical,revision,design_id) VALUES(?,?,1,'CUSTOM-0013')");
         r.bind(1,i);r.bind_blob(2,role);r.done();f.money->provision_wallet(i,i);
         SqliteRecoveredCharacterRepository(f.db).commit_resources(i,i,{}, {100,100,50,50,0,"CUSTOM-0012"});
-        f.owners.emplace(i,Panel::Owner{i,i,i,1,4,3,59,60,static_cast<std::uint16_t>(cn?936:950),1,1});f.online.insert(i);
+        f.owners.emplace(i,Panel::Owner{i,i,i,1,4,3,59,60,static_cast<std::uint16_t>(simplified?936:950),1,1});f.online.insert(i);
     }
     f.join(7,f.guild);for(unsigned i=8;i<=30;++i)f.join(i,f.guild);
     for(unsigned i=31;i<=53;++i)f.apply(i,f.guild);
@@ -314,8 +314,8 @@ void forged_and_missing_schema() {
     {WorldFixture f;const auto plan=f.action();auto retired=f.owners[3];f.owners.erase(3);f.fail(plan);}
 }
 }
-int main(){try{for(bool cn:{false,true})service_lifecycle(cn);service_denials();cache_behaviors();consumed_publication_proof();
-    for(bool cn:{false,true})full50_and_duplicates(cn);
+int main(){try{for(bool simplified:{false,true})service_lifecycle(simplified);service_denials();cache_behaviors();consumed_publication_proof();
+    for(bool simplified:{false,true})full50_and_duplicates(simplified);
     forged_and_missing_schema();
     std::cout<<"PASS test_owned_guild_officer_service_0082 cases="<<service_cases<<" checks="<<checks<<" negative_cases="<<negative_cases<<'\n';return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

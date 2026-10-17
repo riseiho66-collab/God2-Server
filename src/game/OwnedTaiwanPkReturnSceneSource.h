@@ -19,8 +19,8 @@ public:
     using Input=OwnedTaiwanReturnActorSavedSource::PopulationInput;
     using Equipment=OwnedTaiwanReturnActorSavedSource::ProfileEquipment;
     using Request=OwnedPkOutboxPublication::ReturnSceneRequest;
-    using Scene=cn::SharedActorVisibility::TaiwanReturnScene;
-    using Check=cn::SharedActorVisibility::TaiwanReturnCheck;
+    using Scene=shared::SharedActorVisibility::TaiwanReturnScene;
+    using Check=shared::SharedActorVisibility::TaiwanReturnCheck;
     using Lease=SharedWorldPresence::Lease;
     enum class Selection {CustomSameAreaSceneV1}; // CUSTOM-0027; not native audience evidence.
     struct MaterialSources {
@@ -34,14 +34,14 @@ public:
     };
     static std::shared_ptr<OwnedTaiwanPkReturnSceneSource> create(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<SharedNativeWorldTransports>,
-        std::shared_ptr<cn::SharedActorVisibility>,std::shared_ptr<ProfileOwner>,
+        std::shared_ptr<shared::SharedActorVisibility>,std::shared_ptr<ProfileOwner>,
         Selection,MaterialSources);
     OwnedPkOutboxPublication::ReturnSceneSource return_source();
     OwnedTaiwanPkReturnSceneSource(const OwnedTaiwanPkReturnSceneSource&)=delete;
     OwnedTaiwanPkReturnSceneSource& operator=(const OwnedTaiwanPkReturnSceneSource&)=delete;
 private:
     OwnedTaiwanPkReturnSceneSource(std::shared_ptr<SharedWorldPresence>,
-        std::shared_ptr<SharedNativeWorldTransports>,std::shared_ptr<cn::SharedActorVisibility>,
+        std::shared_ptr<SharedNativeWorldTransports>,std::shared_ptr<shared::SharedActorVisibility>,
         std::shared_ptr<ProfileOwner>,Selection,MaterialSources);
     std::optional<Scene> observe(const Request&);
     bool current(const std::shared_ptr<State>&,Check);
@@ -49,7 +49,7 @@ private:
     bool fence(const State&,Check) const;
     const std::shared_ptr<SharedWorldPresence> presence_;
     const std::shared_ptr<SharedNativeWorldTransports> transports_;
-    const std::shared_ptr<cn::SharedActorVisibility> visibility_;
+    const std::shared_ptr<shared::SharedActorVisibility> visibility_;
     const std::shared_ptr<ProfileOwner> profiles_;
     const Selection selection_;
     const MaterialSources material_;

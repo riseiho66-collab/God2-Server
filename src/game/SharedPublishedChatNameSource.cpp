@@ -5,12 +5,11 @@
 #include <utility>
 
 namespace god2 {
-using NativeConnection=cn::SharedCredentialConnection;
-using Receiver=std::variant<std::shared_ptr<NativeConnection>,std::shared_ptr<Session>>;
+using Receiver=std::variant<std::shared_ptr<Session>>;
 struct SharedPublishedChatNameSource::Identity {};
 struct SharedPublishedChatNameSource::Observed {
     Receiver receiver;
-    cn::SharedActorVisibility::ChatActorSnapshot registry;
+    shared::SharedActorVisibility::ChatActorSnapshot registry;
     RecoveredPosition recipient_position;
     std::optional<SessionState> taiwan_phase;
     std::uint64_t taiwan_battle_generation;
@@ -18,7 +17,7 @@ struct SharedPublishedChatNameSource::Observed {
     std::string name;
     std::uint64_t name_source_revision;
     std::uint16_t native_name_page;
-    std::optional<cn::SharedActorVisibility::TaiwanReceiverTextState> taiwan_globals; // Exact profile source, including typed C1C epoch.
+    std::optional<shared::SharedActorVisibility::TaiwanReceiverTextState> taiwan_globals; // Exact profile source, including typed C1C epoch.
 };
 struct SharedPublishedChatNameSource::Storage {
     std::shared_ptr<const Identity> identity;
@@ -40,14 +39,12 @@ std::string_view SharedPublishedChatNameSource::Witness::native_name_bytes() con
 std::uint16_t SharedPublishedChatNameSource::Witness::codepage() const noexcept {return storage_->page;}
 std::uint16_t SharedPublishedChatNameSource::Witness::native_name_codepage() const noexcept {return storage_->observed.native_name_page;}
 const SharedPublishedChatNameSource::Lookup& SharedPublishedChatNameSource::Witness::lookup() const noexcept {return storage_->lookup;}
-bool SharedPublishedChatNameSource::Witness::recipient_is(const std::shared_ptr<NativeConnection>& c) const noexcept {
-    const auto retained=std::get_if<std::shared_ptr<NativeConnection>>(&storage_->observed.receiver);return c && retained && *retained==c;
-}
+
 bool SharedPublishedChatNameSource::Witness::recipient_is(const std::shared_ptr<Session>& c) const noexcept {
     const auto retained=std::get_if<std::shared_ptr<Session>>(&storage_->observed.receiver);return c && retained && *retained==c;
 }
 SharedPublishedChatNameSource::SharedPublishedChatNameSource(std::shared_ptr<SharedChatIdentitySource> names,
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility)
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility)
     :identities_(std::move(names)),presence_(std::move(presence)),visibility_(std::move(visibility)),identity_(std::make_shared<const Identity>()) {}
 SharedPublishedChatNameSource::~SharedPublishedChatNameSource() {
     if(thread_!=std::this_thread::get_id())std::terminate();
@@ -58,7 +55,7 @@ void SharedPublishedChatNameSource::owner() const {
 }
 std::shared_ptr<SharedPublishedChatNameSource> SharedPublishedChatNameSource::create(
     std::shared_ptr<SharedChatIdentitySource> names,std::shared_ptr<SharedWorldPresence> presence,
-    std::shared_ptr<cn::SharedActorVisibility> visibility) {
+    std::shared_ptr<shared::SharedActorVisibility> visibility) {
     if(!names || !presence || !visibility || !names->owns_presence(presence) || !visibility->owns_presence(presence))return {};
     return std::shared_ptr<SharedPublishedChatNameSource>(new SharedPublishedChatNameSource(std::move(names),std::move(presence),std::move(visibility)));
 }
@@ -81,24 +78,13 @@ std::optional<SharedPublishedChatNameSource::Observed> SharedPublishedChatNameSo
     const auto tw=visibility_->taiwan_chat_actor(binding,source.position);
     if(reentered_ || !identities_->current(lookup) || reentered_)return std::nullopt;
     Receiver receiver;std::uint32_t actor=0;std::string name;std::uint64_t revision=0;std::uint16_t native_page=0;
-    std::optional<cn::SharedActorVisibility::TaiwanReceiverTextState> globals;
-    std::optional<cn::SharedActorVisibility::MainlandRawNameState> cn_state;
-    if(tw) {
-        const auto c=tw->connection.lock();
-        if(!c || !tw->raw_name_state.available())return std::nullopt;
-        native_page=tw->raw_name_state.wire_codepage();
-        receiver=c;actor=tw->native_actor_identity;name=tw->native_name_bytes;
-        revision=tw->raw_name_state.source_revision();
-        globals=tw->raw_name_state;
-    }else {
-        const auto cn=visibility_->mainland_chat_actor(binding,source.position);
-        if(reentered_ || !identities_->current(lookup) || reentered_ || !cn || cn->native_language_tag!=0 || !cn->raw_name_state)
-            return std::nullopt; // Tag1 projected strings are a separate, unqualified name namespace here.
-        const auto c=cn->connection.lock();const auto state=*cn->raw_name_state;
-        if(!c || !state.source_revision || !state.current || (state.wire_codepage!=936 && state.wire_codepage!=950))return std::nullopt;
-        native_page=state.wire_codepage;
-        receiver=c;actor=cn->native_actor_identity;name=cn->native_name_bytes;revision=state.source_revision;cn_state=state;
-    }
+    std::optional<shared::SharedActorVisibility::TaiwanReceiverTextState> globals;
+    if(!tw)return std::nullopt;
+    const auto connection=tw->connection.lock();
+    if(!connection || !tw->raw_name_state.available())return std::nullopt;
+    native_page=tw->raw_name_state.wire_codepage();
+    receiver=connection;actor=tw->native_actor_identity;name=tw->native_name_bytes;
+    revision=tw->raw_name_state.source_revision();globals=tw->raw_name_state;
     // Same original Unicode, not equal bytes across distinct936/950 domains.
     // No display conversion, alias or forced page/tag change is introduced.
     const auto native_encoded=OwnedCharacterNameText::from_utf8(lookup.matched_name()->original_utf8(),native_page);
@@ -112,12 +98,7 @@ std::optional<SharedPublishedChatNameSource::Observed> SharedPublishedChatNameSo
         if(reentered_ || !position || *position!=recipient->position)return false;
         return std::visit([&](const auto& c) {
             if(!c || c->closing())return false;
-            using Connection=typename std::decay_t<decltype(c)>::element_type;
-            if constexpr(std::is_same_v<Connection,NativeConnection>)
-                return c->role()==NativeConnection::Transport::Role::World && c->world_admission_current() &&
-                    c->world_session_id()==binding.recipient().session && c->verified_account_id()==binding.recipient().account &&
-                    c->world_character_offered(binding.recipient().character);
-            else return c->id()==binding.recipient().session && c->account_id==binding.recipient().account &&
+            return c->id()==binding.recipient().session && c->account_id==binding.recipient().account &&
                 c->character_id==binding.recipient().character && c->recovered_world_ready() &&
                 (c->state()==SessionState::InWorld || c->state()==SessionState::InBattle) &&
                 c->common_world_delivery_current(binding.recipient().account,binding.recipient().character,binding.recipient().generation) &&
@@ -132,30 +113,13 @@ std::optional<SharedPublishedChatNameSource::Observed> SharedPublishedChatNameSo
         const auto c=std::get_if<std::shared_ptr<Session>>(&receiver);
         return !c || (phase && (*c)->state()==*phase && (*c)->battle_generation()==battle);
     };
-    if(cn_state) {
-        const auto& c=std::get<std::shared_ptr<NativeConnection>>(receiver);
-        const bool actual=cn_state->current(*c,cn_state->source_revision,native_page);
-        if(!actual || !same_receiver())return std::nullopt;
-    }
     // Obtain a second current private publication after all real receiver/NLS
     // callbacks, not a name-only join. The incarnation is checked by visibility.
-    if(tw) {
-        const auto again=visibility_->taiwan_chat_actor(binding,source.position);
-        if(!again || again->connection.lock()!=std::get<std::shared_ptr<Session>>(receiver) ||
-           again->native_actor_identity!=actor || again->native_name_bytes!=name ||
-           again->raw_name_state.source_revision()!=revision || again->raw_name_state.wire_codepage()!=native_page ||
-           !globals || !again->raw_name_state.same_source(*globals))
-            return std::nullopt;
-    }else {
-        const auto again=visibility_->mainland_chat_actor(binding,source.position);
-        if(!again || again->native_language_tag!=0 || !again->raw_name_state ||
-           again->connection.lock()!=std::get<std::shared_ptr<NativeConnection>>(receiver) ||
-           again->native_actor_identity!=actor || again->native_name_bytes!=name ||
-           again->raw_name_state->source_revision!=revision || again->raw_name_state->wire_codepage!=native_page)return std::nullopt;
-        const auto& c=std::get<std::shared_ptr<NativeConnection>>(receiver);
-        const bool actual=cn_state->current(*c,revision,native_page);
-        if(!actual || !same_receiver())return std::nullopt;
-    }
+    const auto again=visibility_->taiwan_chat_actor(binding,source.position);
+    if(!again || again->connection.lock()!=std::get<std::shared_ptr<Session>>(receiver) ||
+       again->native_actor_identity!=actor || again->native_name_bytes!=name ||
+       again->raw_name_state.source_revision()!=revision || again->raw_name_state.wire_codepage()!=native_page ||
+       !globals || !again->raw_name_state.same_source(*globals))return std::nullopt;
     if(!same_receiver() || !visibility_->chat_actor_snapshot_current(*retained))return std::nullopt;
     return Observed{receiver,*retained,recipient->position,phase,battle,actor,std::move(name),revision,native_page,globals};
 }

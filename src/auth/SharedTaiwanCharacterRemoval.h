@@ -45,7 +45,6 @@ public:
     using Handler=std::function<bool(Session&,const RecoveredCharacterDelete&)>;
     // Same signature as Session::RecoveredCharacterHandlers.delete_character.
     // Host retains actual account/login/character/legacy objects for handler
-    // lifetime and supplies the SAME admission/presence used by TW and CN.
     // An invalid/mismatched source returns no handler, never a legacy fallback.
     static Handler handler(Sources);
 private:

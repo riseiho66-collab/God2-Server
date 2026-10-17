@@ -8,7 +8,6 @@
 
 namespace god2 {
 // Read the actual full TW zero-seed2A emitted by Session. No candidate builder,
-// profile defaults or CN-as-TW authority. Native468626..468676 copies these
 // local actor fields; all appearance/resource/opaque bytes remain untouched.
 struct RecoveredWorldEntryView {
     RecoveredWorldEntry::Frame wire;

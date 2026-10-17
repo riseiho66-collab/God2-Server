@@ -23,7 +23,6 @@ public:
         std::uint32_t restore_mp;
         BattleNumericProfile numeric_profile{BattleNumericProfile::LegacyCustom};
         // Trusted logical projection only: no send, persist or reentry. It must
-        // retain the complete values; never select a profile from CN/TW or C2S.
         std::function<std::vector<std::uint8_t>(std::uint8_t,
             const StoredInventorySlot&,const CharacterResources&)> projector{};
     };

@@ -1,5 +1,5 @@
 #pragma once
-#include "cn/world/SharedActorVisibility.h"
+#include "shared/world/SharedActorVisibility.h"
 #include "game/SharedWorldPresence.h"
 #include <memory>
 #include <optional>
@@ -12,7 +12,7 @@ namespace god2 {
 class SharedNativeActorNameSource {
 public:
     using Lease=SharedWorldPresence::Lease;
-    using Native=cn::SharedActorVisibility::Native;
+    using Native=shared::SharedActorVisibility::Native;
     static std::shared_ptr<SharedNativeActorNameSource> create(std::shared_ptr<SharedWorldPresence>);
     ~SharedNativeActorNameSource();
     SharedNativeActorNameSource(const SharedNativeActorNameSource&)=delete;

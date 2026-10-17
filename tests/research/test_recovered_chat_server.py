@@ -1,6 +1,7 @@
-"""Two authenticated native-protocol sockets, CP950/CP936 common chat.
+"""Two authenticated Taiwan-protocol sockets, CP950/CP936 common chat.
 
 This checks real server routing and wire bytes without claiming rendered UI.
+The zh-CN locale selects Simplified display; both peers use Taiwan packets.
 """
 from contextlib import ExitStack,closing
 import hashlib
@@ -100,16 +101,16 @@ class RecoveredChatServerTests(unittest.TestCase):
         w,h=self.harness()
         with h.server() as server,ExitStack() as stack:
             tw,tw_id=self.enter(w,h,stack,server,world.dual.OWNER,world.dual.HEROES[0],'zh-TW')
-            cn,cn_id=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
+            simplified,simplified_id=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
             h.await_marker(server.root,'WORLD_INITIALIZER_TAIL_ACCEPTED',2)
             tw.sendall(self.chat(h,'漢字遊戲','cp950'))
             self.display(h,tw,tw_id,'漢字遊戲','cp950',False)
-            self.display(h,cn,tw_id,'汉字游戏','cp936',True)
-            cn.sendall(self.chat(h,'欢迎游戏','cp936'))
-            self.display(h,tw,cn_id,'歡迎遊戲','cp950',False)
-            self.display(h,cn,cn_id,'欢迎游戏','cp936',True)
+            self.display(h,simplified,tw_id,'汉字游戏','cp936',True)
+            simplified.sendall(self.chat(h,'欢迎游戏','cp936'))
+            self.display(h,tw,simplified_id,'歡迎遊戲','cp950',False)
+            self.display(h,simplified,simplified_id,'欢迎游戏','cp936',True)
             h.silent(tw)
-            h.silent(cn)
+            h.silent(simplified)
 
     def test_name_prefix_is_owned_and_long_chinese_remains_valid(self):
         w,h=self.harness()
@@ -128,16 +129,16 @@ class RecoveredChatServerTests(unittest.TestCase):
         w,h=self.harness()
         with h.server() as server,ExitStack() as stack:
             tw,tw_id=self.enter(w,h,stack,server,world.dual.OWNER,world.dual.HEROES[0],'zh-TW')
-            cn,cn_id=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
+            simplified,simplified_id=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
             h.await_marker(server.root,'WORLD_INITIALIZER_TAIL_ACCEPTED',2)
             tw.sendall(self.chat(h,'遊戲‧','cp950'))
             self.display(h,tw,tw_id,'遊戲‧','cp950',False)
-            self.display(h,cn,tw_id,'游戏?','cp936',True)
-            cn.sendall(self.chat(h,'欢迎游戏','cp936'))
-            self.display(h,tw,cn_id,'歡迎遊戲','cp950',False)
-            self.display(h,cn,cn_id,'欢迎游戏','cp936',True)
+            self.display(h,simplified,tw_id,'游戏?','cp936',True)
+            simplified.sendall(self.chat(h,'欢迎游戏','cp936'))
+            self.display(h,tw,simplified_id,'歡迎遊戲','cp950',False)
+            self.display(h,simplified,simplified_id,'欢迎游戏','cp936',True)
             h.silent(tw)
-            h.silent(cn)
+            h.silent(simplified)
 
     def test_captured_original_client_chat_wire_routes_to_both_languages(self):
         w,h=self.harness()
@@ -155,58 +156,58 @@ class RecoveredChatServerTests(unittest.TestCase):
             '遊戲邏輯及原客戶端的技能書使用流程尚未接通a')
         with h.server() as server,ExitStack() as stack:
             tw,tw_id=self.enter(w,h,stack,server,world.dual.OWNER,world.dual.HEROES[0],'zh-TW')
-            cn,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
+            simplified,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
             h.await_marker(server.root,'WORLD_INITIALIZER_TAIL_ACCEPTED',2)
             tw.sendall(wire)
             self.display(h,tw,tw_id,'遊戲邏輯及原客戶端的技能書使用流程尚未接通a','cp950',False)
-            self.display(h,cn,tw_id,'游戏逻辑及原客户端的技能书使用流程尚未接通a','cp936',True)
+            self.display(h,simplified,tw_id,'游戏逻辑及原客户端的技能书使用流程尚未接通a','cp936',True)
             h.silent(tw)
-            h.silent(cn)
+            h.silent(simplified)
 
     def test_chat_and_movement_coalesced_in_one_tcp_write(self):
         w,h=self.harness()
         with h.server() as server,ExitStack() as stack:
             tw,tw_id=self.enter(w,h,stack,server,world.dual.OWNER,world.dual.HEROES[0],'zh-TW')
-            cn,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
+            simplified,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
             h.await_marker(server.root,'WORLD_INITIALIZER_TAIL_ACCEPTED',2)
             tw.sendall(movement_wire(18,12,1)+self.chat(h,'漢字遊戲','cp950'))
             self.assertEqual(h.read_frame(tw,0x5d,5)[3],1)
             self.display(h,tw,tw_id,'漢字遊戲','cp950',False)
-            self.display(h,cn,tw_id,'汉字游戏','cp936',True)
+            self.display(h,simplified,tw_id,'汉字游戏','cp936',True)
             with closing(sqlite3.connect(server.database)) as db:
                 self.assertEqual(db.execute('SELECT scene,x,y FROM recovered_positions WHERE character_id=?',
                     (tw_id,)).fetchone(),(15,18,12))
             h.silent(tw)
-            h.silent(cn)
+            h.silent(simplified)
 
     def test_chat_and_movement_in_one_world_frame_ack_first(self):
         w,h=self.harness()
         with h.server() as server,ExitStack() as stack:
             tw,tw_id=self.enter(w,h,stack,server,world.dual.OWNER,world.dual.HEROES[0],'zh-TW')
-            cn,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
+            simplified,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
             h.await_marker(server.root,'WORLD_INITIALIZER_TAIL_ACCEPTED',2)
             legacy='漢字遊戲'.encode('cp950')
             chat=b'\x2f'+(len(legacy)+8).to_bytes(2,'little')+bytes(4)+legacy+b'\0'
             tw.sendall(h.frame(0x2e,bytes((18,0,12,0,1,0))+chat))
             self.assertEqual(h.read_frame(tw,0x5d,5)[3],1)
             self.display(h,tw,tw_id,'漢字遊戲','cp950',False)
-            self.display(h,cn,tw_id,'汉字游戏','cp936',True)
+            self.display(h,simplified,tw_id,'汉字游戏','cp936',True)
             with closing(sqlite3.connect(server.database)) as db:
                 self.assertEqual(db.execute('SELECT scene,x,y FROM recovered_positions WHERE character_id=?',
                     (tw_id,)).fetchone(),(15,18,12))
             h.silent(tw)
-            h.silent(cn)
+            h.silent(simplified)
 
     def test_invalid_chat_cannot_commit_coalesced_movement(self):
         w,h=self.harness()
         with h.server() as server,ExitStack() as stack:
             tw,tw_id=self.enter(w,h,stack,server,world.dual.OWNER,world.dual.HEROES[0],'zh-TW')
-            cn,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
+            simplified,_=self.enter(w,h,stack,server,world.dual.OTHER,world.dual.HEROES[1],'zh-CN')
             h.await_marker(server.root,'WORLD_INITIALIZER_TAIL_ACCEPTED',2)
             malformed=b'\x2f'+(9).to_bytes(2,'little')+bytes(4)+b'\x81\0'
             tw.sendall(h.frame(0x2e,bytes((18,0,12,0,1,0))+malformed))
             h.closed(tw)
-            h.silent(cn)
+            h.silent(simplified)
             with closing(sqlite3.connect(server.database)) as db:
                 self.assertIsNone(db.execute('SELECT x,y FROM recovered_positions WHERE character_id=?',
                     (tw_id,)).fetchone())

@@ -150,7 +150,7 @@ bool SharedTaiwanWorldLifecycle::Binding::ready(Session& session) {
     stage=Stage::Ready;return true;
 }
 std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle::hooks(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,Entered entered,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,Entered entered,
     std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
     std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !entered || !visibility->owns_presence(presence) ||
@@ -175,7 +175,7 @@ std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle:
     return result;
 }
 Session::CommonWorldLifecycleFactory SharedTaiwanWorldLifecycle::factory(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,Entered entered,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,Entered entered,
     std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
     std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !entered || !visibility->owns_presence(presence) ||
@@ -253,7 +253,7 @@ void SharedTaiwanWorldLifecycle::AsyncBinding::ready(Session& session,ReadyCompl
     }catch(...) {invoking=false;inline_result.reset();release();throw;}
 }
 std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle::hooks_async(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,AsyncOwner scene,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,AsyncOwner scene,
     std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
     std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !scene.entered || !scene.cancel || !visibility->owns_presence(presence) ||
@@ -291,7 +291,7 @@ std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle:
     return result;
 }
 Session::CommonWorldLifecycleFactory SharedTaiwanWorldLifecycle::factory_async(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,AsyncOwner scene,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,AsyncOwner scene,
     std::shared_ptr<SharedNativeWorldTransports> transports,TaiwanWorldEntryIdentity identity,
     std::shared_ptr<TaiwanActorStatusIncarnationSource> status_incarnations) {
     if(!valid_taiwan_world_entry_identity(identity) || !presence || !visibility || !scene.entered || !scene.cancel || !visibility->owns_presence(presence) ||

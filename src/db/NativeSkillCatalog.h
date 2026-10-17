@@ -71,8 +71,8 @@ public:
     // Sequential callers must reobserve it; this is not a cross-source CAS.
     std::optional<NativeSkillSource> lookup_main_source(const std::string& dataset_id) const;
 
-    // One main-schema DB read view over both original dataset selectors.
-    // Missing counterparts remain missing; no import, grant or native Current.
+    // One main-schema DB read view over the selected Taiwan dataset.
+    // Missing native rows remain missing; no import, grant or native Current.
     std::optional<SharedSkillLookup> lookup_shared_definition_main(
         std::int64_t kind,std::int64_t definition_id) const;
 

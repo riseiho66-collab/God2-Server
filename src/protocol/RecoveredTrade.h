@@ -97,8 +97,6 @@ struct RecoveredTrade {
     }
     // 27 ->498D70 is the absolute local purse DWORD, independent of role23.
     static bool wallet_amount_representable(std::uint64_t amount) noexcept {
-        // Current TW/CN purse displays use signed32 %d. This TW serializer
-        // does not qualify CN hosting or an extended client profile.
         return amount<=static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max());
     }
     static std::vector<std::uint8_t> wallet(std::uint64_t amount) {

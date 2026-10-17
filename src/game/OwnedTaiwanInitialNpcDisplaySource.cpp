@@ -11,7 +11,7 @@
 namespace god2 {
 namespace {
 using Entered=SharedTaiwanWorldEntered;
-using Visibility=cn::SharedActorVisibility;
+using Visibility=shared::SharedActorVisibility;
 template<class A,class B> bool same_owner(const std::shared_ptr<A>& a,const std::shared_ptr<B>& b) noexcept {
     return a.get()==b.get()&&!a.owner_before(b)&&!b.owner_before(a);
 }

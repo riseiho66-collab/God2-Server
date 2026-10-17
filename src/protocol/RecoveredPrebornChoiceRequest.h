@@ -7,10 +7,7 @@
 #include <vector>
 
 namespace god2 {
-// Shared TW/CN C2S staged-choice structural grammar only.
 // Same149c 4FEEC0 queues 4FF230(C81), then 4FECD0(C83);
-// pinned CN preborn534810 queues the same2B81/3+2N83 layouts.
-// Actual CN splitter/receiver delegates here while retaining its own value
 // adapter, phase/issuer/operation/reply. Separate from C28 and S2C battle83.
 // C83's complete initialized layout requires stable native source counts,
 // readable pointers and sufficient output storage; the native sender supplies

@@ -1,3 +1,5 @@
+Latest scope: Taiwan-only server (owner 2026-10-18). Existing database files, schema history and saves are preserved; no SQL was executed by this cleanup.
+
 # Database architecture and owner requirements (2026-10-15)
 
 This document supersedes the historical accounts/characters-only design example. It describes the actual current source and the owner's migration/configuration requirements; planned features are not installed storage or verified imports.
@@ -60,12 +62,12 @@ Primary references:
 
 ## Preservation and acceptance
 
-Preserve accounts, saves, ownership, transactional histories and all frozen features. No destructive schema cleanup is implied. Keep C++/Lua ownership, original native source hashes, shared64 domains, the exact coin cap99999999999/stack99/native levels, 453 Traditional primary skill names/client formulas/current-maximum-HP poison10th and common TW/CN/four browser support.
+Preserve accounts, saves, ownership, transactional histories and all frozen features. No destructive schema cleanup is implied. Keep C++/Lua ownership, original native source hashes, shared64 domains, the exact coin cap99999999999/stack99/native levels, 453 Traditional primary skill names/client formulas/current-maximum-HP poison10th and common Taiwan PC/browser support.
 
 PHASE1 is source integration only: no product/database/export execution, SQL reads/writes against an actual database, builds/tests, runtime migration, import, activation or deployment. A completed formatter/dictionary is not a completed MySQL backend, data-driven gameplay integration or TW100%.
 ## Actor-specific skill classification (owner clarification, 2026-10-15)
 
-Use the actual game's owner and learning/use rules, not file-format convenience, to classify editable data. Player-learnable definitions, prerequisites and player learned-state are independent of battle-pet skill learning/ownership and monster skill/AI assignments. These corresponding authoritative domains remain common across TW/CN.
+Use the actual game's owner and learning/use rules, not file-format convenience, to classify editable data. Player-learnable definitions, prerequisites and player learned-state are independent of battle-pet skill learning/ownership and monster skill/AI assignments. These corresponding authoritative domains belong to Taiwan.
 
 Original skill source datasets and common C++/Lua formula/effect implementations may be shared. This never merges learning permissions, actor identity, acquired skills or monster AI. Existing selected-deity/menu/native snapshot evidence must not be fabricated into a separate player learned list. Proposed physical tables need recovered actor/category evidence, typed repositories and reversible save-preserving migrations before activation.
 
@@ -87,7 +89,7 @@ DB-driven configuration applies to every recovered gameplay system that benefits
 | Shops, crafting and enhancement | Offers, prices, recipes, materials, eligibility and recovered probability rules | Purchases, consumption, resulting instances and transaction history |
 | Other recovered systems | Domain-specific editable rules, such as social/guild or battle reward configuration where actually present | Membership, battle results and other owner-specific state |
 
-Use separate player and pet progression curves when their actual rules differ. Share a recovered effect/formula implementation where semantics match; never let that merge player skill learning, pet skill learning or monster AI permissions. Shared TW/CN gameplay definitions do not require duplicate regional balance tables. Protocol-specific opaque records retain their evidenced scope.
+Use separate player and pet progression curves when their actual rules differ. Share a recovered effect/formula implementation where semantics match; never let that merge player skill learning, pet skill learning or monster AI permissions. Shared Taiwan gameplay definitions do not require duplicate regional balance tables. Protocol-specific opaque records retain their evidenced scope.
 
 Keep configuration definitions, player/world state and audit/source evidence distinct. A gameplay category becomes a separate table family only when its fields, relationships, owner or lifecycle warrant it; ordinary subtypes can use validated categories and relation tables. Do not create one universal parameter/blob table or a table for every cosmetic label.
 

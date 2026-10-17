@@ -8,13 +8,12 @@
 #include <vector>
 
 namespace god2 {
-enum class SharedSkillRegion { Taiwan, China };
+enum class SharedSkillRegion { Taiwan };
 enum class SharedSkillRowQualification {
     MetadataSnapshotOnly, OriginalRowPinned, OwnerRowPinned, InstalledEquivalentRowPinned
 };
 enum class SharedSkillStatus {
-    SingleProfile, VerifiedEqualPayload, BorrowedCNReserve, CNPopulatedTWEmpty,
-    OwnerSelectedTWCompleteConflict, UnresolvedRegionalProfiles, OwnerCustom
+    SingleProfile, UnresolvedSource, OwnerCustom
 };
 // Owning definition data, never a native Current/learning/casting capability.
 // row_digest_verified is an informational reader digest result, never proof
@@ -54,9 +53,9 @@ struct OwnerSkillRule {
 };
 struct SharedSkillDefinition {
     // Stable registry/native-binding key. A common identity does not assert
-    // equal native effects. Original regional keys and full records remain.
+    // equal native effects. Original Taiwan keys and full records remain.
     std::uint16_t canonical_key=0;
-    SharedSkillStatus status=SharedSkillStatus::UnresolvedRegionalProfiles;
+    SharedSkillStatus status=SharedSkillStatus::UnresolvedSource;
     std::vector<SharedSkillNativeBinding> profiles;
     // Owner-selected complete parameter base only; not a damage formula,
     // native eligibility, server debit, bank population or entitlement.
@@ -72,5 +71,5 @@ const char* shared_skill_qualification_name(SharedSkillRowQualification) noexcep
 // Pure owning value composition. Selected-row pins do not attest a loaded
 // whole file or observed native bank. Unknown source snapshots stay explicit.
 SharedSkillDefinition resolve_shared_skill_definition(std::uint8_t kind,std::uint8_t id,
-    std::optional<SharedSkillNativeBinding> taiwan,std::optional<SharedSkillNativeBinding> china);
+    std::optional<SharedSkillNativeBinding> taiwan);
 }

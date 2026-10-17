@@ -344,7 +344,7 @@ std::optional<SqliteSkillBookLearningRepository::Observation> SqliteSkillBookLea
     if(!common||!native||common->requested_native!=native||!common->definition.chosen_profile)return std::nullopt;
     if(std::none_of(common->definition.profiles.begin(),common->definition.profiles.end(),[&](const auto& profile){
         // Original skills only: installed equivalence retains the exact original
-        // bytes under its own453 epoch; reserves/custom/CN never become rights.
+        // bytes under its own453 epoch; reserves/custom never become rights.
         return profile.region==SharedSkillRegion::Taiwan&&
             native_taiwan_skill_source_matches(profile.source,skills_.taiwan_profile())&&
             ((skills_.taiwan_profile()==NativeTaiwanSkillProfile::Historical448&&
@@ -409,7 +409,7 @@ std::optional<SqliteSkillBookLearningRepository::Plan> SqliteSkillBookLearningRe
     if(remaining) {
         cell.instance->quantity=remaining;cell.instance->revision=advance(old_item.revision);
         // A common custody epoch advances on every regional alias. Their opaque
-        // raw records are retained; this does not qualify any CN projection.
+        // raw records are retained; this does not qualify any native projection.
         for(auto& alias:cell.instance->aliases)alias.revision=cell.instance->revision;
     }else cell.instance.reset();
     const auto offset=std::size_t(before->slot)*24;

@@ -1,6 +1,5 @@
 #include "game/SharedNativeSpectatorTargets.h"
 #include "protocol/RecoveredSpectatorTargetsD0.h"
-#include "cn/protocol/CnSpectatorTargetsD0.h"
 #include <exception>
 #include <limits>
 #include <map>
@@ -57,9 +56,6 @@ std::optional<std::map<std::uint8_t,D0>> last_d0(const Pub::Observation& ui) {
                 const std::span<const std::uint8_t> raw(event.logical.data()+at,length);
                 if(event.protocol==Pub::Protocol::Taiwan) {
                     const auto view=RecoveredSpectatorTargetsD0::read(raw);if(!view)return std::nullopt;
-                    result.insert_or_assign(view->slot(),D0{event.revision,ordinal,view->slot(),view->first_target(),view->second_target()});
-                }else if(event.protocol==Pub::Protocol::Mainland) {
-                    const auto view=god2cn::CnSpectatorTargetsD0::read(raw);if(!view)return std::nullopt;
                     result.insert_or_assign(view->slot(),D0{event.revision,ordinal,view->slot(),view->first_target(),view->second_target()});
                 }else return std::nullopt;
             }
@@ -150,8 +146,6 @@ struct SharedNativeSpectatorTargets::State:std::enable_shared_from_this<State> {
                     c->recovered_world_ready() && (c->state()==SessionState::InWorld || c->state()==SessionState::InBattle) &&
                     c->common_world_delivery_current(lease.account,lease.character,lease.generation) &&
                     !c->common_world_entry_current(lease.account,lease.character,lease.generation);
-            else return c->role()==cn::SharedCredentialConnection::Transport::Role::World && c->world_admission_current() &&
-                c->world_session_id()==lease.session && c->verified_account_id()==lease.account && c->world_character_offered(lease.character);
         },actual);
     }
     std::optional<Strong> receiver(const Token& token) const {
@@ -172,7 +166,7 @@ struct SharedNativeSpectatorTargets::State:std::enable_shared_from_this<State> {
             root=row;
         }
         if(!root || (tw && ((*tw)->state()!=*phase || (*tw)->battle_generation()!=battle)))return std::nullopt;
-        return Scope{token.lease(),root->character,root->position,tw?Pub::Protocol::Taiwan:Pub::Protocol::Mainland,phase,battle};
+        return Scope{token.lease(),root->character,root->position,Pub::Protocol::Taiwan,phase,battle};
     }
     bool qualified(const Token& token,const Strong& actual,const Publication::Observation& ui,
         const std::vector<BindingView>& bindings,const std::shared_ptr<Issuer>& issuer,std::uint64_t generation,

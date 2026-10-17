@@ -1,7 +1,6 @@
 #pragma once
 #include "game/SharedWorldPresence.h"
 #include "net/Session.h"
-#include "cn/net/SharedCredentialConnection.h"
 #include <map>
 #include <memory>
 #include <optional>
@@ -18,8 +17,8 @@ class SharedNativeWorldTransports {
     struct SnapshotStorage;
 public:
     using Lease=SharedWorldPresence::Lease;
-    using WeakTransport=std::variant<std::weak_ptr<Session>,std::weak_ptr<cn::SharedCredentialConnection>>;
-    using StrongTransport=std::variant<std::shared_ptr<Session>,std::shared_ptr<cn::SharedCredentialConnection>>;
+    using WeakTransport=std::variant<std::weak_ptr<Session>>;
+    using StrongTransport=std::variant<std::shared_ptr<Session>>;
     class Token {
     public:
         Token(const Token&)=default;
@@ -52,7 +51,6 @@ public:
     SharedNativeWorldTransports& operator=(const SharedNativeWorldTransports&)=delete;
     bool owns_presence(const std::shared_ptr<SharedWorldPresence>&) const;
     std::optional<Token> bind(const Lease&,const std::shared_ptr<Session>&);
-    std::optional<Token> bind(const Lease&,const std::shared_ptr<cn::SharedCredentialConnection>&);
     bool current(const Token&) const;
     bool release(const Token&); // Exact registry incarnation only; no repository/common cleanup.
     std::optional<Snapshot> lookup(const Lease&) const;

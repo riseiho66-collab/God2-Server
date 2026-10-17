@@ -49,7 +49,7 @@ public:
     using Current=std::function<bool(Check,const Scope&)>;
     using Install=std::function<bool(Session&,const Scope&)>;
     using Cleanup=std::function<void(const Scope&)>;
-    using OutwardProvider=std::function<std::optional<std::vector<cn::SharedActorVisibility::OutwardRecipient>>(
+    using OutwardProvider=std::function<std::optional<std::vector<shared::SharedActorVisibility::OutwardRecipient>>(
         Session&,const Scope&)>;
     struct Native {
         ReplyDecision decision;
@@ -64,8 +64,8 @@ public:
         // Other records remain unchanged. Structural parsing does not qualify
         // their phases/content or the issuer's complete actual peer selection.
         std::vector<std::size_t> incoming_offsets;
-        std::vector<cn::SharedActorVisibility::InitialTaiwanActor> incoming;
-        std::vector<cn::SharedActorVisibility::OutwardRecipient> outward;
+        std::vector<shared::SharedActorVisibility::InitialTaiwanActor> incoming;
+        std::vector<shared::SharedActorVisibility::OutwardRecipient> outward;
         Current current;
         // Real scene owner installs its authoritative scene and InWorld state,
         // without yield/send/DB writes, inside the held publication boundary.
@@ -80,10 +80,10 @@ public:
         // This pure game-owner metadata never enters Session frame custody.
         std::shared_ptr<const TaiwanInitialNpcSceneObservation> initial_npc_observation{};
         Native(ReplyDecision,std::vector<std::uint8_t>,std::vector<std::size_t>,
-            std::vector<cn::SharedActorVisibility::InitialTaiwanActor>,
-            std::vector<cn::SharedActorVisibility::OutwardRecipient>,Current,Install,Cleanup);
+            std::vector<shared::SharedActorVisibility::InitialTaiwanActor>,
+            std::vector<shared::SharedActorVisibility::OutwardRecipient>,Current,Install,Cleanup);
         Native(ReplyDecision,std::vector<std::uint8_t>,std::vector<std::size_t>,
-            std::vector<cn::SharedActorVisibility::InitialTaiwanActor>,
+            std::vector<shared::SharedActorVisibility::InitialTaiwanActor>,
             OutwardDecision,OutwardProvider,Current,Install,Cleanup);
     };
     using Source=std::function<std::optional<Native>(Session&,const Scope&)>;
@@ -96,7 +96,7 @@ public:
     // or HP-loss side effect precedes the saved player publication, including
     // opaque descendants. The exact overlap check is not that semantic proof.
     static SharedTaiwanWorldLifecycle::AsyncOwner create(
-        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,Source,
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,Source,
         TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter,
         InitialDeityPublisher deity_publisher=InitialDeityPublisher::External);
 };

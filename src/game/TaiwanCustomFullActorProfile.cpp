@@ -361,7 +361,7 @@ const TaiwanCustomFullActorProfile::SourceInput& TaiwanCustomFullActorProfile::P
 const TaiwanCustomFullActorProfile::ReceiverInput& TaiwanCustomFullActorProfile::Profile::receiver()const noexcept{return data_->receiver;}
 const TaiwanCustomFullActorProfile::ResourceInput& TaiwanCustomFullActorProfile::Profile::resources()const noexcept{return data_->resources;}
 const TaiwanCustomFullActorProfile::StatusInput& TaiwanCustomFullActorProfile::Profile::status()const noexcept{return data_->status;}
-const std::shared_ptr<const cn::SharedActorVisibility::TaiwanReturnActorOverride>& TaiwanCustomFullActorProfile::Profile::actor_override()const noexcept{return data_->status.actor_override;}
+const std::shared_ptr<const shared::SharedActorVisibility::TaiwanReturnActorOverride>& TaiwanCustomFullActorProfile::Profile::actor_override()const noexcept{return data_->status.actor_override;}
 std::uint64_t TaiwanCustomFullActorProfile::Profile::revision()const noexcept{return data_->revision;}
 }
 

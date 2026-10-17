@@ -64,8 +64,6 @@ bool SharedNativeWorldTransports::tuple(const Lease& lease,const StrongTransport
                 c->recovered_world_ready() && (c->state()==SessionState::InWorld || c->state()==SessionState::InBattle) &&
                 c->common_world_delivery_current(lease.account,lease.character,lease.generation) &&
                 !c->common_world_entry_current(lease.account,lease.character,lease.generation);
-        else return c->role()==cn::SharedCredentialConnection::Transport::Role::World && c->world_admission_current() &&
-            c->world_session_id()==lease.session && c->verified_account_id()==lease.account && c->world_character_offered(lease.character);
     },transport);
 }
 bool SharedNativeWorldTransports::qualified(const Token& token,const StrongTransport& transport) const {
@@ -131,14 +129,7 @@ std::optional<SharedNativeWorldTransports::Token> SharedNativeWorldTransports::b
     const auto lease=original;const auto receiver=original_receiver;
     return bind_owned(lease,StrongTransport{receiver});
 }
-std::optional<SharedNativeWorldTransports::Token> SharedNativeWorldTransports::bind(const Lease& original,const std::shared_ptr<cn::SharedCredentialConnection>& original_receiver) {
-    owner();if(terminal_)return std::nullopt;
-    if(busy_){reentered_=true;return std::nullopt;}
-    busy_=true;reentered_=false;
-    struct EndOperation {bool& busy;~EndOperation(){busy=false;}} end{busy_};
-    const auto lease=original;const auto receiver=original_receiver;
-    return bind_owned(lease,StrongTransport{receiver});
-}
+
 bool SharedNativeWorldTransports::release(const Token& original) {
     owner();if(terminal_)return false;
     if(busy_)reentered_=true;

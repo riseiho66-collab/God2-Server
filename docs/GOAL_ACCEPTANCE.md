@@ -1,16 +1,14 @@
 # GOD2 Active Goal Acceptance
 
-## Current dual-client execution plan (2026-10-06)
+## Current Taiwan-only scope (2026-10-18)
 
-The owner restarted goal mode for one server supporting both TW and CN. Follow
-M1-M5 in docs/PACKET_CONNECTION_GOAL_20261006.md. All CN gameplay remains native;
-old custom-fallback text does not authorize CN invented rules or guessed wire
-contracts. Complete source connections before comprehensive build/runtime/tests,
-then repair/regress/release both clients and mixed interactions. Shared tables
-are default; proven storage incompatibilities use _tw/_cn suffixes. Original
-accounts/saves and frozen features remain protected. Historical goal-mode API
-limitations below are obsolete; current goal text is maintained through the
-supported goal interface and old receipts are retained.
+The owner requires this server to develop only Taiwan. Regional implementations,
+listeners, importers and active plans are retired. Keep Taiwan PC and its two
+native binary WebSocket entry paths, saved state and Traditional/Simplified
+display. The latest scope replaces earlier multi-region requirements. Complete
+real directional/phase/state/variant paths before concentrated build/tests and
+current-client own-server acceptance. Source cleanup itself is not TW100%.
+See AGENTS.md and PACKET_CONNECTION_GOAL_20261006.md for current workflow.
 
 ## Active objective
 

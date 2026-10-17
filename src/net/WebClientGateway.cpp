@@ -68,7 +68,7 @@ struct WebClientGateway::State:std::enable_shared_from_this<State> {
                origin.find_first_of("\r\n \t")!=std::string::npos||!origins.insert(origin).second)
                 throw std::invalid_argument("Web gateway Origin must be explicit and unique");
         for(const auto& route:routes) {
-            if((route.path!="/tw/native"&&route.path!="/tw/native-game"&&route.path!="/cn/native"&&route.path!="/cn/native-game")||
+            if((route.path!="/tw/native"&&route.path!="/tw/native-game")||
                !route.endpoint.port()||route.endpoint.address().is_unspecified()||
                !paths.insert(route.path).second||route.endpoint==policy.listen)
                 throw std::invalid_argument("Web gateway requires registered native paths/endpoints");

@@ -203,7 +203,7 @@
         "verification": "48 native remote-consumer executions;5 isolated TCP cases including two-way24-pose matrices, late join, disconnect, movement, battle return and existing chat regressions;3 C++ test targets. See docs/research/native-peer-pose-20261002.md.",
         "activation": "Application candidate wired; formal executable unchanged. Rendered current-client acceptance pending. No persistent data migration.",
         "native_lifecycle_evidence": "502570 ->504080 ->4FFCB0 ->41AF90; remote4FB290 ->4FD140 ->4FFCB0; animation18 clears at track completion, animations16/17 stay. Current client code regions match captured image.",
-        "current_client_acceptance": "private-peer-pose-20261002-05: TW/CN hidden-desktop clients, six bidirectional mode events, one-shot completion on both local/peer renderers, late observer idle without stale replay, persistent mode2 late replay, movement/save and mode1 after movement. Actual ACT track binding verified; screenshots/pixel inspection not used."
+        "current_client_acceptance": "private-peer-pose-20261002-05: TW hidden-desktop clients, six bidirectional mode events, one-shot completion on both local/peer renderers, late observer idle without stale replay, persistent mode2 late replay, movement/save and mode1 after movement. Actual ACT track binding verified; screenshots/pixel inspection not used."
       },
       "native_shared_first_skill_recovery": "native-skill-reconnect-20260921-03 qualifies first-exchange disconnect and fresh original clients on the same server. Saved HP88 MP42 enemyHP96 and complete checkpoint/resources/reservation rows survive unchanged. Two remaining native skills finish; all checkpoint (including RNG), resources, reservations, XP, settlements and positions match uninterrupted native-shared-skills-20260921-01 exactly. World repopulation/movement pass. Diagnostic only. Run01 failed on child-owned hotbar cleanup, fixed by parent-owned fixture; run02 hit the still-open native empty map-catalog fault at459ED2 before recovery. Successful run03 does not resolve that startup fault.",
       "native_shared_skill_normal_path": "native-shared-skills-20260921-01 qualifies uninterrupted three-skill combat with original combatant and observer clients: three native skill1 commands, retaliation, one settlement, Fight set/clear, world repopulation and movement/save. Final HP76/120 MP26/80 resource revision5, battle revision6 enemyHP0 and XP0. Existing CUSTOM-0012 rules remain test-only. Subsequent first-exchange reconnect and server restart are recorded separately.",
@@ -315,7 +315,7 @@
       "indoor_reconnect_20260921": "native-town-indoor-relogin-20260921-03: new client restores post-walk scene15/18,12/rev55 without replaying map or movement probes; ring010001, all15 journal slots and item5569 restored, no town NPCs. All21 tables/schema unchanged. Direct indoor startup has no outdoor catalog; independent native indoor961-byte grid remains exact. Attempts01/02 are observer failures retained, not passes. Explicit Taiwan resource-language compatibility remains. Bounded native-function chain qualified; physical UI, reverse route and production acceptance remain open.",
       "indoor_followup_movement_20260921": "native-town-indoor-walk-20260921-01: durable crossing followed by original5024C0 movement to18,12; native ACK5D01 and ring010102, later idle world frame430, persisted scene15/revision55. Other20 tables unchanged. Explicit process-local Taiwan resource language override retained. Captured-evidence regression added; fresh-client cross-map reconnect and physical UI acceptance still pending.",
       "durable_receiver_20260921": "native-town-indoor-durable-20260921-02 accepts original scene61 receiver and one exact context; live grid31x31 equals pinned indoor data. Only recovered_positions changes town110,70/rev53 to indoor17,13/rev54. Explicit process-local resource language compatibility changes4/2 to4/1 after exact selector-code check; import confirmed GetSystemDefaultLangID. No OS locale or on-disk EXE changes. Packet/hash/ABI/grid/DB regression passes. Destination movement, fresh-client reconnect and rendered UI acceptance remain pending; not production promotion.",
-      "durable_runtime_attempt_20260921": "Runner exposes explicit durable indoor transfer and independent committed-row check. native-town-indoor-durable-20260921-01 exits before Winsock while loading gb tables, unlike prior successful non-gb startup; current system locale zh-CN. Server starts, all21 DB tables unchanged. No scene packet reached; durable transfer remains unverified. Resolve process-local language/resource startup before destination walk/reconnect. No OS locale or original executable modified.",
+      "durable_runtime_attempt_20260921": "Runner exposes explicit durable indoor transfer and independent committed-row check. Server starts, all21 DB tables unchanged. No scene packet reached; durable transfer remains unverified. Resolve process-local language/resource startup before destination walk/reconnect. No OS locale or original executable modified.",
       "durable_application_binding_20260921": "Supersedes service-only integration gap: default-off scene_indoor_transfer requires scene_indoor_probe, source_consensus and explicit nonempty indoor_navigation. Application registers both maps, commits the isolated character1 town110,70 to indoor17,13 transfer and releases movement only after its pending exact context. Indoor reconnect restores saved journal/inventory without town NPCs. Existing transport-only probe is unchanged. Release build and four targeted suites pass; new Application route is NOT fresh-runtime verified, runner exposure and native destination walk/reconnect still pending. No existing runtime config or production mode changed.",
       "per_character_binding_20260921": "Service-only groundwork: optional pinned indoor navigation beside town, per-character scene/kind and movement ring, begin_indoor_transfer builds native-qualified scene61 before CAS destination commit, and pending receipt blocks movement. Tests cover two characters on distinct maps, disconnect before receipt, service reconstruction, stale source/destination revisions and authoritative reconnect. Application has not enabled this durable crossing API; existing indoor probe remains transport-only. No reverse transfer, physical UI acceptance or production promotion.",
       "indoor_transport_probe_20260921": "Additional default-off scene_indoor_probe requires scene_probe and rejects scene_relocate. Emits scene61 for area2/scene15/kind2/17,13 with zero opaque WORD and no same-scene bit. Retains the town DB unchanged; admits the one pending context notice but blocks all subsequent non-tick gameplay because destination movement authority has not been installed. This is native resource/receiver qualification only, not a cross-map gameplay or revival feature.",
@@ -968,7 +968,7 @@
       "native_gap": "Current original-client chat opcode and payload, client text codepage, language selection and rendering have not been qualified. Client-local quest/UI resources cannot be replaced by server UTF-8 chat messages.",
       "rules": {
         "conversion": "Bundled OpenCC s2t/t2s phrase-first dictionaries convert valid UTF-8 independently for each recipient; Lua NPC JSON text and option labels are converted while identifiers remain unchanged. No semantic translation.",
-        "preference": "In the placeholder world chat route, /lang zh-CN or /lang zh-TW changes the in-memory recipient preference; traditional is the default. No account or character rows are modified."
+        "preference": "No account or character rows are modified."
       },
       "reason": "Connect useful bilingual chat behavior to an actual own-server socket route while keeping the unverified original protocol separate.",
       "activation": "Placeholder protocol only. The current original-client server path does not invoke this chat route.",
@@ -1106,7 +1106,7 @@
         "artifacts/designs/skill-damage-v1-20260926/native_mp_catalog.lua"
       ],
       "native_gap": "Original attack/defense/skill-rank damage producer and sufficient original combat observations remain unavailable in the examined evidence. Native inference remains the first priority.",
-      "rules": "Draft smooth attack/defense mitigation with explicitly custom skill-rank, area, element, ordinary hit/critical and variance factors. Existing MP is preserved verbatim from the supported Taiwan client source SHA256 7676acd93f164d071f7681a3fe74de94d65892759dbf2e69e3c0f748423d2f51; 448 entries, 243 description comparisons agree. No CN MP or arbitrary cost is imported.",
+      "rules": "Draft smooth attack/defense mitigation with explicitly custom skill-rank, area, element, ordinary hit/critical and variance factors. Existing MP is preserved verbatim from the supported Taiwan client source SHA256 7676acd93f164d071f7681a3fe74de94d65892759dbf2e69e3c0f748423d2f51; 448 entries, 243 description comparisons agree.",
       "reason": "Owner authorized design only for missing formulas and explicitly required existing MP values; corrected target to the currently supported Taiwan client.",
       "activation": "Draft artifacts only. Not loaded by Application or active gameplay scripts. No database, save or live server change. No original formula claim.",
       "verification": "Static current-source identity, raw MP extraction and existing book-binding reconciliation only. No game, server or implementation tests run. Balance and native-client acceptance remain unqualified.",
@@ -1636,7 +1636,7 @@
       "native_gap": "Original server-side option persistence/admission/replies not recovered. S2C1D is unrelated173 bytes; no echo or authority inferred.",
       "rules": "Preserve both raw C2S1D option bytes. Admit only standalone authenticated owned ready-world notice, emit no reply and change no game state, saves or chat filters. Reject mixed mutations, premature selection and battle until those flows are qualified.",
       "reason": "Current497D80 produces an otherwise unsupported3-byte record after local option UI updates; connect the verified transport without inventing gameplay.",
-      "activation": "INSTALLED_TRANSPORT_ONLY2026-10-02; TW/CN native local UI five toggles/reset20 operations accepted. World notification admission only; original server authority and battle/mixed variants remain OPEN.",
+      "activation": "INSTALLED_TRANSPORT_ONLY2026-10-02; TW native local UI five toggles/reset20 operations accepted. World notification admission only; original server authority and battle/mixed variants remain OPEN.",
       "field_origins": {
         "wire_shape": "NATIVE_VERIFIED",
         "local_UI_toggle_masks": "NATIVE_VERIFIED",
@@ -1666,7 +1666,7 @@
       "native_gap": "Original server ground-drop rules, restrictions on enhanced/bound/quest items, economics and battle discard have not been recovered. Wire27 and absolute41 are verified independently in the build-matched producer/consumer.",
       "rules": "One authenticated selected ready-world owned ordinary bag slot0..29 per batch, optionally idle ticks. Source-pinned qualified scalar inventory only. Quantity1..count<=127 and exact item/revision/owner required. BEGIN IMMEDIATE decrement, clear item at zero, advance revision once; preserve source hash/design id. No ground spawn, currency, new items or metadata. Reject pending battles/mixed mutations/transition/unprojected state. Preserve pre-stage3 guide slot0. Prepare absolute41 before commit, deny and restore projection on validation or DB failure.",
       "reason": "Connect actual native bag discard UI to authoritative saved stack mutation with conservative scope; do not invent unsupported enhanced item or ground spawn behavior.",
-      "activation": "INSTALLED_SCOPED_2026-10-02; current TW/CN native bag partial/complete/single-item6/6 accepted; C++4/4, TCP discard2/2, regression6/6, native machine24/24 and frozen chat passed. Executable-only promotion; PID18180 at deployment, no schema/save/config/client changes.",
+      "activation": "INSTALLED_SCOPED_2026-10-02; current TW native bag partial/complete/single-item6/6 accepted; C++4/4, TCP discard2/2, regression6/6, native machine24/24 and frozen chat passed. Executable-only promotion; PID18180 at deployment, no schema/save/config/client changes.",
       "field_origins": {
         "C2S27_item_slot_quantity_and_S2C41_shape": "NATIVE_VERIFIED",
         "source_instance_ownership_and_eligibility": "EXISTING_CUSTOM_POLICY",
@@ -1695,7 +1695,7 @@
       "native_gap": "Original server invitation expiry, leader/disband policy, persistent parties, transfer count source, cross-scene tracking, follow, shared battle/EXP/loot not recovered. Native producers6A/57/58/5A and receivers54/55/56/57/58 are independently verified; a roster does not establish shared battle authority.",
       "rules": "Authenticated owned ready-world leases only, same scene consenting join, one pending request per requester/leader with30s expiry, five members from native four-other roster. All existing members must remain ready and in the joining scene at acceptance. Decline/busy create no membership. Leader-only kick; member leave, pending cancellation, disconnect cleanup; leader departure disbands. Prepare recipient-localized strict14-byte unique display names before ephemeral state publication; preserve self Unicode spelling without OpenCC and refuse replacement/truncation/collisions. Saved role level/profession/HUD/resources required. Refresh relevant maximum-five leases after accepted movement/resource handlers; readiness recovery replays current peer snapshots both ways, position only in the same scene. One party request may coalesce with common chat/ticks and retains the existing frozen chat dispatch. Native bars consume signed low WORD; wider resource values are not admitted. Transfer preview byte0 is an explicit custom default, not recovered. No persistent party rows, grants, shared combat or economic mutations.",
       "reason": "Connect verified original multiplayer party controls and authoritative membership without guessing unrelated trade, follow or battle packets. Preserve frozen authentication/chat/IME/client and all saves.",
-      "activation": "INSTALLED_SCOPED_2026-10-02; CTest5/5, actual isolated TCP6/6, native79cases and5widths, ledger1/1 and frozen chat passed. Original TW/CN hidden desktop runs05/06 accepted two-way consent, roster, native movement, leave, kick and disconnect including raw-self name variants. Executable-only managed promotion PID2076; no schema/save/config/client changes. Group battle/follow/shared rewards/cross-scene tracking and large-player load remain unqualified.",
+      "activation": "INSTALLED_SCOPED_2026-10-02; CTest5/5, actual isolated TCP6/6, native79cases and5widths, ledger1/1 and frozen chat passed. Original TW hidden desktop runs05/06 accepted two-way consent, roster, native movement, leave, kick and disconnect including raw-self name variants. Executable-only managed promotion PID2076; no schema/save/config/client changes. Group battle/follow/shared rewards/cross-scene tracking and large-player load remain unqualified.",
       "field_origins": {
         "wire_shapes_native_profession_and_roster_fields": "NATIVE_VERIFIED",
         "owned_level_resources_and_HUD": "EXISTING_SAVED_AUTHORITY",
@@ -1727,7 +1727,7 @@
       "native_gap": "Original economic eligibility, binding restrictions, stack merge, distance, timeout, server escrow and settlement authority not recovered. Client29/2A/2B/2C/2D producers and4E/4F/50/51/52/53/27 consumers independently build-matched. Client rendering does not establish official transaction rules.",
       "rules": "Explicit native-startup schema installation and zero-default owned wallet provisioning preserve existing balances; no grant API. Native wallet amount is a full unsigned DWORD. Two distinct same-scene ready owned live characters with complete30-slot snapshots; maximum8 unique source slots each, quantities1..count<=127. Only pinned qualified scalar MED02 consumables are eligible, no equipment/enhanced/bound/quest/map instance inference or stack merging; receive into empty slots after removing offers. Transient offers lock on own confirmation; accept coalesced2B+2C, settle only when both confirm. Custom60-second inactivity lease; cancel, disconnect, expiry, stale snapshot or scene/readiness change restore saved30-slot inventory and absolute purse after4F. Verify both complete snapshots and no pending battle under BEGIN IMMEDIATE. Pre-encode both canonical replies before writes; success closes52 then synchronizes inventories/purses. Transfer quantities and money conservatively, require uint32 balance range, advance changed physical-slot/wallet revisions once. Unique64-hex receipt with readback prevents replay; any validation/write/readback failure rolls back both sides. Existing frozen chat remains the authority for coalesced common chat.",
       "reason": "Build actual conserved persistent settlement for the verified native player-trade UI before admitting or promoting gameplay. Keep already working frozen features untouched.",
-      "activation": "INSTALLED_SCOPED_NATIVE_TRADE_2026-10-02; candidate4d00868cc4e6d3b945e5450b273ff8a3c8c7a44e698c9a0397f42f3531855cd0. CTest9/9, native61/61, trade TCP3/3 and existing party TCP6/6 pass. Original hidden TW/CN client20/20 operations qualify quantities, money renderer, two-way cancellation and two settlements; no pixel acceptance claimed. Formal Application now handles29/2A/2B/2C/2D; world parser38 cases is not whole-game completion. Managed startup adds two empty trade tables only, all old rows/schema/history preserved. Client/config/frozen chat unchanged. Evidence: artifacts/releases/native-trade-20261002 and artifacts/playtests/private-trade-20261002-05/run-result.json.",
+      "activation": "INSTALLED_SCOPED_NATIVE_TRADE_2026-10-02; candidate4d00868cc4e6d3b945e5450b273ff8a3c8c7a44e698c9a0397f42f3531855cd0. CTest9/9, native61/61, trade TCP3/3 and existing party TCP6/6 pass. Original hidden TW client20/20 operations qualify quantities, money renderer, two-way cancellation and two settlements; no pixel acceptance claimed. Formal Application now handles29/2A/2B/2C/2D; world parser38 cases is not whole-game completion. Managed startup adds two empty trade tables only, all old rows/schema/history preserved. Client/config/frozen chat unchanged. Evidence: artifacts/releases/native-trade-20261002 and artifacts/playtests/private-trade-20261002-05/run-result.json.",
       "field_origins": {
         "wire_shapes_and_client_money_confirmation_close_behavior": "NATIVE_VERIFIED",
         "existing_scalar_item_slots_and_provenance": "EXISTING_CUSTOM_POLICY",
@@ -1762,7 +1762,7 @@
       "native_gap": "Original economic caps, fees/interest, access distance/expiry and native bank NPC roles/positions remain unrecovered. C2S39/61/62 and S2C46/47/27 are build-qualified;63/64/65 item directions are verified; current scoped runtime is tracked separately in CUSTOM-0065. Native signed bank UI limit arithmetic can overflow and is not original server authority.",
       "rules": "Per-character zero-on-qualified-open bank, existing owned trade purse, no grants/interest/fees. Positive signed-int-compatible input, checked conservation, bank cap500000000 and purseuint32. BEGIN IMMEDIATE owner/full-snapshot/pending-battle checks, both amount/revision CAS updates, unique64-hex server receipt and exact receipt/balance readback before commit. Independently qualified bank role plus72 placement; no startup points or guessed positions. Test-only role/placement admitted only by existing private2598 guard. Square3tile access,60second inactive lease; selected ready nontrade same-scene owner. OneNPC37 or bank mutation may coexist with ticks/common chat; duplicate/extra mutations reject. Refused known bank opener is consumed without disconnecting; unknown NPC retains old route. Close39kind1 drops context without response; absolute47/27 sync pre-encoded before money commit. Separate identical61/62 frames can be legitimate clicks because native packets have no unique request ID.",
       "reason": "Connect original banking controls to authoritative conserved savings while keeping native-placement gaps and custom economic policy explicit.",
-      "activation": "INSTALLED_MONEY_PROTOCOL_2026-10-02; candidate02 SHA090de7764db203f70d10fa0d2e771f962063ca0f7069d48b486d19547ec72a92, managed PID19452/port2592. CTest13/13; bank TCP4/4, existing tradeTCP3/3 and partyTCP6/6; native78/78, hidden originalTW/CN12events/6durable receipts accepted. Frozen chat unchanged. Startup adds only3empty tables/2indices; all existing schema/history/rows exact, client/config unchanged. Formal qualified bank service points0: money protocol installed but original banker placement/access remains incomplete. At that release bank item63/64/65 was not implemented; subsequent scoped installation is tracked in CUSTOM-0065.",
+      "activation": "INSTALLED_MONEY_PROTOCOL_2026-10-02; candidate02 SHA090de7764db203f70d10fa0d2e771f962063ca0f7069d48b486d19547ec72a92, managed PID19452/port2592. CTest13/13; bank TCP4/4, existing tradeTCP3/3 and partyTCP6/6; native78/78, hidden originalTW12events/6durable receipts accepted. Frozen chat unchanged. Startup adds only3empty tables/2indices; all existing schema/history/rows exact, client/config unchanged. Formal qualified bank service points0: money protocol installed but original banker placement/access remains incomplete. At that release bank item63/64/65 was not implemented; subsequent scoped installation is tracked in CUSTOM-0065.",
       "field_origins": {
         "wire_and_native_bank_controls": "NATIVE_VERIFIED",
         "owned_trade_purse": "EXISTING_SAVED_AUTHORITY",
@@ -1868,7 +1868,7 @@
         "tools/strike_lab/private_bank_armor_projection_20261002_v03.py",
         "tools/operations/native_armor_transfer_release_20261002.py"
       ],
-      "replacement": "Recover original role source restrictions/level units, server equipped final-state/stat generation and HeroDoll mapping, then qualify actual combat and peer appearance. Native TW/CN instance transport and relogin are accepted; banking/trading full equipment remains ineligible. Recover native acquisition/enhancement separately; do not turn synthetic grants into production drops. Preserve current saved items, source/client pins and frozen chat/auth/IME. See docs/research/native-armor-transfer-20261002.md and the separate formal release receipt."
+      "replacement": "Recover original role source restrictions/level units, server equipped final-state/stat generation and HeroDoll mapping, then qualify actual combat and peer appearance. Native TW instance transport and relogin are accepted; banking/trading full equipment remains ineligible. Recover native acquisition/enhancement separately; do not turn synthetic grants into production drops. Preserve current saved items, source/client pins and frozen chat/auth/IME. See docs/research/native-armor-transfer-20261002.md and the separate formal release receipt."
     },
     {
       "id": "CUSTOM-0067",
@@ -1887,7 +1887,7 @@
       "native_gap": "Original unlock, account sharing, binding and acquisition policies remain unqualified. Six cache pages do not prove six unlocked pages. Weapon/gem bank transport remains OPEN.",
       "rules": "Existing explicit bag0..29 and vault scalar capacity only; preserve optional protected30..49 and all three overlays. Whole qualified EQU2/TEQ26 full20 custody, one item, empty bag/vault destinations or armor-armor vault swap. Physical revisions, immutable owner/full snapshots, prepare all bytes before writes, transactional full readback, receipt uniqueness and rollback. Native UI pages0..2 and cells2..49 only. Existing qualified MED scalar route retains quantities and whole-cell swap without metadata loss. Armor-MED swaps remain ineligible. No grants, capacity on read, formulas, appearance or altered ordinary MED eligibility.",
       "reason": "Connect native63/64/65 armor producers to persistence with native48 and full bag responses while preserving working scalar banking.",
-      "activation": "INSTALLED_CURRENT_CLIENT_ACCEPTED_TRANSPORT_2026-10-03; exact candidate5e7f999e038fd6dad63a714be8e5352f765a973599f860880a17855848126dd1; original hidden TW/CN12/12 armor mutations and20/20 MED,14/14 targeted CTests, formal schema43/route enabled with0 old saved rows changed and0 grants. Receipt artifacts/releases/owned-armor-bank-20261003/clone-stage/release.json. Original unlock/admission/acquisition and weapon/gem bank transfers remain OPEN.",
+      "activation": "INSTALLED_CURRENT_CLIENT_ACCEPTED_TRANSPORT_2026-10-03; exact candidate5e7f999e038fd6dad63a714be8e5352f765a973599f860880a17855848126dd1; original hidden TW12/12 armor mutations and20/20 MED,14/14 targeted CTests, formal schema43/route enabled with0 old saved rows changed and0 grants. Receipt artifacts/releases/owned-armor-bank-20261003/clone-stage/release.json. Original unlock/admission/acquisition and weapon/gem bank transfers remain OPEN.",
       "field_origins": {
         "native63_64_65_48_full20": "NATIVE_VERIFIED",
         "whole_owner_custody_revision_receipts": "CUSTOM_DESIGNED",
@@ -1899,7 +1899,7 @@
         "tests/storage_owned_armor_bank_adapter_0067.cpp",
         "tools/strike_lab/current_bank_armor_transport_20261002.py"
       ],
-      "replacement": "Qualify original custody/admission/unlock policies separately; preserve all original instances and owner saves. Production requires the new candidate against current original TW/CN clients; offline279 cases alone are insufficient."
+      "replacement": "Qualify original custody/admission/unlock policies separately; preserve all original instances and owner saves. Production requires the new candidate against current original TW clients; offline279 cases alone are insufficient."
     },
     {
       "id": "CUSTOM-0068",
@@ -1933,7 +1933,7 @@
         "tools/strike_lab/current_bank_weapon_gem_transport_20261003.py",
         "tools/strike_lab/private_owned_foreign_bank_v02_20261003.py"
       ],
-      "replacement": "Qualify original admission/unlock/binding separately; require own-server original TW/CN acceptance before formal promotion. Preserve all saved instances and source pins."
+      "replacement": "Qualify original admission/unlock/binding separately; require own-server original TW acceptance before formal promotion. Preserve all saved instances and source pins."
     },
     {
       "id": "CUSTOM-0069",
@@ -1968,7 +1968,7 @@
         "tools/strike_lab/private_owned_instance_trade_20261003.py",
         "tools/operations/stage_owned_instance_trade_20261003.py"
       ],
-      "replacement": "Qualify original binding/tradability/destination/acquisition rules independently and require original TW/CN live acceptance before formal promotion. Preserve original instances, accounts, source/client pins and frozen chat/auth/IME."
+      "replacement": "Qualify original binding/tradability/destination/acquisition rules independently and require original TW live acceptance before formal promotion. Preserve original instances, accounts, source/client pins and frozen chat/auth/IME."
     },
     {
       "id": "CUSTOM-0070",
@@ -2003,7 +2003,7 @@
         "tools/strike_lab/private_owned_mixed_bank_v06_20261003.py",
         "tools/operations/stage_owned_mixed_bank_v06_20261003.py"
       ],
-      "replacement": "Recover original admission/binding/unlock independently; require original TW/CN own-server live acceptance before enabling this default-off route. Preserve saved instances, original pins and frozen client/chat/auth/IME."
+      "replacement": "Recover original admission/binding/unlock independently; require original TW own-server live acceptance before enabling this default-off route. Preserve saved instances, original pins and frozen client/chat/auth/IME."
     },
     {
       "id": "CUSTOM-0071",
@@ -2038,7 +2038,7 @@
         "tools/strike_lab/private_owned_instance_discard_20261003.py",
         "tools/operations/stage_owned_instance_discard_20261003.py"
       ],
-      "replacement": "Recover original binding/protection/drop policy independently. Require original TW/CN own-server native UI, cancel/accept, typed20 audit, unchanged scalar route and real relogin acceptance before activation; preserve all prior accounts/saves/client/chat/auth/IME.",
+      "replacement": "Recover original binding/protection/drop policy independently. Require original TW own-server native UI, cancel/accept, typed20 audit, unchanged scalar route and real relogin acceptance before activation; preserve all prior accounts/saves/client/chat/auth/IME.",
       "acceptance": {
         "native_offline_cases": 419,
         "ctest_passed": 32,
@@ -2126,7 +2126,7 @@
         "artifacts/research/native-party-chat-0073/root-extra-tcp-tests.py",
         "tools/operations/stage_native_party_chat_20261003.py"
       ],
-      "replacement": "Recover original server audience and denial policy; qualify other channels independently. Require actual current TW/CN client acceptance before formal promotion.",
+      "replacement": "Recover original server audience and denial policy; qualify other channels independently. Require actual current TW client acceptance before formal promotion.",
       "acceptance": {
         "native_machine_cases": 44,
         "ctest_passed": 46,
@@ -2150,7 +2150,7 @@
         "schema_before": 47,
         "schema_after": 47,
         "saved_rows_changed": 0,
-        "live_scope": "Owned consenting two-player same-map world party TW/CN; other-map and battle live acceptance remain open."
+        "live_scope": "Owned consenting two-player same-map world party TW; other-map and battle live acceptance remain open."
       }
     },
     {
@@ -2178,7 +2178,7 @@
         "tools/strike_lab/private_private_chat_20261003.py",
         "tools/operations/stage_native_private_chat_20261003.py"
       ],
-      "replacement": "Recover original server lookup/denial policy; qualify Unicode name aliases and other states independently before broadening scope. Formal activation requires own-server current TW/CN acceptance and saved-row/frozen regression checks.",
+      "replacement": "Recover original server lookup/denial policy; qualify Unicode name aliases and other states independently before broadening scope. Formal activation requires own-server current TW acceptance and saved-row/frozen regression checks.",
       "acceptance": {
         "native_machine_cases": 152,
         "ctest_passed": 49,
@@ -2206,7 +2206,7 @@
         "schema_before": 47,
         "schema_after": 47,
         "saved_rows_changed": 0,
-        "live_scope": "Current original TW/CN clients, two owned same-map world peers; synthetic actualApplication three-peer isolation. Native dollar-prefix and selected-private inputs; private mode2 and native automatic reply9. No rendered pixel claim."
+        "live_scope": "Current original TW clients, two owned same-map world peers; synthetic actualApplication three-peer isolation. Native dollar-prefix and selected-private inputs; private mode2 and native automatic reply9. No rendered pixel claim."
       }
     },
     {
@@ -2274,7 +2274,7 @@
         "schema_after": 48,
         "saved_rows_changed": 0,
         "formal_guild_fixture_rows": 0,
-        "live_scope": "Original TW/CN two owned same-map clients; native #prefix and selectedguild producers; channel3 visible/archive,no bubble; synthetic actualApplication three-peer isolation and native movementACK/party56 ordering. Administrator-configured guild membership only."
+        "live_scope": "Original TW two owned same-map clients; native #prefix and selectedguild producers; channel3 visible/archive,no bubble; synthetic actualApplication three-peer isolation and native movementACK/party56 ordering. Administrator-configured guild membership only."
       }
     },
     {
@@ -2440,7 +2440,7 @@
         "src/handlers/OwnedGuildAnnouncementBatch.h",
         "src/main.cpp"
       ],
-      "native_gap": "Formal configured TW/CN create/apply/approve/reject/member-leave client workflows accepted and deployed. Original NPC mapping/governance, announcement79/98 runtime, transfer/disband/officers/kick/growth/economy and production concurrency remain OPEN.",
+      "native_gap": "Formal configured TW create/apply/approve/reject/member-leave client workflows accepted and deployed. Original NPC mapping/governance, announcement79/98 runtime, transfer/disband/officers/kick/growth/economy and production concurrency remain OPEN.",
       "rules": [
         "Native8D five-byte prompt and native6F23-byte request; exact mode/context and dual-codepage name validation. Client actor hint/tail never authorize mutations.",
         "CUSTOM30-second single-use world lease; observed movement, transfer, battle and active gameplay invalidate it. Lab requires both explicit env flags, loopback2598, disposable DB parent and no diagnostic combat/progression mixture.",
@@ -2455,7 +2455,7 @@
         "Ordinary members read an exact read-only founder/governance snapshot independent of the founder battle reservation. Their own world and SQL nonbattle qualification remain mandatory. Founder panels/approval/rejection retain the original leader() action restrictions; a read-only snapshot cannot bypass them. Native-client acceptance uses a clearly marked legal TEST_ONLY SQL reservation, not an actual rendered founder battle.",
         "CUSTOM entry uses exact full prepared plan, fresh paired SQL/world identity and30-second one-use non-wrapping session request. Native choice4 is rejected; only0/1/2 admitted. IssuedE7 history classification grants no authority and leaves original9A route intact.",
         "Chat retains frozen delivery and cancels modal authority. Same-batch help/chat cannot publish new permission; close86 revokes both selector and new membership input, including85/86 ordering.",
-        "New2996 is an append within native capacity3000; all original2995 native-retained rows preserved in both950/936. Private physical copies used for acceptance; exact qualified pair installed after successful formal TW/CN acceptance. Client EXE is unchanged.",
+        "New2996 is an append within native capacity3000; all original2995 native-retained rows preserved in both950/936. Private physical copies used for acceptance; exact qualified pair installed after successful formal TW acceptance. Client EXE is unchanged.",
         "Announcement79/98 codec and transactional repository are compiled candidates only; no runtime route or announcement migration is active."
       ],
       "reason": "Supply verified native field boundaries and replay-safe owner admission before implementing player-accessible cave membership.",
@@ -2678,7 +2678,7 @@
         "Every accepted member and pending applicant, including offline, must be persisted nonbattle. Every connected matching-character session must be currently ready with exact account/character; all audience readiness is current policy, not immutable movement ABA.",
         "BEGIN IMMEDIATE exact founder/governance/full roster/application CAS and paired read-only proofs; world callbacks must work after membership/governance deletion, without SQL/UI/reentry effects.",
         "Retain owned_guilds id/name/unknown columns and all announcement history; only bump retained revision and delete exact own governance/members/applications. No fee/refund, no schema migration, save replacement or unrelated mutation.",
-        "Retained names and their native folded TW/CN byte variants remain reserved. This is CUSTOM retirement/name-reservation policy, not recovered original name reuse.",
+        "Retained names and their native folded TW byte variants remain reserved. This is CUSTOM retirement/name-reservation policy, not recovered original name reuse.",
         "Capture every75 before old observers and any prefix. Suppress announcement writes across recursion, revoke at EACH success/denial before suffix and at scope exit. Invalidate every connected member/applicant permission before qualified2D/92 clearing; retain native cached rows until clear.",
         "Malformed later record rejects whole frame before earlier chat or75 callback. Cancel is native UI only; no guessed dedicated75 ACK.",
         "Native75 projection readability preflight uses frozen private_chat_peer outside SQL proof before usable lease capture and after each prefix. Missing role/resources or unsupported stored codepage denies retirement rather than leaving a live stale guild name; paired transaction proof stays world-only."
@@ -3448,12 +3448,12 @@
         "src/handlers/RecoveredBankService.cpp",
         "src/relations53/GuildJoinConversation53Runtime.h"
       ],
-      "native_gap": "Current pinned TW/CN purse DWORDs are rendered with signed32 %d; no native uint64 coin wire or complete widened producer/consumer chain is qualified.",
+      "native_gap": "Current pinned TW purse DWORDs are rendered with signed32 %d; no native uint64 coin wire or complete widened producer/consumer chain is qualified.",
       "rules": "Owner selected exact coin maximum99999999999, only coins; experience/damage/HP maxima remain undecided. Nonnegative uint64 domain, checked additions/subtractions, exact decimal/signed64 storage projection, no silent native DWORD truncation. A native DWORD bit export does not authorize signed GUI display.",
       "reason": "Implement the explicitly requested numeric domain separately from original native wire/client behavior.",
       "activation": "PHASE1 source integration: shared wallet reads, scalar/full-instance trade planning and CAS, bank purse transfers/receipt readback and guild Lua wallet input use bounded64. Legacy27 rejects unrepresentable positive display before settlement; legacy schema CHECKs and native formats remain unchanged. No build/test/runtime, migration, client patch, hosting or deployment.",
       "tests": [],
-      "replacement": "Connect version-qualified widened storage/arithmetic/native TW/CN/web producer/consumer/display and preserve original native formats as legacy profiles; final comprehensive verification after source integration.",
+      "replacement": "Connect version-qualified widened storage/arithmetic/native TW/web producer/consumer/display and preserve original native formats as legacy profiles; final comprehensive verification after source integration.",
       "source_integration_20261007": {
         "artifact": "artifacts\\integration\\packet-connections-20261006\\coin-wallet64-01",
         "wallet_amount_bits": 64,
@@ -3473,12 +3473,12 @@
       "implementation": [
         "src/game/OwnedStackQuantity.h"
       ],
-      "native_gap": "TW41 count is signed byte with negative occupancy clears; CN and all stack UI/producer/mutation semantics remain unqualified for99. Existing30 values include bag capacity and separate shop selection bounds.",
+      "native_gap": "Existing30 values include bag capacity and separate shop selection bounds.",
       "rules": "Only source-qualified stackable items may use per-stack maximum99; retain ordinary bag capacity and unstackable complete-instance semantics. Checked quantity domain increment/decrement; no item identity/stackability inference, grant, merge or native client patch.",
       "reason": "Explicit owner per-stack limit increase while preserving quantity conservation, item instances and existing saves.",
       "activation": "Domain source only, not yet installed in native gameplay/storage/GUI paths.",
       "tests": [],
-      "replacement": "Qualify current TW/CN producers/consumers and stackability sources, connect same authoritative storage/mutations and per-recipient UI; validate comprehensively after full source integration.",
+      "replacement": "Qualify current TW producers/consumers and stackability sources, connect same authoritative storage/mutations and per-recipient UI; validate comprehensively after full source integration.",
       "round325_quantity64_source_extension": {
         "round": 325,
         "date": "2026-10-12",
@@ -3523,7 +3523,7 @@
         "scripts/gameplay/revival.lua",
         "src/game/BattleCheckpointCodec.cpp"
       ],
-      "native_gap": "Original server damage, defense, critical formulas, revival execution and balance remain unqualified. Existing CUSTOM-0006 coefficients and CUSTOM-0017 execution are not recovered official rules. This arithmetic extension does not authorize native CN custom gameplay, new skills or new native TW/CN/web packet formats.",
+      "native_gap": "Original server damage, defense, critical formulas, revival execution and balance remain unqualified. Existing CUSTOM-0006 coefficients and CUSTOM-0017 execution are not recovered official rules.",
       "rules": {
         "selection": "Only an explicit owner-supplied BattleNumericProfile::ExtendedHealth64 selects the extended rule path. LegacyCustom remains the constructor/input default; never infer a profile from client identity, values or language.",
         "damage": "Retain CUSTOM-0006 order and coefficients: scaled_attack=attack*power_percent//100; scaled_defense=defense*defense_percent//100; base=max(1,scaled_attack-scaled_defense); critical iff roll<critical_chance_bp, then damage=base*critical_multiplier_percent//100. ExtendedHealth64 excludes the old final1000000 clip; LegacyCustom keeps the unchanged capped combat.lua. This is an owner-authorized numeric extension of an existing custom rule, not a newly selected official formula or production balance.",
@@ -3536,14 +3536,13 @@
         "numeric_profile_and_width_extension": "Owner numeric64 directive20261007; CUSTOM_DESIGNED extension, not original native recovery.",
         "damage_order_coefficients_minimum_and_critical_predicate": "Inherited CUSTOM-0006 custom formula; no official formula or balance qualification.",
         "legacy_damage_clip": "Unchanged CUSTOM-0006 gameplay/combat.lua capped path; preserved only in LegacyCustom.",
-        "extended_damage_clip_exclusion_and_integer_rounding": "CUSTOM-0090 owner-authorized arithmetic extension in separately selected combat_health64.lua; not native TW/CN wire authority.",
+        "extended_damage_clip_exclusion_and_integer_rounding": "CUSTOM-0090 owner-authorized arithmetic extension in separately selected combat_health64.lua; not native TW wire authority.",
         "revival_hp1_mp66": "Existing CUSTOM-0017 book6808 description-only evidence; executable projection, eligibility and timing remain custom and unqualified as official behavior.",
         "identity_rng_transaction_and_skill_authority": "Existing explicit server-owned Battle checks and caller-supplied policy; this record supplies no default actor, skill, credentials, success result or native provider."
       },
       "reason": "Carry the explicitly selected owner arithmetic profile through actual Battle callbacks and exact Lua integer boundaries without silently changing legacy formulas, choosing new gameplay maxima or promoting custom rules into native gameplay.",
-      "activation": "PHASE1 source-only callable capability through an explicitly owner-selected Battle profile and LuaEngine API. Application, diagnostic-v1 and PK admission remain LegacyCustom. No native TW/CN/web extended profile, installed schema, production promotion, client patch, runtime execution or deployment is activated by this record.",
+      "activation": "PHASE1 source-only callable capability through an explicitly owner-selected Battle profile and LuaEngine API. Application, diagnostic-v1 and PK admission remain LegacyCustom. No native TW/web extended profile, installed schema, production promotion, client patch, runtime execution or deployment is activated by this record.",
       "production_activated": false,
-      "native_tw_cn_web_profile_activated": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
       "deferred_qualification": "Complete source integration first; full balance qualification, saved-state compatibility, comprehensive verification and own-server current-client acceptance remain deferred and unclaimed. Preserve legacy native wire and independently qualify any extended native/client/display profile.",
@@ -3580,13 +3579,13 @@
         "src/handlers/DiagnosticSupplyService.cpp",
         "src/db/SqliteRecoveredCharacterRepository.cpp"
       ],
-      "native_gap": "Existing MED02 text declarations and original C2S26/legacy41/24 contracts do not qualify original server clamping, death, consumption, cooldown or complete wide native HP producer/consumer/display behavior. This numeric extension supplies no native CN custom-gameplay permission, new item, recovery magnitude or original formula.",
+      "native_gap": "Existing MED02 text declarations and original C2S26/legacy41/24 contracts do not qualify original server clamping, death, consumption, cooldown or complete wide native HP producer/consumer/display behavior.",
       "rules": {
         "selection": "Supply input and trusted service policy use a known explicit numeric profile, default LegacyCustom. Only a caller-selected ExtendedHealth64 path uses exact wide HP; never infer the profile from client, locale, magnitude or packet fields.",
         "projection": "Reuse unchanged CUSTOM-0016 supply.lua: dead HP0 remains unchanged and consumes nothing; living HP/MP gains min(explicit restore amount, remaining capacity); consume one only iff actual HP or MP increases. Preserve no-op behavior and original supply order; no revival, grants or new supply magnitudes.",
         "representation": "HP, maxHP and explicit restoreHP use uint64 within nonnegative signed64 representability, with exact Lua integer input/output and no double. MP, maxMP and restoreMP remain uint32 with the old signed32 admission limit. These are representation limits, not selected HP/damage/experience gameplay caps.",
         "legacy_reply": "LegacyCustom retains the existing native inventory/resource reply and checked legacy resource representation. Existing catalog policies do not automatically select wide HP.",
-        "extended_reply": "ExtendedHealth64 requires a caller-owned pure bounded logical projector with independently qualified payload/source authority. Validate and prepare the complete reply before the existing atomic inventory/resources CAS. Missing or invalid selected projection fails without legacy fallback, invented opcode, zero filling or clipping. This capability does not qualify a native TW/CN/web extended profile.",
+        "extended_reply": "ExtendedHealth64 requires a caller-owned pure bounded logical projector with independently qualified payload/source authority. Validate and prepare the complete reply before the existing atomic inventory/resources CAS. Missing or invalid selected projection fails without legacy fallback, invented opcode, zero filling or clipping. This capability does not qualify a native TW/web extended profile.",
         "authority": "Retain trusted self target/item/source identity, complete owned inventory/resource baselines, one-unit consumption iff actual gain, transaction ownership, pending battle exclusion, full CAS and readback. The pure Lua projection is not request, item, target or profile authority.",
         "caps": "HP, damage and experience gameplay maxima remain undecided. Only coins have the owner-selected maximum99999999999. Preserve native levels, unrelated fields and all existing resource/item provenance."
       },
@@ -3595,15 +3594,14 @@
         "living_only_headroom_and_consumption": "Inherited CUSTOM-0016 custom supply.lua policy, unchanged; official server behavior remains unqualified.",
         "existing_med02_recovery_amounts": "Existing independently pinned NativeSupplyCatalog/CUSTOM-0050 source declarations retain their original provenance. This record creates no item or amount and does not promote client text into general server authority.",
         "legacy_wire_projection": "Existing qualified legacy41/24 path is preserved with width rejection; no native layout is widened by this record.",
-        "extended_wire_projection": "Mandatory externally supplied qualified logical projector; source capability only. No default opcode, payload or automatic native TW/CN/web selection."
+        "extended_wire_projection": "Mandatory externally supplied qualified logical projector; source capability only. No default opcode, payload or automatic native TW/web selection."
       },
       "reason": "Extend the existing owned supply arithmetic and prepare-before-CAS boundary to exact HP64 under an explicit caller policy while retaining old supply semantics, item/source authority and legacy wire behavior.",
-      "activation": "PHASE1 source-only explicitly selected capability. Application, existing catalog factories, diagnostic/native profile defaults and PK remain legacy. No wide native TW/CN/web profile, installed HP64 migration, production balance, client patch, runtime execution or deployment is activated.",
+      "activation": "PHASE1 source-only explicitly selected capability. Application, existing catalog factories, diagnostic/native profile defaults and PK remain legacy. No wide native TW/web profile, installed HP64 migration, production balance, client patch, runtime execution or deployment is activated.",
       "production_activated": false,
-      "native_tw_cn_web_profile_activated": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
-      "deferred_qualification": "Actual wide supply caller/projector, authoritative native role representation, additive save-preserving HP64 schema, complete TW/CN/web producer/consumer/object/display paths and full balance/current-client acceptance remain OPEN. No build, test, native run or SQL/DB execution is claimed.",
+      "deferred_qualification": "Actual wide supply caller/projector, authoritative native role representation, additive save-preserving HP64 schema, complete TW/web producer/consumer/object/display paths and full balance/current-client acceptance remain OPEN. No build, test, native run or SQL/DB execution is claimed.",
       "replacement": "Replace only the inherited custom clamping/death/consumption/eligibility policies when original server evidence and current-client behavior are independently qualified. Preserve actual source declarations, saves and owned fulltuple CAS; independently qualify any extended wire/profile before activation.",
       "source_integration_20261008": {
         "artifact": "artifacts/integration/packet-connections-20261006/shared-supply-health64-source-01",
@@ -3655,9 +3653,8 @@
         "native_appearance": "OPEN; independent complete same149c afterstate producer and actual equip rules still required."
       },
       "reason": "Provide real shared owned-instance/position persistence and durable selection facts for native request routing without promoting legacy diagnostic rows, deriving fake native IDs or guessing game rules.",
-      "activation": "PHASE1 explicit optional source capability only. Default accessor/schema/migrations/Main do not install or select it. Actual acquisition/equipment handlers, Lua rules, replies, canonical-item plus native-presentation joint transaction and client acceptance remain OPEN. No CN custom gameplay permission is created.",
+      "activation": "PHASE1 explicit optional source capability only. Default accessor/schema/migrations/Main do not install or select it. Actual acquisition/equipment handlers, Lua rules, replies, canonical-item plus native-presentation joint transaction and client acceptance remain OPEN.",
       "production_activated": false,
-      "native_tw_cn_web_profile_activated": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
       "deferred_qualification": "Genuine original acquisition/custody/definition mapping supplier; native full before/after inventory and appearance; real C28 handler and ordered replies; atomic canonical mutation plus native display checkpoint; all mutation variants and later full build/runtime/native acceptance.",
@@ -3745,7 +3742,6 @@
       "reason": "Provide actual conditional TW handler-to-storage-to-reply code instead of another caller-supplied action placeholder.",
       "activation": "PHASE1 explicit same-Context with_owned_bag_moves source capability. Main/source populations/schema installation remain unselected; no deployment or native acceptance.",
       "production_activated": false,
-      "native_tw_cn_web_profile_activated": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
       "replacement": "Replace this labelled relocation/destination policy with independently recovered original server rules; retain custody identity, saves and actual native bytes.",
@@ -3785,7 +3781,6 @@
         "limits": "Written is not remote ACK/cache/catalog/helpers/grant/original policy. Initial genuine bank/acquisition, native5D/allvariants/transfer/postbattle and native acceptance remain OPEN."
       },
       "production_activated": false,
-      "native_tw_cn_web_profile_activated": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
       "deferred_qualification": "Native opaque/helper effects and original server producer; real full25/custody/native1215 initial issuance and client cache, legacy movement witness progression, runtime Main acceptance, original policies/all variants/full native acceptance.",
@@ -3816,7 +3811,7 @@
         "retention": "Complete existing inventory, all instance IDs/acquisitions/aliases/counts/revisions and full1215+DA15 bytes unchanged. Only common x/y/position revision and matching equipment witness position/revision advance. Original sourceSHA retained; provenance marker appended once within2048B.",
         "transaction": "One actual same-connection BEGIN IMMEDIATE; full expected tuples/common roots/no pending battle, ten main source tables/TEMP NOCASE guards. Two observing Current calls before writes; exact position SQL CAS then native witness stage. Closed full reads after writes, no external callbacks after staged position. Joint immutable tokens preallocated before single durable COMMIT.",
         "delivery": "Complete actual5D and peer projection prepared before mutation. Require current durable same-writer receipt/current Session/lease/position before original scene publication and peer delivery. Failure preserves durable prefix. No producer/default5D or invented reply.",
-        "compatibility": "Null/default and borrowed movement APIs retain existing behavior; opt-in passes actual transaction strongly through host/source/controller. No CN/web/frozen feature rewrite.",
+        "compatibility": "Null/default and borrowed movement APIs retain existing behavior; opt-in passes actual transaction strongly through host/source/controller.",
         "normal_joint_sender_custody441": "Actualexclusive normalInitialization wholebatch beforeonejointCOMMIT -> privateCommitted/fullcurrent/localqueue -> exactoriginalinput/wholeACK -> samepureSessionFIFO/fullwrite receipt; oneposition+equipmentrevision increment forwholebatch, no inventedcommonLease/intermediateversions/nativeACK/inputhold. Existing rule/ACK unchanged."
       },
       "reason": "Connect ordinary walking to subsequent owned-bag requests without leaving the existing native delivery witness at an obsolete saved position.",
@@ -3836,7 +3831,6 @@
         "limits": "Written is not remote ACK/cache/catalog/helpers/grant/original policy. Initial genuine bank/acquisition, native5D/allvariants/transfer/postbattle and native acceptance remain OPEN."
       },
       "production_activated": false,
-      "native_tw_cn_web_profile_activated": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_SOURCE_ONLY",
       "deferred_qualification": "Genuine full custody/material issuance, original server witness lifecycle and all movement/transfer variants, operational Main, original-native acceptance, complete TW denominator and remaining gameplay routes.",
@@ -3913,7 +3907,7 @@
         "fields": "A7 opaque header and row flags use explicit custom canonical0; do not claim recovered official values or globally unused fields. Name, profession and level come from actual owned common profile/role. CP950 identity bytes remain unchanged. Published descriptions and every outgoing A7 description qualify exact CP950 roundtrip before NUL within20 bytes; full query24 and post-NUL bytes remain owned unchanged. No display conversion or arbitrary truncation. Unavailable scope yields no fabricated success/error record.",
         "commit": "Own complete request/source material; prepare response before publishing the copy-on-write directory/query state, then recheck actual owners, scene and source. Current normal-entry receipt is data, not combat authority or remote acknowledgement. No SQL writes or migrations; existing common read APIs provide saved identity/role/location.",
         "delivery": "Install actual optional wrapper after final world handler selection. Preserve contiguous unrelated original handler calls, framed replies and wire order, including the existing blacklist wrapper. Queue acceptance is not client acknowledgement. Scope is actual requesting Session replies, not all distributed watcher lifecycle.",
-        "frozen": "Preserve original party invite/consent/kick/leave, chat/filter, IME, authentication, fonts, text conversion, accounts, saves, original clients, CN/web paths and peer files."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -3948,7 +3942,7 @@
         "sources": "Actual common names, role levels/professions, movement and complete party ownership remain authoritative. CP950 identity bytes are preserved. AB baseline and existing custom preview HUD supplier are separate; byte equality between them is not an authority gate. Legacy resource projection boundaries are not numeric-extension completion.",
         "commit": "Prepare complete reply and recipient projection before publication; reread relevant actual owners and full shared party state before directory/pending commit. A readonly full NativeParty state comparison fences members/groups/membership/pending/expiry without changing consent rules. Successful enqueue is not remote receipt or acceptance.",
         "hosting": "Extend existing default-off world.owned_party_directory.enabled wrapper after final handler selection. Preserve unrelated batches, framed replies, frozen party/chat behavior and prior blacklist wrapper; no new schema or SQL mutation.",
-        "frozen": "Preserve accounts/saves/chat/filter/IME/authentication/fonts/text conversion/client binaries/CN/web and peer files."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -3982,7 +3976,7 @@
         "planning": "Pure expected-snapshot COW plan with bounded owned recipient logical aggregates and frame geometry before publication. Reobserve full roots/role/position and private entry; all pure owner/phase/battle/closing/entry fences follow all observers. Listings/queries/issued/fanout use actual max_sessions; visible rows<=6, perrecipient frame and totalfanout bytes bounded. Every prebuilt caller A7 source must match its second full observation before caller-skipped fanout publication; NativeParty state also must match.",
         "transport": "Ordinary Session.send_world_records allocates and encodes on IOstrand. Game preencoding is preparation/geometry, not allocation-free held publication, current-at-release, atomic all-recipient delivery, Written or ACK. Partial postcommit delivery is possible; exact query/incarnation failure retires/closes, without rolling back or retrying an already sent prefix. Common-world held APIs require actual own grants and are not borrowed.",
         "hosting": "Extend existing default-off world.owned_party_directory.enabled actual wrapper and its real lifecycle hooks. No new schema, SQL writes, deployment or activation.",
-        "frozen": "Preserve accounts/saves/chat/filter/IME/authentication/native fonts/text conversion/native clients/CN/web/peer files and existing NativeParty consent."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "open_limits": [
         "Foreign-owner issued-WORD tombstone, capacity or geometry conflict can reject the entire watcher plan, delaying refresh/publication until query retirement; not isolated automatic retirement.",
@@ -4056,7 +4050,7 @@
         "lifecycle": "New successfulAB replaces Presentation; fullA7 clears it; actual query/window retirement removes it. Both watcher candidate collections retain all Presentation members afterC91, not just listed actors.",
         "limits": "One issued nativeWORD tombstone/capacity/framing conflict can fail wholeplan and defer fanout. Ordinary IO can fail after source commit/partialsubmission; no held/current-at-release/atomicrecipient/Written/ACK guarantee. No silent IDrebind.",
         "hosting": "Existing default-off owned_party_directory wrapper and actual hooks; no new config/schema/table/databasewrite/activation/deployment.",
-        "frozen": "Preserve accounts/saves/chat/filter/IME/auth/fonts/conversion/nativeclients/CN/web/options and NativeParty rules."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -4089,7 +4083,7 @@
         "qualification": "Preserve TW260 captured private-entry guards, full recipient/readsets, party-state and expected-directory CAS, actual prepared-caller source comparisons, A8/A9 rules and exact incarnation lifetimes.",
         "limits": "Whole-map limits, invalid global source/owner/readsets, allocation, final private-entry checks, snapshot/party CAS, total fanout framing and ordinary IO failures can still defer all publication. No held/all-recipient atomic/current-at-release/Written/nativeACK guarantee. General postbattle entry renewal and full64/native identity remain open.",
         "hosting": "Existing default-off owned_party_directory feature only; no new option/schema/table/DBwrite/clientpatch/activation/deployment.",
-        "frozen": "Preserve accounts/saves/chat/filter/IME/authentication/native fonts/text conversion/native clients/CN/web/options and NativeParty consent rules."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -4127,7 +4121,7 @@
         "publication": "Prepare ordinary framed S77 before last-symbol/time commit. Native reader ignores remaining bytes; zero projection is explicit custom. No HP/MP/skill/turn/RNG/checkpoint mutation. Prepared output is not Written, delivery acceptance or client render proof.",
         "hosting": "battle.owned_pose.enabled defaultfalse; requires existing authenticated diagnostic player/participant bootstrap. Existing actual diagnostic Application bind only; ordinary shared PvP/encounter producer and opponent fanout OPEN.",
         "world": "Battle standalone C66 delegates to installed battle owner and Application returns before world location/presence handling. Frozen world posture modes1..3 unchanged.",
-        "frozen": "Preserve accounts/saves/chat/filter/IME/authentication/native fonts/text conversion/native clients/CN/web/worldpose/NativeParty."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -4162,7 +4156,7 @@
         "document": "New version2/CUSTOM-0104 round document retains explicit initial bounds and optional per-view initial observations. Initial flags and observation presence must agree; all postinitial phases require both observations. Later result phases retain the original exact resolver-supplied expected masks and preserve initial observations.",
         "readset": "Only new mode adds explicit policy/bounds provenance to repository admission readset. Legacy tickets/readsets/documents are not reinterpreted. No schema installation, table change, migration or persistence execution in this phase.",
         "limits": "Existing shared PK backend remains unhosted. Actual combat/skill/appearance/complete entry suppliers, paired Session holds/activation, later grant/result inputs, recovery and world return remain OPEN. No completed C69/35/whole gameplay route or native acceptance claim.",
-        "frozen": "Preserve accounts/saves/chat/filter/IME/auth/fonts/conversion/client binaries/CN/web/worldpose/NativeParty and all ordinary action authority."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -4197,7 +4191,7 @@
         "fences": "Concrete source-current observations before/after new projection and before reserved-room prepare/current/initial/activate, outside existing SQL transactions because joint committed_current owns its autocommit read scope. Never require the retired world lease for later active battle actions. These preflights do not claim atomic Session/storage admission, held dual-queue publication or recovery.",
         "readset": "New mode alone retains exact complete source readset and policy identity in Prepared and repository admission readset. Legacy factories/tickets/readset bytes remain unchanged. No schema installation, migration, runtime DB/SQL execution or implicit activation.",
         "limits": "Actual combat/skills/fullS1C/82/88/grants/contexts, paired exact held Sessions, real RoomAuthority/Application hosting, later control/results/grants/worldreturn/reconnect and full-game inventory remain OPEN.",
-        "frozen": "Preserve accounts/saves/chat/filter/IME/auth/fonts/conversion/client binaries/CN/web/worldpose/NativeParty, common authoritative gameplay and numeric extension scope."
+        "frozen": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -4233,7 +4227,7 @@
         "scope": "Dual attack/dual defense input adoption only. Retain role base/modifier/fiveelement source bytes but invent no meanings/formulas/affinity rule or learned skill list. Complete S1C/82/88/grants/context remain separately required. Empty skill permission is not inferred from an absent source.",
         "fences": "Current private appearance/joint/Session checks stay outside room SQL because joint current owns read scopes. Reserved transaction source guards use closed concrete row equality only, no Session/user callbacks/nested transaction. Active battle keeps admitted immutable stats/readset and existing actor/resource semantics, without demanding retired world lease/live auxiliary.",
         "limits": "No actual RoomAuthority/Application adapter, PK generation resolver, held dual Session entry publication, atomic live admission/recovery, original formulas or whole-game completion follows. Later controls/results/grants/worldreturn/reconnect remain OPEN. A digest is binding only.",
-        "legacy": "Old prepare/factories/Input without optional combat sources, serialized readsets, schema/defaults, native/client behavior and all frozen/CN/web functionality retained. No schema installation, gameDB access, save migration, tests or activation inPHASE1."
+        "legacy": "No schema installation, gameDB access, save migration, tests or activation inPHASE1."
       },
       "activation": false,
       "production_activated": false,
@@ -4267,7 +4261,7 @@
         "recipients": "Generate complete own/opponent identities separately for each actual recipient using the current private normal-world initialization language/config source and its qualified CP950/CP936 mapping. Retain all four projected45-byte records; do not reuse one encoded name for recipients with different encodings.",
         "consumption": "New explicit entry factory consumes private sources into complete S1C45 and actual owned appearance/level. Full caller-provided vital templates must match actual saved resources; unknown vital fields are not invented. Existing82 contexts,88 counters/bulk and17-byte control/grants remain separately supplied and qualified, not derived from IDs or this text source.",
         "fences": "Live private Session/joint/current checks remain outside SQL. Capture same-connection complete text plus existing full combat/appearance rows in consistent source reads and compare complete tuples inside RESERVED room SQL. Retain full original and projected material in conditional readset. Active rooms keep admitted immutable material, with broader writer interlocks/recovery explicitly open.",
-        "legacy": "Old projection factories/readset bytes and room inputs without the new optional source remain unchanged. No frozen text writer/schema/codec behavior changes, native font changes, client patches, CN/web mutation, Application activation or deployment.",
+        "legacy": "Old projection factories/readset bytes and room inputs without the new optional source remain unchanged.",
         "limits": "One bounded source/material path only. Not a hosted shared-room route, skill permission, original status/ordinal authority, complete identity renderer, remote ACK, dualSession held admission, partial-I/O recovery or whole-game completion."
       },
       "activation": false,
@@ -4300,8 +4294,8 @@
         "submission": "For this explicit mode mark exact room/revision1/viewer outbox submitted only after full local async_write and exact immutable delivery comparison. This is stronger than historical enqueue marker but is not remote receipt/rendering/native ACK. Per-view latch prevents duplicate durable marking.",
         "failure": "Preactivation aborts held/preparing tokens and abandons only RESERVED. Postactivation failures close both Sessions and retain active room/outboxes/member locks; never fake rollback or restore world under active ownership. Full recovery/reconnect/terminal release remain separate open work.",
         "lifetime": "Real serial game callbacks, exact asio executor equality and private receipt incarnation. Weak owner/lifetime callbacks, offer attempt invalidation before cancellation, no raw destroyed service access. Borrowed game/database owners drain before shutdown.",
-        "legacy": "Existing frozen chat/IME/auth/fonts/conversion/client binaries/CN/web/worldpose/NativeParty and ordinary sender behavior remain unchanged when new API/async authority absent. No build/tests/runtime/codec/gameDBSQL/schema/migration/activation/deploy inPHASE1.",
-        "limits": "One bounded async entry admission source chain, not complete hosted PK or whole-game route. Application pk_rooms still unassigned pending full original sources, gameplay handlers, common visibility and recovery. Shared64 numeric goals and full TW/CN/web scope preserved.",
+        "legacy": "No build/tests/runtime/codec/gameDBSQL/schema/migration/activation/deploy inPHASE1.",
+        "limits": "One bounded async entry admission source chain, not complete hosted PK or whole-game route. Application pk_rooms still unassigned pending full original sources, gameplay handlers, common visibility and recovery. Shared64 numeric goals and full TW/web scope preserved.",
         "capacity": "Bound this adapter to256 retained room attempts; reject before any new reservation at capacity. Safely drop cancelled preactivation attempts after invalidating private tokens/callbacks. Active/complete/recovery rooms retain exact identities within quota until explicit terminal recovery. This is custom server resource policy, not an original native gameplay cap."
       },
       "activation": false,
@@ -4333,7 +4327,7 @@
         "projection": "New owned-vitals factory takes two exact private player and vital receipts, requires exact Combat equality and current before/after. Retain four full owner HP/MP templates plus private receipts; build both actual recipient views with own HP/MP and opposite HP at14, never emit ignored side1 MP. Keep complete supplied S88/raw118/counter, contexts and future grants unchanged.",
         "persistence": "Repository conditionally binds full four templates, source/provenance and complete relative entry to existing digest/readset. Validate exact Combat/Player/Vital receipt equality and all actual projected vital bytes. Live current runs outside SQL; RESERVED compares closed stored tuple inside room transaction. ACTIVE retains admitted input and uses existing shared room/outbox lifecycle.",
         "limits": "No automatic Application installation, Battle/skill/formula/round/counter/monster-stat authority, client mutation or production publication. New source chain only; old source bytes/semantics when absent preserved. All prior106 CUSTOM records retained.",
-        "phase": "Static source reading/hash/accounting only. No build/compiler/tests/native/VM/runtime/codec/gameDBSQL/migration/activation/deployment. Frozen chat/IME/auth/fonts/conversion/saves/CN/web retained."
+        "phase": "Static source reading/hash/accounting only. No build/compiler/tests/native/VM/runtime/codec/gameDBSQL/migration/activation/deployment."
       },
       "activation": false,
       "production_activated": false,
@@ -4363,7 +4357,7 @@
         "projection": "New factory takes exact owned Players/Vitals and complete supplied82context/88friendlybulk only. Mint both grants internally; check exact private Player and Combat equality with retained sources, grant current and final all-Player current. Preserve full17byte records; withhold both grants from9record305byte initial stream until existing CUSTOM0086 two initial0B controls. Initial control material does not authorize learned skills, targets, formulas or later-round grants.",
         "persistence": "Conditional complete private receipts, full source grant bytes, design/slot/flags/rawlabel/canonical offsets and original-producer=false bind existing readset/digest. Current/connection checks outside SQL, closed full stored tuple checks inside RESERVED only. Active rooms keep admitted immutable sources and existing common room/outbox lifecycle.",
         "context_counter": "82 contextA is a qualified conditional C35 echo operand, not established local time. Native local time uses independent timeGetTime. 82 contextB byte1 is unsigned initial C70 countdown0..255 with zero retained; observer byte0 and copied highWORD retain separate meanings. S88 counterDWORD1 and raw118 operational display bits08/04/02/01 remain supplied, not padding or guessed defaults. Native top S88 RET4 begins518BE8 and ends exclusive518BEB; historical prose remains retained.",
-        "legacy": "New optional source absent preserves existing supplied full grants, old factory/readset behavior and all frozen saves/chat/IME/auth/fonts/conversion/client binaries/CN/web. No Application installation, schema or stored-save mutation.",
+        "legacy": "No Application installation, schema or stored-save mutation.",
         "limits": "One scoped source chain; not complete hostedC69/PK route, original authorization, full renderer readiness, native ACK, common world visibility, results, worldreturn/reconnect or recovery. Shared64 money/EXP/damage/HP and all dual-client/web objectives retained.",
         "phase": "Static source/file/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
       },
@@ -4397,7 +4391,7 @@
         "projection": "New no-View factory receives only exact owned Players/Vitals and Fightcatalog. Internally mint full82/88 then existing0110grants/0109vitals/0107identities/0105appearances; final exact receipt equality/current and all-Player text fences. Nine records305bytes unchanged; initial grants withheld until both0B. Existing factories/optional-absent readsets retain rawsupplied bytes.",
         "persistence": "Repository consumes exact private Player/Vital/Combat and checked peer generation, full actual82prefix9 and88tail121 atderivedoffset184/total305, retained command context and full source bytes/policy in existing readset/digest. Live current outsideSQL; closed source rows in RESERVED only; ACTIVE immutable source. No new schema/migration/DBexecution.",
         "limits": "One scoped initial entry source path, not complete hostedC69/PK route. Application resolver/authority, common visibility,35/skills/Lua/turn/results/latergrants/worldreturn/reconnect/recovery remain open. Existing custom legacy combat adoption retained; original monster stats/formulas not recovered.",
-        "phase": "Static source/hash/accounting only. No build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment. Preserve all saves/chat/IME/auth/fonts/conversion/nativeclients/CN/web/shared64 numeric scope."
+        "phase": "Static source/hash/accounting only. No build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
       },
       "activation": false,
       "production_activated": false,
@@ -4431,7 +4425,7 @@
         "callbacks": "Synchronous no-yield resolver contract; guard game thread/reentry, actual SQLite autocommit and total-changes before/after callbacks. Actual private initialization is checked before Session fields. Recheck exact Session/lease/source after callbacks; callbacks are trusted concrete owner integration, not client bool authorization. Cross-connection writes, mutate-and-restore ABA, executor pumping and native-network freshness are not solved by this fence.",
         "reservation": "Use actual room.prepare_owned from private Combat sources, internally derived complete Prepared and its exact notification bounds; full readset/digest remain produced inside existing repository. Post-reservation current/pair/private-source failure or exception abandons RESERVED via no-throw cleanup. Durable identifier remains retained. No hold, state transition, active room, enqueue/socket write/clientACK during preparation. Live checks are outside SQL, RESERVED closed source tuples inside existing transaction; active source behavior stays frozen.",
         "factory": "SqliteDatabase factory assembles actual private connection and exact concrete repository-owned writers into this preparer without exposing raw database publicly. No schema creation, SQL execution at factory creation, Application installation, default flags or source activation. Callback owners and borrowed repositories must outlive all preparers/tickets and drain on shared game executor.",
-        "limits": "One concrete preparation source chain, not complete hosted C69/PK route. Admission hold/release, common visibility, real source resolvers/seed wiring, learned skills/Lua/turns/results/later grants/world return/reconnect and persistent recovery remain separate. Legacy writer/read/template/default behavior and frozen auth/chat/IME/fonts/conversion/nativeclients/CN/web/shared64 objectives unchanged.",
+        "limits": "One concrete preparation source chain, not complete hosted C69/PK route. Admission hold/release, common visibility, real source resolvers/seed wiring, learned skills/Lua/turns/results/later grants/world return/reconnect and persistent recovery remain separate.",
         "phase": "Static source/hash/accounting only. No build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
       },
       "activation": false,
@@ -4449,8 +4443,8 @@
       "name": "Paired Taiwan PK visibility departure preserving common entry transport identity",
       "authority": "CUSTOM_OPT_IN_VISIBILITY_LIFECYCLE_NOT_ORIGINAL_SERVER_TIMING_OR_ATOMIC_NETWORK_ADMISSION",
       "implementation": [
-        "src/cn/world/SharedActorVisibility.h",
-        "src/cn/world/SharedActorVisibility.cpp",
+        "src/shared/world/SharedActorVisibility.h",
+        "src/shared/world/SharedActorVisibility.cpp",
         "src/net/Session.h",
         "src/net/Session.cpp",
         "src/handlers/OwnedPkEntryAdmission.h",
@@ -4467,7 +4461,7 @@
         "callbacks": "Markers+allincoming erasure precedecancelcallbacks. Visibility rejectclose suppressedonlyexactmarkedrecipient; externaldone maystillclose. Reentrantwithdraw poisons pair, allprivateholds/commonlease/savedpose recheckedaftercallbacks; no callbacksideeffectatomicity. Only actual stored native73 to surviving observers, submissiononly/noACK/fullwrite/rollback/atomicfanout.",
         "current": "Private receipt exact Held OR Committed PRE-RELEASE ONLY. Session committedcurrent verifiespendingphase/commonidentity/preallocatedbattleidentity withoutstale prebattlecurrent. Released/Written/pendingcleared notauthorized. Markerpersists until exactlifecyclerelease.",
         "retirement": "ExactVisibility.release retiresonlythatlease marker AFTERallcleanup; nested samerelease cannotearlyunblock; successor/otherparticipant intact. Reentrypoisons. No resume/commonpresence.release/Sessionmutation/DBwrites/newwire inVisibility. Lifecycle.release revokesneededcommonidentity and isnotused. Diagnosticreturn cannotreplace newnormalprivateinitialization/terminalowner.",
-        "limits": "Oneboundedoptinlifecyclepath, fullroutes0/newopcodes0. Saves/auth/chat/IME/fonts/conversion/clients/CN/web/shared64 retained exceptexactmarkedTW visibilitygate. NoApplicationactivation/wholegamepercentageclaim.",
+        "limits": "Oneboundedoptinlifecyclepath, fullroutes0/newopcodes0. NoApplicationactivation/wholegamepercentageclaim.",
         "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
       },
       "activation": false,
@@ -4499,7 +4493,7 @@
         "round": "Retain complete canonical round/SQL revision/battle revision/state/headers/context/bounds/permanent first observations/masks/controls/grant submissions/intents. Existing read_round source fences remain. Grant epoch is not outbox revision; historical settled intent costs not reauthorized against post-action MP.",
         "outbox": "Read ALL rows including submitted. Every actual revision exact viewer0/1, bounded nonempty logical bytes, submitted0/1 unchanged; revision1 exact Prepared entries, current checkpoint revision pair mandatory; legal gaps1/2 retained. Older pairs allsubmitted; current control requires ownsubmitted, Grants/Collect/Ready require both. No auto-resend/reset/re-encoding/ACK claim. No new fixed total history quota; checked size_t overflow/allocation failure reject without mutation.",
         "publication": "Private immutable recovery snapshot contains genuine Ticket/checkpoint/round/all outboxes, no runtime claim. RoomState claims owner, restores exact Battle, preallocates complete map node, then full durable snapshot-current reload before nonallocating node publication. No state transition/action/DB write/send. Read-fence-to-publication is not cross-process atomic; subsequent existing CAS still applies.",
-        "scope": "Same-process retained Ticket only, one concrete loader/rebinding increment, no new opcode/full gameplay route/whole-game percentage. Sessions/reconnect, departure markers/admission operations, terminal locks/saves/world return, later grants/learned skills and restart authority remain separate. Native/CN/web/frozen features and 64-bit extension unchanged.",
+        "scope": "Same-process retained Ticket only, one concrete loader/rebinding increment, no new opcode/full gameplay route/whole-game percentage. Sessions/reconnect, departure markers/admission operations, terminal locks/saves/world return, later grants/learned skills and restart authority remain separate.",
         "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
       },
       "activation": false,
@@ -4536,7 +4530,7 @@
         "failure": "New PK-only 5second close_timeout deadline and conditional post/timer failure guards prevent immortal pending; delayed callbacks reject retired identity, not guaranteed executed by deadline. Normal source failure closes both and retains durable room/locks/submitted values. Executor allocation can prevent game-owner peer notification; only local close/strand retirement assured there. No rollback of partial I/O or already-marked owner rows.",
         "capacity": "Driver retains up to256 bindings including failed owners, no automatic terminal removal; capacity may exhaust until real lifecycle recovery exists. Existing1MiB/256 write budget retained. Explicit custom resource bounds, not native gameplay caps.",
         "scope": "One bounded output publication path, no Application hosting/activation, new opcode, completed whole-game route or completion percentage. Full result provenance, learned skills/Lua, later grants, terminal saves/world return, restart/private Ticket/Session recovery and nonce authority remain separate. Borrowed owners/repositories must live/drain on same actual game executor.",
-        "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment. Frozen auth/chat/IME/fonts/conversion/clients/CN/web and shared64 numeric scope unchanged."
+        "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
       },
       "activation": false,
       "production_activated": false,
@@ -4569,7 +4563,7 @@
         "preservation": "Existing queue/input-prefix/ACK staging, held write budget/deadline, private source proofs, old skill sender and normal bootstrap remain unchanged. Session.h and Admission edits are comments only; behavior changes are confined to Session.cpp, Appearance and Preparation.",
         "audit_erratum": "Readonly native/source audit supplement supersedes primary inference that PK visibility departure removes common presence qualification: exact ready lease/common identity is retained. Presence alone neither proves nor disproves skill issuer qualification. Frozen historical receipts remain unchanged.",
         "scope": "One bounded prebattle lifecycle prerequisite, no Application installation, new opcode, complete route or whole-game percentage. Existing opt-in composition remains inactive by default. Lua resolution hosting, fresh83/88 templates/counters, later grants, terminal return and full recovery remain separate.",
-        "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment. Frozen saves/auth/chat/IME/fonts/conversion/clients/CN/web/shared64 scope retained."
+        "phase": "Static source/hash/accounting only; no build/compiler/test/runtime/native/VM/codec/gameDBSQL/migration/activation/deployment."
       },
       "activation": false,
       "production_activated": false,
@@ -4598,7 +4592,7 @@
         "group": "Two distinct groups according to explicit server execution order, ((round-1)%127)*2+ordinal, range0..253. Avoid255 because52AC20 increments BYTE boundary then skips actor scan on wrap. Not a nonce, original formula or animation acceptance proof. First modulo128 source epoch retained as superseded.",
         "bulk88": "Fresh121 bytes. Checked round1..INT32_MAX is a CUSTOM positive counter relative to exact initialseed0, not original round identity or guaranteed readiness. Raw117..120=0 explicit display policy; reset friendly slots1..13, actual own HP/MP supplied by shared projection. Never copy initial counter0 into each result.",
         "settlement": "Complete actual round document fenced across source preparation and resolver reread; existing staged shared Battle and repository full settle CAS preserved. Rule must remain pure/nonreentrant. Server order and actual next masks mandatory, not arrival order/clientcounter/initialmask guesses.",
-        "scope": "One new inactive basic-result source path, no Application install, skill3 supplier, later-grant widening, terminal89/world return/saved settlement, schema/wire change or full route completion. Whole TW/CN/web/shared64 objective retained.",
+        "scope": "One new inactive basic-result source path, no Application install, skill3 supplier, later-grant widening, terminal89/world return/saved settlement, schema/wire change or full route completion. Whole TW/web/shared64 objective retained.",
         "phase": "Static source/native disassembly/accounting only. No build/compiler/tests/runtime/native/VM/codec/gameDBSQL/migrate/activate/deploy."
       },
       "activation": false,
@@ -5068,8 +5062,8 @@
       "name": "Owned TW retained world-departure lineage at terminal input",
       "authority": "TW_CUSTOM_PRIVATE_RETAINED_DEPARTURE_SOURCE_NOT_WORLD_RETURN_OR_NATIVE_ACK",
       "implementation": [
-        "src/cn/world/SharedActorVisibility.cpp",
-        "src/cn/world/SharedActorVisibility.h",
+        "src/shared/world/SharedActorVisibility.cpp",
+        "src/shared/world/SharedActorVisibility.h",
         "src/db/SqliteDatabase.cpp",
         "src/game/SharedWorldPresence.cpp",
         "src/game/SharedWorldPresence.h",
@@ -5190,8 +5184,8 @@
       "name": "Owned TW PK paired complete return visibility preparation",
       "authority": "TW_CUSTOM_OPT_IN_PRIVATE_PREALLOCATION_NOT_WORLD_RETURN_OR_NATIVE_ACK",
       "implementation": [
-        "src/cn/world/SharedActorVisibility.cpp",
-        "src/cn/world/SharedActorVisibility.h",
+        "src/shared/world/SharedActorVisibility.cpp",
+        "src/shared/world/SharedActorVisibility.h",
         "src/db/SqliteDatabase.cpp",
         "src/db/SqliteDatabase.h",
         "src/handlers/OwnedPkOutboxPublication.h",
@@ -5364,7 +5358,14 @@
         "ownership": "Private exact initial ticket/incarnation/map Entry; attempted same incarnation never reinitializes; cancellation before real callback and cleanup retires exact Entry before original callback; no save mutation.",
         "profile": "Immutable actual input/controlblock/row/EQ/both IncTokens/revision/override; typed Current around real provider and pure retained after final saved-role-EQ SQL cut; same Context Host factory supplies actual state.",
         "remaining": "Later state writers/complete writer membership/private exact-byte permits/final game-IO cuts/other domains/Main/native acceptance remain OPEN; not whole-route completion.",
-        "implementation": ["src/game/TaiwanActorStatusOwnedSource.h", "src/game/TaiwanActorStatusOwnedSource.cpp", "src/game/TaiwanCustomFullActorProfile.h", "src/game/TaiwanCustomFullActorProfile.cpp", "src/core/SharedTaiwanNativeWorldHostPlan.h", "src/core/SharedTaiwanNativeWorldHostPlan.cpp"],
+        "implementation": [
+          "src/game/TaiwanActorStatusOwnedSource.h",
+          "src/game/TaiwanActorStatusOwnedSource.cpp",
+          "src/game/TaiwanCustomFullActorProfile.h",
+          "src/game/TaiwanCustomFullActorProfile.cpp",
+          "src/core/SharedTaiwanNativeWorldHostPlan.h",
+          "src/core/SharedTaiwanNativeWorldHostPlan.cpp"
+        ],
         "source_connected": true,
         "default_activated": false,
         "build_tests_runtime_SQL_activation_deployment": false
@@ -5560,8 +5561,8 @@
         "source_paths": [
           "src/game/SharedWorldPresence.h",
           "src/game/SharedWorldPresence.cpp",
-          "src/cn/world/SharedActorVisibility.h",
-          "src/cn/world/SharedActorVisibility.cpp",
+          "src/shared/world/SharedActorVisibility.h",
+          "src/shared/world/SharedActorVisibility.cpp",
           "src/db/SqliteDatabase.h",
           "src/db/SqliteDatabase.cpp",
           "src/game/OwnedTaiwanReturnActorSavedSource.h",
@@ -5594,8 +5595,8 @@
           "src/game/OwnedTaiwanReturnActorSavedSource.cpp",
           "src/game/SharedWorldPresence.h",
           "src/handlers/OwnedPkOutboxPublication.h",
-          "src/cn/world/SharedActorVisibility.h",
-          "src/cn/world/SharedActorVisibility.cpp",
+          "src/shared/world/SharedActorVisibility.h",
+          "src/shared/world/SharedActorVisibility.cpp",
           "src/db/SqliteDatabase.cpp"
         ],
         "evidence": "docs/research/tw-return-profile-input-source-20261015.md"
@@ -5612,7 +5613,6 @@
         "current_private_entry_offer_qualifier_and_both_bank_incarnations": true,
         "actual_StoredSourceFactory_existing_owned_PK_return_recipe_connected": true,
         "Consumed_uses_private_selector_transport_incarnation_under_actual_Visibility_successor": true,
-        "nonempty_DrvDoll_tail_transform_streamer_status_CN_domains_complete": false,
         "native_DA_to_Hero_arguments_and_ordinary_branch_linkage_proved": false,
         "full_configured_Application_native_route_and_acceptance_complete": false,
         "default_enabled": false,
@@ -5648,7 +5648,7 @@
         "default_enabled": false,
         "source_paths": [
           "src/protocol/RecoveredTaiwanPlayerAppearanceUpdate.h",
-          "src/cn/world/SharedActorVisibility.cpp",
+          "src/shared/world/SharedActorVisibility.cpp",
           "src/game/TaiwanCustomFullActorProfile.h",
           "src/game/TaiwanCustomFullActorProfile.cpp",
           "src/game/TaiwanNativeActorArgumentSource.h",
@@ -5714,8 +5714,8 @@
       "name": "Owned TW PK return common stored first-name source",
       "authority": "TW_CUSTOM_PRIVATE_RETURN_COMMON_ORIGINAL_NAME_PROJECTION_NOT_FULL_ACTOR_ISSUER",
       "implementation": [
-        "src/cn/world/SharedActorVisibility.cpp",
-        "src/cn/world/SharedActorVisibility.h"
+        "src/shared/world/SharedActorVisibility.cpp",
+        "src/shared/world/SharedActorVisibility.h"
       ],
       "native_gap": "Full current actor/resource/secondary+tertiary text/selection issuer and final paired return/release/recovery remain incomplete.",
       "rules": {
@@ -5742,8 +5742,8 @@
       "name": "Same-DB private TW return stored secondary text source",
       "authority": "TW_CUSTOM_PRIVATE_RETURN_ACTUAL_COMMON_SECONDARY_ROW_PROJECTION_NOT_FULL_ACTOR_ISSUER",
       "implementation": [
-        "src/cn/world/SharedActorVisibility.cpp",
-        "src/cn/world/SharedActorVisibility.h",
+        "src/shared/world/SharedActorVisibility.cpp",
+        "src/shared/world/SharedActorVisibility.h",
         "src/db/SqliteDatabase.cpp",
         "src/game/OwnedTaiwanPkReturnRoleTextSource.h"
       ],
@@ -5772,8 +5772,8 @@
       "name": "Same-DB private TW return common guild third text",
       "authority": "TW_CUSTOM_PRIVATE_RETURN_ACTUAL_COMMON_GUILD_SOURCE_NOT_ORIGINAL_GUILD_STORAGE",
       "implementation": [
-        "src/cn/world/SharedActorVisibility.cpp",
-        "src/cn/world/SharedActorVisibility.h",
+        "src/shared/world/SharedActorVisibility.cpp",
+        "src/shared/world/SharedActorVisibility.h",
         "src/db/SqliteDatabase.cpp",
         "src/db/SqliteGuildRepository.h",
         "src/game/OwnedTaiwanPkReturnRoleTextSource.h",
@@ -5803,8 +5803,8 @@
       "name": "Private TW return actual common current endpoint roots and poses",
       "authority": "TW_CUSTOM_SOURCE_OWNERSHIP_AND_READSET_POLICY_NOT_NATIVE_GAMEPLAY_RULE",
       "implementation": [
-        "src/cn/world/SharedActorVisibility.cpp",
-        "src/cn/world/SharedActorVisibility.h",
+        "src/shared/world/SharedActorVisibility.cpp",
+        "src/shared/world/SharedActorVisibility.h",
         "src/db/SqliteDatabase.cpp",
         "src/game/OwnedTaiwanPkReturnRoleTextSource.h",
         "src/handlers/OwnedPkOutboxPublication.h"
@@ -5830,23 +5830,21 @@
     },
     {
       "id": "CUSTOM-0138",
-      "name": "Owner shared skill complete-source composition and Traditional text",
+      "name": "Owner Taiwan skill source composition and Traditional text",
       "authority": "OWNER_REQUESTED_COMMON_SOURCE_POLICY_NOT_RECOVERED_NATIVE_FORMULA_OR_PERMISSION",
       "implementation": [
         "src/db/SharedSkillDefinition.cpp",
         "src/db/SharedSkillDefinition.h",
         "src/db/NativeSkillCatalog.cpp",
-        "src/scripting/LuaEngine.cpp",
-        "src/cn/assets/CnSharedSkillCatalog.cpp",
-        "src/cn/world/CnPrebornSkillChoiceSource.cpp"
+        "src/scripting/LuaEngine.cpp"
       ],
-      "native_gap": "Physical raw equality does not prove equal skill algorithms, native UI widths, learned rights or effects. Complete cast/debit/status/CN custom presentation remains open.",
+      "native_gap": "Exact Taiwan raw/source pins qualify owning metadata only; complete formula, casting, learned rights and costs still require actual native authority.",
       "rules": {
         "source": "Exact full110 expected row bytes and source/key/ordinal/offset/count/image pins qualify owning metadata. Public digest flag cannot qualify different bytes. Original raw records remain unchanged.",
-        "selection": "Prefer CN complete for confirmed TW reserve0/122..125 and pinned empty1/83; TW complete for both-complete conflicts0/95 and1/129, retain original CN profile. Unknown snapshots have no chosen qualified profile.",
-        "text": "Pinned nonempty TW Traditional name/short primary; confirmed reserved reuse uses separate CN name/short converted literal. Bounded source projection excludes WORD3E; not a recovered UI width.",
-        "scope": "New actual Main Lua common getter and CN private selection owning facts. Old native record, CN453 private gate and learned rights remain separately required. No grants, SQL/schema mutation or new wire packets.",
-        "custom": "Existing CUSTOM0058/0059 common skills are authorized for future CN adapters; no synthesized original CN rows. This rule does not change their existing formulas."
+        "selection": "Only the requested Taiwan profile may supply the complete parameter base; no regional fallback or alternate-source merge. Unknown Taiwan rows remain explicit.",
+        "text": "Taiwan Traditional name and short text remain primary, with original full raw rows and native source qualification retained.",
+        "scope": "The existing C++/Lua getter returns owning Taiwan definition metadata; it grants no learning, cast, debit or native acceptance rights.",
+        "custom": "Preserve the existing CUSTOM-0058/0059 Taiwan rules and126/150; no original native row is synthesized."
       },
       "activation": false,
       "production_activated": false,
@@ -5886,7 +5884,6 @@
         "source_connected": true,
         "explicit_dataset": "tw-installed-cbspec2-3adcda70-149c1b45-453-v1",
         "legacy448_preserved": true,
-        "907_original_raw_pins_preserved": true,
         "shared_equivalent_original448_fullrow_pinning": true,
         "actual_Config_Database_Catalog_PK_same_profile_selection": true,
         "new_native_formula_learning_right_or_display_asset": false,
@@ -5959,7 +5956,7 @@
         "src/handlers/RecoveredBattleService.cpp",
         "src/core/Application.cpp"
       ],
-      "native_gap": "CN original453 cannot grant126/150; real CN actor/list/resources/effect and application hosting remain open. Existing Application owner-skill path is isolated diagnostic battle source.",
+      "native_gap": "Existing Application owner-skill path is isolated diagnostic battle source.",
       "rules": {
         "source": "Actual selected deity privately minted full saved readset on the same SQLite connection; exact account/character/selection/row/provenance/all skills/current skill comparison.",
         "action": "After existing authenticated complete C35 key/sequence/targets selection and trusted common rule, load a fresh readset and retain it across staged rule/encode/retaliation; check actual Session identity/generation and saved selection before persistence.",
@@ -5974,8 +5971,8 @@
       "native_client_acceptance": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
-      "reason": "Owner requires both custom skills to share saved rights and common gameplay before independent CN adapters.",
-      "replacement": "Complete actual CN host/actor/list/87 publication and native effects, then full source-route build/tests/native acceptance in later phase."
+      "reason": "Taiwan-only scope; retired regional notes remain in Git history.",
+      "replacement": "Taiwan-only scope; retired regional notes remain in Git history."
     },
     {
       "id": "CUSTOM-0140",
@@ -5986,7 +5983,7 @@
         "src/handlers/RecoveredBattleService.h",
         "src/handlers/RecoveredBattleService.cpp"
       ],
-      "native_gap": "Original CN453 lacks126/150. Actual mainland host/actor/list/resources/87/effects and complete TW native control/auxiliary/primary-secondary roster providers remain open.",
+      "native_gap": "Complete Taiwan native control, auxiliary and primary/secondary roster providers remain open.",
       "rules": {
         "source": "One privately minted complete saved deity roster determines BOTH custom keys; selected row/full bytes/provenance/revisions/selection retain actual same-repository identity.",
         "definition": "Actual existing shared getter supplies formal existing owner-rule key/design only. Raw native profiles/selected base/metadata never grant learned skills or certify a client bank.",
@@ -6004,7 +6001,7 @@
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
       "reason": "Owner requires two custom skills to share actual learned and publication source, not unrelated metadata or invented native rows.",
-      "replacement": "Complete actual native control/list/actor/profile and mainland custom effects, then comprehensive source-route build/tests/native acceptance."
+      "replacement": "Taiwan-only scope; retired regional notes remain in Git history."
     },
     {
       "id": "CUSTOM-0141",
@@ -6015,14 +6012,14 @@
         "src/net/Session.cpp",
         "src/core/Application.cpp"
       ],
-      "native_gap": "Local bootstrap input ordering was not fenced by passive Written receipt. CN host/list/actor/resources/effects and client acceptance remain unqualified.",
+      "native_gap": "Local bootstrap input ordering was not fenced by passive Written receipt.",
       "rules": {
         "scope": "Only actual typed owner126/150 bootstrap arms its existing private response Attempt; ordinary and passive receipt paths preserve their defaults.",
         "installation": "Exact private Attempt installed atomically on game before original response handoff; network observes immutable receipt and atomic lifecycle/phase/epoch, never game-owned account fields.",
         "input": "Preserve original bounded raw bytes, staged batch semantics, native skill generation/deadline and read ownership; no extra read, packet split or reclassification.",
         "completion": "Same FIFO full response must physically complete and old completion/bookkeeping succeed before exact current hold releases input once.",
         "failure": "Retire hold and prohibit continuation before fallible logging/close paths; stale epoch/drop/exception never releases. Physical Written fact remains local and is not demoted.",
-        "limits": "No native ACK, remote cache/list adoption, turn grant, learned rights, durable rollback or CN wire/effect proof is inferred."
+        "limits": "Taiwan-only scope; retired regional notes remain in Git history."
       },
       "activation": false,
       "production_activated": false,
@@ -6032,33 +6029,7 @@
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
       "reason": "Connect existing actual owner-skill bootstrap to original input continuation while preserving authoritative common learned/persistence rules.",
-      "replacement": "Complete native providers and CN actual gameplay adapter, then comprehensive build/tests/current-client acceptance."
-    },
-    {
-      "id": "CUSTOM-0142",
-      "name": "CN existing C35 common definition handoff and retained skill group prefix",
-      "authority": "OWNER_COMMON_SOURCE_COMPOSITION_NOT_NATIVE_FORMULA_PERMISSION_OR_HOST",
-      "implementation": [
-        "src/cn/world/SharedNativeBattleCommandData.h",
-        "src/cn/world/SharedNativeBattleCommandData.cpp"
-      ],
-      "native_gap": "CN original453 lacks owner126/150; extended native profile/resources, actor/control/learned/committed87 provider and actual common action host remain unqualified.",
-      "rules": {
-        "definition": "Existing qualified CnSharedSkillCatalog.lookup_shared supplies owning common definition plus exact requested native CN row; raw skill_fields are read ONLY from original CN row.",
-        "handoff": "Actual existing DataAuthority current/prepare/execute_group receives owning common value; reobserve the same requested row and full definition around sequential observer cuts, never silently replace.",
-        "continuation": "Skill-containing Append groups retain exact prior plan/requests/lease/token and unconsumed original prefix rows/private native selection holders; equivalent fresh values cannot substitute those private holders.",
-        "mixed": "New suffix is checked, next plan stays Append/Final with same group/issuer capabilities and generations; referenced mixed inventory stays with actual Current and used-cell bytes. Pure Item/Opaque prefix policy remains.",
-        "limits": "Sequential checks are not cross-source atomic CAS. Existing execute-once/actual-result and durable-prefix behavior remain; no retry/rollback after COMMIT, native learned/MP/grant/effects or hosting inferred."
-      },
-      "activation": false,
-      "production_activated": false,
-      "schema_installed": false,
-      "deployment": false,
-      "native_client_acceptance": false,
-      "tests": [],
-      "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
-      "reason": "One common TW/CN skill definition must reach the real existing CN command data handoff while regional wire provenance remains exact.",
-      "replacement": "Complete actual common action authority, native actor/list/profile/learned/persistence providers and CN custom adapters, then comprehensive build/tests/current-client acceptance."
+      "replacement": "Taiwan-only scope; retired regional notes remain in Git history."
     },
     {
       "id": "CUSTOM-0143",
@@ -6068,7 +6039,7 @@
         "src/game/SharedTaiwanNativeSkillCommandSource.h",
         "src/game/SharedTaiwanNativeSkillCommandSource.cpp"
       ],
-      "native_gap": "Actual complete native issued roster/control, learned actor/grant and action owner hosting remain unqualified; common metadata cannot manufacture original TW or CN custom rows.",
+      "native_gap": "Taiwan-only scope; retired regional notes remain in Git history.",
       "rules": {
         "scope": "Append owning common definition to existing Scope; actual qualification/current/action/after_action callbacks receive the same value without changing virtual signatures.",
         "native": "Original digestchecked TW record and issued selection must exactly equal shared requested_native; chosen common profile never replaces native grammar/MP/wire fields.",
@@ -6083,7 +6054,7 @@
       "native_client_acceptance": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
-      "reason": "One common TW/CN skill core requires the existing TW command action interface to receive the same owning common definition already available to the CN data handoff.",
+      "reason": "Taiwan-only scope; retired regional notes remain in Git history.",
       "replacement": "Complete actual full native list/actor/learned/action/persistence suppliers and adapters, then comprehensive build/tests/current-client acceptance."
     },
     {
@@ -6108,7 +6079,7 @@
       "native_client_acceptance": false,
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
-      "reason": "The common TW/CN definition must be carried by the genuine saved selected-skill observation rather than reconstructed from a key later.",
+      "reason": "The common TW definition must be carried by the genuine saved selected-skill observation rather than reconstructed from a key later.",
       "replacement": "Join actual ordered selected roster publications, current target/action owner and transaction/next receipt, then comprehensive acceptance."
     },
     {
@@ -6225,16 +6196,16 @@
         "src/core/Config.cpp",
         "src/core/Application.cpp"
       ],
-      "native_gap": "Original server eligibility/debit/recipient/order not recovered. All381 inventory declarations qualify C25 (362direct/19masterconfirmation); distinct shortcut C26, native list adoption, complete actions and CN native adapters remain OPEN.",
+      "native_gap": "Original server eligibility/debit/recipient/order not recovered.",
       "rules": {
         "subject": "C25 has no qualified subject. Use the exact currently selected owned deity, same common definition and genuine uniquely bound owned book. All381 source bindings use one policy; no guessed12C/level/stat exclusions.",
         "policy": "Pure Lua owning numeric/boolean snapshots: absent valid skill below native100 capacity consumes exactly one book; already learned consumes zero and issues no new activation. Stack99. C++ independently validates values.",
         "material": "Full common inventory/all regional aliases, actual TW20 and paired genuine full3B25, native1215 full witness, full roster/selection/revisions/provenance, book raw/parsed digests and owning common/native definition. Actual normalINIT nativeactor matches witness and optional exact fullLease; full64 database owner independent.",
-        "transaction": "Same SQLite connection, own immediate transaction, complete before/after CAS, guarded namespaces/reentry/pending battle, one debit+saved34+durableevent+activationheader/links. Preserve opaque raw data; tag derived population/witness/deity CUSTOM0148 provenance. No alias custody revision grants CN projection.",
+        "transaction": "Same SQLite connection, own immediate transaction, complete before/after CAS, guarded namespaces/reentry/pending battle, one debit+saved34+durableevent+activationheader/links. Preserve opaque raw data; tag derived population/witness/deity CUSTOM0148 provenance.",
         "publication": "Preallocate full S34->S35->S41 wire and committed carrier before COMMIT; actual Main captures one whole original response and input hold. Local Written is not native ACK/adoption; postcommit failure terminal, no SQL retry/rollback.",
         "restoration": "Single original activation-aware deity+pet projection, only exact legitimately retained events35. Service waits exact original Written source and adds book material only, never duplicateS30 or default35from34. Pending/missing source defers; stale epoch retires before genuine successor qualification. Empty extra output requires final actualWritten/source cut.",
         "scope": "Default-off world.owned_skillbook_learning.enabled; explicit schema installer only, never Main DDL/import/backfill. Actual independently constructed CommonWorld/battle-return publisher and other legitimate deity-writer lineage remain OPEN.",
-        "regional": "Common skill definitions/ownership/event storage retained. CN native-only adapter unqualified; original CN453 unchanged. Required126/150 CN resources/profile/effects/cast still independently OPEN."
+        "regional": "Common skill definitions/ownership/event storage retained."
       },
       "activation": false,
       "production_activated": false,
@@ -6244,7 +6215,7 @@
       "tests": [],
       "verification_status": "NOT_RUN_PHASE1_STATIC_SOURCE_ONLY",
       "reason": "Close actual TW C25 book/deity/debit/save/event/reply source gap after targeted native material/consumer search, without inventing original server rules.",
-      "replacement": "Recover native eligibility/order, qualify shortcut/actual CommonWorld and return publishers/legitimate mutation lineage/CN adapters, connect complete skill actions, then comprehensive builds/tests/native acceptance.",
+      "replacement": "Taiwan-only scope; retired regional notes remain in Git history.",
       "common_world_initial_source": {
         "classification": "ROUND382_ACTUAL_DEFAULT_OFF_EXCLUSIVE_INITIAL_DEITY_PUBLISHER_NOT_NATIVE_RESET_OR_PK_RETURN",
         "context": "Actual config flag -> same Context app_owned_initial_deities -> native factory supports_app_owned_initial_deities -> retained exact Owner bit -> WorldEntered ApplicationOwned policy; old false/External unchanged.",
@@ -6254,7 +6225,7 @@
         "order": "Preserve exact original returned wire as prefix, append owned deity frames suffix, capture ONE actual whole response/inputhold. Immutable expectedwire/private WWR and explicit logicalbatchcount; no fake perframe receipts/dummyFIFO/directpush.",
         "consumers": "Actual originalrestoration observer, bookbootstrapsupplier and existing PKpeer check exactwholeWritten/current/source/wire identity; legacyperpushreceipts unchanged. SamecallbackPending defers bookbootstrap. Old complete-player/PKprojectionflag remains false.",
         "native_limit": "Normal reset is conditional. Session CommonWorld factory once/Binding Fresh proves firstphysicalsource; privateINIT/PKpreparation changing futureeffectiveData is not a new remote reset/adoption/ACK.",
-        "remaining": "Actual battle-return/deity-writer lineage/C26/full actions/native adoption/CN native/custom126/150 adapters and whole-game denominator remain OPEN.",
+        "remaining": "Taiwan-only scope; retired regional notes remain in Git history.",
         "source_connected": true,
         "default_enabled": false,
         "whole_route_complete": false,
@@ -6267,7 +6238,7 @@
         "transaction": "Both overloads use ONE private guarded operation and same Repo/Lua/fullbeforeafterCAS/event/activation/prebuilt34->35->41; no separate learning policy or transaction.",
         "Main": "Actual bookclassification precedes olderC26 supply/teleport delegate. Wholeframe admits one C25 OR C26 plusTicks/optionalterminal1F. Originaltypedvariant dispatch; allnonbookframes delegate unchanged. Existing actualwholeWWR/inputhold/passivebagretirement/postcommitfailure retained.",
         "currentness": "Complete incomingtarget proof repeats around existing observers and finalpurecommit predicate; oldINIT neverrebased.",
-        "remaining": "Nonself targetedbooks/nativeeligibility/debit/order/adoption/battle-return/otherwriterlineage/fullactions/CN adapters/fullgame denominator OPEN.",
+        "remaining": "Taiwan-only scope; retired regional notes remain in Git history.",
         "source_connected": true,
         "default_enabled": false,
         "complete_bidirectional_route": false,
@@ -6380,5 +6351,6 @@
         "product_execution": false
       }
     }
-  ]
+  ],
+  "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
 }

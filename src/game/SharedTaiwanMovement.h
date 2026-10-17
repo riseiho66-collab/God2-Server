@@ -1,5 +1,5 @@
 #pragma once
-#include "cn/world/SharedMovementPublication.h"
+#include "shared/world/SharedMovementPublication.h"
 #include "scripting/TaiwanMovementRules.h"
 
 namespace god2 {
@@ -22,7 +22,6 @@ public:
         virtual ~WorldOwner()=default;
         // Read destination raw cell from the actual initialized native map/view,
         // including its real resource/frame/object/window lifecycle. No generic
-        // all-pass/rectangle/CN-cache substitution or fabricated scene revision.
         virtual std::optional<Scene> scene(const Lease&,const RecoveredPosition&,
             const RecoveredMovement::Request&)=0;
         virtual bool current(const Lease&,const Scene&)=0;
@@ -34,12 +33,12 @@ public:
     };
     static std::shared_ptr<SharedTaiwanMovement> attach(const std::shared_ptr<Session>&,
         std::shared_ptr<SharedWorldPresence>,const Lease&,TaiwanMovementRules&,
-        std::shared_ptr<cn::SharedActorVisibility>,WorldOwner&);
+        std::shared_ptr<shared::SharedActorVisibility>,WorldOwner&);
     // Explicit actual-source opt-in. Retain both real game-owned suppliers and
     // require the exact active common delivery generation, with reentry guards.
     static std::shared_ptr<SharedTaiwanMovement> attach(const std::shared_ptr<Session>&,
         std::shared_ptr<SharedWorldPresence>,const Lease&,std::shared_ptr<TaiwanMovementRules>,
-        std::shared_ptr<cn::SharedActorVisibility>,std::shared_ptr<WorldOwner>,
+        std::shared_ptr<shared::SharedActorVisibility>,std::shared_ptr<WorldOwner>,
         std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody={});
     ~SharedTaiwanMovement();
     // Same signature as actual Session::RecoveredCharacterHandlers.movement.
@@ -49,9 +48,9 @@ public:
     std::vector<std::uint8_t> handle(Session&,std::span<const RecoveredMovement::Request>);
 private:
     SharedTaiwanMovement(const std::shared_ptr<Session>&,std::shared_ptr<SharedWorldPresence>,
-        const Lease&,TaiwanMovementRules&,std::shared_ptr<cn::SharedActorVisibility>,WorldOwner&);
+        const Lease&,TaiwanMovementRules&,std::shared_ptr<shared::SharedActorVisibility>,WorldOwner&);
     SharedTaiwanMovement(const std::shared_ptr<Session>&,std::shared_ptr<SharedWorldPresence>,
-        const Lease&,std::shared_ptr<TaiwanMovementRules>,std::shared_ptr<cn::SharedActorVisibility>,
+        const Lease&,std::shared_ptr<TaiwanMovementRules>,std::shared_ptr<shared::SharedActorVisibility>,
         std::shared_ptr<WorldOwner>,std::shared_ptr<SqliteOwnedEquipmentTransaction>);
     void owner() const;
     bool current(Session&) const;
@@ -66,8 +65,8 @@ private:
     Lease lease_;
     std::shared_ptr<TaiwanMovementRules> rules_owner_;
     TaiwanMovementRules& rules_;
-    std::shared_ptr<cn::SharedActorVisibility> visibility_;
-    cn::SharedMovementPublication publication_;
+    std::shared_ptr<shared::SharedActorVisibility> visibility_;
+    shared::SharedMovementPublication publication_;
     std::shared_ptr<WorldOwner> world_owner_;
     WorldOwner& world_;
     // CUSTOM-0095 explicit actual joint position/custody retention. The real

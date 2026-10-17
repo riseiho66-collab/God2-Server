@@ -19,13 +19,13 @@ void provenance(const sqlite_detail::Statement& q,int at,const char* design) {
     require(q.text(at)=="CUSTOM_DESIGNED" && q.text(at+1)==design && q.text(at+2)==source,
             "Guild gameplay provenance mismatch");
 }
-std::string encoded_name(const std::string& name,bool cn) {
+std::string encoded_name(const std::string& name,bool simplified) {
     require(!name.empty() && name.size()<=60 && name.find('%')==std::string::npos &&
             std::none_of(name.begin(),name.end(),[](unsigned char c){return c<32 || c==127;}),"Unsafe guild/name text");
     try {
-        const auto bytes=LegacyChineseCodec::encode(name,cn);
+        const auto bytes=LegacyChineseCodec::encode(name,simplified);
         require(!bytes.empty() && bytes.size()<=15 && bytes.find('\0')==std::string::npos &&
-                LegacyChineseCodec::decode(bytes,cn)==name,"Guild/name is not lossless in both languages");
+                LegacyChineseCodec::decode(bytes,simplified)==name,"Guild/name is not lossless in both languages");
         return bytes;
     }catch(const std::exception&) {throw DatabaseError("Unrepresentable guild/name text");}
 }
@@ -36,9 +36,9 @@ std::string fold(std::string name) {
 }
 void name_valid(const std::string& name) {(void)encoded_name(name,false);(void)encoded_name(name,true);}
 void unambiguous(const std::vector<GuildRosterMember>& members) {
-    for(const auto cn:{false,true}) {
+    for(const auto simplified:{false,true}) {
         std::set<std::string> names;
-        for(const auto& member:members)require(names.insert(fold(encoded_name(member.name_utf8,cn))).second,
+        for(const auto& member:members)require(names.insert(fold(encoded_name(member.name_utf8,simplified))).second,
                                                "Native folded guild member name collision");
     }
 }
@@ -256,14 +256,14 @@ bool SqliteOwnedGuildMembershipRepository::player_created(std::uint64_t id) {
     q.bind_id(1,id);return q.row();
 }
 std::optional<SqliteOwnedGuildMembershipRepository::Guild> SqliteOwnedGuildMembershipRepository::find_by_name(const std::string& name) {
-    name_valid(name);const auto tw=fold(encoded_name(name,false)),cn=fold(encoded_name(name,true));
+    name_valid(name);const auto tw=fold(encoded_name(name,false)),simplified=fold(encoded_name(name,true));
     sqlite_detail::Statement q(db_,"SELECT g.id,g.name_utf8 FROM owned_guilds g JOIN owned_guild_governance_0078 v ON v.guild_id=g.id ORDER BY g.id");
     std::optional<Guild> result;
     while(q.row()) {
         const auto candidate=q.text(1);const auto tw_matches=fold(encoded_name(candidate,false))==tw;
-        const auto cn_matches=fold(encoded_name(candidate,true))==cn;
-        if(!tw_matches && !cn_matches)continue;
-        require(tw_matches && cn_matches && !result,"Ambiguous dual-language native folded guild lookup");
+        const auto simplified_matches=fold(encoded_name(candidate,true))==simplified;
+        if(!tw_matches && !simplified_matches)continue;
+        require(tw_matches && simplified_matches && !result,"Ambiguous dual-language native folded guild lookup");
         result=guild(q.number<std::uint64_t>(0));(void)governance(result->id);
     }
     return result;
@@ -355,7 +355,7 @@ SqliteOwnedGuildMembershipRepository::Created SqliteOwnedGuildMembershipReposito
     require(expected.role && RecoveredRoleLevel::parse(expected.role->logical)->level()>=policy.minimum_level,"Guild creation level below policy");
     SqliteTradeRepository money(db_);require(money.load_wallet(expected.account_id,expected.character_id)==std::optional(wallet),"Guild creation wallet snapshot conflict");
     sqlite_detail::Statement names(db_,"SELECT name_utf8 FROM owned_guilds");
-    while(names.row())for(const auto cn:{false,true})require(fold(encoded_name(names.text(0),cn))!=fold(encoded_name(name,cn)),"Native folded guild name collision");
+    while(names.row())for(const auto simplified:{false,true})require(fold(encoded_name(names.text(0),simplified))!=fold(encoded_name(name,simplified)),"Native folded guild name collision");
     const auto revision=next_revision(db_);const Guild created{id,revision,name};
     sqlite_detail::Statement insert(db_,"INSERT INTO owned_guilds(id,name_utf8,revision,origin,design_id,source_sha256) VALUES(?,?,?,'CUSTOM_DESIGNED','CUSTOM-0075',?)");
     insert.bind_id(1,id);insert.bind(2,name);insert.bind_id(3,revision);insert.bind(4,std::string(source));insert.done();require(sqlite3_changes(db_)==1,"Guild creation insert failed");

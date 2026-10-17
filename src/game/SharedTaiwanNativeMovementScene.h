@@ -12,7 +12,6 @@
 namespace god2 {
 // Concrete retained TW map/actor owner for the explicit native movement source.
 // Actual native snapshots or original composition material are required;
-// no CN layout, static collision consensus,
 // invented map initialization, authority, camera frame or5D is supplied here.
 class SharedTaiwanNativeMovementScene final:public SharedTaiwanMovement::WorldOwner {
 public:

@@ -23,7 +23,7 @@ std::optional<SharedWorldAdmission::Grant> SharedWorldAdmission::issue(
     std::uint64_t session,Key key,std::vector<Target> allowed,Clock::time_point deadline,Clock::time_point now) {
     owner();expire(now);
     if(!session || !key.account || allowed.empty() || deadline<=now ||
-       (key.protocol!=Protocol::Taiwan && key.protocol!=Protocol::Mainland) ||
+       key.protocol!=Protocol::Taiwan ||
        entries_.size()>=live_capacity_ || issued_.size()>=issued_capacity_ || issued_.contains(key) ||
        generation_==std::numeric_limits<std::uint64_t>::max())return std::nullopt;
     // Do not require check_key nonzero: no such native field contract is proven.

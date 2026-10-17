@@ -89,7 +89,7 @@ class ArmorTransferReleaseGates(unittest.TestCase):
         native['0']=(bytes(4)+b'\x01'+bytes(19)).hex()
         self.assertFalse(release.native_saved_matches(native,saved))
 
-    def test_bank_actual_tw_cn_and_owner_instances(self):
+    def test_bank_actual_native_and_owner_instances(self):
         release.run02_gate(self.bank)
         self.assertEqual(self.bank['ui']['initial']['instances'],self.bank['ui']['final_instances'])
 

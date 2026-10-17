@@ -6,7 +6,7 @@ namespace god2 {
 SharedTaiwanNativeEquipmentPublicationSource::SharedTaiwanNativeEquipmentPublicationSource(
     SqliteNativeEquipmentSnapshotRepository& repository,AccountRepository& accounts,
     RecoveredCharacterRepository& characters,std::shared_ptr<SharedWorldPresence> presence,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,SqliteNativeEquipmentSnapshotRepository::Committed committed)
+    std::shared_ptr<shared::SharedActorVisibility> visibility,SqliteNativeEquipmentSnapshotRepository::Committed committed)
     :repository_(repository),accounts_(accounts),characters_(characters),presence_(std::move(presence)),
      visibility_(std::move(visibility)),committed_(std::move(committed)) {}
 void SharedTaiwanNativeEquipmentPublicationSource::owner() const {
@@ -15,7 +15,7 @@ void SharedTaiwanNativeEquipmentPublicationSource::owner() const {
 std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNativeEquipmentPublicationSource::create(
     SqliteNativeEquipmentSnapshotRepository& repository,AccountRepository& accounts,
     RecoveredCharacterRepository& characters,std::shared_ptr<SharedWorldPresence> presence,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,SqliteNativeEquipmentSnapshotRepository::Committed committed) {
+    std::shared_ptr<shared::SharedActorVisibility> visibility,SqliteNativeEquipmentSnapshotRepository::Committed committed) {
     if(!presence || !visibility || !presence->owns_repository(characters) || !visibility->owns_presence(presence) ||
        !repository.owns_sources(accounts,characters) || !repository.committed_current(committed))
         throw std::invalid_argument("TW equipment requires exact common sources and this writer's durable token");
@@ -25,7 +25,7 @@ std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNative
 std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNativeEquipmentPublicationSource::create(
     std::shared_ptr<SqliteOwnedEquipmentTransaction> repository,AccountRepository& accounts,
     RecoveredCharacterRepository& characters,std::shared_ptr<SharedWorldPresence> presence,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,SqliteOwnedEquipmentTransaction::Committed committed) {
+    std::shared_ptr<shared::SharedActorVisibility> visibility,SqliteOwnedEquipmentTransaction::Committed committed) {
     if(!repository||!repository->owns_sources(accounts,characters)||!repository->committed_current(committed))
         throw std::invalid_argument("TW joint equipment requires both current committed populations");
     auto source=create(repository->equipment_writer(),accounts,characters,std::move(presence),std::move(visibility),committed.equipment());
@@ -39,7 +39,7 @@ std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNative
 std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNativeEquipmentPublicationSource::create(
     std::shared_ptr<SqliteOwnedEquipmentTransaction> repository,AccountRepository& accounts,
     RecoveredCharacterRepository& characters,std::shared_ptr<SharedWorldPresence> presence,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,SqliteOwnedEquipmentTransaction::EntryCommitted committed) {
+    std::shared_ptr<shared::SharedActorVisibility> visibility,SqliteOwnedEquipmentTransaction::EntryCommitted committed) {
     if(!repository||!repository->owns_sources(accounts,characters)||!repository->committed_current(committed))
         throw std::invalid_argument("TW entry/equipment requires all three current committed populations");
     auto source=create(repository->equipment_writer(),accounts,characters,std::move(presence),std::move(visibility),
@@ -49,7 +49,7 @@ std::shared_ptr<SharedTaiwanNativeEquipmentPublicationSource> SharedTaiwanNative
         throw std::invalid_argument("TW entry/equipment source changed during construction");
     return source;
 }
-std::optional<cn::SharedActorVisibility::TaiwanAppearanceAfterState>
+std::optional<shared::SharedActorVisibility::TaiwanAppearanceAfterState>
 SharedTaiwanNativeEquipmentPublicationSource::current(const SharedWorldPresence::Lease& original) {
     owner();if(reading_){reentered_=true;return std::nullopt;}
     reading_=true;reentered_=false;
@@ -76,14 +76,14 @@ SharedTaiwanNativeEquipmentPublicationSource::current(const SharedWorldPresence:
     };
     if(!qualify() || !durable_current() || !qualify())return std::nullopt;
     const auto update=snapshot.appearance();if(!update || update->actor_identity()!=lease.actor_handle)return std::nullopt;
-    return cn::SharedActorVisibility::TaiwanAppearanceAfterState{snapshot.revision,snapshot.source_record,*update};
+    return shared::SharedActorVisibility::TaiwanAppearanceAfterState{snapshot.revision,snapshot.source_record,*update};
 }
-void SharedTaiwanNativeEquipmentPublicationSource::publish(const cn::SharedActorVisibility::Binding& original,
-    cn::SharedActorVisibility::TaiwanAppearanceCompletion done) {
+void SharedTaiwanNativeEquipmentPublicationSource::publish(const shared::SharedActorVisibility::Binding& original,
+    shared::SharedActorVisibility::TaiwanAppearanceCompletion done) {
     owner();if(!done)throw std::invalid_argument("TW equipment publication completion required");
     const auto self=shared_from_this();const auto binding=original;const auto lease=binding.source();
     if(reading_){reentered_=true;try {done(false);}catch(...) {}return;}
-    const auto supplier=[self,lease](cn::SharedActorVisibility::TaiwanAppearanceCheck) {return self->current(lease);};
+    const auto supplier=[self,lease](shared::SharedActorVisibility::TaiwanAppearanceCheck) {return self->current(lease);};
     // No data or issuer is re-created here. The existing endpoint requalifies
     // this exact committed fulltuple at Prepare/Before/After/queue completion.
     visibility_->publish_taiwan_appearance(binding,committed_.snapshot().position,supplier,std::move(done));

@@ -85,7 +85,6 @@ bool SharedTaiwanCharacterRemoval::handle(Session& session,const RecoveredCharac
     const auto actual=[&selection_current,&policy,&scope](Phase phase) {
         return selection_current() && (*policy)(scope,phase) && selection_current();
     };
-    // Full row CAS, both prepared/active registries and all TW/CN offer
     // invalidations are mandatory in the already concrete common writer.
     // The predicate's lifetime ends with this synchronous serial transaction.
     // Return committed truth directly: no post-COMMIT failure becomes a false

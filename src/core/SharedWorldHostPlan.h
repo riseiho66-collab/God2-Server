@@ -84,8 +84,6 @@ struct SharedWorldHostPlan {
         std::shared_ptr<SharedWorldHost> common_world;
         // Application's exact shared SQLite reader, borrowed through game-owner
         // drain. Null is legacy source absence, never an empty learned list.
-        // TW uses its pinned dataset; CN must qualify all native CN rows with
-        // CnSharedSkillCatalog. Catalog membership supplies no gameplay grants.
         const NativeSkillCatalog* native_skills=nullptr;
         // Explicit same-Database raw delivery reader. Borrowed until game-owner
         // vault/handler drain, never a fake shared Database lifetime token.

@@ -1,7 +1,7 @@
 #pragma once
 #include "handlers/OwnedPkRoomState.h"
 #include "handlers/OwnedPkOutboxPublication.h"
-#include "cn/world/SharedActorVisibility.h"
+#include "shared/world/SharedActorVisibility.h"
 #include "net/Session.h"
 #include <array>
 #include <map>
@@ -36,10 +36,10 @@ public:
     // CUSTOM-0130 exclusive additive bind path. The real Attempt supplies its
     // privately minted departure; no caller scalar can recreate this token.
     using DepartureBind=std::function<bool(const Ticket&,const std::array<std::shared_ptr<Session>,2>&,
-        const std::array<Session::NativePkEntryHold,2>&,const cn::SharedActorVisibility::TaiwanPkDeparture&)>;
+        const std::array<Session::NativePkEntryHold,2>&,const shared::SharedActorVisibility::TaiwanPkDeparture&)>;
     OwnedPkEntryAdmission(OwnedPkRoomState& rooms,Prepare prepare,Sessions sessions,
                           Invitations::Resolve peers,
-                          std::shared_ptr<cn::SharedActorVisibility> world_visibility = {},
+                          std::shared_ptr<shared::SharedActorVisibility> world_visibility = {},
                           std::shared_ptr<SharedWorldPresence> world_presence = {},
                           Bind bind = {},DepartureBind departure_bind = {})
         :rooms_(rooms),prepare_(std::move(prepare)),sessions_(std::move(sessions)),
@@ -143,7 +143,7 @@ private:
         std::array<std::optional<Session::NativePkEntryHold>,2> holds;
         // CUSTOM-0113 opt-in world departure; no automatic restoration on
         // failure or terminal result. Exact lifecycle cleanup retires markers.
-        std::optional<cn::SharedActorVisibility::TaiwanPkDeparture> departure;
+        std::optional<shared::SharedActorVisibility::TaiwanPkDeparture> departure;
         std::array<bool,2> held{},submitted{};
         Stage stage=Stage::Reserved;
         Completion completion;
@@ -159,7 +159,7 @@ private:
     };
     OwnedPkRoomState& rooms_;
     Prepare prepare_;Sessions sessions_;Invitations::Resolve peers_;
-    std::shared_ptr<cn::SharedActorVisibility> world_visibility_;
+    std::shared_ptr<shared::SharedActorVisibility> world_visibility_;
     std::shared_ptr<SharedWorldPresence> world_presence_;
     Bind bind_;
     DepartureBind departure_bind_;

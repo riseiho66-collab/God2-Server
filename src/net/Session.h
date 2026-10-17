@@ -26,7 +26,7 @@
 #include <vector>
 #include <utility>
 
-namespace god2::cn {class SharedActorVisibility;}
+namespace god2::shared {class SharedActorVisibility;}
 
 namespace god2 {
 
@@ -862,7 +862,7 @@ public:
     std::uint64_t character_id = 0;
 
 private:
-    friend class cn::SharedActorVisibility;
+    friend class shared::SharedActorVisibility;
     friend class SharedTaiwanMovement;
     friend class RecoveredMovementService;
     class NormalMovementBatchWrite final {

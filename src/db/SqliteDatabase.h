@@ -24,11 +24,9 @@
 #include "db/NativeSupplyCatalog.h"
 #include "db/NativeSkillCatalog.h"
 #include "db/TaiwanInstalledSkillCatalogImport.h"
-#include "cn/assets/CnNativeSkillCatalogImport.h"
 #include "db/NativeSkillBookCatalog.h"
 #include "db/SqliteSkillBookLearningRepository.h"
 #include "db/NativeSkillBookSourceCatalog.h"
-#include "cn/assets/CnNativeSkillBookSourceImport.h"
 #include "db/SqliteCompanionRepository.h"
 #include "db/SqliteBeastSnapshotRepository.h"
 #include "db/SqliteBeastBagRepository.h"
@@ -169,7 +167,7 @@ public:
     // initialized Lua/executor and callback dependencies must outlive backend.
     std::unique_ptr<OwnedTaiwanPkRoomBackend> make_owned_taiwan_pk_room_backend(
         asio::any_io_executor,LuaEngine&,std::shared_ptr<SharedWorldPresence>,
-        std::shared_ptr<cn::SharedActorVisibility>,const std::filesystem::path&,
+        std::shared_ptr<shared::SharedActorVisibility>,const std::filesystem::path&,
         OwnedTaiwanPkEntryPreparation::Sessions,OwnedTaiwanPkEntryPreparation::Initializations,
         OwnedTaiwanPkEntryPreparation::Resolve,OwnedTaiwanPkEntryPreparation::Seed,
         OwnedTaiwanPkRoomBackend::Parameters,std::array<std::uint8_t,2>,std::chrono::milliseconds,
@@ -217,11 +215,6 @@ public:
     const NativeEnemyDisplayCatalog& native_enemy_display_catalog() const;
     const NativeSupplyCatalog& native_supply_catalog() const;
     const NativeSkillCatalog& native_skill_catalog() const;
-    // Explicit source-data import only; default migration/Application never
-    // invokes it. No grants or character changes. Requires a migrated DB and
-    // actual pinned provider; bind the same native_skill_catalog() afterward.
-    cn::CnNativeSkillCatalogImport::Result import_cn_native_skill_catalog(
-        std::shared_ptr<const god2cn::CnNativeSkillCatalog>);
     // Explicit insertion-only453 source installation on this actual connection.
     // The writer is bound to the chosen initialization's installation thread;
     // migrated normal DB or explicit private import-only connection allowed.
@@ -236,9 +229,6 @@ public:
     // Additive shared raw evidence; lazy borrowed reader on this same DB.
     // Existing TW parsed catalog/default migrations/Main remain unchanged.
     const NativeSkillBookSourceCatalog& native_skill_book_source_catalog();
-    void install_native_skill_book_source_schema(); // Explicit source schema only.
-    cn::CnNativeSkillBookSourceImport::Result import_cn_native_skill_book_sources(
-        std::shared_ptr<const cn::CnNativeSkillBookBindings>);
     const NativeQuestCatalog& native_quest_catalog() const;
     const NativeMultiMessageCatalog& native_multi_message_catalog() const;
     const NativeMapItemCatalog& native_map_item_catalog() const;

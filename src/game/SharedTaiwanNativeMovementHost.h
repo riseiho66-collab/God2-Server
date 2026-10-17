@@ -13,12 +13,12 @@ public:
     using InputSource=std::function<std::optional<Input>(Session&,
         const SharedTaiwanNativeMovementScene::FactoryScope&)>;
     static std::shared_ptr<SharedTaiwanNativeMovementHost> create(
-        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,
         std::shared_ptr<TaiwanMovementRules>,std::size_t actual_session_capacity);
     // Actual input provider is invoked only for the first real movement
     // factory after completed common initial publication. No fallback supplier.
     static std::shared_ptr<SharedTaiwanNativeMovementHost> create(
-        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,
         std::shared_ptr<TaiwanMovementRules>,InputSource,std::size_t actual_session_capacity,
         std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody={});
     ~SharedTaiwanNativeMovementHost();

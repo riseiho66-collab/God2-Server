@@ -649,7 +649,7 @@ std::shared_ptr<OwnedTaiwanPkEntryPreparation> SqliteDatabase::make_owned_taiwan
 }
 std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_room_backend(
     asio::any_io_executor game,LuaEngine& lua,std::shared_ptr<SharedWorldPresence> presence,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,const std::filesystem::path& archive_path,
+    std::shared_ptr<shared::SharedActorVisibility> visibility,const std::filesystem::path& archive_path,
     OwnedTaiwanPkEntryPreparation::Sessions sessions,
     OwnedTaiwanPkEntryPreparation::Initializations initializations,
     OwnedTaiwanPkEntryPreparation::Resolve peers,OwnedTaiwanPkEntryPreparation::Seed seed,
@@ -726,7 +726,7 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         // not construct missing actors or turn an empty fallback into a scene.
         auto actor_saved_source=make_owned_taiwan_return_actor_saved_source(presence);
         return_source=[resolvers,role_text_source,actor_saved_source,presence](const OwnedPkOutboxPublication::ReturnSceneRequest& request)
-            ->std::optional<cn::SharedActorVisibility::TaiwanReturnScene>{
+            ->std::optional<shared::SharedActorVisibility::TaiwanReturnScene>{
         if(resolvers->stopped||request.actor_input)return {}; // Backend alone issues it.
         auto supplied=request; // Own the complete request before any observer.
         const auto population=presence->observe_ready_population();
@@ -757,7 +757,7 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         value->actor_profile_equipment_required=typed;
         const auto current=value->current;
         value->current=[resolvers,current,presence,actor_saved_source,population=*population,saved_rows=*saved_rows]
-                (cn::SharedActorVisibility::TaiwanReturnCheck check){
+                (shared::SharedActorVisibility::TaiwanReturnCheck check){
             const auto retained=[&] {
                 return !resolvers->stopped&&actor_saved_source->owns_presence(presence)&&
                     actor_saved_source->owns_readset(saved_rows)&&
@@ -783,7 +783,7 @@ std::unique_ptr<OwnedTaiwanPkRoomBackend> SqliteDatabase::make_owned_taiwan_pk_r
         [owner=driver.get(),departure_visibility,departure_presence](const OwnedPkRoomState::Ticket& ticket,
             const std::array<std::shared_ptr<Session>,2>& bound,
             const std::array<Session::NativePkEntryHold,2>& holds,
-            const cn::SharedActorVisibility::TaiwanPkDeparture& departure){
+            const shared::SharedActorVisibility::TaiwanPkDeparture& departure){
             return owner->bind(ticket,bound,holds,
                 OwnedTaiwanPkBasicDriver::WorldDeparture{departure_visibility,departure_presence,departure});});
     // The private constructor only moves already assembled owners; no callback
@@ -1079,11 +1079,6 @@ const NativeSkillCatalog& SqliteDatabase::native_skill_catalog() const {
     if (!migrated_) throw DatabaseError("Migrate database before accessing repositories");
     return *impl_->native_skill_catalog;
 }
-cn::CnNativeSkillCatalogImport::Result SqliteDatabase::import_cn_native_skill_catalog(
-    std::shared_ptr<const god2cn::CnNativeSkillCatalog> native) {
-    if(!migrated_)throw DatabaseError("Migrate database before explicit CN skill import");
-    return cn::CnNativeSkillCatalogImport::import_actual_source(impl_->connection.get(),std::move(native));
-}
 TaiwanInstalledSkillCatalogImport::Outcome SqliteDatabase::import_taiwan_installed_skill_catalog(
     std::shared_ptr<const TaiwanInstalledSkillCatalogSource> source) {
     if(!impl_ || (!migrated_ && !impl_->taiwan_skill_import_only) || !source || !impl_->taiwan_installed_skill_import ||
@@ -1125,15 +1120,6 @@ const NativeSkillBookSourceCatalog& SqliteDatabase::native_skill_book_source_cat
     if(!impl_->native_skill_book_source_catalog)
         impl_->native_skill_book_source_catalog=std::make_unique<NativeSkillBookSourceCatalog>(impl_->connection.get());
     return *impl_->native_skill_book_source_catalog;
-}
-void SqliteDatabase::install_native_skill_book_source_schema() {
-    if(!migrated_)throw DatabaseError("Migrate before explicit shared book source schema");
-    cn::CnNativeSkillBookSourceImport::install_schema(impl_->connection.get());
-}
-cn::CnNativeSkillBookSourceImport::Result SqliteDatabase::import_cn_native_skill_book_sources(
-    std::shared_ptr<const cn::CnNativeSkillBookBindings> native) {
-    if(!migrated_)throw DatabaseError("Migrate before explicit CN book source import");
-    return cn::CnNativeSkillBookSourceImport::import_actual_source(impl_->connection.get(),std::move(native));
 }
 const NativeQuestCatalog& SqliteDatabase::native_quest_catalog() const {
     if(!migrated_)throw DatabaseError("Migrate database before accessing repositories");

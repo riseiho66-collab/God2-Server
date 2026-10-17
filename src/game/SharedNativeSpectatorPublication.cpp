@@ -1,6 +1,5 @@
 #include "game/SharedNativeSpectatorPublication.h"
 #include "protocol/RecoveredSpectatorTargetsD0.h"
-#include "cn/protocol/CnSpectatorTargetsD0.h"
 #include <exception>
 #include <limits>
 #include <map>
@@ -42,17 +41,16 @@ struct Pending {
     const std::shared_ptr<const Pub::Event> event;
     const std::shared_ptr<const View> candidate,released_view,failed_view;
     std::vector<std::uint8_t> taiwan_logical;
-    std::vector<god2cn::Bytes> mainland_records;
     Pub::Completion completion;
     bool approved=false,completed=false,submitting=false;
     std::optional<bool> inline_release;
     Pending(std::shared_ptr<Entry> original,Strong actual,std::shared_ptr<Pub::WorldOwner> issuer,
         std::shared_ptr<const Pub::Event> supplied,std::shared_ptr<const View> staged,std::shared_ptr<const View> released,
         std::shared_ptr<const View> failed,
-        std::vector<std::uint8_t> tw,std::vector<god2cn::Bytes> cn,Pub::Completion done)
+        std::vector<std::uint8_t> tw,Pub::Completion done)
         :entry(std::move(original)),receiver(std::move(actual)),owner(std::move(issuer)),event(std::move(supplied)),
          candidate(std::move(staged)),released_view(std::move(released)),failed_view(std::move(failed)),taiwan_logical(std::move(tw)),
-         mainland_records(std::move(cn)),completion(std::move(done)) {}
+         completion(std::move(done)) {}
 };
 bool same_character(const RecoveredCharacter& a,const RecoveredCharacter& b) {
     return a.id==b.id && a.account_id==b.account_id && a.slot==b.slot && a.profile==b.profile &&
@@ -61,9 +59,6 @@ bool same_character(const RecoveredCharacter& a,const RecoveredCharacter& b) {
 bool same_scope(const Pub::Scope& a,const Pub::Scope& b) {
     return a.recipient==b.recipient && same_character(a.character,b.character) && a.saved_position==b.saved_position &&
         a.protocol==b.protocol && a.taiwan_phase==b.taiwan_phase && a.taiwan_battle_generation==b.taiwan_battle_generation;
-}
-Pub::Protocol protocol(const Strong& receiver) {
-    return std::holds_alternative<std::shared_ptr<Session>>(receiver)?Pub::Protocol::Taiwan:Pub::Protocol::Mainland;
 }
 Weak weak(const Strong& receiver) {return std::visit([](const auto& c)->Weak{return c;},receiver);}
 Strong lock(const Weak& receiver) {return std::visit([](const auto& c)->Strong{return c.lock();},receiver);}
@@ -134,8 +129,6 @@ struct SharedNativeSpectatorPublication::State:std::enable_shared_from_this<Stat
                     c->recovered_world_ready() && (c->state()==SessionState::InWorld || c->state()==SessionState::InBattle) &&
                     c->common_world_delivery_current(lease.account,lease.character,lease.generation) &&
                     !c->common_world_entry_current(lease.account,lease.character,lease.generation);
-            else return c->role()==cn::SharedCredentialConnection::Transport::Role::World && c->world_admission_current() &&
-                c->world_session_id()==lease.session && c->verified_account_id()==lease.account && c->world_character_offered(lease.character);
         },receiver);
     }
     std::optional<Strong> receiver(const Token& token) const {
@@ -158,7 +151,7 @@ struct SharedNativeSpectatorPublication::State:std::enable_shared_from_this<Stat
             root=row;
         }
         if(!root || (tw && ((*tw)->state()!=*phase || (*tw)->battle_generation()!=battle)))return std::nullopt;
-        return Scope{token.lease(),root->character,root->position,protocol(actual),phase,battle};
+        return Scope{token.lease(),root->character,root->position,Protocol::Taiwan,phase,battle};
     }
     bool qualified(const Token& token,const Strong& actual,const std::shared_ptr<WorldOwner>& issuer,
         Check stage,const Event& event,const std::function<bool()>& private_current) const {
@@ -215,36 +208,34 @@ struct SharedNativeSpectatorPublication::State:std::enable_shared_from_this<Stat
             a.terminal==b.terminal && a.pending==b.pending &&
             (a.entry? (a.blocked || a.view==b.view):a.absence_generation==b.absence_generation);
     }
-    std::vector<god2cn::Bytes> records(const Event& event) const {
+    std::size_t validate_records(const Event& event) const {
         if(event.logical.empty() || event.logical.size()>budgets.max_logical_bytes)throw std::invalid_argument("Native UI logical budget");
-        std::vector<god2cn::Bytes> result;result.reserve(budgets.max_records);
+        std::size_t count=0;
         for(std::size_t at=0;at<event.logical.size();) {
             const auto opcode=event.logical[at];std::size_t length=0;
             if(opcode==0xcd)length=65;else if(opcode==0xd0)length=7;
             else throw std::invalid_argument("Native UI requires complete actual CD/D0 only");
-            if(length>event.logical.size()-at || result.size()==budgets.max_records)
+            if(length>event.logical.size()-at || count==budgets.max_records)
                 throw std::length_error("Native UI complete record boundary/budget");
             const std::span<const std::uint8_t> record(event.logical.data()+at,length);
             std::uint8_t slot=0;
             if(opcode==0xcd)slot=record[5]; // Entire64 body retained, flags never synthesized.
             else if(event.protocol==Protocol::Taiwan) {
                 const auto view=RecoveredSpectatorTargetsD0::read(record);if(!view)throw std::invalid_argument("TW D0 shape");slot=view->slot();
-            }else {
-                const auto view=god2cn::CnSpectatorTargetsD0::read(record);if(!view)throw std::invalid_argument("CN own D0 shape");slot=view->slot();
             }
             // Qualified supplied output domain, not the native leaf's bound.
             if(slot<1 || slot>50)throw std::invalid_argument("Native UI supplier slot domain1..50");
-            result.emplace_back(record.begin(),record.end());at+=length;
+            ++count;at+=length;
         }
-        return result;
+        return count;
     }
     void prepare_submit(const Event& supplied,const std::shared_ptr<WorldOwner>& issuer,Completion& done,std::shared_ptr<Pending>& out) {
         const auto event=std::make_shared<const Event>(supplied); // Deep-copy all raw caller-owned bytes.
         if(!issuer || !event->ui_epoch || !event->revision || event->revision<=event->previous_revision ||
-           (event->protocol!=Protocol::Taiwan && event->protocol!=Protocol::Mainland))throw std::invalid_argument("Actual UI issuer lineage required");
-        auto frames=records(*event);if(frames.size()>256)throw std::length_error("Actual native batch capacity");
+           event->protocol!=Protocol::Taiwan)throw std::invalid_argument("Actual UI issuer lineage required");
+        const auto record_count=validate_records(*event);if(record_count>256)throw std::length_error("Actual native batch capacity");
         const auto registered=transports->lookup(event->recipient);
-        if(!registered || reentered || protocol(registered->transport())!=event->protocol)throw std::runtime_error("Actual UI recipient registration");
+        if(!registered || reentered || event->protocol!=Protocol::Taiwan)throw std::runtime_error("Actual UI recipient registration");
         const Strong actual=registered->transport(); // Strong before all following observers.
         const auto& token=registered->token();
         if(event->protocol==Protocol::Taiwan) {
@@ -279,8 +270,8 @@ struct SharedNativeSpectatorPublication::State:std::enable_shared_from_this<Stat
                 (!previous || (!previous->pending && (previous==entry?!previous->terminal:previous->retired))) && endpoint(token,actual);};
         if(!qualified(token,actual,issuer,Check::BeforeQueue,*event,before))throw std::runtime_error("Actual UI prequeue Current failed");
         if(absence_generation==std::numeric_limits<std::uint64_t>::max())throw std::overflow_error("Private UI absence lineage exhausted");
-        std::vector<std::uint8_t> tw=event->protocol==Protocol::Taiwan?event->logical:std::vector<std::uint8_t>{};
-        out=std::make_shared<Pending>(entry,actual,issuer,event,candidate,released,original,std::move(tw),std::move(frames),std::move(done));
+        std::vector<std::uint8_t> tw=event->logical;
+        out=std::make_shared<Pending>(entry,actual,issuer,event,candidate,released,original,std::move(tw),std::move(done));
         // All source allocation/record/budget preparation precedes this effect.
         slots.insert_or_assign(event->recipient.session,entry);advance_absence();
         entry->view=candidate;entry->pending=true;active=entry;out->submitting=true;
@@ -305,7 +296,6 @@ struct SharedNativeSpectatorPublication::State:std::enable_shared_from_this<Stat
                 if constexpr(std::is_same_v<C,Session>)c->send_common_world_records_with_publication(std::move(out->taiwan_logical),
                     entry->lease.account,entry->lease.character,entry->lease.generation,approve,complete,
                     std::nullopt,entry->lease); // Genuine ready recipient: actual GAME vault, no scalar fallback.
-                else c->send_world_batch_with_publication(std::move(out->mainland_records),approve,complete);
             },actual);
         }catch(...) {out->submitting=false;entry->terminal=true;throw;}
         out->submitting=false;

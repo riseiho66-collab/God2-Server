@@ -130,7 +130,7 @@ sol::table common_skill_snapshot(sol::state_view lua,const SharedSkillLookup& va
     for(std::size_t n=0;n<d.profiles.size();++n) {
         const auto& b=d.profiles[n];
         profiles[n+1]=lua.create_table_with(
-            "region",b.region==SharedSkillRegion::Taiwan?"TW":"CN",
+            "region","TW",
             "source",catalog_provenance(lua,b.source),
             "source_record_index",b.source_record_index,"source_offset",b.source_offset,
             "record_sha256",b.record_sha256,"row_qualification",shared_skill_qualification_name(b.qualification),

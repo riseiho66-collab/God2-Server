@@ -14,8 +14,8 @@ enum class TaiwanWorldEntryIdentity;
 // Serial game-owner lease over actual common character/storage identity.
 // This integration policy does not recover spawn rules or manufacture wire
 // data. The scene owner supplies its already reserved native actor handle.
-// Both adapters must use the same registry before cross-version exclusion can
-// be claimed. Existing TW movement/presence is not implicitly registered here.
+// All Taiwan adapters use the same registry for session exclusion.
+// Existing TW movement/presence is not implicitly registered here.
 class SharedWorldPresence {
 public:
     struct Lease {

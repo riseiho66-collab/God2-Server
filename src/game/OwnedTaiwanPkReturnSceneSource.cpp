@@ -54,13 +54,13 @@ struct OwnedTaiwanPkReturnSceneSource::State {
 };
 OwnedTaiwanPkReturnSceneSource::OwnedTaiwanPkReturnSceneSource(
         std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<SharedNativeWorldTransports> transports,
-        std::shared_ptr<cn::SharedActorVisibility> visibility,std::shared_ptr<ProfileOwner> profiles,
+        std::shared_ptr<shared::SharedActorVisibility> visibility,std::shared_ptr<ProfileOwner> profiles,
         Selection selection,MaterialSources material)
     :presence_(std::move(presence)),transports_(std::move(transports)),visibility_(std::move(visibility)),
      profiles_(std::move(profiles)),selection_(selection),material_(std::move(material)){}
 std::shared_ptr<OwnedTaiwanPkReturnSceneSource> OwnedTaiwanPkReturnSceneSource::create(
         std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<SharedNativeWorldTransports> transports,
-        std::shared_ptr<cn::SharedActorVisibility> visibility,std::shared_ptr<ProfileOwner> profiles,
+        std::shared_ptr<shared::SharedActorVisibility> visibility,std::shared_ptr<ProfileOwner> profiles,
         Selection selection,MaterialSources material){
     if(!presence||!transports||!visibility||!profiles||!transports->owns_presence(presence)||
        !visibility->owns_presence(presence)||!profiles->owns_presence(presence)||
@@ -154,7 +154,6 @@ std::optional<OwnedTaiwanPkReturnSceneSource::Scene> OwnedTaiwanPkReturnSceneSou
             bool selected=bool(member);
             for(const auto& position:positions)
                 selected|=row.actor.position.area==position.area&&row.actor.position.scene==position.scene;
-            // A same-scene CN endpoint needs its native adapter. Refuse the
             // whole selection; never silently omit it from a TW-only roster.
             if(selected&&!tw)return {};
             std::optional<Session::NativeTaiwanReceiverSelector> selector;
@@ -171,10 +170,10 @@ std::optional<OwnedTaiwanPkReturnSceneSource::Scene> OwnedTaiwanPkReturnSceneSou
         if(!found[0]||!found[1]||!fence(*state,Check::Prepare))return {};
         Scene scene;
         using Key=std::pair<std::uint64_t,std::uint64_t>;
-        std::map<Key,cn::SharedActorVisibility::TaiwanReturnActor> actors;
+        std::map<Key,shared::SharedActorVisibility::TaiwanReturnActor> actors;
         std::map<std::size_t,Equipment> equipment;
         const auto actor=[&](std::size_t source_row,std::size_t recipient_row)
-                ->std::optional<cn::SharedActorVisibility::TaiwanReturnActor>{
+                ->std::optional<shared::SharedActorVisibility::TaiwanReturnActor>{
             const auto source=state->endpoints[source_row],recipient=state->endpoints[recipient_row];
             const auto& source_saved=rows[source_row].actor;
             const auto& recipient_saved=rows[recipient_row].actor;
@@ -212,12 +211,12 @@ std::optional<OwnedTaiwanPkReturnSceneSource::Scene> OwnedTaiwanPkReturnSceneSou
                 if(!status_publication||!profiles_->current(*profile,Check::Prepare)||!fence(*state,Check::Prepare))return {};
             }
             state->profiles.push_back(*profile);
-            auto qualification=std::make_shared<const cn::SharedActorVisibility::TaiwanReturnQualification>(
-                cn::SharedActorVisibility::TaiwanReturnQualification{profile->revision(),
+            auto qualification=std::make_shared<const shared::SharedActorVisibility::TaiwanReturnQualification>(
+                shared::SharedActorVisibility::TaiwanReturnQualification{profile->revision(),
                     [owner,state,profile=*profile]{return owner->qualified(state,profile);},{}});
-            cn::SharedActorVisibility::Taiwan native{recipient->session,profile->spawn(),profile->removal(),
-                profile->movement(),cn::SharedActorVisibility::TaiwanReceiverTextState(*recipient->selector),{}};
-            cn::SharedActorVisibility::TaiwanReturnActor output{source_saved.lease,recipient_saved.lease,
+            shared::SharedActorVisibility::Taiwan native{recipient->session,profile->spawn(),profile->removal(),
+                profile->movement(),shared::SharedActorVisibility::TaiwanReceiverTextState(*recipient->selector),{}};
+            shared::SharedActorVisibility::TaiwanReturnActor output{source_saved.lease,recipient_saved.lease,
                 source_saved.position,recipient_saved.position,source->session,std::move(native),
                 std::move(qualification),profile->actor_override(),std::move(status_publication)};
             actors.emplace(key,output);return output;

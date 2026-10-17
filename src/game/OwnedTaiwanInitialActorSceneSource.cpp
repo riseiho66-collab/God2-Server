@@ -14,7 +14,7 @@
 namespace god2 {
 namespace {
 using Entered=SharedTaiwanWorldEntered;
-using Visibility=cn::SharedActorVisibility;
+using Visibility=shared::SharedActorVisibility;
 using Profiles=TaiwanCustomFullActorProfile;
 using Input=Profiles::SavedInput;
 using Lease=SharedWorldPresence::Lease;
@@ -199,7 +199,6 @@ struct OwnedTaiwanInitialActorSceneSource::State {
         return okay&&pure();
     }
     // Qualify genuine audience metadata BEFORE authoring any TW replacement.
-    // CN material remains the genuine source's complete native responsibility.
     bool audience(const std::vector<Visibility::OutwardRecipient>& selected) const {
         if(selected.size()>256||!outward_ready())return false;
         std::set<std::uint64_t> sessions;
@@ -222,10 +221,7 @@ struct OwnedTaiwanInitialActorSceneSource::State {
                         actual->character_id==recipient.character&&!actual->closing()&&actual->recovered_world_ready()&&
                         actual->common_world_delivery_current(recipient.account,recipient.character,recipient.generation)&&
                         native.movement.state()==(std::uint16_t(raw[7])|(std::uint16_t(raw[8])<<8));
-                }else return !actual->closing()&&actual->role()==cn::SharedCredentialConnection::Transport::Role::World&&
-                    actual->world_session_id()==recipient.session&&actual->verified_account_id()==recipient.account&&
-                    actual->world_character_offered(recipient.character)&&actual->world_admission_current()&&
-                    native.movement.state_raw()==native.spawn.state_raw();
+                }
             },item.native);
             if(!bound||!outward_ready())return false;
         }
@@ -443,7 +439,7 @@ std::optional<Entered::Native> OwnedTaiwanInitialActorSceneSource::supply(
         std::vector<State::Actor> actors;auto roles=state->roles;auto equipment=state->equipment;
         for(auto& item:selected){
             auto* native=std::get_if<Visibility::Taiwan>(&item.native);
-            if(!native)continue; // Genuine CN vector/model/order is untouched.
+            if(!native)return std::nullopt;
             if(!state->outward_ready())return {};
             {
                 auto eq=state->scope.actor_input->source()->observe_profile_equipment(state->scope.actor_input->readset(),row);

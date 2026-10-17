@@ -3,7 +3,7 @@
 #include "game/SharedNativeWorldTransports.h"
 #include "game/SharedNativeSpectatorPublication.h"
 #include "game/SharedNativeSpectatorTargets.h"
-#include "cn/world/SharedActorVisibility.h"
+#include "shared/world/SharedActorVisibility.h"
 #include <exception>
 #include <stdexcept>
 #include <utility>
@@ -11,7 +11,7 @@
 namespace god2 {
 SharedWorldHost::SharedWorldHost(RecoveredCharacterRepository& characters)
     :characters_(characters),presence_(std::make_shared<SharedWorldPresence>(characters)),
-     visibility_(std::make_shared<cn::SharedActorVisibility>(presence_)),
+     visibility_(std::make_shared<shared::SharedActorVisibility>(presence_)),
      transports_(SharedNativeWorldTransports::create(presence_)) {}
 SharedWorldHost::~SharedWorldHost() {
     if(thread_!=std::this_thread::get_id())std::terminate();
@@ -22,7 +22,7 @@ void SharedWorldHost::owner() const {
 std::shared_ptr<SharedWorldPresence> SharedWorldHost::presence() const {
     owner();return presence_;
 }
-std::shared_ptr<cn::SharedActorVisibility> SharedWorldHost::visibility() const {
+std::shared_ptr<shared::SharedActorVisibility> SharedWorldHost::visibility() const {
     owner();return visibility_;
 }
 std::shared_ptr<SharedNativeWorldTransports> SharedWorldHost::transports() const {

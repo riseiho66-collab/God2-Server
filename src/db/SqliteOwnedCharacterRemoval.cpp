@@ -24,7 +24,7 @@ bool SqliteRecoveredCharacterRepository::erase_owned_snapshot_impl(
        (summaries?(!summary_current || bool(current)):(!current || bool(summary_current))) ||
        (expected.name_codepage!=0 && expected.name_codepage!=936 && expected.name_codepage!=950) ||
        expected.streamer_privilege>3)return false;
-    // This is the existing common root's actual storage format, not a CN19
+    // This is the existing common root's actual storage format, not a transport
     // producer limit or conversion. The expected row comes from shared storage.
     const auto end=std::find(expected.profile.begin(),expected.profile.begin()+15,0);
     if(end==expected.profile.begin() || end==expected.profile.begin()+15)return false;

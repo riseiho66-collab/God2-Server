@@ -15,12 +15,11 @@ namespace god2 {
 // integration/security policy, not recovered official key generation or TTL.
 // The authoritative success controller supplies a key, deadline and real
 // destination catalog; this class never invents packet fields or success bytes.
-// Native CN copy/resend relation: cn-admission-contract-agent-01/findings.json.
 // AccountRepository/password verification remains a separate prerequisite.
 class SharedWorldAdmission {
 public:
     using Clock=std::chrono::steady_clock;
-    enum class Protocol {Taiwan,Mainland};
+    enum class Protocol {Taiwan};
     struct Target {
         std::uint16_t group,server;
         bool operator==(const Target&) const=default;
@@ -170,7 +169,6 @@ public:
     // offered character snapshot that a real mutation may invalidate.
     bool world_owned(const Ticket&) const;
     // Common character mutation owner supplies actual IDs, not adapter slots,
-    // raw names or incoming19 fields. Covers TW and CN grants for this account.
     // This does not mutate storage, consume its operation token, revoke another
     // active actor, send a reply or recover native deletion rules.
     std::optional<CharacterOfferInvalidation> prepare_character_offer_invalidation(

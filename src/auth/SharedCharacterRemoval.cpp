@@ -27,7 +27,6 @@ bool SharedCharacterRemoval::commit_impl(SqliteRecoveredCharacterRepository& cha
     RecoveredCharacter expected,Current operation,CommitObservation* observation) {
     if(!begin_observation(observation,expected))return false;
     if(!operation || !presence.owns_repository(characters))return false;
-    // All plan allocations precede saved-state changes. This covers every TW/CN
     // grant for this common account/character, independent of wire name/slot.
     auto invalidation=admission.prepare_character_offer_invalidation(expected.account_id,expected.id);
     if(!invalidation)return false;

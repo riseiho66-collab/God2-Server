@@ -1,5 +1,7 @@
 # GOD2 Server Rebuild
 
+目前只開發台服原生 PC 與其網頁入口 `/tw/native`、`/tw/native-game`。台服繁簡顯示與存檔保留；目前仍為來源整合階段，尚未完成全遊戲驗收。最新範圍見 [AGENTS.md](AGENTS.md)。
+
 **服務端主要使用 C++20＋Lua 5.4，資料儲存使用 SQLite。**
 C++ 負責網路、狀態、資料儲存與遊戲整合；Lua 負責既有架構中的遊戲規則。
 `tools/` 與 `tests/research/` 內的 Python 是離線逆向、研究、測試與維運工具，

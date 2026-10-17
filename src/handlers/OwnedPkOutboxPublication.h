@@ -1,6 +1,6 @@
 #pragma once
 #include "handlers/OwnedPkRoomState.h"
-#include "cn/world/SharedActorVisibility.h"
+#include "shared/world/SharedActorVisibility.h"
 #include "net/Session.h"
 #include <algorithm>
 #include <array>
@@ -56,9 +56,9 @@ public:
     // actual registry/presence and privately minted token stay together; raw
     // markers, same IDs or another visibility instance are not substitutes.
     struct WorldDeparture {
-        std::shared_ptr<cn::SharedActorVisibility> visibility;
+        std::shared_ptr<shared::SharedActorVisibility> visibility;
         std::shared_ptr<SharedWorldPresence> presence;
-        cn::SharedActorVisibility::TaiwanPkDeparture token;
+        shared::SharedActorVisibility::TaiwanPkDeparture token;
     };
     // CUSTOM-0133 actual return supplier receives the exact saved terminal
     // lineage, not old visibility edges. Pure game-owner call; it must return
@@ -75,7 +75,7 @@ public:
         // input before the mandatory scene supplier. Publication never mints it.
         std::shared_ptr<const OwnedTaiwanReturnActorSavedSource::PopulationInput> actor_input={};
     };
-    using ReturnSceneSource=std::function<std::optional<cn::SharedActorVisibility::TaiwanReturnScene>(const ReturnSceneRequest&)>;
+    using ReturnSceneSource=std::function<std::optional<shared::SharedActorVisibility::TaiwanReturnScene>(const ReturnSceneRequest&)>;
     explicit OwnedPkOutboxPublication(OwnedPkRoomState& rooms,ReturnSceneSource return_scene={},
             std::weak_ptr<ReturnLifecycleOwner> lifecycle_owner={})
         :rooms_(rooms),lifetime_(std::make_shared<Lifetime>(Lifetime{this})),return_scene_source_(std::move(return_scene)),
@@ -453,7 +453,7 @@ private:
         std::weak_ptr<Lifetime> lifetime;
         std::weak_ptr<Binding> binding;
         const std::array<Session::NativePkReturnPreparation,2> preparations;
-        const cn::SharedActorVisibility::TaiwanPkReturnPlan visibility;
+        const shared::SharedActorVisibility::TaiwanPkReturnPlan visibility;
         const std::array<Session::NativeBattleSkill,2> final_writes;
         const std::array<std::uint64_t,2> revisions;
         const std::array<std::array<std::uint8_t,4>,2> payloads;
@@ -461,10 +461,10 @@ private:
         std::optional<Session::NativePkReturnReservation> reservation;
         // Owning exact private plan/pair and ordered full6F records for the
         // actual later sender. This subset alone cannot publish a return.
-        std::optional<cn::SharedActorVisibility::TaiwanPkReturnRecords> records;
+        std::optional<shared::SharedActorVisibility::TaiwanPkReturnRecords> records;
         std::optional<Session::NativePkReturnOutputPlan> output_plan;
         std::optional<Session::NativePkReturnOutputHold> output_hold;
-        std::optional<cn::SharedActorVisibility::TaiwanPkReturnConsumption> consumption;
+        std::optional<shared::SharedActorVisibility::TaiwanPkReturnConsumption> consumption;
         bool consumption_failed_seen=false;
         std::optional<Session::NativePkReturnPublication> publication;
         bool publication_written_seen=false,publication_failed_seen=false;
@@ -478,7 +478,7 @@ private:
         bool reserved_seen=false,failed_seen=false;
         ReturnFlight(std::weak_ptr<Lifetime> life,std::weak_ptr<Binding> owner,
                 std::array<Session::NativePkReturnPreparation,2> prepared,
-                cn::SharedActorVisibility::TaiwanPkReturnPlan plan,
+                shared::SharedActorVisibility::TaiwanPkReturnPlan plan,
                 std::array<Session::NativeBattleSkill,2> outputs,
                 std::array<std::uint64_t,2> versions,
                 std::array<std::array<std::uint8_t,4>,2> contexts,
@@ -569,7 +569,7 @@ private:
         // Preallocated only: original live initialization/identity/state remain.
         std::optional<std::array<Session::NativePkReturnPreparation,2>> return_preparations;
         // CUSTOM-0133 private preallocated visibility; never published/current WORLD.
-        std::optional<cn::SharedActorVisibility::TaiwanPkReturnPlan> return_visibility;
+        std::optional<shared::SharedActorVisibility::TaiwanPkReturnPlan> return_visibility;
         std::shared_ptr<ReturnFlight> return_flight;
         bool return_preparing=false,return_reentered=false,return_finished=false;
         bool failed=false,pumping=false,resolving=false,resolver_reentered=false;
@@ -739,7 +739,7 @@ private:
                 if(!binding->sessions[viewer]->native_pk_return_preparation_current(prepared[viewer]))
                     throw DatabaseError("PK preallocated return generation no longer matches its Session");
             if(!pair_current())throw DatabaseError("PK return pair changed before private retention");
-            std::optional<cn::SharedActorVisibility::TaiwanPkReturnPlan> visibility_plan;
+            std::optional<shared::SharedActorVisibility::TaiwanPkReturnPlan> visibility_plan;
             if(return_scene_source_){
                 // Opt-in only: absence preserves295 preparation-only path.
                 // Once configured, missing/invalid output fails the whole pair.

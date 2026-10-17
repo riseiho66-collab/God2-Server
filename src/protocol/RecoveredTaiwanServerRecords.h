@@ -76,7 +76,6 @@ private:
 
     // Exact 00..FD pointer leaves plus the native >FD unsupported branch.
     // Positive values include opcode; -2 means total WORD; -1 unsupported.
-    // No C2S producer grammar or CN length table is used.
     inline static constexpr std::array<std::int16_t,256> native_lengths{{
         /*00*/3,2,23,3,5,9,5,75,65,5,17,33,389,21,9,37,
         /*10*/37,5,8,527,9,13,9,25,3,-2,4,3,45,173,2,125,

@@ -25,7 +25,7 @@ public:
         RecoveredPosition saved_position;
         Publication::Protocol protocol;
         std::optional<SessionState> taiwan_phase;
-        std::uint64_t taiwan_battle_generation; // No manufactured CN counter.
+        std::uint64_t taiwan_battle_generation; // Actual Taiwan battle incarnation.
     };
     class Target {
     public:

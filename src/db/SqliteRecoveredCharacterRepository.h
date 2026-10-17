@@ -17,7 +17,7 @@ class SqliteNativeCharacterSummarySnapshotRepository;
 class SqliteCompanionRepository;
 class SelectedDeitySkillReadset;
 // CUSTOM-0139: borrowed actual saved observation, consumed in the same DB txn.
-// It grants neither native CN casting nor a skill absent from the saved row.
+// It grants no native casting permission or skill absent from the saved row.
 struct OwnedSkillCheckpointAuthority {
     SqliteCompanionRepository& repository;
     const SelectedDeitySkillReadset& readset;
@@ -158,7 +158,7 @@ public:
                               const std::array<std::uint8_t, 40>& profile) override;
     struct NewOwnedCharacter {
         // Explicit common storage shape from the actual qualified rule source.
-        // Never infer these bytes/slot/codepage/style from a native CN17 record.
+        // Never infer these bytes/slot/codepage/style from a transport record.
         std::uint8_t slot;
         std::array<std::uint8_t,40> profile;
         std::uint16_t name_codepage;
@@ -171,7 +171,7 @@ public:
     std::optional<RecoveredCharacter> create_owned_snapshot(std::uint64_t account,
         std::span<const RecoveredCharacter> expected,NewOwnedCharacter,CurrentCreation);
     struct OwnedNameCandidate {
-        // Actual qualified common storage bytes/codepage, not incoming CN D3,
+        // Actual qualified common storage bytes/codepage, not incoming wire data,
         // a display conversion, name join or new character identity.
         std::array<std::uint8_t,16> common_name_bytes;
         std::uint16_t name_codepage;

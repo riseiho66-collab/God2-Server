@@ -1,4 +1,4 @@
-"""Real Application sockets and SQLite, synthetic peers, not native-client E2E."""
+"""Taiwan Application sockets with both display scripts, not native-client E2E."""
 from pathlib import Path
 import struct
 import tempfile
@@ -41,34 +41,34 @@ class PlayerVisibilityServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='god2-visibility-chat-') as directory:
             with h.server(database=Path(directory)/'player-visibility-diagnostic.db') as server:
                 endpoint,tw_id=w.create(h,server)
-                cn_id=self.create_character(h,server,dual.OTHER,b'VisibleChinese')
-                chat.speaker_names={tw_id:dual.HEROES[0].decode('ascii'),cn_id:'VisibleChinese'}
-                with h.connect(endpoint) as tw,h.connect(endpoint) as cn:
+                simplified_id=self.create_character(h,server,dual.OTHER,b'VisibleChinese')
+                chat.speaker_names={tw_id:dual.HEROES[0].decode('ascii'),simplified_id:'VisibleChinese'}
+                with h.connect(endpoint) as tw,h.connect(endpoint) as simplified:
                     self.select(w,h,tw,tw_id)
                     tw.sendall(current_world_ready_wire(tw_id,(4,3)))
                     w.state_candidate(h,tw)
                     tw.sendall(h.frame(0x30,b'\0'))
                     h.silent(tw)
-                    self.select(w,h,cn,cn_id,account=dual.OTHER)
-                    cn.sendall(current_world_ready_wire(cn_id,(4,2)))
-                    w.state_candidate(h,cn)
-                    cn.sendall(h.frame(0x30,b'\0'))
-                    for recipient,identity in ((tw,cn_id),(cn,tw_id)):
+                    self.select(w,h,simplified,simplified_id,account=dual.OTHER)
+                    simplified.sendall(current_world_ready_wire(simplified_id,(4,2)))
+                    w.state_candidate(h,simplified)
+                    simplified.sendall(h.frame(0x30,b'\0'))
+                    for recipient,identity in ((tw,simplified_id),(simplified,tw_id)):
                         spawn=h.read_frame(recipient,0x6f,84)[3:-1]
                         self.assertEqual(int.from_bytes(spawn[:4],'little')&4095,identity)
                     tw.sendall(chat.chat(h,'漢字遊戲','cp950'))
                     chat.display(h,tw,tw_id,'漢字遊戲','cp950',False)
-                    chat.display(h,cn,tw_id,'汉字游戏','cp936',True)
-                    cn.sendall(chat.chat(h,'欢迎游戏','cp936'))
-                    chat.display(h,tw,cn_id,'歡迎遊戲','cp950',False)
-                    chat.display(h,cn,cn_id,'欢迎游戏','cp936',True)
+                    chat.display(h,simplified,tw_id,'汉字游戏','cp936',True)
+                    simplified.sendall(chat.chat(h,'欢迎游戏','cp936'))
+                    chat.display(h,tw,simplified_id,'歡迎遊戲','cp950',False)
+                    chat.display(h,simplified,simplified_id,'欢迎游戏','cp936',True)
                     tw.sendall(movement_wire(18,12,1))
                     self.ack(h,tw,1)
-                    update=h.read_frame(cn,0x5e,16)[3:-1]
+                    update=h.read_frame(simplified,0x5e,16)[3:-1]
                     self.assertEqual(int.from_bytes(update[:2],'little'),tw_id)
                     tw.sendall(chat.chat(h,'測試','cp950'))
                     chat.display(h,tw,tw_id,'測試','cp950',False)
-                    chat.display(h,cn,tw_id,'测试','cp936',True)
+                    chat.display(h,simplified,tw_id,'测试','cp936',True)
                     self.assertEqual(self.positions(server.database),[(tw_id,2,15,18,12,1)])
                     with closing(sqlite3.connect(server.database)) as db:
                         self.assertEqual(db.execute('pragma quick_check').fetchone(),('ok',))

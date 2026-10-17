@@ -19,7 +19,7 @@ struct NativeAccountSnapshot {
 class NativeAccountSnapshotRepository {
 public:
     virtual ~NativeAccountSnapshotRepository()=default;
-    // Same actual authenticated account backend, not a separately opened CN DB.
+    // Same actual authenticated account backend.
     virtual bool owns_accounts(const AccountRepository&) const noexcept=0;
     // Missing row is absent. Missing schema/backend or malformed stored data
     // is an error, never an all-zero/free/default-success snapshot.

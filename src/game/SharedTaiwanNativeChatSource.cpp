@@ -1,5 +1,4 @@
 #include "game/SharedTaiwanNativeChatSource.h"
-#include "cn/protocol/CnChatConsumerContract.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include "protocol/RecoveredPrivateChat.h"
 #include "protocol/RecoveredTaiwanChatConsumerContract.h"
@@ -15,7 +14,6 @@
 namespace god2 {
 namespace {
 using Source=SharedTaiwanNativeChatSource;
-using Connection=cn::SharedCredentialConnection;
 struct Slot {
     const Source::Lease lease;
     const std::weak_ptr<Session> session;
@@ -23,7 +21,7 @@ struct Slot {
     Slot(const Source::Lease& actual,const std::shared_ptr<Session>& connection):lease(actual),session(connection) {}
 };
 struct Recipient {
-    std::variant<std::shared_ptr<Connection>,std::shared_ptr<Session>> transport;
+    std::variant<std::shared_ptr<Session>> transport;
     RecoveredPosition saved_position;
     std::optional<SessionState> taiwan_phase;
     std::uint64_t taiwan_battle_generation;
@@ -32,7 +30,7 @@ struct Owner {
     const std::thread::id thread=std::this_thread::get_id();
     const std::shared_ptr<SharedWorldPresence> presence;
     const std::shared_ptr<SharedChatIdentitySource> identities;
-    const std::shared_ptr<cn::SharedActorVisibility> visibility;
+    const std::shared_ptr<shared::SharedActorVisibility> visibility;
     const std::shared_ptr<SharedPublishedChatNameSource> published_names;
     const std::shared_ptr<Source::WorldOwner> world;
     const std::shared_ptr<const ChineseText> text;
@@ -43,7 +41,7 @@ struct Owner {
     std::shared_ptr<Slot> active;
     std::vector<std::optional<SharedNativeWorldTransports::Snapshot>> active_routes;
     bool operating=false,reentered=false;
-    Owner(std::shared_ptr<SharedWorldPresence> p,std::shared_ptr<cn::SharedActorVisibility> v,
+    Owner(std::shared_ptr<SharedWorldPresence> p,std::shared_ptr<shared::SharedActorVisibility> v,
         std::shared_ptr<Source::WorldOwner> w,std::shared_ptr<const ChineseText> t,Source::Budgets b,std::size_t c,
         std::shared_ptr<SharedNativeWorldTransports> routes)
         :presence(std::move(p)),identities(SharedChatIdentitySource::create(presence)),visibility(std::move(v)),
@@ -146,17 +144,7 @@ struct Owner {
            (delivery.code_page!=Source::WireCodePage::CP950 && delivery.code_page!=Source::WireCodePage::CP936) ||
            (delivery.preference!=ChineseLanguage::Traditional && delivery.preference!=ChineseLanguage::Simplified))return std::nullopt;
         const auto position=presence->saved_position(delivery.recipient);if(!position)return std::nullopt;
-        if(const auto native=std::get_if<std::weak_ptr<Connection>>(&delivery.transport)) {
-            const auto connection=native->lock();
-            if(!connection || connection->closing() || connection->role()!=Connection::Transport::Role::World ||
-               !connection->world_admission_current() || connection->world_session_id()!=delivery.recipient.session ||
-               connection->verified_account_id()!=delivery.recipient.account ||
-               !connection->world_character_offered(delivery.recipient.character) ||
-               delivery.code_page!=Source::WireCodePage::CP936 || delivery.native_consumer_tag!=0)return std::nullopt;
-            // CN battle/formatter state remains actual WorldOwner qualification;
-            // this connection API supplies no battle-generation getter.
-            return Recipient{connection,*position,std::nullopt,0};
-        }
+
         const auto connection=std::get<std::weak_ptr<Session>>(delivery.transport).lock();
         if(!connection || connection->closing() || !connection->recovered_world_ready() ||
            connection->id()!=delivery.recipient.session || connection->account_id!=delivery.recipient.account ||
@@ -175,21 +163,10 @@ struct Owner {
         return actual && actual->transport==retained.transport && actual->saved_position==retained.saved_position &&
             actual->taiwan_phase==retained.taiwan_phase && actual->taiwan_battle_generation==retained.taiwan_battle_generation;
     }
-    bool peer_current(const Source::Delivery& delivery,const Source::Scope& source,std::span<const std::uint8_t> record,
-        std::size_t projected_body_size) const {
-        const auto native=std::get_if<std::weak_ptr<Connection>>(&delivery.transport);
-        if(!native)return !delivery.visible_peer; // TW peer bubble belongs to actual WorldOwner, not a CN token.
-        const auto reply=god2cn::CnChat::read_reply(record);if(!reply)return false;
-        const bool bubble=(reply->channel()==0 || reply->channel()==6) && delivery.recipient!=source.lease;
-        if(!bubble)return !delivery.visible_peer;
-        if(!delivery.visible_peer || delivery.visible_peer->source()!=source.lease ||
-           delivery.visible_peer->recipient()!=delivery.recipient)return false;
-        const auto actor=visibility->mainland_chat_actor(*delivery.visible_peer,source.saved_position);
-        if(!actor || actor->connection.lock()!=native->lock() || actor->native_actor_identity!=reply->actor())return false;
-        const auto prefix=actor->native_name_bytes+": ";const auto raw=reply->text();
-        return raw.starts_with(prefix) && delivery.body_offset==prefix.size() &&
-            projected_body_size<=raw.size()-prefix.size() && raw.size()==prefix.size()+projected_body_size &&
-            raw.find(": /board ")==std::string_view::npos && raw.find(": $")==std::string_view::npos;
+    bool peer_current(const Source::Delivery& delivery,const Source::Scope&,
+        std::span<const std::uint8_t>,std::size_t) const {
+        // Native TW bubble policy remains the actual WorldOwner's duty.
+        return !delivery.visible_peer;
     }
     bool peer_qualified(Session& session,const std::shared_ptr<Slot>& slot,const Source::Delivery& delivery,
         const Recipient& recipient,const Source::Scope& origin,std::span<const std::uint8_t> record,
@@ -303,24 +280,12 @@ struct Owner {
                    delivery.original_body_utf8!=input->body_utf8)
                     throw std::runtime_error("TW native chat actual recipient/original identity rejected");
                 recipients.push_back(*destination);
-                const bool mainland=std::holds_alternative<std::weak_ptr<Connection>>(delivery.transport);
-                std::optional<god2cn::CnChat::Reply> native;
-                std::optional<RecoveredTaiwanChatConsumerContract::Reply> taiwan;std::string_view raw;
-                std::size_t budget=0;
-                if(mainland) {
-                    native=god2cn::CnChat::read_reply(delivery.full_native_reply);
-                    if(!native)throw std::invalid_argument("TW native chat missing actual complete CN5C");
-                    const auto actual_budget=god2cn::CnChatConsumerContract::world_plain_text_budget(native->channel());
-                    if(!actual_budget)throw std::invalid_argument("TW native chat unsupported CN destination consumer");
-                    budget=std::min(*actual_budget,god2cn::CnChat::Reply::max_text_bytes);raw=native->text();
-                }else {
-                    taiwan=RecoveredTaiwanChatConsumerContract::read_reply(delivery.full_native_reply);
-                    if(!taiwan)throw std::invalid_argument("TW native chat missing actual complete TW5C");
-                    const auto actual_budget=RecoveredTaiwanChatConsumerContract::world_plain_text_budget(taiwan->channel());
-                    if(!actual_budget || taiwan->text().size()>*actual_budget)
-                        throw std::invalid_argument("TW native chat unsupported complete TW5C consumer");
-                    raw=taiwan->text();budget=*actual_budget;
-                }
+                const auto taiwan=RecoveredTaiwanChatConsumerContract::read_reply(delivery.full_native_reply);
+                if(!taiwan)throw std::invalid_argument("TW native chat missing actual complete TW5C");
+                const auto actual_budget=RecoveredTaiwanChatConsumerContract::world_plain_text_budget(taiwan->channel());
+                if(!actual_budget || taiwan->text().size()>*actual_budget)
+                    throw std::invalid_argument("TW native chat unsupported complete TW5C consumer");
+                const auto raw=taiwan->text();const auto budget=*actual_budget;
                 if(delivery.body_offset>raw.size() || delivery.body_size>raw.size()-delivery.body_offset)
                     throw std::invalid_argument("TW native chat supplied body boundary rejected");
                 const auto prefix=raw.substr(0,delivery.body_offset),suffix=raw.substr(delivery.body_offset+delivery.body_size);
@@ -337,8 +302,7 @@ struct Owner {
                     budget-prefix.size()-suffix.size());
                 const auto projected=std::string(prefix)+encoded.bytes+std::string(suffix);
                 std::vector<std::uint8_t> record;
-                if(mainland)record=native->replace_text(projected,delivery.native_consumer_tag);
-                else {
+                {
                     if(projected.empty() || projected.size()>budget || projected.find('\0')!=std::string::npos)
                         throw std::invalid_argument("TW native chat final TW sink budget rejected");
                     const auto header=taiwan->header();record.assign(header.begin(),header.end());
@@ -393,9 +357,7 @@ struct Owner {
                    (input->published_target && !published_names->registry_current(*input->published_target)))
                     throw std::runtime_error("TW native chat before native recipient submission expired");
                 if(delivery.recipient!=origin->lease) {
-                    if(const auto mainland=std::get_if<std::shared_ptr<Connection>>(&recipients[i].transport))
-                        (*mainland)->send(std::move(prepared[i].record));
-                    else std::get<std::shared_ptr<Session>>(recipients[i].transport)->send_world_records(std::move(prepared[i].record));
+                    std::get<std::shared_ptr<Session>>(recipients[i].transport)->send_world_records(std::move(prepared[i].record));
                     ++submitted;
                 }
                 if(!recipient_current(delivery,recipients[i]) ||
@@ -420,7 +382,7 @@ struct Owner {
 };
 }
 SharedTaiwanNativeChatSource::Binding SharedTaiwanNativeChatSource::create(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,
     std::shared_ptr<WorldOwner> world,std::shared_ptr<const ChineseText> text,Budgets budgets,std::size_t capacity,
     std::shared_ptr<SharedNativeWorldTransports> transports) {
     if(!presence || !visibility || !visibility->owns_presence(presence) || !world || !text || !capacity ||

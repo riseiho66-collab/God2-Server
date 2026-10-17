@@ -2,7 +2,7 @@
 #include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include "game/TaiwanActorStatusIncarnationSource.h"
 #include "game/TaiwanActorStatusPublication.h"
-#include "cn/world/SharedActorVisibility.h"
+#include "shared/world/SharedActorVisibility.h"
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -28,7 +28,7 @@ public:
     using Equipment=OwnedTaiwanReturnActorSavedSource::ProfileEquipment;
     using Lease=SharedWorldPresence::Lease;
     using Incarnation=TaiwanActorStatusIncarnationSource::Token;
-    using Override=cn::SharedActorVisibility::TaiwanReturnActorOverride;
+    using Override=shared::SharedActorVisibility::TaiwanReturnActorOverride;
     class Policy final {
     public:
         enum class Version {Custom0133OrdinaryInitialClearV1};

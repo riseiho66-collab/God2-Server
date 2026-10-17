@@ -5,7 +5,7 @@
 #include "game/TaiwanNativeDrvDoll.h"
 #include "game/TaiwanActorStatusProfileScope.h"
 #include "game/TaiwanActorStatusOwnedSource.h"
-#include "cn/world/SharedActorVisibility.h"
+#include "shared/world/SharedActorVisibility.h"
 #include <functional>
 #include <asio/any_io_executor.hpp>
 #include <memory>
@@ -34,7 +34,7 @@ class TaiwanCustomFullActorProfile final {
     struct Identity {};
     struct Data;
 public:
-    using Check=cn::SharedActorVisibility::TaiwanReturnCheck;
+    using Check=shared::SharedActorVisibility::TaiwanReturnCheck;
     using Lease=SharedWorldPresence::Lease;
     using SavedInput=OwnedTaiwanReturnActorSavedSource::PopulationInput;
     using Equipment=OwnedTaiwanReturnActorSavedSource::ProfileEquipment;
@@ -106,7 +106,7 @@ public:
         Domain domain;
         std::uint64_t epoch;
         std::uint32_t unsupported_domains;
-        std::shared_ptr<const cn::SharedActorVisibility::TaiwanReturnActorOverride> actor_override;
+        std::shared_ptr<const shared::SharedActorVisibility::TaiwanReturnActorOverride> actor_override;
         std::shared_ptr<const void> dependency_owner;
         std::function<bool(Check,const StatusInput&)> current;
         // LAST: private same saved-input/row/EQ and BOTH actor incarnations.
@@ -137,7 +137,7 @@ public:
         const ReceiverInput& receiver() const noexcept;
         const ResourceInput& resources() const noexcept;
         const StatusInput& status() const noexcept;
-        const std::shared_ptr<const cn::SharedActorVisibility::TaiwanReturnActorOverride>& actor_override() const noexcept;
+        const std::shared_ptr<const shared::SharedActorVisibility::TaiwanReturnActorOverride>& actor_override() const noexcept;
         std::uint64_t revision() const noexcept;
         bool operator==(const Profile& other) const noexcept{return data_==other.data_;}
     private:

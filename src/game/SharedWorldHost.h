@@ -8,7 +8,7 @@ class SharedWorldPresence;
 class SharedNativeWorldTransports;
 class SharedNativeSpectatorPublication;
 class SharedNativeSpectatorTargets;
-namespace cn {class SharedActorVisibility;}
+namespace shared {class SharedActorVisibility;}
 
 // One actual game-owner common world context. Creation allocates the presence,
 // visibility and native transport registries only; no scene, native records or
@@ -24,7 +24,7 @@ public:
     SharedWorldHost(SharedWorldHost&&)=delete;
     SharedWorldHost& operator=(SharedWorldHost&&)=delete;
     std::shared_ptr<SharedWorldPresence> presence() const;
-    std::shared_ptr<cn::SharedActorVisibility> visibility() const;
+    std::shared_ptr<shared::SharedActorVisibility> visibility() const;
     std::shared_ptr<SharedNativeWorldTransports> transports() const;
     // Optional actual UI publisher, installed once from this same Context.
     // No native event, window epoch or gameplay authority is created here.
@@ -38,7 +38,7 @@ private:
     RecoveredCharacterRepository& characters_;
     const std::thread::id thread_=std::this_thread::get_id();
     const std::shared_ptr<SharedWorldPresence> presence_;
-    const std::shared_ptr<cn::SharedActorVisibility> visibility_;
+    const std::shared_ptr<shared::SharedActorVisibility> visibility_;
     const std::shared_ptr<SharedNativeWorldTransports> transports_;
     std::shared_ptr<SharedNativeSpectatorPublication> spectator_publication_;
     std::shared_ptr<SharedNativeSpectatorTargets> spectator_targets_;

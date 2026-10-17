@@ -219,7 +219,7 @@ SharedTaiwanWorldEntered::Source with_initial_saved_actor_input(
                 const auto real=native->outward_provider;
                 outward=std::make_shared<const Entered::OutwardProvider>([state,real](
                         Session& actual,const Entered::Scope& value)
-                        ->std::optional<std::vector<cn::SharedActorVisibility::OutwardRecipient>> {
+                        ->std::optional<std::vector<shared::SharedActorVisibility::OutwardRecipient>> {
                     Call call(*state);
                     if(!call.entered||state->connection.lock().get()!=&actual||!state->matches(value)||
                        !state->saved_current())return {};

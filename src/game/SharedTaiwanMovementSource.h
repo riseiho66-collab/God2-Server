@@ -30,7 +30,7 @@ public:
     // events. Returned actual owners and rules remain strongly game-owned.
     // Capacity comes from the actual host, not an invented native player limit.
     static Binding create(std::shared_ptr<SharedWorldPresence>,
-        std::shared_ptr<cn::SharedActorVisibility>,std::shared_ptr<TaiwanMovementRules>,
+        std::shared_ptr<shared::SharedActorVisibility>,std::shared_ptr<TaiwanMovementRules>,
         Factory,std::size_t actual_session_capacity,
         std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody={});
 };

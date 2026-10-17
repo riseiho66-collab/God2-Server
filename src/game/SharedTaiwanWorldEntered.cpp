@@ -11,7 +11,7 @@
 namespace god2 {
 namespace {
 using Entered=SharedTaiwanWorldEntered;
-using Visibility=cn::SharedActorVisibility;
+using Visibility=shared::SharedActorVisibility;
 static_assert(std::is_nothrow_move_constructible_v<Entered::Native>);
 struct Pending {
     Entered::Scope scope;

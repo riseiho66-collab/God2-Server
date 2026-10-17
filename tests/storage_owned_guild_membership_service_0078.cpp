@@ -53,8 +53,8 @@ struct Fixture {
         [this](const auto& input){if(!rule_available)throw std::runtime_error("Test rule unavailable");return lua.owned_guild_membership(input);});
     }
     ~Fixture(){service.reset();money.reset();repo.reset();if(db)sqlite3_close(db);}
-    Wire::Request request(const Wire::Prompt& prompt,const std::string& utf8,bool cn=false) {
-        const auto bytes=LegacyChineseCodec::encode(utf8,cn);check(bytes.size()<16);
+    Wire::Request request(const Wire::Prompt& prompt,const std::string& utf8,bool simplified=false) {
+        const auto bytes=LegacyChineseCodec::encode(utf8,simplified);check(bytes.size()<16);
         Wire::Request request;request.context=static_cast<std::uint16_t>(prompt[1]|(std::uint16_t{prompt[2]}<<8));
         request.operation=static_cast<Wire::Operation>(prompt[3]);request.selected_actor_hint=0xffff; // never authority.
         std::copy(bytes.begin(),bytes.end(),request.raw_name.begin());request.opaque_stack_byte=0xa5;return request;

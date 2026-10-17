@@ -15,7 +15,7 @@ class SharedNativeSpectatorPublication final {
 public:
     using Lease=SharedWorldPresence::Lease;
     using Token=SharedNativeWorldTransports::Token;
-    enum class Protocol {Taiwan,Mainland};
+    enum class Protocol {Taiwan};
     enum class Status {Missing,Pending,Published,Retired,Unavailable};
     struct Event {
         Lease recipient;
@@ -30,7 +30,7 @@ public:
         RecoveredPosition saved_position;
         Protocol protocol;
         std::optional<SessionState> taiwan_phase;
-        std::uint64_t taiwan_battle_generation; // No fabricated CN battle counter.
+        std::uint64_t taiwan_battle_generation; // Actual Taiwan battle incarnation.
     };
     enum class Check {BeforeQueue,BeforeRelease,AfterRelease,Observe};
     class WorldOwner {

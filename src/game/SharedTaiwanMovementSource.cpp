@@ -43,7 +43,7 @@ struct QualifiedWorld final:SharedTaiwanMovement::WorldOwner {
 };
 struct MovementOwner:std::enable_shared_from_this<MovementOwner> {
     std::shared_ptr<SharedWorldPresence> presence;
-    std::shared_ptr<cn::SharedActorVisibility> visibility;
+    std::shared_ptr<shared::SharedActorVisibility> visibility;
     std::shared_ptr<TaiwanMovementRules> rules;
     std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody;
     Source::Factory factory;
@@ -197,7 +197,7 @@ struct MovementOwner:std::enable_shared_from_this<MovementOwner> {
 };
 }
 SharedTaiwanMovementSource::Binding SharedTaiwanMovementSource::create(
-    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<cn::SharedActorVisibility> visibility,
+    std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<shared::SharedActorVisibility> visibility,
     std::shared_ptr<TaiwanMovementRules> rules,Factory factory,std::size_t actual_session_capacity,
     std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody) {
     if(!presence || !visibility || !rules || !factory || !actual_session_capacity ||

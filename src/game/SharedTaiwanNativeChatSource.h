@@ -1,5 +1,9 @@
 #pragma once
-#include "cn/world/SharedNativeChat.h"
+#include "shared/world/SharedActorVisibility.h"
+#include "game/SharedNativeWorldTransports.h"
+#include "game/SharedPublishedChatNameSource.h"
+#include "text/ChineseText.h"
+#include "text/LegacyChineseCodec.h"
 #include "game/SharedTaiwanWorldRecordSource.h"
 #include "game/SharedChatIdentitySource.h"
 
@@ -9,9 +13,25 @@ namespace god2 {
 class SharedTaiwanNativeChatSource final {
 public:
     using Lease=SharedWorldPresence::Lease;
-    using WireCodePage=cn::SharedNativeChat::WireCodePage;
-    using Delivery=cn::SharedNativeChat::Delivery;
-    using Prepared=cn::SharedNativeChat::Prepared;
+    enum class WireCodePage {CP950,CP936};
+    struct Delivery {
+        Lease recipient;
+        std::variant<std::weak_ptr<Session>> transport;
+        WireCodePage code_page;
+        ChineseLanguage preference;
+        std::uint8_t native_consumer_tag;
+        std::vector<std::uint8_t> full_native_reply;
+        std::size_t body_offset,body_size;
+        std::string original_body_utf8;
+        std::optional<shared::SharedActorVisibility::Binding> visible_peer;
+        bool use_common_transport=false;
+    };
+    struct Prepared {
+        std::size_t delivery_index;
+        std::vector<std::uint8_t> record;
+        std::size_t replacements;
+        bool truncated;
+    };
     using Reply=SharedTaiwanWorldRecordSource::Reply;
     enum class NativeContent {PlayerText,NamedWhisper};
     struct Input {
@@ -39,7 +59,7 @@ public:
         // Real target->sender published-peer name incarnation, if this native
         // namespace is selected. Manual/offline/other domains stay qualified
         // separately; missing binding is never implicit name/actor permission.
-        std::optional<cn::SharedActorVisibility::Binding> named_peer;
+        std::optional<shared::SharedActorVisibility::Binding> named_peer;
     };
     enum class Check {Resolved,Prepared,BeforeRecipient,AfterRecipient,BeforeReturn};
     struct Budgets {
@@ -70,7 +90,7 @@ public:
         // Actual same Session cipher/framing profile, exact prepared logical5C.
         // No default zero-seed laboratory encoder, rekey or guessed handshake.
         virtual std::optional<std::vector<std::uint8_t>> sender_wire(const Scope&,const Prepared&)=0;
-        // Includes true TW peer bubble authority (not a CN visibility token),
+        // Includes true TW peer bubble authority,
         // all recipient native destination windows and full projected outputs.
         virtual bool qualify_delivery(const Scope&,const RecoveredChat::Request&,const Input&,
             const Publication&,const std::vector<Prepared>&,const std::vector<SenderPrepared>&)=0;
@@ -83,7 +103,7 @@ public:
         std::function<void(Session&)> release; // Own exact Session bookkeeping.
         std::function<void()> invalidate_active;
     };
-    static Binding create(std::shared_ptr<SharedWorldPresence>,std::shared_ptr<cn::SharedActorVisibility>,
+    static Binding create(std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,
         std::shared_ptr<WorldOwner>,std::shared_ptr<const ChineseText>,Budgets,std::size_t actual_session_capacity,
         std::shared_ptr<SharedNativeWorldTransports> = {});
 };

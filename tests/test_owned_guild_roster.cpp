@@ -96,9 +96,9 @@ int main() {
         invalid.peer.name="self";invalid.peer.ready=false;check(!reject.prepare(10));
         invalid.peer.ready=true;invalid.roster->members[1].name_utf8="😀";check(!reject.prepare(10));
         invalid.roster->members[1].name_utf8="測試";
-        for(bool cn:{false,true}) {
-            invalid.peer.simplified=cn;plan=reject.prepare(10);check(plan && plan->logical.size()==44);
-            const auto expected=LegacyChineseCodec::encode("測試",cn);
+        for(bool simplified:{false,true}) {
+            invalid.peer.simplified=simplified;plan=reject.prepare(10);check(plan && plan->logical.size()==44);
+            const auto expected=LegacyChineseCodec::encode("測試",simplified);
             check(std::equal(expected.begin(),expected.end(),plan->logical.begin()+28,
                 [](char a,std::uint8_t b){return static_cast<std::uint8_t>(a)==b;}));
         }

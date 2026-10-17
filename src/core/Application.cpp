@@ -14,7 +14,6 @@
 #include "db/SqliteNativeWorldEntrySnapshotRepository.h"
 #include "db/SqliteNativeEquipmentSnapshotRepository.h"
 #include "db/SqliteOwnedInventoryRepository.h"
-#include "cn/net/SharedCredentialServer.h"
 #include "relations53/GuildRelations53SelectorDraft.h"
 #include "relations53/SharedGuildApplication53Draft.h"
 #include "relations53/GuildRelationCacheBootstrap53.h"
@@ -833,7 +832,7 @@ struct WorldLifecycleVaultGuard {
     ~WorldLifecycleVaultGuard() {if(vault)vault->revoke();}
 };
 }
-static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_plan,const WebServerPlan* web_plan,unsigned run_for_seconds,
+static int run_server_impl(const Config& config,const WebServerPlan* web_plan,unsigned run_for_seconds,
                            const SharedWorldHostPlan* world_plan=nullptr) {
     config.validate_owned_whole_bag_moves();
     if(config.owned_whole_bag_moves_enabled && world_plan)
@@ -1813,9 +1812,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     if(end==role->profile.begin() || end==role->profile.begin()+15)throw DatabaseError("Trade name invalid");
                     const auto name=LegacyChineseCodec::decode(std::string_view(reinterpret_cast<const char*>(role->profile.data()),end-role->profile.begin()),role->name_codepage==936);
                     const auto live=trade_sessions.at(recipient.session).lock();if(!live)throw DatabaseError("Trade name recipient missing");
-                    const bool cn=live->recovered_client_language()==1;if(!trade_text)trade_text.emplace(config.chinese_dictionary_root);
-                    const auto localized=trade_text->convert(name,cn?ChineseLanguage::Simplified:ChineseLanguage::Traditional);
-                    const auto encoded=LegacyChineseCodec::encode_display(localized,cn);
+                    const bool simplified=live->recovered_client_language()==1;if(!trade_text)trade_text.emplace(config.chinese_dictionary_root);
+                    const auto localized=trade_text->convert(name,simplified?ChineseLanguage::Simplified:ChineseLanguage::Traditional);
+                    const auto encoded=LegacyChineseCodec::encode_display(localized,simplified);
                     if(encoded.replacements || encoded.truncated || encoded.bytes.empty() || encoded.bytes.size()>14)throw DatabaseError("Trade name unrepresentable");
                     RecoveredTrade::Name result{};std::copy(encoded.bytes.begin(),encoded.bytes.end(),result.begin());return result;
                 },[&](const StoredInventorySlot& slot) {
@@ -1857,9 +1856,9 @@ static int run_server_impl(const Config& config,const cn::SharedServerPlan* cn_p
                     if(end==role->profile.begin() || end==role->profile.begin()+15)throw DatabaseError("Trade name invalid");
                     const auto name=LegacyChineseCodec::decode(std::string_view(reinterpret_cast<const char*>(role->profile.data()),end-role->profile.begin()),role->name_codepage==936);
                     const auto live=trade_sessions.at(recipient.session).lock();if(!live)throw DatabaseError("Trade name recipient missing");
-                    const bool cn=live->recovered_client_language()==1;if(!trade_text)trade_text.emplace(config.chinese_dictionary_root);
-                    const auto localized=trade_text->convert(name,cn?ChineseLanguage::Simplified:ChineseLanguage::Traditional);
-                    const auto encoded=LegacyChineseCodec::encode_display(localized,cn);
+                    const bool simplified=live->recovered_client_language()==1;if(!trade_text)trade_text.emplace(config.chinese_dictionary_root);
+                    const auto localized=trade_text->convert(name,simplified?ChineseLanguage::Simplified:ChineseLanguage::Traditional);
+                    const auto encoded=LegacyChineseCodec::encode_display(localized,simplified);
                     if(encoded.replacements || encoded.truncated || encoded.bytes.empty() || encoded.bytes.size()>14)throw DatabaseError("Trade name unrepresentable");
                     RecoveredTrade::Name result{};std::copy(encoded.bytes.begin(),encoded.bytes.end(),result.begin());return result;
                 },[&](const StoredInventorySlot& slot) {
@@ -2509,13 +2508,13 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     const auto at=party_sessions.find(d.recipient);if(at==party_sessions.end())continue;
                     auto recipient=at->second.lock();if(!recipient || !recipient->recovered_world_ready())continue;
                     if(!party_text)party_text.emplace(config.chinese_dictionary_root);
-                    const bool cn=recipient->recovered_client_language()==1;
+                    const bool simplified=recipient->recovered_client_language()==1;
                     // Native55/57 recognize self by the actor's exact name.
                     // Character-list transcoding preserves Unicode variants;
                     // OpenCC must not turn one's own 台 into 臺 here.
                     const auto translated=d.recipient==d.actor.session?d.actor.name:
-                        party_text->convert(d.actor.name,cn?ChineseLanguage::Simplified:ChineseLanguage::Traditional);
-                    const auto encoded=LegacyChineseCodec::encode_display(translated,cn);
+                        party_text->convert(d.actor.name,simplified?ChineseLanguage::Simplified:ChineseLanguage::Traditional);
+                    const auto encoded=LegacyChineseCodec::encode_display(translated,simplified);
                     if(encoded.replacements || encoded.truncated || encoded.bytes.empty() || encoded.bytes.size()>14)
                         throw DatabaseError("Party display name unrepresentable");
                     if(d.event==NativeParty::Event::Add) {
@@ -9325,22 +9324,6 @@ if(guild_officer_runtime && player_guild(session) &&
             if(config.recovered_account_auth) character_handlers.authenticate_async=async_login;
             TcpServer server(network.context(),game.get_executor(),config.host,config.port,config.max_sessions,config.packet_dump,
                 on_packet,on_disconnect,config.protocol_mode,std::move(recovered_login),std::move(character_handlers),std::move(character_routes));
-            // Same existing authoritative repositories and serial game owner.
-            // No CN DB/schema, protocol guessing or default native success data.
-            std::unique_ptr<cn::SharedCredentialServer> cn_server;
-            if(cn_plan) {
-                for(const auto& endpoint:cn_plan->endpoints) {
-                    // Reserve distinct ports also for wildcard/address aliases.
-                    // Catalog ports must be supplied explicitly, never relocated.
-                    if(endpoint.port==server.port() ||
-                       (character_server && endpoint.port==character_server->port()))
-                        throw std::invalid_argument("CN endpoint conflicts with an existing TW listener");
-                }
-                cn_server=std::make_unique<cn::SharedCredentialServer>(network.context(),game.get_executor(),
-                    database.accounts(),database.account_native_snapshots(),database.native_character_summaries(),
-                    database.recovered_characters(),
-                    database.native_map_catalog(),*cn_plan,common_world,database.native_skill_catalog());
-            }
             std::unique_ptr<WebClientGateway> web_gateway;
             if(web_plan) {
                 std::vector<WebNativeRoute> routes;
@@ -9351,27 +9334,16 @@ if(guild_officer_runtime && player_guild(session) &&
                         asio::ip::address(asio::ip::address_v4::loopback()):asio::ip::address(asio::ip::address_v6::loopback()));
                     return endpoint;
                 };
-                const auto cn_bound=cn_server?cn_server->bound_endpoints():std::vector<cn::SharedCredentialServer::BoundEndpoint>{};
                 for(const auto& request:web_plan->routes) {
                     using Role=WebServerPlan::Role;
                     if(request.role==Role::TwAccount||request.role==Role::TwWorld) {
-                        if(request.target||!config.recovered_account_auth||!is_credential_mode(config.protocol_mode)||
+                        if(!config.recovered_account_auth||!is_credential_mode(config.protocol_mode)||
                            config.protocol_mode==ProtocolMode::God2CharacterConnection)
                             throw std::invalid_argument("WEB TW requires hosted native authentication and role");
                         if(request.role==Role::TwWorld&&!character_server)
                             throw std::invalid_argument("WEB TW world listener missing");
                         routes.push_back({request.role==Role::TwAccount?"/tw/native":"/tw/native-game",
                             reachable({asio::ip::make_address(config.host),request.role==Role::TwAccount?server.port():character_server->port()})});
-                    } else if(request.role==Role::CnAccount||request.role==Role::CnWorld) {
-                        const bool world_role=request.role==Role::CnWorld;
-                        if(!cn_server||world_role!=request.target.has_value())
-                            throw std::invalid_argument("WEB CN requires hosted native role/target");
-                        auto found=std::find_if(cn_bound.begin(),cn_bound.end(),[&](const auto& bound){
-                            if(bound.role!=(world_role?cn::SharedServerPlan::Role::World:cn::SharedServerPlan::Role::Account))return false;
-                            return !world_role||(bound.target&&bound.target->group==request.target->group&&bound.target->server==request.target->server);
-                        });
-                        if(found==cn_bound.end())throw std::invalid_argument("WEB CN registry target missing");
-                        routes.push_back({world_role?"/cn/native-game":"/cn/native",reachable(found->socket)});
                     } else throw std::invalid_argument("WEB native role invalid");
                 }
                 web_gateway=std::make_unique<WebClientGateway>(network.context(),web_plan->policy,std::move(routes));
@@ -9436,7 +9408,6 @@ if(guild_officer_runtime && player_guild(session) &&
                 scheduler->stop(); signals.cancel(); deadline.cancel();
                 if(web_gateway)web_gateway->stop();
                 server.stop();
-                if(cn_server)cn_server->stop();
                 if(character_server) character_server->stop();
                 network.stop();
             };
@@ -9449,7 +9420,6 @@ if(guild_officer_runtime && player_guild(session) &&
                 character_server->start();
                 spdlog::info("Character connection listening on {}:{}; independent authentication; 1F candidate unverified",config.host,character_server->port());
             }
-            if(cn_server)cn_server->start();
             server.start();
             if(web_gateway)web_gateway->start();
             scheduler->start(); lua.call_event("server_start");
@@ -9475,28 +9445,15 @@ if(guild_officer_runtime && player_guild(session) &&
     return 0;
 }
 int run_server(const Config& config,unsigned run_for_seconds) {
-    return run_server_impl(config,nullptr,nullptr,run_for_seconds);
-}
-int run_server(const Config& config,const cn::SharedServerPlan& plan,unsigned run_for_seconds) {
-    return run_server_impl(config,&plan,nullptr,run_for_seconds);
+    return run_server_impl(config,nullptr,run_for_seconds);
 }
 int run_server(const Config& config,const WebServerPlan& plan,unsigned run_for_seconds) {
-    return run_server_impl(config,nullptr,&plan,run_for_seconds);
-}
-int run_server(const Config& config,const cn::SharedServerPlan& cn_plan,const WebServerPlan& web_plan,unsigned run_for_seconds) {
-    return run_server_impl(config,&cn_plan,&web_plan,run_for_seconds);
+    return run_server_impl(config,&plan,run_for_seconds);
 }
 int run_server(const Config& config,const SharedWorldHostPlan& world_plan,unsigned run_for_seconds) {
-    return run_server_impl(config,nullptr,nullptr,run_for_seconds,&world_plan);
-}
-int run_server(const Config& config,const cn::SharedServerPlan& cn_plan,const SharedWorldHostPlan& world_plan,unsigned run_for_seconds) {
-    return run_server_impl(config,&cn_plan,nullptr,run_for_seconds,&world_plan);
+    return run_server_impl(config,nullptr,run_for_seconds,&world_plan);
 }
 int run_server(const Config& config,const WebServerPlan& web_plan,const SharedWorldHostPlan& world_plan,unsigned run_for_seconds) {
-    return run_server_impl(config,nullptr,&web_plan,run_for_seconds,&world_plan);
-}
-int run_server(const Config& config,const cn::SharedServerPlan& cn_plan,const WebServerPlan& web_plan,
-               const SharedWorldHostPlan& world_plan,unsigned run_for_seconds) {
-    return run_server_impl(config,&cn_plan,&web_plan,run_for_seconds,&world_plan);
+    return run_server_impl(config,&web_plan,run_for_seconds,&world_plan);
 }
 }

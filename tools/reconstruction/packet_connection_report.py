@@ -26,18 +26,15 @@ def report(round_name, catalog_name=None, round_directory=None):
         destination = requested.resolve()
     ledger_raw = LEDGER.read_bytes()
     ledger = json.loads(ledger_raw.decode('utf-8'))
-    # Counts come from the current segments, never the historical catalog
-    # pointer retained in the ledger. Match the catalog's scoped tuple method.
-    def phase_bindings(keys):
-        return [(direction,phase,op) for segment in ledger.get('dual_client_source_segments',[])
-                for direction,key in keys for phase,ops in segment.get(key,{}).items() for op in ops]
-    cn_bindings = phase_bindings([('C2S','native_c2s_by_phase'),('S2C','native_s2c_by_phase')])
-    tw_bindings = phase_bindings([('C2S','tw_native_c2s_by_phase'),('S2C','tw_native_s2c_by_phase')])
+    # Taiwan-only segments retain the original directional/phase associations.
+    # Removing another protocol never completes or reduces Taiwan route gaps.
+    segments = ledger['tw_source_segments']
+    tw_bindings = [(direction, phase, op) for segment in segments
+                   for direction, key in [('C2S', 'c2s_by_phase'), ('S2C', 's2c_by_phase')]
+                   for phase, ops in segment.get(key, {}).items() for op in ops]
     current_phase_counts = {
-        'cn_unhosted_phase_source_bindings':len(cn_bindings),
-        'cn_unique_unhosted_phase_source_binding_values':len(set(cn_bindings)),
-        'tw_unhosted_phase_source_bindings':len(tw_bindings),
-        'tw_unique_unhosted_phase_source_binding_values':len(set(tw_bindings)),
+        'tw_unhosted_phase_source_bindings': len(tw_bindings),
+        'tw_unique_unhosted_phase_source_binding_values': len(set(tw_bindings)),
     }
     current_catalog = None
     if catalog_name is not None:
@@ -163,130 +160,23 @@ def report(round_name, catalog_name=None, round_directory=None):
     replies = sorted({x for row in groups for x in row['s2c']})
     controls = ledger['world_control_or_diagnostic_opcodes']
     gaps = ledger['world_unconnected_gameplay_opcodes']
-    paths = sorted({p for row in groups + pending_groups for p in row['source_paths']} |
-                   {p for row in ledger.get('dual_client_source_segments', []) for p in row['source_paths']} |
-                   set(ledger.get('tw_native_pet2_e5_update326', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_e5_family_source327', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_e6_petegg_input_source328', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_petegg_selection_source329', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_petegg_deferred_source330', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_petegg_e7_list_input_source331', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_ui_byte_updates_source332', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_9c_and_petegg_list_boundaries333', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_f4_list_writer_and_web_handoff334', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_petroom_catalog_source335', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_petroom_spi_raw_source336', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_spi_definition_text337', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_spi_offsets_and_scalars338', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_rommaps_spi_resource339', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_spi_conditional_record340', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_petegg_local_state_source341', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_petroom_presend_storage_source342', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_c24_fullbank_alias_source343', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_c24_normal_entry_source344', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_normal_entry_movement_custody_source345', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_owned_mutation_response_custody_source346', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_normal_entry_readiness_authority_source347', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_catalog_material_helper_source348', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_item_helper_output_ui_source349', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_item_ui_acquisition_seam_source350', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_item_ui_blacklist_owner_source351', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_item_row_alias_blacklist_chain_source352', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_item_writer_original_response_source353', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_world_control_authority_frontier_source354', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_route_authority_source355', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_party_preview_transport_source356', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_party_callback_admission_source357', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_party_lifetime_source358', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_cn_shared_skill_source359', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_cn_common_owner_skill_definition_source360', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_cn_common_owned_skill_commit_source361', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_cn_owned_skill_bootstrap_write_source362', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_cn_owned_skill_input_continuation_source363', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_cn_common_skill_command_source364', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_common_skill_command_source365', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_world_skill_request_source366', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_selected_deity_common_skill_source367', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_world_skill_self_target_source368', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_deity_selection_commit_source369', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_deity_selection_publication_source370', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_world_skill_menu_event_source371', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_owned_item_presence_source372', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_preborn_input_source373', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_preborn_issuer_presence_source374', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_cn_preborn_grammar_source375', {}).get('source_paths', [])) |
-                   set(ledger.get('preborn_current_source376', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_preborn_window_owner_source377', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_skillbook_use_source378', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_skill_command_presence_source379', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_skillbook_target_source380', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_skillbook_learning_source381', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_common_world_skill_restoration_source382', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_skillbook_shortcut_source383', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_battle_return_source384', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_paired_return_reservation_source385', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_record_publication_source386', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_output_hold_source387', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_consume_source388', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_write_source389', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_finish_source390', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_backend_lifecycle391', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_pk_native_identity392', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_pk_companion_whole393', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_pk_learning_closed394', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_player395', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_pk_player_source396', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_pk_main_host397', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_pk_zero_deity398', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_learning_publication399', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_learning_pk_successor403', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_return_actor_field404', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_actor_override405', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_receiver_selector406', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_resource_bank407', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_native_lookup408', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_actor_saved409', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_return_profile_input410', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_native_arguments412', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_resources413', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_status_write_fence415', {}).get('source_paths', [])) |
-                   set(ledger.get('mysql80_dictionary_format416', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_status_pending_writer417', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_status_incarnation418', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_status_profile_scope419', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_drv_fifth420', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_status_owned421', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_status_publication422', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_actor_drv_doll_tail423', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_route_assembly424', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_scene_multiframe425', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_world_display_readset426', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_population427', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_post_install_outward428', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_saved_input429', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_endpoints430', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_status_transport_audit431', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_status_transport432', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_actor_producer433', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_outward_actor_publication434', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_npc_display435', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_initial_actor_npc_joint436', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_native_movement_cursor437', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_legacy_joint_movement_custody441', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_movement_policy_invalid_reload442', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_movement_policy_scheduled_reload443', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_beast_panel_fields_dictionary444', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_closing_peer_affine_publication445', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_visibility_observer_membership446', {}).get('source_paths', [])) |
-                   set(ledger.get('mysql80_foreign_key_export447', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_owned_ordinary_movement_custody440', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_owned_ordinary_movement_policy439', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_owned_ordinary_movement438', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_full_actor_profile411', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_installed453_operator402', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_installed453_import401', {}).get('source_paths', [])) |
-                   set(ledger.get('tw_installed453_profile400', {}).get('source_paths', [])) |
-                   {'src/core/Application.cpp', 'src/protocol/RecoveredWorldRecords.h'})
+    # The current ledger explicitly owns its entire active source closure.
+    # Retired historical inputs belong to preserved earlier reports; an absent
+    # current source remains an error, never an implicit skip or completion.
+    declared_paths = ledger['source_paths']
+    if not isinstance(declared_paths, list) or not declared_paths or any(
+            not isinstance(p, str) or not p or Path(p).is_absolute() or
+            not (SERVER / p).resolve().is_relative_to(SERVER.resolve())
+            for p in declared_paths):
+        raise ValueError('Current source_paths must name a nonempty repository-owned source closure')
+    if len(declared_paths) != len(set(declared_paths)):
+        raise ValueError('Current source_paths contains duplicate entries')
+    required_paths = {p for row in groups + pending_groups for p in row['source_paths']} | {
+        p for segment in segments for p in segment.get('source_paths', [])} | {
+        'src/core/Application.cpp', 'src/protocol/RecoveredWorldRecords.h'}
+    if not required_paths.issubset(declared_paths):
+        raise ValueError('Current source closure omits a reviewed, pending or conditional Taiwan source')
+    paths = sorted(declared_paths)
     # A missing file is a report error, never silent qualification/completion.
     digests = {p: hashlib.sha256((SERVER / p).read_bytes()).hexdigest() for p in paths}
     counts = {
@@ -331,36 +221,13 @@ def report(round_name, catalog_name=None, round_directory=None):
         'whole_game_completed_route_count': None,
         'whole_game_completion_percent': None,
         'current_source_phase_new_deployments': 0,
-        'cn_unhosted_partial_owner_chains': sum(x.get('source_owner_chains_added',0)
-                                               for x in ledger.get('dual_client_source_segments',[])),
-        'tw_unhosted_partial_owner_chains':sum(x.get('tw_source_owner_chains_added',0) for x in ledger.get('dual_client_source_segments',[])),
-        'dual_client_unhosted_partial_owner_chains':sum(x.get('source_owner_chains_added',0)+x.get('tw_source_owner_chains_added',0)
-            for x in ledger.get('dual_client_source_segments',[])),
+        'tw_unhosted_partial_owner_chains': sum(x.get('source_owner_chains_added', 0) for x in segments),
         **current_phase_counts,
     }
     latest = ROOT / 'packet-progress-latest.json'
     prior = json.loads(latest.read_text(encoding='utf-8')) if latest.exists() else None
     delta = {k: v - prior['counts'][k] for k, v in counts.items()
              if isinstance(v, int) and prior and isinstance(prior['counts'].get(k), int)}
-    if prior:
-        # Earlier reports kept these qualified partial-source counts outside
-        # counts. Read that actual prior evidence instead of implying all are new.
-        previous_partial={
-            'cn_unhosted_partial_owner_chains':prior.get('cn_shared_admission_owner_chains_in_source'),
-            'cn_unhosted_phase_source_bindings':(prior.get('dual_client_endpoint_catalog') or {}).get('summary',{}).get('cn_unhosted_phase_source_bindings'),
-            'cn_unique_unhosted_phase_source_binding_values':(prior.get('dual_client_endpoint_catalog') or {}).get('summary',{}).get('cn_unique_unhosted_phase_source_binding_values'),
-        }
-        for key,value in previous_partial.items():
-            if key not in prior['counts'] and isinstance(value,int):delta[key]=counts[key]-value
-        # TW associations already existed in the sealed prior source segments.
-        # Derive their old count without modifying that report or implying all
-        # seven are new in the first report exposing these columns.
-        previous_tw=[(direction,phase,op) for segment in prior.get('dual_client_source_segments',[])
-            for direction,key in [('C2S','tw_native_c2s_by_phase'),('S2C','tw_native_s2c_by_phase')]
-            for phase,ops in segment.get(key,{}).items() for op in ops]
-        for key,value in [('tw_unhosted_phase_source_bindings',len(previous_tw)),
-            ('tw_unique_unhosted_phase_source_binding_values',len(set(previous_tw)))]:
-            if key not in prior['counts']:delta[key]=counts[key]-value
     if prior and 'c2s_wrapper_argument_opcode_candidates' not in prior['counts']:
         delta['c2s_wrapper_argument_opcode_candidates'] = len(wrapper_ops)
         delta['c2s_known_argument_opcode_candidates'] = len(direct_ops | wrapper_ops) - len(direct_ops)
@@ -382,7 +249,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'recorded_utc': datetime.now(timezone.utc).isoformat(),
         'method': 'STATIC_SOURCE_REVIEW_AND_PINNED_NATIVE_FORMAT_INDEX',
         'phase': 'CONNECT_ALL_ROUTES_FIRST', 'goal': 'INCOMPLETE',
-        'goal_api_status': ledger.get('dual_client_execution_plan',{}).get('actual_goal_api_status'),
+        'goal_api_status': ledger.get('execution_plan',{}).get('actual_goal_api_status'),
         'native_sha256': native['native_sha256'],
         'native_index_sha256': hashlib.sha256(index_path.read_bytes()).hexdigest(),
         'native_wrapper_census_sha256': hashlib.sha256(wrapper_path.read_bytes()).hexdigest(),
@@ -417,13 +284,13 @@ def report(round_name, catalog_name=None, round_directory=None):
         'unconnected_gameplay': gaps,
         'outside_world_parser_open': ledger['outside_world_parser_open'],
         'frozen_pre_world_source_routes': ledger['frozen_pre_world_source_routes'],
-        'dual_client_native_inventory': ledger.get('dual_client_native_inventory'),
-        'dual_client_source_segments': ledger.get('dual_client_source_segments', []),
+        'tw_native_inventory': ledger.get('tw_native_inventory'),
+        'tw_source_segments': segments,
         'tw_owned_inventory_reply234': ledger.get('tw_owned_inventory_reply234'),
         'tw_item_definition235': ledger.get('tw_item_definition235'),
         'tw_deity_equipment236': ledger.get('tw_deity_equipment236'),
-        'dual_client_endpoint_catalog': current_catalog,
-        'historical_ledger_endpoint_catalog': ledger.get('dual_client_endpoint_catalog'),
+        'tw_endpoint_catalog': current_catalog,
+        'historical_ledger_endpoint_catalog': ledger.get('tw_endpoint_catalog'),
         'phase_source_counts_method':'CURRENT_LEDGER_DIRECTION_PHASE_OPCODE_TUPLES',
         'tw_native_equipment_request_context324': ledger.get('tw_native_equipment_request_context324'),
         'tw_owned_quantity64_equipment_state325': ledger.get('tw_owned_quantity64_equipment_state325'),
@@ -460,12 +327,12 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_native_party_preview_transport_source356': ledger.get('tw_native_party_preview_transport_source356'),
         'tw_native_party_callback_admission_source357': ledger.get('tw_native_party_callback_admission_source357'),
         'tw_native_party_lifetime_source358': ledger.get('tw_native_party_lifetime_source358'),
-        'tw_cn_shared_skill_source359': ledger.get('tw_cn_shared_skill_source359'),
-        'tw_cn_common_owner_skill_definition_source360': ledger.get('tw_cn_common_owner_skill_definition_source360'),
-        'tw_cn_common_owned_skill_commit_source361': ledger.get('tw_cn_common_owned_skill_commit_source361'),
-        'tw_cn_owned_skill_bootstrap_write_source362': ledger.get('tw_cn_owned_skill_bootstrap_write_source362'),
-        'tw_cn_owned_skill_input_continuation_source363': ledger.get('tw_cn_owned_skill_input_continuation_source363'),
-        'tw_cn_common_skill_command_source364': ledger.get('tw_cn_common_skill_command_source364'),
+        'tw_shared_skill_source359': ledger.get('tw_shared_skill_source359'),
+        'tw_common_owner_skill_definition_source360': ledger.get('tw_common_owner_skill_definition_source360'),
+        'tw_common_owned_skill_commit_source361': ledger.get('tw_common_owned_skill_commit_source361'),
+        'tw_owned_skill_bootstrap_write_source362': ledger.get('tw_owned_skill_bootstrap_write_source362'),
+        'tw_owned_skill_input_continuation_source363': ledger.get('tw_owned_skill_input_continuation_source363'),
+        'tw_common_skill_command_source364': ledger.get('tw_common_skill_command_source364'),
         'tw_common_skill_command_source365': ledger.get('tw_common_skill_command_source365'),
         'tw_world_skill_request_source366': ledger.get('tw_world_skill_request_source366'),
         'tw_selected_deity_common_skill_source367': ledger.get('tw_selected_deity_common_skill_source367'),
@@ -476,7 +343,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_owned_item_presence_source372': ledger.get('tw_owned_item_presence_source372'),
         'tw_preborn_input_source373': ledger.get('tw_preborn_input_source373'),
         'tw_preborn_issuer_presence_source374': ledger.get('tw_preborn_issuer_presence_source374'),
-        'tw_cn_preborn_grammar_source375': ledger.get('tw_cn_preborn_grammar_source375'),
+        'tw_preborn_grammar_source375': ledger.get('tw_preborn_grammar_source375'),
         'preborn_current_source376': ledger.get('preborn_current_source376'),
         'tw_preborn_window_owner_source377': ledger.get('tw_preborn_window_owner_source377'),
         'tw_skillbook_use_source378': ledger.get('tw_skillbook_use_source378'),
@@ -550,10 +417,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_installed453_profile400': ledger.get('tw_installed453_profile400'),
         'current_catalog_supplied':current_catalog is not None,
         'tw_supplemental_producer_evidence': ledger.get('tw_supplemental_producer_evidence'),
-        'cn_unresolved_receiver_evidence': ledger.get('cn_unresolved_receiver_evidence'),
-        'cn_account_admission_evidence': ledger.get('cn_account_admission_evidence'),
-        'cn_shared_admission_owner_chains_in_source': sum(x.get('source_owner_chains_added',0) for x in ledger.get('dual_client_source_segments',[])),
-        'shared_admission_owner_chains_are_unhosted_partial_sources': True,
+        'tw_owner_chains_are_unhosted_partial_sources': True,
         'source_digests': digests,
         'limits': ledger['counting_limits'],
         'tests_builds_client_execution_live_mutation': False,
@@ -600,8 +464,7 @@ def report(round_name, catalog_name=None, round_directory=None):
              f"| 登錄 S2C 回覆 opcode 下限 | {len(replies)} |",
              f"| 世界控制／診斷 opcode（不算功能完成） | {len(controls)} |",
              f"| 世界已解析但功能未接通 opcode | {len(gaps)} |",
-             f"| CN／TW未掛載局部owner鏈 | {counts['cn_unhosted_partial_owner_chains']}／{counts['tw_unhosted_partial_owner_chains']}（條件式來源，非完整玩法） |",
-             f"| 雙版本局部owner鏈合計 | {counts['dual_client_unhosted_partial_owner_chains']}（非完成路徑分子） |",
+             f"| TW未掛載局部owner鏈 | {counts['tw_unhosted_partial_owner_chains']}（條件式來源，非完整玩法） |",
              f"| TW未掛載階段/封包來源關聯／去重 | {counts['tw_unhosted_phase_source_bindings']}／{counts['tw_unique_unhosted_phase_source_binding_values']}（原生變體仍未完整） |",
              '| 全遊戲總封包／完成路徑／完成率 | 未知 |',
              '| 本來源階段新增正式部署 | 0 |', '',
@@ -637,21 +500,14 @@ def report(round_name, catalog_name=None, round_directory=None):
         for row in pending_groups:
             lines += ['- ' + row['name'] + '：' + row['remaining']]
         lines += ['']
-    dual = ledger.get('dual_client_native_inventory')
-    if dual:
-        lines += ['## 陸服獨立版本盤點', '',
-                  '以下取自固定CN來源快照，不與上述TW候選或限定來源分支直接相加。', '',
-                  f"CN版本SHA256：`{dual['cn_client_sha256']}`；來源：`{dual['source_snapshot']}`。", '',
-                  f"C2S已觀察opcode值：{dual['cn_c2s_observed_opcode_values']}；S2C階段/opcode項目：{dual['cn_s2c_phase_opcode_entries']}；可用長度opcode：{dual['cn_s2c_supported_length_opcodes']}。", '',
-                  f"本共用服務端已完成CN雙向遊戲路徑：{dual['cn_complete_bidirectional_gameplay_routes']}；全遊戲總數／百分比：未知。", '',
-                  '共用遊戲內容與權威資料表為預設；封包差異優先在適配器處理，只有已證儲存差異才使用表名後綴_tw/_cn的專屬表。', '']
-        lines += ['## 雙版本條件式來源串接', '',
-                  '以下包含CN、TW與共用來源；均保留正式掛載與完整路徑的缺口。', '']
-        for segment in ledger.get('dual_client_source_segments', []):
+    if segments:
+        lines += ['## 台服條件式來源串接', '',
+                  '以下均保留正式掛載與完整路徑的缺口；不計入完整玩法路徑。', '']
+        for segment in segments:
             lines += ['- ' + segment['name'] + '：' + segment['status'] + '。仍缺：' + '；'.join(segment['remaining'])]
         lines += ['']
     lines += ['', 'TW 補充原生發送證據：歷史通用候選151保留；新增跨分支／參數追蹤2C、2D、6F、99、A9，共6個限定分支紀錄。合併opcode集合156；不是新增玩法串接，所有變體及階段仍未窮盡。',
-              'CN 接收函式47DE70、4812B0已補owner、游標與條件分支；兩者呼叫階段仍未知，不因相同opcode或缺少直接caller而推定配對或不可達。', '']
+              '']
     markdown = '\n'.join(lines)
     out.with_suffix('.md').write_text(markdown, encoding='utf-8')
     (ROOT / 'packet-progress-latest.md').write_text(markdown, encoding='utf-8')

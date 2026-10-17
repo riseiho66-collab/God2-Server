@@ -1,0 +1,890 @@
+{
+  "contract_version": "god2-server/taiwan-only/source/1",
+  "scope": "Taiwan-only by explicit owner request 2026-10-18",
+  "source_files": [
+    {
+      "path": "src/db/SqliteCompanionRepository.h",
+      "bytes": 11426,
+      "sha256": "06ba899aacdef0fa5e5eaa8572471004b48041df4a30aff59aedd89a0a83ec05"
+    },
+    {
+      "path": "src/db/SqliteCompanionRepository.cpp",
+      "bytes": 48580,
+      "sha256": "e2fc84dec74b6af579473dfcaf1d4e88e9d91042d1a95a226753601b382056d2"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.h",
+      "bytes": 16742,
+      "sha256": "630d11604d00e4a4eb0af6b7d16543b8a8d0d8e721cdcf562f1ffdff07fc499c"
+    },
+    {
+      "path": "src/db/SqliteRecoveredCharacterRepository.cpp",
+      "bytes": 71468,
+      "sha256": "ec47b2668a6d2a0c6a80b8bb1f63622132bb47765bb87bfc7d833a384307b0a8"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.h",
+      "bytes": 9053,
+      "sha256": "6b72768cb05b77c8c064f17d814dec62650bc226db9ad668144f29d58d637fc5"
+    },
+    {
+      "path": "src/handlers/RecoveredBattleService.cpp",
+      "bytes": 48477,
+      "sha256": "5a19c0bd5398e08817e69601e3ac9e39cb96e57cc9d4ba7519055a0a4834d87c"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "bytes": 850415,
+      "sha256": "821df0a38a21cbc7706c97ab0c51c036251cfd6c9baaee5efb46ae6e8e6d49c4"
+    },
+    {
+      "path": "src/net/Session.h",
+      "bytes": 59001,
+      "sha256": "dd988336c9d9c81474afa9f3bef0f9c574809e8580375153ab29174e3ee08032"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "bytes": 485896,
+      "sha256": "d7df0e29702fad511d02edaa645226f934c4ba329b948337ea5ee764c5a40bb2"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeSkillCommandSource.h",
+      "bytes": 4137,
+      "sha256": "df661e92a22debf2faf451bb86b13a574b19f83743e60ada37304355385b6f3a"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeSkillCommandSource.cpp",
+      "bytes": 12622,
+      "sha256": "1b64c8ed8750c4421800988274e95e2a7d6aa992fd457912cc71f049babf834e"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldRecords.h",
+      "bytes": 37620,
+      "sha256": "04faf655c818fecc9269c786270d07fc19b7d20f2e65e8d6a61b918bfa84569e"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.h",
+      "bytes": 5907,
+      "sha256": "27bee675c6bb8eb0736540451fdb190e434a45e380341ef989632dd79b27925e"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "bytes": 22849,
+      "sha256": "bd5fc4b974f788670826aa7911c339e037b8365397e0e3a617fb49c13bc2d2b7"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeRecordHandlerSource.cpp",
+      "bytes": 12348,
+      "sha256": "1c20a8f90c69721005388ebfd0264ced93306436620ff7f1b6139048d5ddb091"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "bytes": 97456,
+      "sha256": "ccbf98fd6697b21bffb419200012886263dbc7fd2ee0e105ae259fa674bd468b"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldSkillRequest.h",
+      "bytes": 1810,
+      "sha256": "9a0c36f78d76ffdd64b0a30361ee92177ca93ad0bb0c23eec53336374e8e965a"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedDeitySkillSource.h",
+      "bytes": 5845,
+      "sha256": "988c38b24bd963208ebabf3e5d920dbb8e5010228f65bbb8efe4eb19446baacd"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedDeitySkillSource.cpp",
+      "bytes": 27915,
+      "sha256": "8b6314c878f0409e31c3e1d59a8a2ae5373a93c5ec7dc576b9aa8d44e75f687e"
+    },
+    {
+      "path": "src/game/TaiwanWorldEntryIdentity.h",
+      "bytes": 872,
+      "sha256": "83f91533178397a75aa211321add4988857b7e67579635c6262aefc5c85705c3"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.h",
+      "bytes": 8553,
+      "sha256": "d2121cc369b95c1443c608e616032e572291557f75b4f5ff283a77c4d792d049"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.cpp",
+      "bytes": 18428,
+      "sha256": "96781ac2103ce35babdf2b6d824de2073b7bc5bfd2b90b45460fc5eab20cf0c4"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.h",
+      "bytes": 4898,
+      "sha256": "44e488c28b050facd275e2f6058f65f8cf83064e27819fc2b0733bb91d23abfe"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.cpp",
+      "bytes": 20474,
+      "sha256": "d0cbcec56d445b275aa2b1f7ade947988577c98b1b604200ff44b28c8f016f49"
+    },
+    {
+      "path": "src/handlers/RecoveredOwnedCompanions.h",
+      "bytes": 8013,
+      "sha256": "6216eec6935f7a78ab6936a137e29602935e37de4002f9c58a976aea8950c927"
+    },
+    {
+      "path": "src/handlers/RecoveredOwnedCompanions.cpp",
+      "bytes": 20441,
+      "sha256": "8ca43c1bfa085f1d9f69a5dcf1d4b3e5f0fd5f30ecfb38f1c482bb53fcdeeec6"
+    },
+    {
+      "path": "src/core/SharedWorldHostPlan.h",
+      "bytes": 13053,
+      "sha256": "c41369ec6a954f09731c61f48867c965e72cbb2161c852dd86ba31760680ce19"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemSelectionSource.h",
+      "bytes": 6015,
+      "sha256": "74a8069e89a807c812042cc35a29b0efe0fb36c39a061cc186111c66ecccbb7f"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemSelectionSource.cpp",
+      "bytes": 7853,
+      "sha256": "58eeeb9c4112cef4fc2a898d6ba72105a727a50b5fd55ac8d6ecd6f0dd6451ff"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemRequestSource.h",
+      "bytes": 1360,
+      "sha256": "555b52404cf2617ae1680961de17a70b14f3f5c5caa6210a687689e71ed10574"
+    },
+    {
+      "path": "src/game/SharedTaiwanOwnedItemRequestSource.cpp",
+      "bytes": 5903,
+      "sha256": "4c33c8ca85dc7f4ea99a08be0120055ac9e3f2cd1f55135d816022e219384e5f"
+    },
+    {
+      "path": "src/db/NativeItemDefinitionObservation.h",
+      "bytes": 2268,
+      "sha256": "f18b0e6f5c9487a0781641ebbed74c6ecf64740562026e07607314ab23cf006a"
+    },
+    {
+      "path": "src/db/SqliteOwnedInventoryRepository.h",
+      "bytes": 4719,
+      "sha256": "41e1d9f11b8058f880289cdc75696f4612c952fc01eaf48b14aa7194e24e69b3"
+    },
+    {
+      "path": "src/db/SqliteOwnedInventoryRepository.cpp",
+      "bytes": 26973,
+      "sha256": "d247d89eda898ec5c0b3129b270a448c7da4ad84a5f20f44daf8a4f85ad870af"
+    },
+    {
+      "path": "src/protocol/RecoveredPrebornChoiceRequest.h",
+      "bytes": 2955,
+      "sha256": "70f68a4c49169c3da88747f1d23cb78c3c72a183e237fad885796b2f00c80042"
+    },
+    {
+      "path": "src/auth/SharedWorldAdmission.cpp",
+      "bytes": 14851,
+      "sha256": "281da51788c83c73202cb550c90d9c2f427026f0ceb266342c5e08d350caddbd"
+    },
+    {
+      "path": "src/auth/SharedWorldAdmission.h",
+      "bytes": 10693,
+      "sha256": "a9e53251665525816ace2dcb10cdb9baa01431945e60d590d07f2234c5e7a6b8"
+    },
+    {
+      "path": "src/game/SharedTaiwanIssuedSkillSource.h",
+      "bytes": 6812,
+      "sha256": "36f12476dc4b7b01b4b79a38611acb4e89929d025098cd0e1404d3ed0a295ec6"
+    },
+    {
+      "path": "src/game/SharedTaiwanIssuedSkillSource.cpp",
+      "bytes": 24436,
+      "sha256": "c93f400a97426a02dec3f80b4ed089fbe3559b2ae8b61182d191039dc8fa46f7"
+    },
+    {
+      "path": "src/core/Config.h",
+      "bytes": 7809,
+      "sha256": "f4280c1724cd9c66a724f3f52aafc0c2ecb500375c549784d7ec8588fe2d2756"
+    },
+    {
+      "path": "src/core/Config.cpp",
+      "bytes": 62683,
+      "sha256": "23f8ae4a6d821e6533d054a47f327faca3ff9063a27ab6a97d33c0fa439d7f71"
+    },
+    {
+      "path": "src/db/SqliteDatabase.h",
+      "bytes": 18142,
+      "sha256": "bed9cee578f32fc5aac6e333093c64fe353531011347ce89ee3f25a37ab15c03"
+    },
+    {
+      "path": "src/db/SqliteDatabase.cpp",
+      "bytes": 87270,
+      "sha256": "a5022c3c9feeccf8473d0e891dd665df2454c4f708a7499a3df34c24d1d2b397"
+    },
+    {
+      "path": "src/db/NativeSkillBookCatalog.h",
+      "bytes": 1396,
+      "sha256": "74133d3fe1dd1371d557debceeeab2e4bb112f7c5067767894b840c026616336"
+    },
+    {
+      "path": "src/db/NativeSkillBookCatalog.cpp",
+      "bytes": 8435,
+      "sha256": "6b7ad75a21b2ec60d718694f29a936bdfd6408361f789b7817179cc4240e4c7f"
+    },
+    {
+      "path": "src/db/SqliteSkillBookLearningRepository.h",
+      "bytes": 7643,
+      "sha256": "6f4aaa96c41b4d7e261b52eeaa57f95d1bcdd014660560d41b6d7e87415e0dc2"
+    },
+    {
+      "path": "src/db/SqliteSkillBookLearningRepository.cpp",
+      "bytes": 46209,
+      "sha256": "08e91e547bbb6ac7b54c8b31de600f8fdaec2965a0dc5f0be08caa738fdb3546"
+    },
+    {
+      "path": "src/db/SqliteNativeEquipmentSnapshotRepository.h",
+      "bytes": 4219,
+      "sha256": "50b0c204149578eb5c81172679b988ccc1e95c8714de1f56a6c78618a6e90b3e"
+    },
+    {
+      "path": "src/handlers/OwnedSkillBookLearningService.h",
+      "bytes": 8702,
+      "sha256": "48248205eff6ff348950e6d2c67f44739621c0f904a70547f16667a5e84ab2f4"
+    },
+    {
+      "path": "src/handlers/OwnedSkillBookLearningService.cpp",
+      "bytes": 39918,
+      "sha256": "55c6f6cbb8f428e150d56c246546ac8ba2b86a5e0289b367b3b2da27a4fd2a29"
+    },
+    {
+      "path": "src/game/SkillBookLearningRule.h",
+      "bytes": 481,
+      "sha256": "62ebdae0226a9aab262145e09268f32e170d6f4812ec08b12d4613c835f88e43"
+    },
+    {
+      "path": "scripts/gameplay/skill_book_learning.lua",
+      "bytes": 447,
+      "sha256": "24f2e6e5a91edd1f44cfdf248b5314631ffdd5677dc55d3aa59840b84f63b7a9"
+    },
+    {
+      "path": "src/scripting/LuaEngine.h",
+      "bytes": 8462,
+      "sha256": "7aaf10809096c0d9f626eef0e3f45f20fd89c45fe47c4721683a49d9f485877f"
+    },
+    {
+      "path": "src/scripting/LuaEngine.cpp",
+      "bytes": 75395,
+      "sha256": "890dd2ffa5b66d0c66ab28067679f30a16582dbe72e26ea880f4423bf4efb091"
+    },
+    {
+      "path": "src/protocol/RecoveredDeityActivation.h",
+      "bytes": 683,
+      "sha256": "fe05727d91a94998f210a49033130344eafb042308e2eb61b51290f2d5dfa0bd"
+    },
+    {
+      "path": "src/protocol/TaiwanNativeDeityRosterPrefix.h",
+      "bytes": 13016,
+      "sha256": "aa21b91d6d5033ffd792ecaae9672f3632d78496a7a4a124743c437ad660e575"
+    },
+    {
+      "path": "src/game/TaiwanOwnedBagItemMaterial.h",
+      "bytes": 2434,
+      "sha256": "e02911f54dd54ebb9044edaf30cbeac51d2f27e184997b0be093148072f845ef"
+    },
+    {
+      "path": "src/db/NativeEquipmentSnapshotRepository.h",
+      "bytes": 2916,
+      "sha256": "c52e9e30871abf2e09e01037964a7048219aeadf37231b1504d2d1d22d5f2164"
+    },
+    {
+      "path": "src/protocol/RecoveredTaiwanInventoryItemRecord.h",
+      "bytes": 1234,
+      "sha256": "960b4d1d79922a44e7e1e51bcf32f05356b7d5df7a92b4fbae23c1339ab3cce1"
+    },
+    {
+      "path": "src/protocol/RecoveredInventory.h",
+      "bytes": 2835,
+      "sha256": "3d27484062f51655bce1a37c33ab0f551e623e8b14763c1cdbb518bba3031eb9"
+    },
+    {
+      "path": "src/protocol/RecoveredInventoryItemRequest.h",
+      "bytes": 1711,
+      "sha256": "7553f13c9cd050b0fa953bb117e8a21d62f72731006b9cefe91d8269782bc026"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldEntered.h",
+      "bytes": 6525,
+      "sha256": "9f3ed9fd44fdce65ce2fe5bff9723afbb9403c170381137553257ae794705a48"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldEntered.cpp",
+      "bytes": 29523,
+      "sha256": "57631d838143f5363a7c1a7413ef225e38e240c922e358038057889e6223f66f"
+    },
+    {
+      "path": "src/protocol/RecoveredTaiwanServerRecords.h",
+      "bytes": 4939,
+      "sha256": "2d501f57005a43af7ce3ad7bebb75becdda51a60245811cabf10a4ac612d1dad"
+    },
+    {
+      "path": "src/protocol/RecoveredTargetItemRequest.h",
+      "bytes": 1170,
+      "sha256": "f2e46c7c804afbb7f00c8d9b54dd4c25b56ec29358434884e34f195a1d57e0ec"
+    },
+    {
+      "path": "src/handlers/OwnedPkOutboxPublication.h",
+      "bytes": 89897,
+      "sha256": "3a58a370f09f82e44b12e3dbd64b70ad377cfd5534a2e1e3eec24ffc1175d28f"
+    },
+    {
+      "path": "src/shared/world/SharedActorVisibility.h",
+      "bytes": 35359,
+      "sha256": "0f0ec8bc4a220da12d6286db7d434d5178b92f394e2470d5fc483b2f4e42ee1e"
+    },
+    {
+      "path": "src/shared/world/SharedActorVisibility.cpp",
+      "bytes": 142155,
+      "sha256": "4e564f336827c454cd74c2be6cfd44611fff71ac3c662f0c0798aa586ca8aea1"
+    },
+    {
+      "path": "src/db/SqliteOwnedPkRoomRepository.h",
+      "bytes": 16374,
+      "sha256": "8d9f309a3cab1bd4ab8c50afab35fd0602f6955767a64e5df53fdf70dd0a92c7"
+    },
+    {
+      "path": "src/db/SqliteOwnedPkRoomRepository.cpp",
+      "bytes": 124826,
+      "sha256": "f69518ccd48240d38c31065b5069f91b828355c2a6a91556b93c7c92f09fe6a9"
+    },
+    {
+      "path": "src/handlers/OwnedPkRoomState.h",
+      "bytes": 21883,
+      "sha256": "ae61806065769b5c150eb9d1602b1145d03ba12b6943e7712ed624947d5f3d31"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkReturnRoleTextSource.h",
+      "bytes": 18917,
+      "sha256": "e7a532ab8cca6b99c49ef0e5e38cf68c430ce92e39c8051d3a56b2773a5a3a27"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkBasicDriver.h",
+      "bytes": 13267,
+      "sha256": "1d636d1c5e8d743d9a48446e6b9a7215d421cec3172427894daadbb3a9430ce2"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkLuaBasicOwner.h",
+      "bytes": 5983,
+      "sha256": "ff977c75b9d774468aa4e7ff3cc6bf65d0e47851e1c1c7f9d776cf2c6bc0a9d8"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkRoomBackend.h",
+      "bytes": 7728,
+      "sha256": "9c74c93d502e6756fff89e24c318b5db9682e492e0c36043497ccae35cb6bb8d"
+    },
+    {
+      "path": "src/handlers/OwnedPkEntryAdmission.h",
+      "bytes": 22478,
+      "sha256": "a248607ed28a5b6d1c98f7fc55e26f29f68266aca40f4baae3de9dd96af244f3"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkAppearanceSource.h",
+      "bytes": 13627,
+      "sha256": "2e62c61ee2a5b7f1c3f512272e070cb1cbd54770b8144015c8355f225ef9e032"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkPlayerEntrySource.h",
+      "bytes": 15496,
+      "sha256": "0786c704dacc923361e9f71b658c4a87be16c752eed14c31b8ef5ee34ce0aa06"
+    },
+    {
+      "path": "src/handlers/OwnedPkInvitationService.h",
+      "bytes": 20511,
+      "sha256": "833418684d17562ac8aa76ca00deb10001f260df920b1ddba29dd8dbac1733ef"
+    },
+    {
+      "path": "src/handlers/OwnedTaiwanPkEntryPreparation.h",
+      "bytes": 17602,
+      "sha256": "1ea0d3c4e6e3f6607b8830bb98e732aa8d71455a94b762389904650537ed32bf"
+    },
+    {
+      "path": "src/protocol/RecoveredPkEntryProjection.h",
+      "bytes": 26272,
+      "sha256": "3cb30aa8ee69a6bf585f02406685dde9bb1431f1f20313ad85d095e5f64fa884"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkCompanionSource.h",
+      "bytes": 42743,
+      "sha256": "e1e94c0aef9e67268c8771165974c0bffe9c708ccac4415b1a300d1ba65c988f"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.h",
+      "bytes": 28199,
+      "sha256": "adce6212fa40cd1ed4676e18dc5463364fc58505449b260c0a2121e1478ab5ea"
+    },
+    {
+      "path": "src/db/NativeSkillCatalog.cpp",
+      "bytes": 10837,
+      "sha256": "8bbe5e078f8e29efe0272356d303564d61dd232c35e3836fe80ac501b1d3e47c"
+    },
+    {
+      "path": "src/db/NativeSkillCatalog.h",
+      "bytes": 3926,
+      "sha256": "2dd3ad2349bb9110ccf4fdcc7b62888e5c440001ddf9202c288f9eaa3dea0f8b"
+    },
+    {
+      "path": "src/db/NativeSkillSource.h",
+      "bytes": 2865,
+      "sha256": "215a2dfe051b70ed361974895e556ff5a9a940d58729189777941a6b3bc706c2"
+    },
+    {
+      "path": "src/db/SharedSkillDefinition.cpp",
+      "bytes": 399542,
+      "sha256": "f7ffb3b858d58aa5443817a033a53c4b776b0e5e51e50bded644f5509607c5dc"
+    },
+    {
+      "path": "src/db/SharedSkillDefinition.h",
+      "bytes": 3412,
+      "sha256": "812ab725ae0562edf4917c294c3f0f3a4b41da6252d3b8cc0fc47cef6132cabb"
+    },
+    {
+      "path": "src/protocol/TaiwanNativePrimarySkillList.h",
+      "bytes": 25973,
+      "sha256": "4e2da4a4396bf5210ebb037ada115ae8428761a3c48fc1cd36e67078a85e6968"
+    },
+    {
+      "path": "src/protocol/TaiwanNativeSkillCommand.h",
+      "bytes": 14194,
+      "sha256": "b79ce863796af043821c8a0aeed30b79f97cbd00a08ce032c9b083fdcffd4728"
+    },
+    {
+      "path": "src/db/TaiwanInstalledSkillCatalogImport.cpp",
+      "bytes": 18853,
+      "sha256": "dd76eeff00351423330d547512d8e6a3fdf0e2ed97b0531f17ab8b343111776e"
+    },
+    {
+      "path": "src/db/TaiwanInstalledSkillCatalogImport.h",
+      "bytes": 1660,
+      "sha256": "2b1ee2e65a4fc56e55aa825fb6245c4e22ccec29053c22f5b75e60dbb8735892"
+    },
+    {
+      "path": "src/db/TaiwanInstalledSkillCatalogSource.cpp",
+      "bytes": 4757,
+      "sha256": "b24b23f97ea450d154e54184d4de8e640be1933bba0d3ece6d75fec3e6f9d3e9"
+    },
+    {
+      "path": "src/db/TaiwanInstalledSkillCatalogSource.h",
+      "bytes": 1984,
+      "sha256": "8badddb495e048d06b1c260f30b77926d04140fee50d95343e71db6b7705bed3"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "bytes": 1963,
+      "sha256": "43c7f29171244f84577ef898a18f76968d4e85c331bb3496a1a9d1566cee0df0"
+    },
+    {
+      "path": "src/core/TaiwanSkillImportOperator.cpp",
+      "bytes": 7094,
+      "sha256": "5acc78db8a4b7b667b8e3f51601b865b18f409180b8d9c1fe083a4b3f5fad18b"
+    },
+    {
+      "path": "src/core/TaiwanSkillImportOperator.h",
+      "bytes": 736,
+      "sha256": "b5864731f96996e022ff3d3d063ec8bd5884c7cbb69f76cc442124f987a11edd"
+    },
+    {
+      "path": "src/db/TaiwanInstalledSkillCatalogFileSource.cpp",
+      "bytes": 5714,
+      "sha256": "c5e663702b45bf6434c1c221a6757ce06d2340b4c517f7abd9b338444ff3e41c"
+    },
+    {
+      "path": "src/db/TaiwanInstalledSkillCatalogFileSource.h",
+      "bytes": 926,
+      "sha256": "ef5601269fe294fd2464d4579632e1ff5f7189935f1f88d80ce54f482122f022"
+    },
+    {
+      "path": "src/main.cpp",
+      "bytes": 6163,
+      "sha256": "a91a7f2d51a3cb62ed8c007e60f9891001d9df01539ac1a96185b5a229a80a0e"
+    },
+    {
+      "path": "src/protocol/RecoveredTaiwanActorOverride.h",
+      "bytes": 2284,
+      "sha256": "f068e5dc8caf78ab8ef21912d36f66208d184ea7b485aeb67c7ce4060051eac6"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldReady.h",
+      "bytes": 3604,
+      "sha256": "cb00aadf84311b0c443aef4b8984739df3a88badaebc0640ab4ff7f82690f4a9"
+    },
+    {
+      "path": "src/game/SharedNativeActorNameSource.cpp",
+      "bytes": 7521,
+      "sha256": "69fdb28f5ad5059277f00eaba29fe0185585e366520a3b71b58d18a9379bbdd6"
+    },
+    {
+      "path": "src/game/SharedPublishedChatNameSource.cpp",
+      "bytes": 11179,
+      "sha256": "80c0fc7c5a334147cc4a353af169454ed33b01a00e343f6180dd1c7ba95c8228"
+    },
+    {
+      "path": "src/game/TaiwanNativeActorResourceBank.h",
+      "bytes": 8841,
+      "sha256": "9dd495e2dce0fb65872698b8015310320866012c720bd7cfadbcd5d687c048d1"
+    },
+    {
+      "path": "src/game/TaiwanNativeActorResourceBank.cpp",
+      "bytes": 17798,
+      "sha256": "d376cfe4e84a7497519a526bcad553548e736ad21201c16693a609cafcb3b60b"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeWorldEntryOfferSource.h",
+      "bytes": 8356,
+      "sha256": "9c468a8f668a86a2c6d3ad19e3f40b455413719590c9fc6906f092093209d813"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeWorldEntryOfferSource.cpp",
+      "bytes": 19128,
+      "sha256": "4314ff717e89c3883a0135d5aeaa00b18357bb91593248758c6e427acbbdc7f6"
+    },
+    {
+      "path": "src/game/OwnedTaiwanReturnActorSavedSource.h",
+      "bytes": 10640,
+      "sha256": "4cedd59d98a05c09151ef99170ab4907f0e4b67b44076b92aabaa5ea633f60b2"
+    },
+    {
+      "path": "src/game/OwnedTaiwanReturnActorSavedSource.cpp",
+      "bytes": 32055,
+      "sha256": "14f87e18d64a378ea0d1145d4f888962fca69214eb33da5505063a80284c949f"
+    },
+    {
+      "path": "src/db/SqliteOwnedEquipmentTransaction.h",
+      "bytes": 9033,
+      "sha256": "462eccdbe9b4744284806945315a04a6d8af8a3565e71f2709d060bbd6b64f8b"
+    },
+    {
+      "path": "src/db/SqliteOwnedEquipmentTransaction.cpp",
+      "bytes": 23891,
+      "sha256": "303b98cfb428de5b30e5c307b47a89ab1141a381d0fa231549749ab5f52fc029"
+    },
+    {
+      "path": "src/game/TaiwanCustomFullActorProfile.h",
+      "bytes": 12194,
+      "sha256": "77aa9c0230482ae41dd78875164ef23915ee4d102e0e64ad1dc077b1bc808670"
+    },
+    {
+      "path": "src/game/TaiwanCustomFullActorProfile.cpp",
+      "bytes": 43937,
+      "sha256": "10ba2edf6bbda068410c4a57caadd4cb26f701131848409c769c3ec25f24e7fa"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkReturnSceneSource.h",
+      "bytes": 3138,
+      "sha256": "ffeba1499721b49cf0f6be9bff784798963801b6c8e91dd06dd500bd1e51b72a"
+    },
+    {
+      "path": "src/game/OwnedTaiwanPkReturnSceneSource.cpp",
+      "bytes": 16867,
+      "sha256": "a4b0985a812c6de4dc30d35d0e7bece5397c822a976d0a4ef7ec2ba316227680"
+    },
+    {
+      "path": "src/protocol/RecoveredTaiwanPlayerAppearanceUpdate.h",
+      "bytes": 2441,
+      "sha256": "6b9919203de10e39bd2fccf07a0b9b226dffe30ced72900d16bccadcb7967f2c"
+    },
+    {
+      "path": "src/game/TaiwanNativeActorArgumentSource.h",
+      "bytes": 4510,
+      "sha256": "8e9d1814ce3f417e3f7f47304ff5bb278ecc7c70b74ad8b4a4aecdab854a7912"
+    },
+    {
+      "path": "src/game/TaiwanNativeActorArgumentSource.cpp",
+      "bytes": 11905,
+      "sha256": "e01afbf72c31ae768f0318e0fc8f9837d991bcaa68ecb13e1b9a6908bbd8fa07"
+    },
+    {
+      "path": "src/game/TaiwanNativeActorResourceSource.h",
+      "bytes": 4779,
+      "sha256": "c09ed1221844fbe1446d8a998b2e465b46fcd2e1ccf9e40d2d79332743fe6256"
+    },
+    {
+      "path": "src/game/TaiwanNativeActorResourceSource.cpp",
+      "bytes": 20987,
+      "sha256": "8290a899bc0f5c3115c27415af304415c8813e5e2b50c3fb736434008ae0a9d3"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusWriteFence.h",
+      "bytes": 3148,
+      "sha256": "feabe27635076e2586721384330486a898248e15ecbb7728bc4cccec2dd5493e"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusWriteFence.cpp",
+      "bytes": 4910,
+      "sha256": "96cd6ead50f453e974dfcacb1299ffad84535ba1b21497beb9eefab5d3127034"
+    },
+    {
+      "path": "src/db/ServerDataDictionary.h",
+      "bytes": 1659,
+      "sha256": "56c2447bf8daf42ac998a62ec8cce7f99c67ca21294c9f226c2c12075e22981b"
+    },
+    {
+      "path": "src/db/ServerDataDictionary.cpp",
+      "bytes": 68639,
+      "sha256": "5786b625e12f9b8435192c3aa597731387f8c09b214f0185efdc793d49c79481"
+    },
+    {
+      "path": "src/db/MySql80ExportFormat.h",
+      "bytes": 3633,
+      "sha256": "1c796e94f3b94c884175339314d459a6c093a6b49c626605b0f9a4caf4bfa8ed"
+    },
+    {
+      "path": "src/db/MySql80ExportFormat.cpp",
+      "bytes": 18932,
+      "sha256": "ad639d8d58d0fbd32fbcf8f7dedfdbd3af738345ebef914e7d46fc39ad55ff60"
+    },
+    {
+      "path": "src/tools/SqliteToMysqlExportTool.h",
+      "bytes": 820,
+      "sha256": "41d5df788d56b12b0350d49d315446b8d9ceeed0cfba3e38e0ed5bc69793bea3"
+    },
+    {
+      "path": "src/tools/SqliteToMysqlExportTool.cpp",
+      "bytes": 677,
+      "sha256": "e136ed5be12fdb2e3553d1f019a9a2ebe3d42fbcda8e25bf3d64e9ca99c45855"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusIncarnationSource.h",
+      "bytes": 2991,
+      "sha256": "15ebfbc4099da0b7566fb675b286ebd35e94f0cd6b5d7058d2337ad8570e35d6"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusIncarnationSource.cpp",
+      "bytes": 7841,
+      "sha256": "1f6e04533af5e28ef1af803e3891e9d53d75589254ccd74fc766e4e63bae9bdb"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusProfileScope.h",
+      "bytes": 3331,
+      "sha256": "0dd53657d8718f1e53692c6bead436bd0e83f3d0cfd83fb4e0cb2515b6534401"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusProfileScope.cpp",
+      "bytes": 8697,
+      "sha256": "3de6ced835ad56128ec6e06a4da3fdf6e750c493fefbe1ec5c87d42cd9636b91"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusOwnedSource.h",
+      "bytes": 5536,
+      "sha256": "d9fb81e08b71c340e3907b5aded2af4eee2a484fcf1f51c4e0c187194fda1901"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusOwnedSource.cpp",
+      "bytes": 17358,
+      "sha256": "e1b6c21aaf2d482a053bad51e4ee8198864b0c904beedc97c70d1ef8054249a6"
+    },
+    {
+      "path": "src/game/TaiwanActorStatusPublication.h",
+      "bytes": 1899,
+      "sha256": "c0d36be181c147be5c10a03310c10ba603ef8eea2f34f56aa301a4a6d37b3eee"
+    },
+    {
+      "path": "src/game/TaiwanNativeDrvDoll.h",
+      "bytes": 6171,
+      "sha256": "b3f42b42718906c19c1c64f7f23245c383835b39f7d0c12047b2cab889b66692"
+    },
+    {
+      "path": "src/game/TaiwanNativeDrvDoll.cpp",
+      "bytes": 9773,
+      "sha256": "702bab6cd2ecb0d6b4e206058c94d081bb7c5e81ddd12850e57482a95ce00a0c"
+    },
+    {
+      "path": "src/db/NativeNpcDisplayCatalog.h",
+      "bytes": 2415,
+      "sha256": "f3be61ae34a29bb002538263d2cc7505d638083e345752f2e38af046fcf29e7b"
+    },
+    {
+      "path": "src/db/NativeNpcDisplayCatalog.cpp",
+      "bytes": 9253,
+      "sha256": "584f00d113a2173ef8d0338d1177059bd393a5c9fb79d63f8d8e8e9cc9787d9d"
+    },
+    {
+      "path": "src/db/NativeEnemyDisplayCatalog.h",
+      "bytes": 4282,
+      "sha256": "1c7c2366c2dd126b54d2b3f66f2ac5bb3cfb753a438bb059d9df5b16bf0e9d7f"
+    },
+    {
+      "path": "src/db/NativeEnemyDisplayCatalog.cpp",
+      "bytes": 17891,
+      "sha256": "45385dca3bee844802f3abd6432206469729aa8634554c34e2c3a5bfa51a7c77"
+    },
+    {
+      "path": "src/db/SqliteWorldDisplayRepository.h",
+      "bytes": 4796,
+      "sha256": "e1e5240b9bbba1a2ca7094f6c5153a0188d56bd1c2d928b8d0fb859f8811dc7d"
+    },
+    {
+      "path": "src/db/SqliteWorldDisplayRepository.cpp",
+      "bytes": 18269,
+      "sha256": "a8f0919b6ba9ad3bd3cb8ead1ba1e5dbcaf2606be81821fd2c368dbd607ff3ed"
+    },
+    {
+      "path": "src/handlers/RecoveredWorldDisplays.h",
+      "bytes": 2307,
+      "sha256": "9ae34ce77c6ff05129ae44b7b7ddaea9d9275bf66b63c5eccd7244996e96dcbb"
+    },
+    {
+      "path": "src/game/OwnedTaiwanInitialActorSceneSource.h",
+      "bytes": 1029,
+      "sha256": "b708259ba43a37d6e1f012ddbfdfac3a6ec55f03a7d67c3fd48aa1414d2be736"
+    },
+    {
+      "path": "src/game/OwnedTaiwanInitialActorSceneSource.cpp",
+      "bytes": 35327,
+      "sha256": "e49a3ece568e57275fb9e6931e682ed55988c8adf6d8b8c79fee3b58bb26f52d"
+    },
+    {
+      "path": "src/game/OwnedTaiwanInitialNpcDisplaySource.h",
+      "bytes": 865,
+      "sha256": "f191609b8d9ecaccb11cbefbd9a420d97818b6bea28cb27c7c069062e5528d2b"
+    },
+    {
+      "path": "src/game/OwnedTaiwanInitialNpcDisplaySource.cpp",
+      "bytes": 15257,
+      "sha256": "dbbd8e5265599e3e06dbe170dad9ff97355cbe09bc8fda4ed57d92db8d05cc38"
+    },
+    {
+      "path": "src/game/TaiwanInitialNpcSceneObservation.h",
+      "bytes": 4032,
+      "sha256": "ab3f8e6e237931fe599b96e0c62f45192e35418ea8f06d2335814fa4242de4cb"
+    },
+    {
+      "path": "src/protocol/RecoveredMovement.h",
+      "bytes": 4046,
+      "sha256": "b22978140eae934a5f4ea4e1ebe2f97c47a63408b39d9d8614fd6e69163819e9"
+    },
+    {
+      "path": "src/protocol/RecoveredNativeMovement.h",
+      "bytes": 1638,
+      "sha256": "0a6728762428c0c6758c1e87b67537ef324a6376625d7781c3cba0c3844e80e9"
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneResourceOwner.h",
+      "bytes": 4072,
+      "sha256": "20db9ddd537ee00642f5a164d0882bd391f0dbacece8ce00e35eeabca3b3193b"
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneResourceOwner.cpp",
+      "bytes": 26318,
+      "sha256": "d387a8aa0971daa09b825293d4d24c5e41da66cb0b0002e492cf6b5ed1ab4b05"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeMovementHost.h",
+      "bytes": 2482,
+      "sha256": "42ae4cc7b95125470a471b0b0ad7eb0cc36416b2f2f70b5d28ecb216895d9f4d"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeMovementHost.cpp",
+      "bytes": 22504,
+      "sha256": "299e5f5190f37468a2726b5483a307fa561771c97a462847697824716522d478"
+    },
+    {
+      "path": "src/scripting/TaiwanMovementRules.h",
+      "bytes": 1482,
+      "sha256": "8da939fe1cc690c32afa07d60e21b37921d8667c2af2355d1ff75ce132f76ce8"
+    },
+    {
+      "path": "src/scripting/TaiwanMovementRules.cpp",
+      "bytes": 5282,
+      "sha256": "c26d090cd868a60909943dc1ab52941eebe7720c207f8e7d714c87d74521a4af"
+    },
+    {
+      "path": "src/game/OwnedTaiwanOrdinaryMovementAuthority.h",
+      "bytes": 3546,
+      "sha256": "56a65e4d8ae13d8ecdd9426a5c1d01b45c49a4aa366b95d933ab46552d2910ac"
+    },
+    {
+      "path": "src/game/OwnedTaiwanOrdinaryMovementAuthority.cpp",
+      "bytes": 16999,
+      "sha256": "3219beb767849d81d7263013cc564790e05df3d678f25e6d7f54d82988afef29"
+    },
+    {
+      "path": "scripts/tw/owned_ordinary_movement.lua",
+      "bytes": 1802,
+      "sha256": "3ec68c53e58fe1dfc3493a80dfb46b0d52a19014151db6b66969e6f352035a79"
+    },
+    {
+      "path": "src/db/Database.h",
+      "bytes": 2686,
+      "sha256": "198f95f6e8cb7d707d4fa62c1ad36587fc1955ad9bff6a6f21c605f972fac443"
+    },
+    {
+      "path": "src/db/OrdinaryMovementPolicyRepository.h",
+      "bytes": 2040,
+      "sha256": "289ecf31093199ee249367c17f2053a948adad528c448ed5375723c5ff0b61e6"
+    },
+    {
+      "path": "src/db/SqliteOrdinaryMovementPolicyRepository.cpp",
+      "bytes": 15389,
+      "sha256": "d38c4c179ae915758b6bb3a8b3bec9e1ba6bdf5b7245901a5215871b3b250151"
+    },
+    {
+      "path": "src/db/SqliteOrdinaryMovementPolicyRepository.h",
+      "bytes": 1166,
+      "sha256": "a463373caeb07544bfb1b6c5786479e4f69243a2208ea536153fd2e51850230a"
+    },
+    {
+      "path": "src/game/OwnedOrdinaryMovementPolicies.cpp",
+      "bytes": 13314,
+      "sha256": "5fe62058988d9a4d5cf6a5f0056645b56f146f99dc4645e3ac486b752df1621f"
+    },
+    {
+      "path": "src/game/OwnedOrdinaryMovementPolicies.h",
+      "bytes": 4647,
+      "sha256": "32e5e1e5c146e4e6ef58aff7cd79724d23522a6f8a8ae0acf1b03e2c796c73db"
+    },
+    {
+      "path": "src/game/OwnedOrdinaryMovementPolicy.h",
+      "bytes": 1238,
+      "sha256": "137e8c431819e3d74f7cf849af5783c41a5502403da08c05aa2c843cb0979cf8"
+    },
+    {
+      "path": "src/game/SharedTaiwanMovement.cpp",
+      "bytes": 14298,
+      "sha256": "256caaf0fb128e1c878303f83eee7c6245ebc6d97610a57e45a755542e876d5b"
+    },
+    {
+      "path": "src/handlers/RecoveredMovementService.cpp",
+      "bytes": 44344,
+      "sha256": "ef914e43b790a847a6a3faaa0ca82c3faf3aa626b22fa94392aea920a01009aa"
+    },
+    {
+      "path": "src/handlers/RecoveredWorldService.cpp",
+      "bytes": 11902,
+      "sha256": "ef56a66788be0f376bc9b49f56a3c09a1db6873c9fd5446779213431e8261aea"
+    },
+    {
+      "path": "src/protocol/RecoveredBeastPanel.h",
+      "bytes": 9295,
+      "sha256": "b11bf59243501cb5b4d25db8c45bb59c257a4660bef66cb4e9216d1dd8bbd22f"
+    },
+    {
+      "path": "src/shared/world/SharedMovementPublication.cpp",
+      "bytes": 6876,
+      "sha256": "004d5f2338bf3d52bb70485c375f0b537ecab84e8700010f2671a9ad597d7875"
+    },
+    {
+      "path": "src/game/SharedNativeSpectatorPublication.cpp",
+      "bytes": 26553,
+      "sha256": "b4e114fce0e22065ac4a892598fd041c17391e60bc726292d7fcb1a0203c699e"
+    }
+  ],
+  "qualification": {
+    "source_only": true,
+    "whole_route_complete": false,
+    "execution_verified": false,
+    "game_database_modified": false,
+    "whole_game_percentage": null
+  },
+  "native_regions": [
+    "TW"
+  ],
+  "websocket_paths": [
+    "/tw/native",
+    "/tw/native-game"
+  ]
+}

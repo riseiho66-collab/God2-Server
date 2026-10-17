@@ -9,7 +9,6 @@ std::optional<RecoveredCharacter> SharedCharacterNameReplacement::commit(
     std::vector<RecoveredCharacter> expected,std::uint64_t character,
     SqliteRecoveredCharacterRepository::OwnedNameCandidate proposed,Current operation) {
     if(!account || !character || !operation || !presence.owns_repository(characters))return std::nullopt;
-    // Allocate before the SQL writer. Existing TW/CN raw offers for this exact
     // common character must become stale even though its ID remains unchanged.
     auto invalidation=admission.prepare_character_offer_invalidation(account,character);
     if(!invalidation)return std::nullopt;

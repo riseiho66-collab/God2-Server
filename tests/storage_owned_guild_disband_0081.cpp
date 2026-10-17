@@ -76,7 +76,7 @@ struct Fixture {
     std::unique_ptr<SqliteTradeRepository> money;
     std::uint64_t guild{},foreign{};
     const Repo::Proof proof{[]{},[]{}}; // TEST_ONLY world readiness, no gameplay authority minted.
-    explicit Fixture(const std::string& path=":memory:",bool utf16=false,bool cn=false,bool opaque=true) {
+    explicit Fixture(const std::string& path=":memory:",bool utf16=false,bool simplified=false,bool opaque=true) {
         check(sqlite3_open(path.c_str(),&db)==SQLITE_OK);sqlite_detail::execute(db,"PRAGMA foreign_keys=ON");
         if(utf16)sqlite_detail::execute(db,"PRAGMA encoding='UTF-16be'");
         const auto migrations=owned_guild_announcement_migrations();check(migrations.size()==50);
@@ -90,7 +90,7 @@ struct Fixture {
             std::copy(name.begin(),name.end(),profile.begin());profile[29]=static_cast<std::uint8_t>(i);
             const std::vector<std::uint8_t> bytes(name.begin(),name.end());
             sqlite_detail::Statement character(db,"INSERT INTO recovered_characters(id,account_id,slot,profile,name_bytes,name_codepage) VALUES(?,?,0,?,?,?)");
-            character.bind(1,i);character.bind(2,i);character.bind_blob(3,profile);character.bind_blob(4,bytes);character.bind(5,cn?936:950);character.done();
+            character.bind(1,i);character.bind(2,i);character.bind_blob(3,profile);character.bind_blob(4,bytes);character.bind(5,simplified?936:950);character.done();
             RecoveredRoleLevel::Bytes role{};role[0]=0x22;role[1]=35;role[17]=100;role[21]=50;
             sqlite_detail::Statement r(db,"INSERT INTO character_role_snapshots(character_id,logical,revision,design_id) VALUES(?,?,1,'CUSTOM-0013')");
             r.bind(1,i);r.bind_blob(2,role);r.done();money->provision_wallet(i,i);
@@ -191,8 +191,8 @@ Exclusions allowed(Fixture& f) {
         {"owned_guild_governance_0078","guild_id<>"+std::to_string(f.guild)},
         {"owned_guild_applications_0078","guild_id<>"+std::to_string(f.guild)}};
 }
-void lifecycle(bool cn,bool utf16) {
-    Fixture f(":memory:",utf16,cn);const auto lease=f.lease();
+void lifecycle(bool simplified,bool utf16) {
+    Fixture f(":memory:",utf16,simplified);const auto lease=f.lease();
     const auto before=snapshot(f.db,allowed(f));const auto fields=retained_guild(f.db,f.guild);
     const auto foreign=f.repo->leader(4,4);const auto foreign_apps=f.repo->applications(f.foreign);
     const auto clock=scalar(f.db,"SELECT MAX(revision) FROM owned_guilds");
@@ -225,8 +225,8 @@ void empty_and_name_reservation() {
     check(f.repo->guild(retired.retained.id)==retired.retained);
     check(!f.repo->find_by_name("DisGuild") && f.repo->find_by_name("NewGuild").has_value());
 }
-void native_capacity50(bool cn) {
-    Fixture f(":memory:",false,cn);
+void native_capacity50(bool simplified) {
+    Fixture f(":memory:",false,simplified);
     // TEST_ONLY capacity arrangement in a disposable DB. This is not a native
     // capacity/economics claim, and no gameplay server receives these fixtures.
     sqlite_detail::execute(f.db,"UPDATE owned_guild_governance_0078 SET capacity=50 WHERE guild_id=1");
@@ -240,7 +240,7 @@ void native_capacity50(bool cn) {
         sqlite_detail::Statement character(f.db,
             "INSERT INTO recovered_characters(id,account_id,slot,profile,name_bytes,name_codepage) VALUES(?,?,0,?,?,?)");
         character.bind(1,person);character.bind(2,person);character.bind_blob(3,profile);
-        character.bind_blob(4,bytes);character.bind(5,cn?936:950);character.done();
+        character.bind_blob(4,bytes);character.bind(5,simplified?936:950);character.done();
         RecoveredRoleLevel::Bytes role{};role[0]=0x22;role[1]=35;role[17]=100;role[21]=50;
         sqlite_detail::Statement r(f.db,
             "INSERT INTO character_role_snapshots(character_id,logical,revision,design_id) VALUES(?,?,1,'CUSTOM-0013')");
@@ -401,7 +401,7 @@ void persistence_and_writer_conflict() {
 }
 int main() {
     try {
-        for(const bool cn:{false,true})for(const bool utf16:{false,true})lifecycle(cn,utf16);
+        for(const bool simplified:{false,true})for(const bool utf16:{false,true})lifecycle(simplified,utf16);
         empty_and_name_reservation();native_capacity50(false);native_capacity50(true);
         forged_and_stale();battle_and_historical_pending();
         callbacks_and_triggers();persistence_and_writer_conflict();

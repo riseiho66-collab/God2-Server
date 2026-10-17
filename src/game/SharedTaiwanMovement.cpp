@@ -7,12 +7,12 @@
 namespace god2 {
 SharedTaiwanMovement::SharedTaiwanMovement(const std::shared_ptr<Session>& session,
     std::shared_ptr<SharedWorldPresence> presence,const Lease& lease,TaiwanMovementRules& rules,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,WorldOwner& world)
+    std::shared_ptr<shared::SharedActorVisibility> visibility,WorldOwner& world)
     :connection_(session),presence_(std::move(presence)),lease_(lease),rules_(rules),visibility_(std::move(visibility)),
      publication_(presence_,visibility_),world_(world){}
 SharedTaiwanMovement::SharedTaiwanMovement(const std::shared_ptr<Session>& session,
     std::shared_ptr<SharedWorldPresence> presence,const Lease& lease,std::shared_ptr<TaiwanMovementRules> rules,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,std::shared_ptr<WorldOwner> world,
+    std::shared_ptr<shared::SharedActorVisibility> visibility,std::shared_ptr<WorldOwner> world,
     std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody)
     :connection_(session),presence_(std::move(presence)),lease_(lease),rules_owner_(std::move(rules)),
      rules_(*rules_owner_),visibility_(std::move(visibility)),publication_(presence_,visibility_),
@@ -35,7 +35,7 @@ bool SharedTaiwanMovement::current(Session& session) const {
 }
 std::shared_ptr<SharedTaiwanMovement> SharedTaiwanMovement::attach(const std::shared_ptr<Session>& session,
     std::shared_ptr<SharedWorldPresence> presence,const Lease& lease,TaiwanMovementRules& rules,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,WorldOwner& world) {
+    std::shared_ptr<shared::SharedActorVisibility> visibility,WorldOwner& world) {
     if(!session || !presence || !visibility || !visibility->owns_presence(presence))return {};
     auto result=std::shared_ptr<SharedTaiwanMovement>(new SharedTaiwanMovement(session,std::move(presence),lease,
         rules,std::move(visibility),world));
@@ -43,7 +43,7 @@ std::shared_ptr<SharedTaiwanMovement> SharedTaiwanMovement::attach(const std::sh
 }
 std::shared_ptr<SharedTaiwanMovement> SharedTaiwanMovement::attach(const std::shared_ptr<Session>& session,
     std::shared_ptr<SharedWorldPresence> presence,const Lease& lease,std::shared_ptr<TaiwanMovementRules> rules,
-    std::shared_ptr<cn::SharedActorVisibility> visibility,std::shared_ptr<WorldOwner> world,
+    std::shared_ptr<shared::SharedActorVisibility> visibility,std::shared_ptr<WorldOwner> world,
     std::shared_ptr<SqliteOwnedEquipmentTransaction> movement_custody) {
     if(!session || !presence || !visibility || !rules || !world || !visibility->owns_presence(presence))return {};
     if(movement_custody && !presence->owns_repository(movement_custody->characters_repository()))return {};

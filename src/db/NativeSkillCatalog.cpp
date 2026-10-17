@@ -111,19 +111,16 @@ std::optional<NativeSkillRecord> NativeSkillCatalog::lookup_main_digest_checked(
 }
 std::optional<SharedSkillLookup> NativeSkillCatalog::lookup_shared_definition_main(
     std::int64_t kind,std::int64_t definition_id) const {
-    // Existing joined reads validate selectors and corrupt rows even on this
-    // explicit path. A missing CN counterpart never drops a valid TW snapshot.
+    // Existing joined reads validate selectors and corrupt Taiwan rows.
     SharedReadScope scope(db_);
     auto tw=lookup_main(taiwan_dataset_id(),kind,definition_id); // Exact selected epoch; no historical fallback.
-    auto cn=lookup_main("cn-native-cbspec2-582f2695-857b52e3-v1",kind,definition_id);
-    std::optional<SharedSkillNativeBinding> t,c;
+    std::optional<SharedSkillNativeBinding> t;
     if(tw)t=shared_binding(*tw,SharedSkillRegion::Taiwan);
-    if(cn)c=shared_binding(*cn,SharedSkillRegion::China);
     SharedSkillLookup value{tw,resolve_shared_skill_definition(
-        static_cast<std::uint8_t>(kind),static_cast<std::uint8_t>(definition_id),std::move(t),std::move(c))};
+        static_cast<std::uint8_t>(kind),static_cast<std::uint8_t>(definition_id),std::move(t))};
     // Existing native absence stays visible. Only the two formal owner rule
     // keys can yield a common definition with no native source/raw profile.
-    if(!tw && !cn && !value.definition.owner_rule){scope.finish();return std::nullopt;}
+    if(!tw && !value.definition.owner_rule){scope.finish();return std::nullopt;}
     scope.finish();return value;
 }
 std::optional<NativeSkillSource> NativeSkillCatalog::lookup_main_source(const std::string& dataset_id) const {

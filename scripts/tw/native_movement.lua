@@ -1,6 +1,4 @@
 -- TW native RVA102700..1027B2: ordinary adjacent step direction.
--- CN00539150 independently has the same table. This TW source does not
--- adopt legacy TW timing/index/echo policies as CN native authority.
 local rules = {}
 function rules.step_direction(x, y, next_x, next_y, previous_direction)
     local dx, dy = next_x - x, next_y - y
