@@ -277,6 +277,7 @@ def report(round_name, catalog_name=None, round_directory=None):
                    set(ledger.get('tw_movement_policy_scheduled_reload443', {}).get('source_paths', [])) |
                    set(ledger.get('tw_beast_panel_fields_dictionary444', {}).get('source_paths', [])) |
                    set(ledger.get('tw_closing_peer_affine_publication445', {}).get('source_paths', [])) |
+                   set(ledger.get('tw_visibility_observer_membership446', {}).get('source_paths', [])) |
                    set(ledger.get('tw_owned_ordinary_movement_custody440', {}).get('source_paths', [])) |
                    set(ledger.get('tw_owned_ordinary_movement_policy439', {}).get('source_paths', [])) |
                    set(ledger.get('tw_owned_ordinary_movement438', {}).get('source_paths', [])) |
@@ -537,6 +538,7 @@ def report(round_name, catalog_name=None, round_directory=None):
         'tw_movement_policy_scheduled_reload443': ledger.get('tw_movement_policy_scheduled_reload443'),
         'tw_beast_panel_fields_dictionary444': ledger.get('tw_beast_panel_fields_dictionary444'),
         'tw_closing_peer_affine_publication445': ledger.get('tw_closing_peer_affine_publication445'),
+        'tw_visibility_observer_membership446': ledger.get('tw_visibility_observer_membership446'),
         'tw_owned_ordinary_movement_custody440': ledger.get('tw_owned_ordinary_movement_custody440'),
         'tw_owned_ordinary_movement_policy439': ledger.get('tw_owned_ordinary_movement_policy439'),
         'tw_owned_ordinary_movement438': ledger.get('tw_owned_ordinary_movement438'),

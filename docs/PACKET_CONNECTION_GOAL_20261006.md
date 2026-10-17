@@ -6871,3 +6871,29 @@ ChineseTXT. PHASE1no build/tests/product/native/VM/codec/gameDBSQL/schema/migrat
 import/export/activate/deploy.5070GPUauthorizedwhenbeneficialunused.
 
 Details: docs/research/tw-closing-peer-affine-publication-source-20261017.md
+
+## Round446 — whole movement membership after observers (2026-10-18)
+
+Round446 (2026-10-18) human resume verified goal ACTIVE; prior unexplained
+445 blocked-state audit stays historical. Actual movement_bindings and
+complete_movement_set now retain caller inputs, map-ordered Binding values
+and full ChatActorSnapshot models before current observers. No live map
+iterator/reference crosses current. Final pure whole-selected-source cut
+checks exact membership/incarnation/native/name/appearance/receiver plus
+existing TW/CN transport policy. Supplied order-independent exact set retained.
+Source API robustness only: actual SQL is direct and observer contracts are
+read-only/non-yielding; no deployed failure or erased-current iterator UB claim.
+Native bytes/send/advance/hide/release/soleCAS/phase/queuedprefix unchanged.
+Two existing CPP; V82 pins182=180same2updated; canonical844. No new CPP/Lua/
+projectPY/CMake. Existing partial source repair1/fullroutes0/countsunchanged/
+whole%null. Full TW100first/commonCN/fourbinaryWS/all-systemDB goal ACTIVE,
+INCOMPLETE. Release traversal, full native scene/2A/Main, phase/state/variants,
+D8/6B authority/causalS2C, allwriters/affineIO/atomicfanout/clientACK/fullinventory,
+typedDBdomains/MySQL8backend/fullconsistentlosslessexport/fullconstraints/
+atomicpublication/import remain OPEN. Preserve453Traditional/clientBIN/
+maxHPpoison10th/custom126150/907/shared64/coin99999999999/stack99/nativelevels/
+saves/fonts/IME/auth/text/EnglishDBfields/per-tableChineseTXT. PHASE1 no build/
+tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/export/activate/
+deploy.5070GPUauthorizedwhenbeneficialunused. No new human stop received.
+
+Details: docs/research/tw-visibility-observer-membership-source-20261018.md

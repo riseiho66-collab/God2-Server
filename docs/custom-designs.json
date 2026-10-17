@@ -69,6 +69,17 @@
         "local_release_historical_fact_preserved": true,
         "atomic_fanout_or_native_ACK_complete": false,
         "product_execution": false
+      },
+      "movement_observer_membership446": {
+        "document": "docs/research/tw-visibility-observer-membership-source-20261018.md",
+        "actual_current_outside_live_map_traversal": true,
+        "retained_complete_models": true,
+        "final_pure_whole_selected_membership_and_transport": true,
+        "supplied_order_independent": true,
+        "source_API_robustness_only": true,
+        "deployed_failure_demonstrated": false,
+        "atomic_fanout_or_native_ACK_complete": false,
+        "product_execution": false
       }
     },
     {

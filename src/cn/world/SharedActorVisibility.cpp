@@ -2122,30 +2122,75 @@ std::optional<SharedActorVisibility::TaiwanChatActor> SharedActorVisibility::tai
     if(!current_after || !qualify() || receiver->state()!=phase || receiver->battle_generation()!=battle)return std::nullopt;
     return TaiwanChatActor{receiver,native->spawn.identity(),name,state};
 }
+bool SharedActorVisibility::movement_models_stored_current(const Lease& source,
+    std::span<const ChatActorSnapshot> snapshots) const {
+    // Pure final registry/transport cut: no repository/name/current observers.
+    if(taiwan_pk_departed(source)||outward_pending(source))return false;
+    std::size_t index=0;
+    for(const auto& [key,entry]:entries_)if(entry.binding.source()==source) {
+        if(index==snapshots.size() || taiwan_appearance_pending(key))return false;
+        const auto& snapshot=snapshots[index++];
+        if(!matches(snapshot.state_->entry.binding,entry) || !chat_actor_snapshot_current(snapshot))return false;
+        const auto& recipient=entry.binding.recipient();
+        if(!std::visit([&](const auto& connection) {
+            using Connection=typename std::decay_t<decltype(connection)>::element_type;
+            if constexpr(std::is_same_v<Connection,Session>)
+                return !connection->closing() && connection->id()==recipient.session &&
+                    connection->account_id==recipient.account && connection->character_id==recipient.character &&
+                    connection->recovered_world_ready() && (connection->state()==SessionState::InWorld ||
+                        connection->state()==SessionState::CharacterSelected);
+            else return !connection->closing() && connection->role()==SharedCredentialConnection::Transport::Role::World &&
+                connection->world_session_id()==recipient.session && connection->verified_account_id()==recipient.account &&
+                connection->world_character_offered(recipient.character);
+        },snapshot.state_->receiver))return false;
+    }
+    return index==snapshots.size();
+}
 std::optional<std::vector<SharedActorVisibility::Binding>> SharedActorVisibility::movement_bindings(
-    const Lease& source,const RecoveredPosition& before) const {
-    owner();if(taiwan_pk_departed(source))return std::nullopt;
+    const Lease& original_source,const RecoveredPosition& original_before) const {
+    owner();const auto source=original_source;const auto before=original_before;
+    if(taiwan_pk_departed(source))return std::nullopt;
     const auto saved=presence_->saved_position(source);
     if(!saved || taiwan_pk_departed(source)||outward_pending(source) || *saved!=before)return std::nullopt;
-    std::vector<Binding> bindings;
+    std::vector<Binding> bindings;bindings.reserve(entries_.size());
+    // Retain value tokens first; no live map iterator/reference crosses current().
     for(const auto& [key,entry]:entries_)if(entry.binding.source()==source) {
         if(taiwan_appearance_pending(key))return std::nullopt;
-        if(!current(entry.binding,before,before))return std::nullopt;
         bindings.push_back(entry.binding);
     }
+    std::vector<ChatActorSnapshot> snapshots;snapshots.reserve(bindings.size());
+    for(const auto& binding:bindings) {
+        auto snapshot=chat_actor_snapshot(binding,before);if(!snapshot)return std::nullopt;
+        snapshots.push_back(std::move(*snapshot));
+    }
+    if(!movement_models_stored_current(source,snapshots))return std::nullopt;
+    for(const auto& binding:bindings)if(!current(binding,before,before))return std::nullopt;
+    // A later peer's observer cannot silently remove/replace an earlier peer.
+    if(!movement_models_stored_current(source,snapshots))return std::nullopt;
     return bindings;
 }
-bool SharedActorVisibility::complete_movement_set(const Lease& source,const RecoveredPosition& before,
-    const RecoveredPosition& saved_now,std::span<const Binding> supplied) const {
-    owner();if(taiwan_pk_departed(source)||outward_pending(source))return false;
-    std::size_t count=0;
+bool SharedActorVisibility::complete_movement_set(const Lease& original_source,const RecoveredPosition& original_before,
+    const RecoveredPosition& original_saved,std::span<const Binding> supplied) const {
+    owner();const auto source=original_source;const auto before=original_before;const auto saved_now=original_saved;
+    const std::vector<Binding> tokens(supplied.begin(),supplied.end()); // Own caller values before observers.
+    if(taiwan_pk_departed(source)||outward_pending(source))return false;
+    std::vector<Binding> bindings;bindings.reserve(entries_.size());
     for(const auto& [key,entry]:entries_)if(entry.binding.source()==source) {
         if(taiwan_appearance_pending(key))return false;
-        ++count;bool included=false;
-        for(const auto& token:supplied)if(matches(token,entry)) {included=true;break;}
-        if(!included || !current(entry.binding,before,saved_now))return false;
+        bool included=false;
+        for(const auto& token:tokens)if(matches(token,entry)) {included=true;break;}
+        if(!included)return false;
+        bindings.push_back(entry.binding);
     }
-    return count==supplied.size(); // Preparation separately rejects duplicates.
+    if(bindings.size()!=tokens.size())return false; // Exact set; caller order stays independent.
+    std::vector<ChatActorSnapshot> snapshots;snapshots.reserve(bindings.size());
+    for(const auto& binding:bindings) {
+        auto snapshot=chat_actor_snapshot(binding,before);if(!snapshot)return false;
+        snapshots.push_back(std::move(*snapshot));
+    }
+    if(!movement_models_stored_current(source,snapshots))return false;
+    for(const auto& binding:bindings)if(!current(binding,before,saved_now))return false;
+    return movement_models_stored_current(source,snapshots);
 }
 bool SharedActorVisibility::advance(const Binding& binding,const RecoveredPosition& before,const RecoveredPosition& after) {
     reject_taiwan_return_reentry();

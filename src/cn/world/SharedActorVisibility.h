@@ -601,6 +601,7 @@ private:
     bool project_common_name(const Lease&,const Lease&,Native&) const;
     bool common_name_current(const Lease&,const Lease&,const Native&) const;
     bool matches(const Binding&,const Entry&) const;
+    bool movement_models_stored_current(const Lease&,std::span<const ChatActorSnapshot>) const;
     bool recipient_bound(const Lease&,const Native&,const RecoveredPosition&) const;
     bool submit(Native&,std::vector<std::uint8_t>);
     void reject_output(const Lease&,Native&);
