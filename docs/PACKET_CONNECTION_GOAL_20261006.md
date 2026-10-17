@@ -6897,3 +6897,28 @@ tests/product/native/VM/codec/gameDBSQL/schema/migrate/import/export/activate/
 deploy.5070GPUauthorizedwhenbeneficialunused. No new human stop received.
 
 Details: docs/research/tw-visibility-observer-membership-source-20261018.md
+
+## Round447 — MySQL foreign key preservation
+
+Round447 (2026-10-18) adds composite FK and full supporting indexes to the
+actual MySQL8 typed snapshot formatter. Before output, validate exact parent
+PK/UNIQUE, ordered child index, type/signedness/NULL/action/name rules and every
+non-NULL child tuple. Emit all rows before checked ALTER ADD constraints,
+preserving immediate target actions and allowing cyclic load order without
+disabling checks. No arbitrary SQLite constraint translation, consistent DB
+reader, atomic import, actual MySQL backend or target execution is claimed.
+Two existing C++ files; no new project Python/Lua/CMake or physical tables.
+Whole TW gameplay routes added0; counts unchanged/whole denominator unknown.
+Full TW100first/sharedCN/fourbinaryWS/all-systemDB objective ACTIVE/INCOMPLETE.
+Native2A/Entered/scene/Main, D8/6B/C28 rules and full phase/state/variant/deferred
+inventory remain open. Preserve453Traditional/clientBIN/maxHPpoison10th,
+custom126150/907/shared64/coin99999999999/stack99/nativelevels/saves/fonts/IME/
+auth/text/EnglishDBfields/per-tableChineseTXT. PHASE1 no build/tests/product/
+native/VM/codec/gameDBSQL/schema/migration/export/import/activate/deploy.
+Owner asks faster concrete work; bounded source/review parallelism used.
+
+Details: docs/research/mysql80-foreign-key-export-source-20261018.md
+
+LATEST OWNER STOP (Round447): 這輪結束停止工作. Complete447 source publication
+and its unique static inventory, then pause the unfinished goal and STOP.
+Do not begin448 or continue without a new human resume. Full scope unchanged.

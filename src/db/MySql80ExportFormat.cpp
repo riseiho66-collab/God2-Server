@@ -7,6 +7,7 @@
 #include <ostream>
 #include <set>
 #include <string_view>
+#include <utility>
 namespace god2 {
 namespace {
 using F=MySql80ExportFormat;
@@ -90,6 +91,30 @@ std::string key_columns(const F::Table& t,const std::vector<std::size_t>& column
     require(bytes<=3072,"key exceeds InnoDB3072-byte bound; prefix truncation is forbidden");
     return result+")";
 }
+std::string_view referential_action(F::ReferentialAction action) {
+    switch(action) {
+    case F::ReferentialAction::Restrict:return "RESTRICT";
+    case F::ReferentialAction::NoAction:return "NO ACTION";
+    case F::ReferentialAction::Cascade:return "CASCADE";
+    case F::ReferentialAction::SetNull:return "SET NULL";
+    }
+    throw DatabaseError("MySQL8 export: unknown referential action");
+}
+bool leading_columns(const std::vector<std::size_t>& index,
+        const std::vector<std::size_t>& columns) {
+    return index.size()>=columns.size()&&
+        std::equal(columns.begin(),columns.end(),index.begin());
+}
+std::vector<F::Value> key_tuple(const std::vector<F::Value>& row,
+        const std::vector<std::size_t>& columns) {
+    std::vector<F::Value> tuple;tuple.reserve(columns.size());
+    for(const auto column:columns)tuple.push_back(row[column]);
+    return tuple;
+}
+bool contains_null(const std::vector<F::Value>& tuple) {
+    return std::any_of(tuple.begin(),tuple.end(),
+        [](const auto& v){return std::holds_alternative<std::monostate>(v);});
+}
 template<class T>std::string decimal(T value) {
     char buffer[32];const auto result=std::to_chars(buffer,buffer+sizeof(buffer),value);
     require(result.ec==std::errc{},"integer formatting failed");
@@ -136,7 +161,8 @@ MySql80ExportFormat::Report MySql80ExportFormat::write_snapshot(
     for(const auto& t:schema.tables) {
         identifier(t.name);require(names.insert(folded_identifier(t.name)).second,"case-colliding table");
         require(!t.columns.empty()&&t.columns.size()<=1017,"table must contain 1..1017 columns");
-        require(t.unique_keys.size()<=64,"at most64 secondary indexes");
+        require(t.unique_keys.size()<=64&&t.indexes.size()<=64-t.unique_keys.size(),
+            "at most64 secondary indexes including foreign key supporting indexes");
         comment(table_comment(t),2048);
         std::set<std::string> columns,keys;std::uint64_t inline_bytes=0;
         for(const auto& c:t.columns) {
@@ -150,6 +176,11 @@ MySql80ExportFormat::Report MySql80ExportFormat::write_snapshot(
         require(!t.primary_key.empty(),"explicit primary key required for snapshot ordering/identity");
         key_columns(t,t.primary_key,true);
         for(const auto& k:t.unique_keys){const auto name=folded_identifier(k.name);require(name!="primary","reserved primary index name");require(keys.insert(name).second,"case-colliding key name");key_columns(t,k.columns,false);}
+        for(const auto& k:t.indexes) {
+            const auto name=folded_identifier(k.name);
+            require(name!="primary"&&keys.insert(name).second,"reserved or case-colliding index name");
+            key_columns(t,k.columns,false);
+        }
         const auto count=std::count_if(data.begin(),data.end(),[&](const auto& x){return x.table==t.name;});
         require(count==1,"missing/duplicate rows for "+t.name);
         const auto& rows=*std::find_if(data.begin(),data.end(),[&](const auto& x){return x.table==t.name;});
@@ -168,6 +199,62 @@ MySql80ExportFormat::Report MySql80ExportFormat::write_snapshot(
             require(report.rows<std::numeric_limits<std::uint64_t>::max(),"row count overflow");++report.rows;
         }
     }
+    // Complete table/type/key/row validation above precedes cross-table reads.
+    // Retain all ADD statements before invoking the caller's output stream.
+    std::vector<std::string> foreign_key_sql;
+    std::set<std::string> constraint_names;
+    for(const auto& child:schema.tables)for(const auto& fk:child.foreign_keys) {
+        require(constraint_names.insert(folded_identifier(fk.name)).second,
+            "case-colliding foreign key constraint name across schema");
+        const auto child_columns=key_columns(child,fk.columns,false);
+        const auto parent_it=std::find_if(schema.tables.begin(),schema.tables.end(),
+            [&](const auto& t){return t.name==fk.referenced_table;});
+        require(parent_it!=schema.tables.end(),"foreign key parent missing from complete image: "+fk.name);
+        const auto& parent=*parent_it;
+        const auto parent_columns=key_columns(parent,fk.referenced_columns,false);
+        require(fk.columns.size()==fk.referenced_columns.size(),"foreign key arity mismatch: "+fk.name);
+        require(parent.primary_key==fk.referenced_columns||
+            std::any_of(parent.unique_keys.begin(),parent.unique_keys.end(),
+                [&](const auto& k){return k.columns==fk.referenced_columns;}),
+            "foreign key needs an exact complete unique parent key: "+fk.name);
+        const auto supports=[&](const auto& k){return leading_columns(k.columns,fk.columns);};
+        require(leading_columns(child.primary_key,fk.columns)||
+            std::any_of(child.unique_keys.begin(),child.unique_keys.end(),supports)||
+            std::any_of(child.indexes.begin(),child.indexes.end(),supports),
+            "foreign key needs an explicit leading child index: "+fk.name);
+        const auto on_delete=referential_action(fk.on_delete);
+        const auto on_update=referential_action(fk.on_update);
+        for(std::size_t i=0;i<fk.columns.size();++i) {
+            const auto& c=child.columns[fk.columns[i]];
+            const auto& p=parent.columns[fk.referenced_columns[i]];
+            require(c.kind==p.kind,"foreign key signedness/type mismatch: "+fk.name);
+            // All strings already use one no-pad binary collation; index
+            // validation prohibits TEXT/BLOB prefixes and unbounded widths.
+            require(&child!=&parent||fk.columns[i]!=fk.referenced_columns[i],
+                "foreign key cannot reference its own column: "+fk.name);
+            if(fk.on_delete==ReferentialAction::SetNull||fk.on_update==ReferentialAction::SetNull)
+                require(c.nullable,"SET NULL foreign key has nonnullable child column: "+fk.name);
+        }
+        const auto& parent_rows=std::find_if(data.begin(),data.end(),
+            [&](const auto& rows){return rows.table==parent.name;})->rows;
+        const auto& child_rows=std::find_if(data.begin(),data.end(),
+            [&](const auto& rows){return rows.table==child.name;})->rows;
+        std::set<std::vector<Value>> parents;
+        for(const auto& row:parent_rows) {
+            auto tuple=key_tuple(row,fk.referenced_columns);
+            if(!contains_null(tuple))parents.insert(std::move(tuple));
+        }
+        for(const auto& row:child_rows) {
+            const auto tuple=key_tuple(row,fk.columns);
+            // InnoDB MATCH SIMPLE exempts the entire tuple if any part is NULL.
+            require(contains_null(tuple)||parents.contains(tuple),
+                "orphan child row for foreign key: "+fk.name);
+        }
+        foreign_key_sql.push_back("ALTER TABLE "+identifier(child.name)+" ADD CONSTRAINT "+
+            identifier(fk.name)+" FOREIGN KEY "+child_columns+" REFERENCES "+
+            identifier(parent.name)+" "+parent_columns+" ON DELETE "+std::string(on_delete)+
+            " ON UPDATE "+std::string(on_update)+";\n");
+    }
     out<<"-- GOD2 MySQL8.0.17+ typed snapshot format; fresh empty target only.\n"
           "-- Source history remains SQLite provenance, not MySQL migration authority.\n"
           "-- No complete SQLite schema/snapshot/import validation is claimed by this formatter.\n"
@@ -176,12 +263,16 @@ MySql80ExportFormat::Report MySql80ExportFormat::write_snapshot(
           "SET @god2_export_saved_sql_mode=@@SESSION.sql_mode;\n"
           "SET SESSION sql_mode=CONCAT_WS(',',@@SESSION.sql_mode,'NO_BACKSLASH_ESCAPES','STRICT_ALL_TABLES');\n"
           "SET NAMES utf8mb4 COLLATE utf8mb4_0900_bin;\n";
+    if(!foreign_key_sql.empty())
+        out<<"SET @god2_export_saved_foreign_key_checks=@@SESSION.foreign_key_checks;\n"
+              "SET SESSION foreign_key_checks=1;\n";
     for(const auto& t:schema.tables) {
         out<<"CREATE TABLE "<<identifier(t.name)<<" (\n";
         for(const auto& c:t.columns)
             out<<"  "<<identifier(c.name)<<" "<<type(c)<<(c.nullable?" NULL":" NOT NULL")<<" COMMENT "<<comment("See "+t.name+".txt: "+c.name,1024)<<",\n";
         out<<"  PRIMARY KEY "<<key_columns(t,t.primary_key,true);
         for(const auto& k:t.unique_keys)out<<",\n  UNIQUE KEY "<<identifier(k.name)<<" "<<key_columns(t,k.columns,false);
+        for(const auto& k:t.indexes)out<<",\n  KEY "<<identifier(k.name)<<" "<<key_columns(t,k.columns,false);
         out<<"\n) ENGINE=InnoDB ROW_FORMAT=DYNAMIC DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin COMMENT="
            <<comment("See "+t.name+".txt",2048)<<";\n";
     }
@@ -203,9 +294,16 @@ MySql80ExportFormat::Report MySql80ExportFormat::write_snapshot(
             out<<");\n";
         }
     }
-    out<<"COMMIT;\nSET SESSION sql_mode=@god2_export_saved_sql_mode;\n";
+    out<<"COMMIT;\n";
+    // All tables/rows exist, including self/cyclic references. ADD validates
+    // target rows with checks ON; merely re-enabling checks would not do that.
+    for(const auto& statement:foreign_key_sql)out<<statement;
+    if(!foreign_key_sql.empty())
+        out<<"SET SESSION foreign_key_checks=@god2_export_saved_foreign_key_checks;\n";
+    out<<"SET SESSION sql_mode=@god2_export_saved_sql_mode;\n";
     require(bool(out),"output stream failure");
     report.tables=schema.tables.size();report.typed_snapshot_serialized=true;
+    report.foreign_keys=foreign_key_sql.size();report.declared_foreign_key_rows_validated=true;
     // The source reader and real target-import checks are separate future work.
     return report;
 }

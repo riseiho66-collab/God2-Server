@@ -23,11 +23,26 @@ public:
         std::string comment_zh;
     };
     struct Key {std::string name;std::vector<std::size_t> columns;};
+    enum class ReferentialAction {Restrict,NoAction,Cascade,SetNull};
+    struct ForeignKey {
+        std::string name;
+        std::vector<std::size_t> columns;
+        std::string referenced_table;
+        std::vector<std::size_t> referenced_columns;
+        // Deliberately no SET DEFAULT, MATCH FULL or deferred constraint model:
+        // they cannot silently map to immediate InnoDB MATCH SIMPLE behavior.
+        ReferentialAction on_delete=ReferentialAction::NoAction;
+        ReferentialAction on_update=ReferentialAction::NoAction;
+    };
     struct Table {
         std::string name,comment_zh;
         std::vector<Column> columns;
         std::vector<std::size_t> primary_key;
         std::vector<Key> unique_keys;
+        // Explicit nonunique supporting indexes. FK columns must be a leading
+        // index tuple; never rely on implicit indexes with unaccounted limits.
+        std::vector<Key> indexes;
+        std::vector<ForeignKey> foreign_keys;
     };
     struct Schema {
         // Explicit target capability for this first reviewed format profile.
@@ -42,12 +57,18 @@ public:
         bool typed_snapshot_serialized=false;
         bool sqlite_source_snapshot_verified=false;
         bool import_verified=false;
+        std::uint64_t foreign_keys=0;
+        bool declared_foreign_key_rows_validated=false;
     };
     // MySQL8.0.17+ target: no-pad binary text collation, UTF8/binary hex literals,
     // full-width integer decimals, mandatory readable metadata, no DROP/REPLACE.
-    // Provided model supports only the declared PK/UNIQUE constraints; arbitrary
-    // SQLite CHECK/FK/index/trigger/default mappings must be supplied by a future
-    // complete audited schema adapter, never silently passed through this API.
+    // Supports declared PK/UNIQUE, full nonunique indexes and immediate typed
+    // foreign keys with complete unique parent keys. All declared references
+    // and non-NULL child tuples are checked before any output. Cycles may load
+    // because FKs are added after all data, with target checks explicitly ON.
+    // This is a target model, not an arbitrary SQLite constraint translator:
+    // CHECK/partial index/trigger/default/deferred mappings still need an audit.
+    // DDL/ADD failure can leave a partial target; no atomic import is claimed.
     // Requires a fresh empty target. DDL is not transactional in MySQL.
     // Own all input before invoking arbitrary output stream callbacks. No live
     // DB or source authority follows; the caller supplies one complete image.
