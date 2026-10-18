@@ -6428,6 +6428,42 @@
     "whole_world_complete": false,
     "verification_status": "RELEASE_BUILD_FOUR_FOCUSED_SUITES_PASS_ALL48_DIRECTIONS_APPLICATION_TCP_BLACK_BOX_PASS_DEPLOYED_NATIVE_UI_NOT_CLAIMED"
     }
+    ,{
+      "id": "CUSTOM-0155",
+      "name": "Taiwan source-qualified whole-world movement transfer catalog",
+      "authority": "OWNER_AUTHORIZED_FIXED_SERVER_ROUTE_POLICY_FROM_PINNED_ORIGINAL_TW_ASSETS",
+      "implementation": ["src/game/WorldTransferCatalog.cpp", "src/handlers/RecoveredMovementService.cpp", "src/core/Application.cpp", "scripts/gameplay/world_transfer.lua", "resources/world/tw/world-transfer-v1/catalog.json", "tests/test_world_transfers.cpp"],
+      "document": "docs/research/tw-world-transfers-20261018.md",
+      "rules": {
+        "navigation": "Whole pinned manifest and individual SHA256 grids; 587 exact area/scene/kind identities from 142 outdoor and145 indoor resources; raw00, unknown and conflicts rejected except explicit all-known-nonzero per-cell mask6 exceptions",
+        "binding": "HMD instances fixed by same area, exact decoded original asset and original placement record SHA; original town/Kunlun assignments preserved; no runtime first-match aliases or nearest-cell destinations",
+        "arrival": "Source-record marker slots and uniquely matched reciprocal records; explicit qualified matching-primary fallback where auxiliary arrival is missing or blocked; custom policy, not recovered official server trigger rules",
+        "state": "Actual committed displaced step witness, trusted route ID approved by Lua and rechecked by C++; owner/readiness/revision CAS, first-entry prefix ACK, full-reset SC61, owned receipt, cache invalidation, full SceneKey restore"
+      },
+      "native_gap": "Official server event/quest/cost programs are unavailable. Missing client assets and unqualified marker slots remain explicit source gaps. This catalog does not establish full-game or NPC teleport completeness.",
+      "production_activated": true,
+      "native_client_acceptance": false,
+      "whole_world_complete": false,
+      "verification_status": "RELEASE_SIX_FOCUSED_SUITES_PASS_2399_ROUTES_587_COLD_SCENES_PLUS23_CHAINED_CONTINUATIONS_APPLICATION_TCP_PASS_DEPLOYED_NO_NEW_NATIVE_UI_CLAIM"
+    },
+    {
+      "id": "CUSTOM-0156",
+      "name": "Taiwan owned NPC teleport offer lifecycle",
+      "authority": "SOURCE_QUALIFIED_NATIVE_MENU_WIRE_CONTRACT_WITH_OWNER_AUTHORIZED_HOST_LIFECYCLE",
+      "implementation": ["src/handlers/OwnedNpcTeleportOffer.cpp", "src/handlers/RecoveredMovementService.cpp", "src/core/Application.cpp", "tests/test_owned_npc_teleport_offer.cpp"],
+      "document": "docs/research/tw-world-transfers-20261018.md",
+      "rules": {
+        "source": "Only actual published NPC instance, owner, full SceneKey, position/world/NPC generations, complete menu projection and condition/cost authority may issue an offer",
+        "selection": "Separate native37/7A/85 and6D/99/A9 contracts; only an active issued allowed choice maps to a separately qualified immutable world route; private token and full source readset rechecked before commit",
+        "cost": "Eligibility is not payment. QualifiedResources requires an actual joint resource and position transaction; position-only path accepts only separately proved ExplicitNoCost",
+        "unknown": "Zero installed definitions; no guessed free travel, message-ID-as-NPC identity, retired-region positions or fake NPC publication"
+      },
+      "native_gap": "Current TW client texts and packet producers do not supply the complete NPC instance-to-menu-to-destination-to-quest/cost join. Owner confirmed no additional original server settings are available.",
+      "production_activated": false,
+      "native_client_acceptance": false,
+      "npc_gameplay_complete": false,
+      "verification_status": "HOST_LIFECYCLE_FOCUSED_TESTS_PASS_INCLUDING_WORD_ROLLOVER_AND_A9_REOPEN_NO_POSITIVE_NPC_TRAVEL_DEFINITIONS"
+    }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
 }

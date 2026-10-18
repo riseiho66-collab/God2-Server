@@ -1,4 +1,5 @@
 #pragma once
+#include "game/WorldTransferCatalog.h"
 
 #include "db/NativeMapCatalog.h"
 #include "db/NativeSkillCatalog.h"
@@ -114,6 +115,8 @@ public:
     TownGuidePlan town_guide(const TownGuideInput& input);
     // CUSTOM-0025: isolated proposal only; not called by production Application.
     std::optional<DiagnosticDoorPlan> diagnostic_door(const DiagnosticDoorInput& input);
+    bool world_transfer_proposal(const WorldTransferCatalog::Route&,std::uint16_t before_x,
+        std::uint16_t before_y,std::uint16_t x,std::uint16_t y);
     // CUSTOM-0078: pure reference-based membership policy; caller owns all
     // account/session authority, stale leases and atomic storage mutations.
     OwnedGuildMembershipPolicy owned_guild_membership(const OwnedGuildMembershipInput& input);

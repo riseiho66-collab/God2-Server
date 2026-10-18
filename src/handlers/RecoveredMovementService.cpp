@@ -171,11 +171,19 @@ RecoveredMovementService::RecoveredMovementService(RecoveredCharacterRepository&
                !cell_available(route.area,route.target_scene,route.target_x,route.target_y))
                 throw std::invalid_argument("Cross-map endpoint navigation unavailable");
     }
+    if(!town.world_transfer_catalog.empty()) {
+        world_catalog_.emplace(town.world_transfer_catalog);
+        if(!cell_available(initial_area_,scene_,initial_x_,initial_y_))
+            throw std::invalid_argument("Initial saved-world placement is outside the qualified catalog");
+        kind_=scene_kind(initial_area_,scene_);
+    }
 }
 bool RecoveredMovementService::cell_available(int x,int y) const noexcept {
     return cell_available(initial_area_,scene_,x,y);
 }
 bool RecoveredMovementService::cell_available(std::uint16_t area,std::uint16_t scene,int x,int y) const noexcept {
+    if(world_catalog_)return x>=0&&y>=0&&x<=0xffff&&y<=0xffff&&world_catalog_->available(
+        {{area,scene},static_cast<std::uint16_t>(x),static_cast<std::uint16_t>(y)});
     if(cross_maps_ && cross_maps_->kind(area,scene)) {
         const auto value=cross_maps_->cell(area,scene,x,y);
         // CUSTOM-0154: only original Cave02 record47's exact trigger has
@@ -256,8 +264,6 @@ RecoveredWorldEntry::Frame RecoveredMovementService::prepare(std::uint64_t sessi
                 position.x=saved.x;position.y=saved.y;
                 position.scene=saved.scene;position.kind=scene_kind(saved.area,saved.scene);
                 position.area=saved.area;
-                if(saved.area==4 && saved.scene==3)position.kind=0;
-                if(saved.area==13 && saved.scene==12)position.kind=0;
             }
             const auto frame=RecoveredWorldEntry::wire(character,owned.profile,
                 static_cast<std::uint16_t>(position.x),static_cast<std::uint16_t>(position.y),position.area,position.scene,position.kind);
@@ -285,7 +291,7 @@ void RecoveredMovementService::prepare_native(std::uint64_t session,std::uint64_
     const auto saved=characters_.load_position(account,character);
     if(!saved || !saved->revision || saved->area!=full->area || saved->scene!=full->scene ||
        saved->x!=full->x || saved->y!=full->y ||
-       (registered_cross_map_scene(full->area,full->scene) && qualified_scene_kind(full->area,full->scene)!=full->kind) ||
+       ((world_catalog_ || registered_cross_map_scene(full->area,full->scene)) && qualified_scene_kind(full->area,full->scene)!=full->kind) ||
        !cell_available(full->area,full->scene,full->x,full->y))
         throw std::invalid_argument("Native movement actual saved geometry unavailable or mismatched");
     // slot/ready/transfer are the existing operational start state, not native
@@ -315,7 +321,7 @@ void RecoveredMovementService::prepare_native_scene(std::uint64_t session,std::u
     const auto saved=characters_.load_position(account,character);
     if(!saved || !saved->revision || saved->area!=full->area || saved->scene!=full->scene ||
        saved->x!=full->x || saved->y!=full->y ||
-       (registered_cross_map_scene(full->area,full->scene) && qualified_scene_kind(full->area,full->scene)!=full->kind) ||
+       ((world_catalog_ || registered_cross_map_scene(full->area,full->scene)) && qualified_scene_kind(full->area,full->scene)!=full->kind) ||
        !cell_available(full->area,full->scene,full->x,full->y))
         throw std::invalid_argument("Native scene movement actual saved geometry unavailable or mismatched");
     Position position{account,character,static_cast<int>(full->x),static_cast<int>(full->y),
@@ -476,6 +482,54 @@ std::vector<std::uint8_t> RecoveredMovementService::begin_registered_cross_map_t
         throw std::invalid_argument("Unqualified registered cross-map endpoint or baseline");
     return begin_transfer(session,account,character,expected,expected.scene,scene,x,y,expected.area,false);
 }
+std::vector<std::uint8_t> RecoveredMovementService::begin_world_transfer(std::uint64_t session,
+    std::uint64_t account,std::uint64_t character,const RecoveredPosition& expected,std::string_view route_id) {
+    reject_owned_movement_mutation();
+    const auto it=active_.find(session);const auto* route=world_catalog_?world_catalog_->route(route_id):nullptr;
+    if(!route || route->trigger==WorldTransferCatalog::Trigger::NpcOffer || it==active_.end() ||
+       !it->second.last_step || !it->second.last_step->displaced_steps || !expected.revision ||
+       expected.revision>=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) ||
+       expected.area!=route->source.scene.area || expected.scene!=route->source.scene.scene ||
+       expected.x!=route->source.x || expected.y!=route->source.y ||
+       it->second.x!=expected.x || it->second.y!=expected.y ||
+       !qualifies_transfer_destination(expected.area,expected.scene,expected.x,expected.y) ||
+       characters_.load_position(account,character)!=std::optional{expected})
+        throw std::invalid_argument("Unqualified world route or movement witness");
+    const auto& step=*it->second.last_step;
+    const auto* witnessed=world_catalog_->route_for_step({step.area,step.scene},step.before_x,step.before_y,step.x,step.y);
+    if(!witnessed || witnessed->id!=route_id || step.area!=expected.area || step.scene!=expected.scene ||
+       step.x!=expected.x || step.y!=expected.y)
+        throw std::invalid_argument("World route approach witness mismatch");
+    return begin_transfer(session,account,character,expected,expected.scene,route->destination.scene.scene,
+        route->destination.x,route->destination.y,expected.area,false,route->destination.scene.area);
+}
+std::vector<std::uint8_t> RecoveredMovementService::begin_npc_world_transfer(OwnedNpcTeleportOffer& offers,
+    const OwnedNpcTeleportOffer::Identity& owner,const OwnedNpcTeleportOffer::Prepared& prepared) {
+    reject_owned_movement_mutation();
+    const auto& expected=prepared.expected_position;
+    const auto it=active_.find(owner.session);const auto* route=world_catalog_?world_catalog_->route(prepared.route_id):nullptr;
+    if(!route || route->trigger!=WorldTransferCatalog::Trigger::NpcOffer || it==active_.end() ||
+       !it->second.ready || it->second.transfer_pending || it->second.account!=owner.account ||
+       it->second.character!=owner.character || !expected.revision ||
+       expected.revision>=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) ||
+       route->source.scene!=WorldTransferCatalog::SceneKey{expected.area,expected.scene} ||
+       route->source.scene!=WorldTransferCatalog::SceneKey{prepared.issuer.area,prepared.issuer.scene} ||
+       route->source.x!=prepared.issuer.x || route->source.y!=prepared.issuer.y ||
+       prepared.issuer.generation!=prepared.npc_generation ||
+       it->second.saved!=std::optional{expected} || it->second.area!=expected.area || it->second.scene!=expected.scene ||
+       it->second.x!=expected.x || it->second.y!=expected.y)
+        throw std::invalid_argument("NPC transfer lacks an exact owned world-catalog route");
+    // The issuer reobserves actual NPC publication, world/policy generations
+    // and the exact privately retained Prepared value immediately before CAS.
+    const auto proof=offers.revalidate(owner,prepared);
+    if(!proof)throw std::invalid_argument("NPC transfer issued proof is no longer current");
+    if(*proof.value!=OwnedNpcTeleportOffer::CostPolicy::ExplicitNoCost)
+        throw std::invalid_argument("NPC joint resource and position transaction supplier unavailable");
+    if(characters_.load_position(owner.account,owner.character)!=std::optional{expected})
+        throw std::invalid_argument("NPC transfer saved baseline changed during source observation");
+    return begin_transfer(owner.session,owner.account,owner.character,expected,expected.scene,
+        route->destination.scene.scene,route->destination.x,route->destination.y,expected.area,false,route->destination.scene.area);
+}
 RecoveredMovementService::OwnedIslandReturnPlan RecoveredMovementService::prepare_owned_island_return(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected) const {
@@ -512,26 +566,28 @@ void RecoveredMovementService::commit_owned_island_return(
 std::vector<std::uint8_t> RecoveredMovementService::begin_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const std::optional<RecoveredPosition>& expected,std::uint16_t source_scene,std::uint16_t scene,std::uint16_t x,std::uint16_t y,std::uint16_t area,
-    bool reuse_same_scene) {
+    bool reuse_same_scene,std::uint16_t destination_area) {
     reject_owned_movement_mutation();
+    if(!destination_area)destination_area=area;
     const auto it=active_.find(session);
     if(!town_ || !town_source_consensus_ || it==active_.end() || !it->second.ready ||
        it->second.transfer_pending || it->second.account!=account || it->second.character!=character ||
        it->second.saved!=expected || (expected && (expected->area!=area || expected->scene!=source_scene)) ||
-       it->second.area!=area || it->second.scene!=source_scene || !qualifies_transfer_destination(area,scene,x,y))
+       it->second.area!=area || it->second.scene!=source_scene || !qualifies_transfer_destination(destination_area,scene,x,y))
         throw std::invalid_argument("Unqualified town transfer");
     std::array<std::uint8_t,9> logical{0x61,2,1,0,0,0,0,0,0};
-    const auto selector=static_cast<std::uint16_t>(area|(scene<<6));
+    const auto selector=static_cast<std::uint16_t>(destination_area|(scene<<6));
     logical[1]=static_cast<std::uint8_t>(selector);logical[2]=static_cast<std::uint8_t>(selector>>8);
     const auto packed=(std::uint32_t{x}<<2)|(std::uint32_t{y}<<17)|
-        scene_kind(area,scene)|
-        (source_scene==scene && reuse_same_scene?0x10000u:0u);
+        scene_kind(destination_area,scene)|
+        (area==destination_area && source_scene==scene && reuse_same_scene?0x10000u:0u);
     for(unsigned i=0;i<4;++i) logical[5+i]=static_cast<std::uint8_t>(packed>>(8*i));
     auto reply=RecoveredWorldFrame::encode(logical);
     auto next=it->second;
-    next.saved=characters_.commit_position(account,character,expected,area,scene,x,y);
-    next.area=area;next.scene=scene;next.kind=scene_kind(area,scene);
+    next.saved=characters_.commit_position(account,character,expected,destination_area,scene,x,y);
+    next.area=destination_area;next.scene=scene;next.kind=scene_kind(destination_area,scene);
     next.x=x; next.y=y; next.transfer_pending=true;
+    next.last_step.reset();
     it->second=next;
     return reply;
 }
@@ -562,6 +618,7 @@ std::uint16_t RecoveredMovementService::scene_kind(std::uint16_t area,std::uint1
     throw std::invalid_argument("Unregistered source scene kind");
 }
 std::optional<std::uint16_t> RecoveredMovementService::qualified_scene_kind(std::uint16_t area,std::uint16_t scene) const noexcept {
+    if(world_catalog_){const auto* row=world_catalog_->scene({area,scene});return row?std::optional{row->kind}:std::nullopt;}
     // Explicit source-qualified kind registry; scene numbers alias across areas.
     if(cross_maps_)if(const auto kind=cross_maps_->kind(area,scene))return kind;
     if(area==4 && scene==3 && kunlun_)return 0;
@@ -641,6 +698,7 @@ RecoveredMovementService::PreparedMove RecoveredMovementService::prepare_move_ba
             path.push_back({request.x,request.y});
         }
         next.x=request.x;next.y=request.y;next.slot=request.sequence;
+        next.last_step=MovePreview{next.area,next.scene,before_x,before_y,request.x,request.y,displaced?1u:0u};
         // CUSTOM-0153: stop at the first admitted portal after its own validated
         // step. Old-scene tail requests must not advance queue, ACK or position.
         if(stop_after_step && stop_after_step(MovePreview{next.area,next.scene,

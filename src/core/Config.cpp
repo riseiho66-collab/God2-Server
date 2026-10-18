@@ -757,6 +757,20 @@ Config Config::load(const std::filesystem::path& path) {
        c.diagnostic_remote_actor))
         throw std::runtime_error("Diagnostic appearance requires loopback owned appearance and weapons without synthetic remote actor");
     if(c.mock_login && !addr.is_loopback()) throw std::runtime_error("Mock authentication requires a loopback bind address");
+    if(j.at("development").contains("world_transfers")) {
+        const auto& option=j.at("development").at("world_transfers");
+        if(!option.is_object() || (option.contains("enabled") && !option.at("enabled").is_boolean()))
+            throw std::runtime_error("World transfers require an object with a boolean enabled field");
+        c.world_transfers_enabled=option.value("enabled",false);
+        if(c.world_transfers_enabled) {
+            if(!c.recovered_movement || !c.recovered_world_entry || !c.recovered_dual_connection ||
+               !c.diagnostic_town_door_routes || !c.diagnostic_town_source_consensus ||
+               !option.contains("catalog") || !option.at("catalog").is_string() ||
+               option.at("catalog").get_ref<const std::string&>().empty())
+                throw std::runtime_error("World transfers require authenticated movement, owned scene receipts, consensus and a catalog path");
+            c.world_transfer_catalog=resolve(option.at("catalog").get<std::string>());
+        }
+    }
     c.validate_owned_whole_bag_moves();
     return c;
 }

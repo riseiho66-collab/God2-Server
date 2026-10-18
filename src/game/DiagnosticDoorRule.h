@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <string>
 
 namespace god2 {
 // CUSTOM-0025: trusted committed movement snapshot, never client destination data.
@@ -14,6 +15,7 @@ struct DiagnosticDoorInput {
 };
 struct DiagnosticDoorPlan {
     std::uint32_t area{},scene{},x{},y{};
+    std::string route_id; // CUSTOM-0155 exact immutable catalog identity.
     bool operator==(const DiagnosticDoorPlan&) const = default;
 };
 

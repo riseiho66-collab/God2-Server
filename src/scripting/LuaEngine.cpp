@@ -1069,6 +1069,23 @@ std::optional<DiagnosticDoorPlan> LuaEngine::diagnostic_door(const DiagnosticDoo
         throw std::runtime_error("Door plan cannot originate from stationary restoration");
     return plan;
 }
+bool LuaEngine::world_transfer_proposal(const WorldTransferCatalog::Route& route,std::uint16_t before_x,
+    std::uint16_t before_y,std::uint16_t x,std::uint16_t y) {
+    auto& state=vm();const auto module=state.execute(contained_path(root_,root_/"gameplay/world_transfer.lua"));
+    if(module.get_type()!=sol::type::table)throw std::runtime_error("World transfer module must return table");
+    const auto callback=module.as<sol::table>().raw_get<sol::object>("plan");
+    if(callback.get_type()!=sol::type::function)throw std::runtime_error("World transfer module requires plan");
+    auto result=invoke(callback.as<sol::protected_function>(),state.lua.create_table_with(
+        "route_id",route.id,"area",route.source.scene.area,"scene",route.source.scene.scene,
+        "before_x",before_x,"before_y",before_y,"x",x,"y",y,
+        "target_area",route.destination.scene.area,"target_scene",route.destination.scene.scene,
+        "target_x",route.destination.x,"target_y",route.destination.y));
+    if(result.return_count()!=1)throw std::runtime_error("World transfer proposal must return one value");
+    if(result.get_type()==sol::type::nil)return false;
+    if(result.get_type()!=sol::type::string || result.get<std::string>()!=route.id)
+        throw std::runtime_error("World transfer proposal changed its qualified route identity");
+    return true;
+}
 
 SkillBookLearningResult LuaEngine::skill_book_learning(const SkillBookLearningInput& input) {
     if(!input.book_count || input.book_count>99 || input.skill_count>100)

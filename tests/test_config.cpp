@@ -387,6 +387,34 @@ void test_config() {
         auto bad_cross=cross_map;bad_cross["development"]["diagnostic_town"][field]=false;
         rejects(bad_cross,"Cross-map bundle requires complete Island transfer prerequisites");
     }
+    check(!god2::Config::load(fixture.write(cross_map)).world_transfers_enabled &&
+          god2::Config::load(fixture.write(cross_map)).world_transfer_catalog.empty(),"World transfers default disabled");
+    auto global_world=cross_map;
+    global_world["development"]["world_transfers"]={{"enabled",true},{"catalog","resources/world/tw/world-transfer-v1/catalog.json"}};
+    const auto global_config=god2::Config::load(fixture.write(global_world));
+    check(global_config.world_transfers_enabled && global_config.world_transfer_catalog==
+          fixture.root()/"resources/world/tw/world-transfer-v1/catalog.json","Explicit global transfer catalog path");
+    for(const auto& value:std::vector<Json>{"",true,7,nullptr}) {
+        auto invalid=global_world;invalid["development"]["world_transfers"]["catalog"]=value;
+        rejects(invalid,"World catalog requires a nonempty path string");
+    }
+    for(const auto& value:std::vector<Json>{true,7,"catalog",nullptr}) {
+        auto invalid=global_world;invalid["development"]["world_transfers"]=value;
+        rejects(invalid,"World transfer option object required");
+    }
+    for(const auto& value:std::vector<Json>{1,"true",nullptr}) {
+        auto invalid=global_world;invalid["development"]["world_transfers"]["enabled"]=value;
+        rejects(invalid,"World transfer enabled flag must be boolean");
+    }
+    auto no_catalog=global_world;no_catalog["development"]["world_transfers"].erase("catalog");
+    rejects(no_catalog,"World transfer enabled without catalog");
+    for(const auto* field:{"door_routes","source_consensus"}) {
+        auto invalid=global_world;invalid["development"]["diagnostic_town"][field]=false;
+        rejects(invalid,"Global transfer owner and navigation prerequisites");
+    }
+    auto disabled_world=global_world;disabled_world["development"]["world_transfers"]["enabled"]=false;
+    check(god2::Config::load(fixture.write(disabled_world)).world_transfer_catalog.empty(),
+          "Disabled global catalog is not loaded");
     island_town["development"]["diagnostic_town"]["player_visibility"]=true;
     island_town["development"]["diagnostic_remote_actor_language"]=0;
     check(god2::Config::load(fixture.write(island_town)).diagnostic_town_player_visibility,

@@ -8,6 +8,8 @@
 #include "game/RecoveredFruitNavigation.h"
 #include "game/RecoveredParentNavigation.h"
 #include "game/RecoveredCrossMapNavigation.h"
+#include "game/WorldTransferCatalog.h"
+#include "handlers/OwnedNpcTeleportOffer.h"
 #include "protocol/RecoveredMovement.h"
 #include "protocol/RecoveredWorldEntry.h"
 #include <filesystem>
@@ -39,6 +41,7 @@ public:
         std::filesystem::path kunlun_indoor_scenes; // CUSTOM-0052 area4 registry, never town scene aliases.
         std::filesystem::path kunlun_parent_navigation; // CUSTOM-0053 source-pinned area4/scene0.
         std::filesystem::path cross_map_navigation; // CUSTOM-0154 whole-file-pinned cross-MDL bundle.
+        std::filesystem::path world_transfer_catalog; // CUSTOM-0155 complete qualified world snapshot.
     };
     RecoveredMovementService(RecoveredCharacterRepository& characters,const TownDiagnostic& town);
     RecoveredWorldEntry::Frame prepare(std::uint64_t session,std::uint64_t account,std::uint64_t character);
@@ -99,6 +102,11 @@ public:
         std::uint64_t character,const RecoveredPosition& expected,std::uint16_t scene,std::uint16_t x,std::uint16_t y);
     // One qualified kind registry for saved-entry, native61 and peer visibility.
     [[nodiscard]] std::optional<std::uint16_t> qualified_scene_kind(std::uint16_t area,std::uint16_t scene) const noexcept;
+    [[nodiscard]] const WorldTransferCatalog* world_catalog() const noexcept {return world_catalog_?&*world_catalog_:nullptr;}
+    std::vector<std::uint8_t> begin_world_transfer(std::uint64_t session,std::uint64_t account,
+        std::uint64_t character,const RecoveredPosition& expected,std::string_view route_id);
+    std::vector<std::uint8_t> begin_npc_world_transfer(OwnedNpcTeleportOffer&,
+        const OwnedNpcTeleportOffer::Identity&,const OwnedNpcTeleportOffer::Prepared&);
     // CUSTOM-0057: prepare the already source-qualified Island01 -> CityI1
     // arrival, then publish only after an external atomic item+position commit.
     struct OwnedIslandReturnPlan {
@@ -155,6 +163,7 @@ public:
     struct MovePreview {
         std::uint16_t area,scene,before_x,before_y,x,y;
         std::size_t displaced_steps;
+        bool operator==(const MovePreview&) const = default;
     };
     // Returns only after the validated batch (or trusted-host-selected prefix)
     // is durably committed. A stop predicate observes each validated step with
@@ -191,6 +200,7 @@ private:
         std::uint16_t scene=15,kind=2;
         std::uint16_t area=2;
         std::optional<RecoveredPosition> saved;
+        std::optional<MovePreview> last_step;
         bool operator==(const Position&) const = default;
     };
     struct PreparedMove {
@@ -211,7 +221,7 @@ private:
     std::vector<std::uint8_t> begin_transfer(std::uint64_t session,std::uint64_t account,
         std::uint64_t character,const std::optional<RecoveredPosition>& expected,
         std::uint16_t source_scene,std::uint16_t scene,std::uint16_t x,std::uint16_t y,std::uint16_t area=2,
-        bool reuse_same_scene=true);
+        bool reuse_same_scene=true,std::uint16_t destination_area=0);
     [[nodiscard]] std::uint16_t scene_kind(std::uint16_t area,std::uint16_t scene) const;
     std::optional<RecoveredIndoorGrid> grid_;
     std::map<std::uint16_t,RecoveredIndoorGrid> indoor_scenes_;
@@ -222,6 +232,7 @@ private:
     std::optional<RecoveredKunlunNavigation> kunlun_;
     std::optional<RecoveredParentNavigation> kunlun_parent_;
     std::optional<RecoveredCrossMapNavigation> cross_maps_;
+    std::optional<WorldTransferCatalog> world_catalog_;
     std::shared_ptr<const RecoveredFruitNavigation> fruit_;
     RecoveredTownNavigation::Center center_{};
     std::uint16_t scene_=15,kind_=2,initial_x_=17,initial_y_=13;

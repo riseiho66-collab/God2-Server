@@ -835,6 +835,12 @@ struct WorldLifecycleVaultGuard {
 }
 static int run_server_impl(const Config& config,const WebServerPlan* web_plan,unsigned run_for_seconds,
                            const SharedWorldHostPlan* world_plan=nullptr) {
+    // CUSTOM-0155: these supplied factories replace the current entry/move
+    // dispatcher. Static world policy cannot mint their actual TransferOwner,
+    // native resource generations or full opaque entry material.
+    if(config.world_transfers_enabled && world_plan &&
+       (world_plan->make_taiwan_world_entry || world_plan->make_taiwan_movement))
+        throw std::invalid_argument("World catalog transfer host requires its current dispatcher; actual native source transfer bridge unavailable");
     config.validate_owned_whole_bag_moves();
     if(config.owned_whole_bag_moves_enabled && world_plan)
         throw std::invalid_argument("Normal-entry whole bag moves cannot borrow or compete with an explicit shared world plan");
@@ -1486,6 +1492,11 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
 
             std::set<std::uint64_t> owned_weapons_projected;
             OwnedTeleportGemOffer teleport_gem_offers;
+            // No qualified NPC/conditions/cost/menu definitions are present in
+            // the client/server corpus yet. Empty definitions and no private
+            // publication authority remain explicitly inactive, never free travel.
+            OwnedNpcTeleportOffer npc_teleports;
+            if(config.world_transfers_enabled)spdlog::warn("NPC_WORLD_TRANSFER_SOURCE_GAP CUSTOM-0156 definitions=0 missing=actual_npc_menu_conditions_cost_and_arrival_join no_free_fallback");
             std::set<std::uint64_t> owned_gems_projected;
             const auto gem_projection=[](const StoredTeleportGemSlot& slot) {
                 const auto logical=RecoveredInventoryProjection::encode({slot.slot,slot.count,slot.metadata20});
@@ -1605,7 +1616,9 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             };
             const auto visibility_at=[&](const RecoveredVisibility::Presence& source,
                                          const RecoveredPosition& position) {
-                if(!((position.area==2 && (position.scene==4 || position.scene==15 ||
+                if(!((recovered_movement && recovered_movement->world_catalog() &&
+                      recovered_movement->world_catalog()->scene({position.area,position.scene})) ||
+                     (position.area==2 && (position.scene==4 || position.scene==15 ||
                       (config.diagnostic_town_island_routes && position.scene==0) ||
                       (config.diagnostic_town_island_routes && recovered_movement && recovered_movement->registered_cross_map_scene(position.area,position.scene)) ||
                       (config.diagnostic_town_all_door_routes && recovered_movement && recovered_movement->registered_door_pair(4,position.scene)))) ||
@@ -1697,7 +1710,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                             config.diagnostic_town_indoor_navigation,config.diagnostic_town_island_navigation,
                             config.character_birthplace_navigation,config.character_birthplace_x,config.character_birthplace_y,config.fruit_village_quests_enabled?config.fruit_navigation:std::filesystem::path{},config.diagnostic_town_indoor_scenes,config.diagnostic_kunlun_indoor_scenes,
                             config.diagnostic_kunlun_parent_routes?config.diagnostic_kunlun_parent_navigation:std::filesystem::path{},
-                            config.diagnostic_cross_map_navigation});
+                            config.world_transfers_enabled?std::filesystem::path{}:config.diagnostic_cross_map_navigation,
+                            config.world_transfer_catalog});
                     spdlog::warn("Town diagnostic: {}, supplied test placement; live acceptance pending",
                         config.diagnostic_town_source_consensus?"CUSTOM-0019 source agreement gate":"fixed navigation window");
                     if(!config.character_birthplace_navigation.empty())
@@ -3377,6 +3391,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     owned_armor_projected.erase(session->id());
                     owned_gems_projected.erase(session->id());
                     teleport_gem_offers.forget(session->id());
+                    npc_teleports.forget(session->id());
                     diagnostic_vitals_sent.erase(session->id());
                     diagnostic_quest_dialogue_sent.erase(session->id());
                     world_clock_sessions.erase(session->id());
@@ -3446,6 +3461,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                     DiagnosticRemoteActor::logical(2,config.diagnostic_remote_actor_language)).value();
                                 const auto entry=RecoveredWorldEntryView::read(frame);
                                 if(!entry)throw std::runtime_error("Visibility entry geometry rejected");
+                                if(recovered_movement && recovered_movement->world_catalog() &&
+                                   !recovered_movement->qualified_scene_kind(entry->area,entry->scene))
+                                    throw std::runtime_error("World visibility entry scene is not source-qualified");
                                 auto presence=RecoveredPlayerPresence::from_world_entry(
                                     session,account,character,frame,found->profile,spawn,removal,
                                     recovered_movement?recovered_movement->qualified_scene_kind(
@@ -3528,6 +3546,12 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                 const auto qualify_door_step=[&](const RecoveredMovementService::MovePreview& move)
                                     ->std::optional<DiagnosticDoorPlan> {
                                     if(!move.displaced_steps)return std::nullopt;
+                                    if(const auto* catalog=recovered_movement->world_catalog()) {
+                                        const auto* route=catalog->route_for_step({move.area,move.scene},move.before_x,move.before_y,move.x,move.y);
+                                        if(!route || !lua.world_transfer_proposal(*route,move.before_x,move.before_y,move.x,move.y))return std::nullopt;
+                                        return DiagnosticDoorPlan{route->destination.scene.area,route->destination.scene.scene,
+                                            route->destination.x,route->destination.y,route->id};
+                                    }
                                     auto plan=lua.diagnostic_door({move.area,move.scene,
                                         move.before_x,move.before_y,move.x,move.y,
                                         config.diagnostic_town_island_routes,config.diagnostic_town_all_door_routes,config.diagnostic_kunlun_door_routes,config.diagnostic_kunlun_parent_routes,
@@ -3594,7 +3618,11 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                     bool full_reset_navigation_route=false;
                                     const auto destination_x=static_cast<std::uint16_t>(door_plan->x);
                                     const auto destination_y=static_cast<std::uint16_t>(door_plan->y);
-                                    if(recovered_movement->qualified_cross_map_transfer(moved.after.area,moved.after.scene,
+                                    if(!door_plan->route_id.empty()) {
+                                        transfer=recovered_movement->begin_world_transfer(session.id(),session.account_id,
+                                            session.character_id,moved.after,door_plan->route_id);
+                                        full_reset_navigation_route=true;
+                                    } else if(recovered_movement->qualified_cross_map_transfer(moved.after.area,moved.after.scene,
                                         moved.after.x,moved.after.y,static_cast<std::uint16_t>(door_plan->scene),destination_x,destination_y)) {
                                         transfer=recovered_movement->begin_registered_cross_map_transfer(session.id(),session.account_id,
                                             session.character_id,moved.after,static_cast<std::uint16_t>(door_plan->scene),destination_x,destination_y);
@@ -3798,6 +3826,52 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         guild_ordered_world_records=[&](Session& session,std::span<const RecoveredWorldRecords::Record> records)
                             ->std::optional<std::vector<std::uint8_t>> {
                             observe_companion_restoration_write(session);
+                            if(recovered_movement && recovered_movement->world_catalog()) {
+                                const OwnedNpcTeleportOffer::Identity owner{session.id(),session.account_id,session.character_id};
+                                if(npc_teleports.has_offer(session.id()))npc_teleports.observe(owner);
+                                if(npc_teleports.claims(owner,records)) {
+                                    const RecoveredWorldRecords::Record* operation=nullptr;
+                                    for(const auto& record:records) {
+                                        if(std::holds_alternative<RecoveredWorldRecords::Tick>(record))continue;
+                                        if(operation)return std::optional<std::vector<std::uint8_t>>{std::vector<std::uint8_t>{}};
+                                        operation=&record;
+                                    }
+                                    if(!operation)return std::optional<std::vector<std::uint8_t>>{std::vector<std::uint8_t>{}};
+                                    if(const auto* request=std::get_if<RecoveredNpcInteraction::Request>(operation)) {
+                                        const auto issued=npc_teleports.open(owner,*request);
+                                        if(!issued){spdlog::info("NPC_WORLD_OFFER_REJECTED session_id={} reason={}",session.id(),OwnedNpcTeleportOffer::reason_name(issued.reason));return std::optional<std::vector<std::uint8_t>>{std::vector<std::uint8_t>{}};}
+                                        return std::optional<std::vector<std::uint8_t>>{RecoveredWorldFrame::encode(issued.value->logical_menu)};
+                                    }
+                                    if(const auto* close=std::get_if<RecoveredQuestClose::Request>(operation)) {
+                                        npc_teleports.cancel(owner,*close);return std::optional<std::vector<std::uint8_t>>{std::vector<std::uint8_t>{}};
+                                    }
+                                    OwnedNpcTeleportOffer::Result<OwnedNpcTeleportOffer::Prepared> prepared;
+                                    if(const auto* selection=std::get_if<RecoveredTeleport::Selection>(operation))prepared=npc_teleports.select_city(owner,*selection);
+                                    else if(const auto* selection=std::get_if<RecoveredQuestAction::Request>(operation))prepared=npc_teleports.select_dialogue(owner,*selection);
+                                    if(!prepared){spdlog::info("NPC_WORLD_SELECTION_REJECTED session_id={} reason={}",session.id(),OwnedNpcTeleportOffer::reason_name(prepared.reason));return std::optional<std::vector<std::uint8_t>>{std::vector<std::uint8_t>{}};}
+                                    std::vector<std::uint8_t> wire;
+                                    try {wire=recovered_movement->begin_npc_world_transfer(npc_teleports,owner,*prepared.value);}
+                                    catch(const std::exception& error){spdlog::warn("NPC_WORLD_TRANSFER_NOT_COMMITTED session_id={} reason={}",session.id(),error.what());return std::optional<std::vector<std::uint8_t>>{std::vector<std::uint8_t>{}};}
+                                    const auto destination=database.recovered_characters().load_position(session.account_id,session.character_id);
+                                    if(!destination)std::terminate();
+                                    if(config.diagnostic_town_player_visibility) {
+                                        if(const auto source=player_visibility.snapshot(session.id())) {
+                                            pending_visibility.insert_or_assign(session.id(),visibility_at(*source,*destination));
+                                            deliver_visibility(player_visibility.leave(session.id()));visibility_sessions.erase(session.id());
+                                        } else if(pending_visibility.contains(session.id()))pending_visibility.insert_or_assign(session.id(),visibility_at(pending_visibility.at(session.id()),*destination));
+                                        else std::terminate();
+                                    }
+                                    world_display_scene.erase(session.id());diagnostic_town_scene_pending.insert(session.id());
+                                    if(!npc_teleports.committed(session.id(),prepared.value->token))std::terminate();
+                                    return std::optional<std::vector<std::uint8_t>>{std::move(wire)};
+                                }
+                                if(npc_teleports.has_offer(session.id()) && std::any_of(records.begin(),records.end(),[](const auto& r){
+                                    return std::holds_alternative<RecoveredMovement::Request>(r) ||
+                                        std::holds_alternative<RecoveredNpcInteraction::Request>(r) ||
+                                        std::holds_alternative<RecoveredQuestClose::Request>(r) ||
+                                        std::holds_alternative<RecoveredWorldRecords::ContextNotification>(r) ||
+                                        std::holds_alternative<RecoveredBattleCommand::BasicAttackRequest>(r);}))npc_teleports.forget(session.id());
+                            }
                             if(config.owned_pk_invitation_enabled){
                                 pk_invitations.expire(OwnedPkInvitationService::Clock::now());
                                 if(OwnedPkInvitationService::handles(records)){
@@ -6365,6 +6439,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                 if(!accepted) return accepted;
                                 const auto position=recovered_movement->current_location(
                                     session.id(),session.account_id,session.character_id);
+                                const bool world_location=position && recovered_movement->world_catalog() &&
+                                    recovered_movement->world_catalog()->scene({position->area,position->scene});
                                 const bool town_location=position && position->area==2 && (position->scene==4 ||
                                    ((config.diagnostic_town_scene_indoor_transfer || config.diagnostic_town_door_routes) && position->scene==15) ||
                                    (config.diagnostic_town_all_door_routes && recovered_movement->registered_door_pair(4,position->scene)) ||
@@ -6374,7 +6450,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                     (position->scene==3 || (config.diagnostic_kunlun_parent_routes && position->scene==0) ||
                                      (config.diagnostic_kunlun_door_routes && recovered_movement->registered_door_pair(4,3,position->scene)));
                                 const bool fruit_location=config.fruit_village_quests_enabled && position && position->area==13 && position->scene==12;
-                                if(!town_location && !kunlun_location && !fruit_location)
+                                if(!world_location && !town_location && !kunlun_location && !fruit_location)
                                     return std::optional<std::vector<std::uint8_t>>{};
                                 // CUSTOM-0020: nearby test positions, not original spawn coordinates.
                                 std::vector<std::uint8_t> logical;
@@ -6501,7 +6577,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 // CUSTOM-0036: 4/0 is the observed Island01 arrival receipt,
                                 // qualified only by this owned pending scene-0 transfer.
                                 const auto destination=notice && session.character_id &&
-                                    (config.diagnostic_town_island_routes || config.diagnostic_kunlun_parent_routes)
+                                    (config.diagnostic_town_island_routes || config.diagnostic_kunlun_parent_routes || recovered_movement->world_catalog())
                                     ? database.recovered_characters().load_position(session.account_id,session.character_id)
                                     : std::nullopt;
                                 const bool island_arrival=notice && destination && destination->area==2 &&
@@ -6519,8 +6595,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                     notice->payload,session.character_id,session.recovered_client_language());
                                 const bool island_pending=parent_pending || (destination && destination->area==2 &&
                                     (destination->scene==0 || diagnostic_island_return_pending.contains(session.id())));
+                                const bool world_pending=recovered_movement->world_catalog() && destination &&
+                                    recovered_movement->world_catalog()->scene({destination->area,destination->scene});
                                 if(notice && session.character_id &&
-                                   (island_pending ? (island_arrival || island_return || parent_receipt) :
+                                   (world_pending ? diagnostic_owned_scene_receipt(notice->payload,session.character_id,
+                                        session.recovered_client_language()) : island_pending ? (island_arrival || island_return || parent_receipt) :
                                     diagnostic_door_context_receipt(notice->payload,
                                         config.diagnostic_town_door_routes || config.diagnostic_town_scene_probe,
                                         session.recovered_client_language(),session.character_id))) {

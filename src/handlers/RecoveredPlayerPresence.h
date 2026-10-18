@@ -39,9 +39,10 @@ struct RecoveredPlayerPresence {
         // CUSTOM-0154: qualified cross-MDL CAN entries are MDT/kind3. Require the loaded host registry's
         // exact kind too; an arbitrary kind3 full entry remains inadmissible.
         const bool cross_mdl_kind=world_kind==3 && RecoveredCrossMapNavigation::supported_scene(area,scene) && qualified_kind==3;
+        const bool qualified_world_kind=qualified_kind && *qualified_kind==world_kind;
         if((u32(0)&0x3fff)!=character || area<1 || area>16 || x>0x7ff || y>0x7ff ||
-           (world_kind!=0 && world_kind!=2 && !island_kind && !cross_mdl_kind) ||
-           (qualified_kind && *qualified_kind!=world_kind) || (scene==15 && world_kind!=2))
+           (world_kind!=0 && world_kind!=2 && !island_kind && !cross_mdl_kind && !qualified_world_kind) ||
+           (qualified_kind && *qualified_kind!=world_kind) || (!qualified_kind && scene==15 && world_kind!=2))
             throw std::invalid_argument("Player presence world binding/position rejected");
         // The template was captured indoors(kind2). Preserve owning 2A kind0
         // city / kind1 qualified island / kind2 indoor / qualified kind3 MDT.
