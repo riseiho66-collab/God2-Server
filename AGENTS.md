@@ -69,5 +69,8 @@ archives; they are not active dependencies or runtime capabilities.
   files go to C:/Users/risei/Desktop/要刪除清理 for manual deletion; moving on C
   does not reclaim space. Preserve saves/config and inspect dependencies first.
 - RTX5070 use is authorized only when beneficial; no GPU work is needed for
-  this source cleanup. Latest request authorizes only this Taiwan-only cleanup;
-  the previous broader development goal stays paused until the owner resumes.
+  this static formula investigation. The owner resumed work on2026-10-19;
+  continue the Taiwan-only goal and the explicitly requested combat/skill
+  formula research. Earlier CN/four-endpoint scope remains retired. PHASE1
+  source/static constraints apply; do not infer runtime/deploy authorization
+  from the resume.
