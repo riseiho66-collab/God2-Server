@@ -602,6 +602,9 @@ public:
         // LAST: genuine normal-entry CUSTOM-0095 whole-batch sender custody.
         // Exclusive with common-lease custody; no synthetic shared lease.
         bool owned_normal_movement_response_custody=false;
+        // LAST: separate default-off D5 grammar from an actual whole-batch
+        // world owner. It grants no C35/C56, learning or selection authority.
+        bool native_skill_selection_requests=false;
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,

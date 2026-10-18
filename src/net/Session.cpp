@@ -3534,7 +3534,8 @@ struct Session::Impl {
                 character_handlers.bf_requests,character_handlers.spectator6e,
                 character_handlers.map_panel68,character_handlers.c2_controls,character_handlers.spectator_close,
                 character_handlers.native_skill_commands,character_handlers.owned_blacklist,character_handlers.owned_party_directory,
-                character_handlers.owned_client_options,character_handlers.native_world_skill_requests,character_handlers.native_preborn_requests);
+                character_handlers.owned_client_options,character_handlers.native_world_skill_requests,character_handlers.native_preborn_requests,
+                character_handlers.native_skill_selection_requests);
             if(!batch) {
                 // Local protocol diagnosis: never log payloads, names, or chat.
                 if(unsupported)

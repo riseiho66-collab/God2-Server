@@ -321,12 +321,14 @@ SharedTaiwanWorldRecordSource::Binding SharedTaiwanWorldRecordSource::create(
     const bool native_skill_commands=others.native_skills.has_value();
     const bool native_world_skill_requests=others.native_world_skill_requests;
     const bool native_preborn_requests=others.native_preborn_requests;
+    const bool native_skill_selection_requests=others.native_skill_selection_requests;
     auto owner=std::make_shared<Owner>(std::move(presence),std::move(movement),std::move(others),std::move(current),budgets,capacity);
     return {
         [owner](Session& session,std::span<const Record> records){return owner->records(session,records);},
         [owner](Session& session){owner->release(session);},
         [owner]{owner->poison();},
-        spectator6e,spectator_close,native_selection_input,native_skill_commands,native_world_skill_requests,deity_selection_source,native_preborn_requests
+        spectator6e,spectator_close,native_selection_input,native_skill_commands,native_world_skill_requests,deity_selection_source,native_preborn_requests,
+        native_skill_selection_requests
     };
 }
 }

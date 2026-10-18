@@ -27,6 +27,10 @@ v14為 `9cf6202d6acffc5e9cf26ccae8cbe7e8d25137c798cc6d20aee3e9ddcc04b3ee`。
 
 ## 戰鬥queue的兩處原始寫入端
 
+後續狀態（round457）：下述當時未閉合的network+758 producer已由原始pointer
+與REA追到Winsock recv及傳輸解碼；詳見
+[round457記錄](tw-d5-skill-selection-and-network-origin-20261019.md)。以下保留本輪原始邊界。
+
 現用原始.text的 `0051D4E0` 直接E8 caller只有 `005195C2/005195DD`，
 都位於真入口 `00519370`，該入口的原始直接caller為 `005158B1`（根函數515770）。
 兩處都將 `ECX=owner+A9EA4B0` 作為queue，將未改的ESI作為source，

@@ -164,7 +164,8 @@ Source::OtherBinding make_binding(const std::shared_ptr<Owner>& owner) {
         [owner](Session& session){owner->release(session);},
         [owner]{owner->invalidate();},owner->spectator6e,owner->spectator_close,
         owner->remaining.selection_item,owner->remaining.inventory_move,owner->remaining.native_skills,owner->remaining.native_world_skill_requests,
-        {},owner->remaining.native_preborn_requests // C67 remains injected by the final Context owner.
+        {},owner->remaining.native_preborn_requests, // C67 remains injected by the final Context owner.
+        owner->remaining.native_skill_selection_requests
     };
 }
 }
