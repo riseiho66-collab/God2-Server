@@ -1,4 +1,5 @@
 #pragma once
+#include "protocol/RecoveredWorldSkillRequest.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -34,6 +35,21 @@ struct RecoveredRoleSkillStatus {
         std::uint32_t received_value_bits() const noexcept {
             return std::uint32_t{bytes_[5]} | (std::uint32_t{bytes_[6]}<<8) |
                 (std::uint32_t{bytes_[7]}<<16) | (std::uint32_t{bytes_[8]}<<24);
+        }
+        // Current4E8910 controls17..19 issue the SAME seven-byte C56 grammar
+        // as497A90.4132E0 adds opcode to its six-byte body count. This source
+        // requires entry mode2, copies WORD[[U+8688C]], definition kind/id,
+        // and writes raw5=control-17. The sixth body byte remains unwritten.
+        // Caller must bind the actual current entry/slot and control word.
+        // Equality does not prove issued generation, ownership, a charge or
+        // action authority. Do not compare or interpret the residual tail.
+        bool matches_mode2_slot_action(const RecoveredWorldSkillRequest::Request& request,
+                                       std::uint8_t native_slot,
+                                       std::uint16_t current_control_word) const noexcept {
+            return native_slot<3 && mode_bits()==2 &&
+                request.raw_target()==current_control_word && request.raw5()==native_slot &&
+                request.kind()==definition_kind_byte() &&
+                request.definition_id()==definition_id_byte();
         }
         // Exact4E8910 selected countdown arithmetic. Caller supplies the local
         // timeGetTime origin stored on receipt and a sample in the same clock

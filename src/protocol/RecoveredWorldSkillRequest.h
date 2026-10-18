@@ -12,6 +12,10 @@ namespace god2 {
 // Field5 copies U23D872; field6 is unwritten native local residue. Preserve
 // every bit. Target namespace, meaning of field5, learning, phase, cost,
 // action and native reply require their actual sources; grammar grants none.
+// Current aaf0 also4E8910/4E8D46: mode2 role-status controls17..19 copy
+// WORD[[U+8688C]], kind/id and raw5=control-17; the tail is still unwritten.
+//4132E0's count6 excludes opcode, so both sources use this seven-byte grammar.
+// That slot meaning is qualified for this producer only, not all C56/raw5.
 struct RecoveredWorldSkillRequest {
     static constexpr std::uint8_t opcode=0x56;
     static constexpr std::size_t logical_size=7;

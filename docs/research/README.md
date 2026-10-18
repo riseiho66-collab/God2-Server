@@ -31,6 +31,8 @@ FC窗口格式、D5確認鏈與無損槽數比對，見
 [round459記錄](tw-battle-accumulator-application-boundary-20261019.md)。
 C9技能狀態倒數公式、攻防／五行深追與HP清零旁支，見
 [round460記錄](tw-formula-consumer-closure-and-status-countdown-20261019.md)。
+C9快取初始化與mode2面板發出C56的來源，見
+[round461記錄](tw-status-lifecycle-and-c56-slot-source-20261019.md)。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。
