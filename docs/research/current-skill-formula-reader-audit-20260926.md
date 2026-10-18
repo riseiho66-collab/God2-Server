@@ -1,5 +1,12 @@
 # Current skill formula frontier: selected-skill reader audit (2026-09-26)
 
+2026-10-19來源警示：本文的「current」、448技能、381技能書與24筆描述是
+研究當時的歷史快照。SKB來源為raw70a4...／decoded75c3...，不能綁到現用
+raw ef297...，也不能當成現用453技能的權威規則。原雜湊、字面描述與當時
+1,792案例保留；本輪未重新驗證或執行舊codec／Unicorn工具。現用來源界線見
+[round455](tw-skill-producers-and-source-identity-20261019.md)及
+[round460](tw-formula-consumer-closure-and-status-countdown-20261019.md)。
+
 ## Result and scope
 
 No executable original server damage, attack/defense, fixed-damage, hit, or critical formula was recovered. This audit adds a verified caller/reader edge and preserves useful original skill-description constants without promoting them to executable server authority. No runtime, balance, database, or client process was changed.
