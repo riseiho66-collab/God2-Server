@@ -67,6 +67,23 @@ std::vector<std::uint8_t> Battle::revive(std::uint64_t controller,std::uint64_t 
 }
 bool Battle::active() const noexcept { return snapshot_.state == BattleState::Active; }
 
+PoisonShareResult Battle::poison_share(std::uint64_t revision,std::uint8_t target,
+                                      const PoisonRule& rule) const {
+    if(!active() || revision!=snapshot_.revision || target>=snapshot_.actors.size() ||
+       !snapshot_.actors[target] || !snapshot_.actors[target]->hp || !rule)
+        throw std::invalid_argument("Poison share requires a current living battle target");
+    const auto maximum=snapshot_.actors[target]->max_hp;
+    const auto share=rule({maximum});
+    if(!active() || snapshot_.revision!=revision || !snapshot_.actors[target] ||
+       !snapshot_.actors[target]->hp || snapshot_.actors[target]->max_hp!=maximum)
+        throw std::invalid_argument("Poison share target changed during observation");
+    if(share.remainder_tenths>=PoisonShareResult::denominator ||
+       share.whole_hp>maximum/PoisonShareResult::denominator ||
+       share.whole_hp*PoisonShareResult::denominator+share.remainder_tenths!=maximum)
+        throw std::invalid_argument("Poison rule changed the owner-directed exact ratio");
+    return share;
+}
+
 BattleCheckpoint Battle::checkpoint() const {
     std::ostringstream out;out.imbue(std::locale::classic());out<<rng_;
     if(!out) throw std::runtime_error("Battle random state serialization failed");

@@ -3,6 +3,7 @@
 #include "game/BattleNumericProfile.h"
 #include "protocol/RecoveredBattleDelta.h"
 #include "game/RevivalRule.h"
+#include "game/PoisonRule.h"
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -80,12 +81,18 @@ public:
     using RevivalEncode = std::function<std::vector<std::uint8_t>(const BattleSnapshot&, const BattleRevivalResult&)>;
     using NativeDeltaEncode = std::function<std::vector<std::uint8_t>(const BattleSnapshot&,
         std::span<const RecoveredBattleDelta::Record>)>;
+    using PoisonRule = std::function<PoisonShareResult(const PoisonShareInput&)>;
     Battle(std::uint64_t id, std::span<const BattleActor> actors, std::uint32_t seed,
            BattleNumericProfile profile=BattleNumericProfile::LegacyCustom);
     BattleCheckpoint checkpoint() const;
     static Battle restore(const BattleCheckpoint& checkpoint);
     bool active() const noexcept;
     const BattleSnapshot& inspect() const noexcept { return snapshot_; }
+    // CUSTOM-0157 read-only current-snapshot observation. The pure/non-reentrant
+    // rule returns an exact share; no status permission, tick, rounding, damage
+    // or settlement is inferred. Revision and actor are rechecked after it.
+    PoisonShareResult poison_share(std::uint64_t revision,std::uint8_t target,
+                                   const PoisonRule& rule) const;
     std::vector<std::uint8_t> act(std::uint64_t controller, std::uint64_t revision,
                                 const BattleAction& action, const Rule& rule, const Encode& encode);
     // Trusted already-computed server results only, never incoming client83.

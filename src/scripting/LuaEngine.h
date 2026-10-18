@@ -11,6 +11,7 @@
 #include "game/CharacterGrowthRule.h"
 #include "game/SupplyRule.h"
 #include "game/RevivalRule.h"
+#include "game/PoisonRule.h"
 #include "game/TownGuideRule.h"
 #include "game/DiagnosticDoorRule.h"
 #include "game/OwnedGuildMembershipRule.h"
@@ -84,6 +85,10 @@ public:
     // CUSTOM-0006: pure rule evaluation, available without fixture mode.
     // Caller owns actor/skill authorization, RNG, and transactional HP/MP mutation.
     CombatRuleResult combat_damage(const CombatRuleInput& input);
+    // CUSTOM-0157 exact owner ratio only; preserves fractional tenths. The
+    // caller still supplies current owned maxHP, status/tick authority and a
+    // separately established rounding/atomic settlement/full reply policy.
+    PoisonShareResult poison_share(const PoisonShareInput& input);
     // CUSTOM-0013: pure, explicit-table projection. No award, storage or growth mutation.
     ProgressionResult progression(const ProgressionInput& input);
     // Owner-confirmed per-level growth; caller supplies trusted profession,

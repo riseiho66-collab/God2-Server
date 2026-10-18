@@ -956,6 +956,35 @@ bool LuaEngine::pk_invitation_allowed(bool challenger_ready,bool recipient_ready
     return result.get<bool>();
 }
 
+PoisonShareResult LuaEngine::poison_share(const PoisonShareInput& input) {
+    // CUSTOM-0157: preserve all shared64 input bits and the fractional share.
+    // This is a pure rule observation; it neither applies HP nor creates ticks.
+    constexpr auto limit=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    if(input.target_current_max_hp>limit)
+        throw std::invalid_argument("Poison maximum HP exceeds exact shared64 representation");
+    auto& state=vm();
+    const auto module=state.execute(contained_path(root_,root_/"gameplay/poison.lua"));
+    if(module.get_type()!=sol::type::table)
+        throw std::runtime_error("Poison module must return table");
+    const auto callback=module.as<sol::table>().raw_get<sol::object>("share");
+    if(callback.get_type()!=sol::type::function)
+        throw std::runtime_error("Poison module requires share");
+    auto result=invoke(callback.as<sol::protected_function>(),state.lua.create_table_with(
+        "target_current_max_hp",static_cast<lua_Integer>(input.target_current_max_hp)));
+    if(result.return_count()!=1 || result.get_type()!=sol::type::table)
+        throw std::runtime_error("Poison share must return one table");
+    const auto output=result.get<sol::table>();
+    const auto whole=exact_calculation_integer(output.raw_get<sol::object>("whole_hp"),
+        0,input.target_current_max_hp/PoisonShareResult::denominator,"poison whole HP share");
+    const auto remainder=exact_calculation_integer(output.raw_get<sol::object>("remainder_tenths"),
+        0,PoisonShareResult::denominator-1,"poison fractional tenths");
+    // whole*10 <= current maximum <= INT64_MAX; adding at most9 is safe in
+    // uint64. Reconstruction rejects changed divisors and malformed results.
+    if(whole*PoisonShareResult::denominator+remainder!=input.target_current_max_hp)
+        throw std::runtime_error("Poison share does not preserve the owner-directed exact ratio");
+    return {whole,static_cast<std::uint8_t>(remainder)};
+}
+
 RevivalResult LuaEngine::revival(const RevivalInput& input) {
     if(input.numeric_profile!=BattleNumericProfile::LegacyCustom &&
        input.numeric_profile!=BattleNumericProfile::ExtendedHealth64)
