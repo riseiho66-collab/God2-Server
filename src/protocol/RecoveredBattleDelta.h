@@ -34,7 +34,12 @@ struct RecoveredBattleDelta {
         // 0052CB8E/0052CBDE reads payload+D (logical14), then0052BFC0.
         // Native table maps0 to death state9,28 to ordinary live state0.
         std::uint8_t targetOutcome() const noexcept{return bytes_[14];}
-        // Receive-side accumulator arithmetic only. Selector20 replaces HP
+        // Context-free indexed accumulator arithmetic only. This is not the
+        // complete receive state: kind2/3's52CC05 tail also overwrites the HP accumulator at
+        // source239-1, independently of selector or this entry's2C4 index.
+        // Playback52B870 negates kind3 HP in place;52BC50 does not. Callers
+        // cannot promote kinds2/3 by merely selecting a target/sign here.
+        // Selector20 replaces HP
         // accumulator bits, but0052B870/0052BC50 skip scalar HP/MP application
         // when its stored selector is20. This is not a ready-to-apply delta.
         Accumulator accumulate(Accumulator current) const noexcept {

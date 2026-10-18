@@ -25,6 +25,11 @@ inline std::vector<std::uint8_t> thousand_bulls_reply(const BattleSnapshot& stat
     for(const auto& hit:result.hits) {
         if(!state.actors[hit.target] || hit.hp_loss>0x7fff)
             throw std::invalid_argument("ThousandBulls native display range invalid");
+        // Enemy slots are absent from the friendly88 snapshot, and a surviving
+        // cast may omit88 altogether. Preserve native HP representability even
+        // though this timeline deliberately omits eager absolute HP86.
+        (void)RecoveredBattleBootstrap::native_hp_dword(state.actors[hit.target]->max_hp);
+        (void)RecoveredBattleBootstrap::native_hp_dword(state.actors[hit.target]->hp);
         std::array<std::uint8_t,15> bytes{};bytes[0]=0x83;bytes[1]=3;bytes[2]=result.source;
         const auto mask=1u<<(hit.target%14);
         const unsigned offset=5+2*(hit.target/14);

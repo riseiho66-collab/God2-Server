@@ -41,6 +41,8 @@ C9快取初始化與mode2面板發出C56的來源，見
 [round464記錄](tw-skill-deferred-hp-source-20261019.md)。
 普通攻擊、完整kind0／1 renderer分流、復活與PK儲存／送出的HP政策，見
 [round465記錄](tw-basic-skill-revival-hp-policy-20261019.md)。
+kind2／3的目標與累計上下文、完整DWORD回合通知及牛轉仙界踏HP檢查，見
+[round466記錄](tw-effect-kind-context-and-bulk-counter-20261019.md)。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。

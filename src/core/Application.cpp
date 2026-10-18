@@ -7594,10 +7594,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                                         // CUSTOM-0017: revival already consumed cycle1;
                                                         // its no-retaliation followup settles cycle2 here.
                                                         // A fresh restored client counts cycles from zero.
-                                                        bulk[1]=config.diagnostic_battle_revival && config.diagnostic_resume_checkpoint ?
-                                                            static_cast<std::uint8_t>(diagnostic_rounds_granted.at(session_id)-1) :
-                                                            static_cast<std::uint8_t>(diagnostic_rounds_granted.at(session_id)-
-                                                            (config.diagnostic_battle_revival ? 0 : 1));
+                                                        const auto granted=static_cast<std::uint64_t>(diagnostic_rounds_granted.at(session_id));
+                                                        const auto consumed=config.diagnostic_battle_revival && !config.diagnostic_resume_checkpoint ? 0u : 1u;
+                                                        if(granted<consumed)throw std::runtime_error("Diagnostic cycle precedes its current grant");
+                                                        bulk=RecoveredBattleVitalsBatch::with_counter(bulk,granted-consumed);
                                                         for(unsigned slot=0;slot<14;++slot) if(state.actors[slot]) {
                                                             const auto current_hp=RecoveredBattleBootstrap::native_hp_dword(state.actors[slot]->hp);
                                                             for(unsigned i=0;i<4;++i) {
@@ -7812,10 +7812,15 @@ if(guild_officer_runtime && player_guild(session) &&
                                 diagnostic_rounds_granted.at(session.id())<config.diagnostic_battle_rounds ||
                                 diagnostic_combat->diagnostic_timeout_round_ready(session)) &&
                                diagnostic_combat->diagnostic_round_ready(session)) {
+                                auto& round_counter=diagnostic_rounds_granted.at(session.id());
+                                const auto current_round=static_cast<std::uint64_t>(round_counter);
+                                const auto next_round=current_round+1;
+                                if(next_round>std::numeric_limits<unsigned>::max())
+                                    throw std::runtime_error("Diagnostic round counter representation exhausted");
                                 const auto& state=diagnostic_combat->inspect(session.id());
                                 RecoveredBattleVitalsBatch::Bytes bulk{};bulk[0]=0x88;
-                                bulk[1]=static_cast<std::uint8_t>(diagnostic_rounds_granted.at(session.id())+
-                                    (config.diagnostic_battle_revival && !config.diagnostic_resume_checkpoint ? 1 : 0));
+                                bulk=RecoveredBattleVitalsBatch::with_counter(bulk,current_round+
+                                    (config.diagnostic_battle_revival && !config.diagnostic_resume_checkpoint ? 1u : 0u));
                                 for(unsigned slot=0;slot<14;++slot) if(state.actors[slot]) {
                                     const auto current_hp=RecoveredBattleBootstrap::native_hp_dword(state.actors[slot]->hp);
                                     for(unsigned i=0;i<4;++i) {
@@ -7830,7 +7835,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 const auto wire=RecoveredWorldFrame::encode(logical);
                                 reply->insert(reply->end(),wire.begin(),wire.end());
                                 diagnostic_combat->rearm_diagnostic(session,state.revision);
-                                ++diagnostic_rounds_granted.at(session.id());
+                                round_counter=static_cast<unsigned>(next_round);
                                 spdlog::warn("DIAGNOSTIC_NEXT_ROUND_GRANTED session_id={} round={} custom_not_native",session.id(),diagnostic_rounds_granted.at(session.id()));
                             }
                             // Project party position/vitals after the accepted

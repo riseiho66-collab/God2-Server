@@ -221,7 +221,10 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
     // Validate the complete exchange against the pre-exchange ownership snapshot.
     for(const auto& record:records) {
         // Only kind1's direct target-scalar application is qualified here.
-        // Kinds2/3 change actor selection/sign handling in0052B870.
+        // Kinds2/3 also overwrite the HP accumulator at source239-1 during52C520 receive,
+        // independent of selector.52B870 redirects kind2 to source and
+        // negates kind3 HP in place;52BC50 does not negate kind3. The raw
+        // record lacks that base-action/index/playback context.
         if(record.accumulator_kind_bits()!=1)
             throw std::invalid_argument("Native result accumulator kind is unqualified");
         // Current TW 0052CB78 preserves selector20 in actor+5A2[index].

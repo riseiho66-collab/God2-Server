@@ -56,6 +56,10 @@ struct RecoveredBattleAttackPresentation {
         if(((masks[0]|masks[1])&0xc000)||std::popcount(masks[0])+std::popcount(masks[1])!=1||
            masks[input[2]/14]!=0)return {};
         if(input[1]==1){if(input[11]!=0||(input[12]!=0&&input[12]!=28))return {};}
+        // Native516C4E redirects kind2 to the source even for an opposing mask;
+        // it cannot use this opposite-target hit projection. Kind3 has a
+        // different529020 partition (105..108 ordinary, others526890) and
+        // remains outside the existing owned kind0/1 result contract.
         else if(!input[11]||input[12]>1||input[13]!=0||(input[14]!=0&&input[14]!=28))return {};
         Bytes bytes;std::copy(input.begin(),input.end(),bytes.begin());return Record(bytes);
     }

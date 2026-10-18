@@ -22,6 +22,36 @@ int main(){try{
     check(diagnostic_thousand_bulls_manual_seed()==std::array<std::uint8_t,4>{0x34,102,0,150},"Manual seed must grant150 only");
     check(diagnostic_thousand_bulls_manual_selectable()==std::array<std::uint8_t,3>{0x87,150,0x80},"Manual selection identity");
     check(diagnostic_recording_skills()==std::array<std::uint8_t,8>{0x34,102,0,126,0x34,102,0,150},"Recording skills126+150 grants");
+    // The common64 core may hold enemy HP which the native timeline cannot
+    // represent. Both partial and final replies must fail before HP/MP/RNG
+    // publication, even when the actual hit fits the signed16 amount.
+    const auto native_max=std::uint64_t{std::numeric_limits<std::uint32_t>::max()};
+    const BattleAction wide_action{0,{14},false,1000,100,100,0,150};
+    const auto one_point=[](const CombatRuleInput& input){return CombatRuleResult{1,input.mp_cost,false};};
+    for(const bool finish:{false,true}) {
+        for(const auto current:{std::uint64_t{100},native_max+2}) {
+            const std::array<BattleActor,2> wide_actors{{
+                {0,9,100,100,200,200,31,40,5,5},
+                {14,0,current,native_max+2,0,0,10,10,13,1}}};
+            Battle wide_battle(501,wide_actors,123,BattleNumericProfile::ExtendedHealth64);
+            const auto before=wide_battle.checkpoint();
+            rejects([&]{wide_battle.act(9,1,wide_action,one_point,[&](const auto& state,const auto& result){
+                return thousand_bulls_reply(state,result,256,finish);
+            });});
+            check(wide_battle.checkpoint()==before,"Unrepresentable enemy HP published a partial native cast");
+        }
+        const std::array<BattleActor,2> edge_actors{{
+            {0,9,100,100,200,200,31,40,5,5},
+            {14,0,100,native_max,0,0,10,10,13,1}}};
+        Battle edge_battle(502,edge_actors,123,BattleNumericProfile::ExtendedHealth64);
+        const auto edge_wire=edge_battle.act(9,1,wide_action,one_point,[&](const auto& state,const auto& result){
+            return thousand_bulls_reply(state,result,256,finish);
+        });
+        const auto edge_logical=RecoveredWorldFrame::decode(edge_wire);
+        check(edge_logical && edge_logical->size()==17+15+(finish?121:0) &&
+            edge_battle.inspect().actors[14]->hp==99 && edge_battle.inspect().actors[0]->mp==100,
+            "Representable DWORD maximum or one-charge settlement rejected");
+    }
     for(unsigned side=0;side<2;++side)for(unsigned targets:{1u,3u,14u}){
         const auto caster=std::uint8_t(side*14),enemy=std::uint8_t((1-side)*14);
         std::vector<BattleActor> fixture{{caster,9,99999,99999,9999,9999,1,1,999999,999999}};

@@ -3,8 +3,10 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
+#include <stdexcept>
 
 namespace god2 {
 // Battle S2C88 -> 118A90 -> 12D360. Received current values, not base stats.
@@ -16,6 +18,7 @@ struct RecoveredBattleVitalsBatch {
     struct Vitals { std::uint32_t hp, mp; };
     class Record {
     public:
+        std::uint32_t counter_bits() const noexcept { return word(1); }
         std::optional<Vitals> at(std::size_t slot) const noexcept {
             if (slot >= slots) return std::nullopt;
             return Vitals{word(5 + slot * 8), word(9 + slot * 8)};
@@ -38,5 +41,13 @@ struct RecoveredBattleVitalsBatch {
         return Record(owned);
     }
     static Bytes encode_logical(const Record& record) noexcept { return record.bytes_; }
+    // 518A90 reads logical DWORD1, not a BYTE counter. Preserve all actor and
+    // opaque bytes; this checked projection supplies no native turn authority.
+    static Bytes with_counter(Bytes bytes,std::uint64_t counter) {
+        if(bytes[0]!=0x88 || counter>std::numeric_limits<std::uint32_t>::max())
+            throw std::invalid_argument("Battle bulk counter outside native DWORD representation");
+        for(unsigned i=0;i<4;++i)bytes[1+i]=static_cast<std::uint8_t>(counter>>(8*i));
+        return bytes;
+    }
 };
 }
