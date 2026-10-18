@@ -108,6 +108,74 @@ void delta_outcome_usage_test() {
         require(!encoded && battle.checkpoint()==before,"Selector0 invalid result published state");
     }
 }
+void delta_indexed_capacity_test() {
+    static_assert(RecoveredBattleDelta::indexed_capacity==70);
+    const std::array<BattleActor,3> actors{{{0,7,100,200,50,80,10,10,10,10},
+        {1,7,100,200,50,80,10,10,10,10},{14,0,1000,2000,50,80,10,10,10,10}}};
+    auto raw=result_bytes(1,0xffff);raw[14]=255;
+    const auto first=*RecoveredBattleDelta::parse(raw);
+    raw[2]=1;const auto second=*RecoveredBattleDelta::parse(raw);
+    const auto frame=[](std::span<const RecoveredBattleDelta::Record> entries){
+        std::vector<std::uint8_t> logical;
+        for(const auto& entry:entries){const auto bytes=RecoveredBattleDelta::encode(entry);
+            logical.insert(logical.end(),bytes.begin(),bytes.end());}
+        return RecoveredWorldFrame::encode(logical);
+    };
+    // Native physical storage is70 effects per source. These trusted numeric
+    // cases grant no original emission, base-action or continuing i>0 owner.
+    for(const std::size_t count:{65u,70u}) {
+        Battle battle(109,actors,123);const auto before=battle.checkpoint();unsigned encoded=0;
+        const std::vector records(count,first);
+        const auto wire=battle.apply_native_deltas(7,1,records,[&](const BattleSnapshot& staged,auto entries){
+            ++encoded;require(entries.size()==count && staged.revision==2 &&
+                staged.actors[14]->hp==1000-count,"Capacity result encoded before complete settlement");
+            return frame(entries);
+        });
+        const auto decoded=RecoveredWorldFrame::decode(wire);
+        auto expected=before;expected.snapshot.actors[14]->hp-=count;++expected.snapshot.revision;
+        require(encoded==1 && wire.size()==15*count+3 && decoded && decoded->size()==15*count &&
+            battle.checkpoint()==expected,
+            "Qualified65/70 effect entries truncated, repeated encoding or changed RNG");
+    }
+    std::vector<RecoveredBattleDelta::Record> paired;
+    for(unsigned i=0;i<70;++i){paired.push_back(first);paired.push_back(second);}
+    Battle two_sources(110,actors,123);const auto before=two_sources.checkpoint();unsigned encoded=0;
+    const auto wire=two_sources.apply_native_deltas(7,1,paired,[&](const BattleSnapshot& staged,auto entries){
+        ++encoded;require(entries.size()==140 && staged.actors[14]->hp==860,
+            "Per-source effect storage incorrectly treated as whole-exchange capacity");
+        return frame(entries);
+    });
+    const auto decoded=RecoveredWorldFrame::decode(wire);
+    auto expected=before;expected.snapshot.actors[14]->hp=860;++expected.snapshot.revision;
+    require(encoded==1 && wire.size()==2103 && decoded && decoded->size()==2100 &&
+        two_sources.checkpoint()==expected,"Two independent source capacities changed checkpoint/RNG");
+    // A valid prefix from both owned sources must not partially publish when
+    // one source exceeds its own storage, even below the whole28*70 bound.
+    paired.push_back(first);
+    Battle overflow(111,actors,123);const auto saved=overflow.checkpoint();encoded=0;
+    rejects([&]{overflow.apply_native_deltas(7,1,paired,[&](const auto&,auto entries){
+        ++encoded;return frame(entries);});});
+    require(encoded==0 && overflow.checkpoint()==saved,"Source71 overflow encoded or published valid prefix");
+    // The existing service still restricts the entire exchange to its one
+    // authorized source, and validates the actual1050-byte logical frame.
+    asio::io_context io;Session session(asio::ip::tcp::socket(io),io.get_executor(),112,false,{},{});
+    session.account_id=7;session.character_id=7;session.set_state(SessionState::InBattle);
+    Battle hosted(112,actors,123);const auto initial=hosted.checkpoint();
+    RecoveredBattleService service([](const CombatRuleInput&){return CombatRuleResult{1,0,false};});
+    RecoveredBattleService::Policy policy{0,0,0,0,{0,{},false,100,100,0,0,150},{}};
+    std::optional<BattleCheckpoint> committed;
+    service.bind(session,hosted,policy,[](const auto&,const auto&){return std::vector<std::uint8_t>{};},{},
+        [&](const BattleCheckpoint& prior,const BattleCheckpoint& next){
+            require(prior==initial,"Service capacity checkpoint baseline changed");committed=next;
+        });
+    const std::vector seventy(70,first);encoded=0;
+    const auto hosted_wire=service.apply_native_deltas(session,1,seventy,[&](const auto&,auto entries){
+        ++encoded;return frame(entries);
+    });
+    auto settled=initial;settled.snapshot.actors[14]->hp=930;++settled.snapshot.revision;
+    require(encoded==1 && hosted_wire.size()==1053 && committed==settled &&
+        service.inspect(session.id())==settled.snapshot,"Service70 result failed framing/checkpoint/RNG publication");
+}
 void projection_test(const char* path) {
     SqliteDatabase db(path);db.initialize();db.migrate();
     const std::array<std::uint16_t,2> npcKeys{3793,3954};
@@ -136,6 +204,7 @@ void projection_test(const char* path) {
 void self_test() {
     delta_target_selection_test();
     delta_outcome_usage_test();
+    delta_indexed_capacity_test();
     for(unsigned level=0;level<=65535;++level) {
         const RecoveredMonsterLevel::Record record{static_cast<std::uint16_t>(65535-level),static_cast<std::uint16_t>(level)};
         require(RecoveredMonsterLevel::parse(RecoveredMonsterLevel::encode(record))==record,"Monster level WORD roundtrip mismatch");

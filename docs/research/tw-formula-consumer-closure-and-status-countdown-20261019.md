@@ -114,6 +114,13 @@ ACT文字控制項。其圖形／resource／global vtable callees仍未全部閉
 kind2才改成source；kind3跳過這一支。此前一次把kind1也讀為改source的
 摘要已立即更正，原摘要與正確branch bytes均保留在receipt。
 
+2026-10-19 round468更正：下段只描述最末bit0檢查，不足以推出必須由外部
+86/3先設定死亡旗標。完整正常requested9路徑在5266F8自行寫DB8=1，
+526726設1EA=9，再經最末檢查與529870清HP；不能據此增加多餘的status封包。
+既有死亡／復活early gate及其他requested type仍須分別資格化。完整證據見
+[round468記錄](tw-self-status-owner-and-native-death-path-20261019.md)。
+
+以下保留舊末端檢查的歷史描述，應以上述完整正常路徑更正為準：
 526430還依actor+DB8 bit0決定是否保留requested state9；缺此bit會轉成0／95h。
 保留9才可經529870→5299F5將選定actor+DE8清零。529870另有state12h清零
 條件，但未從本523E支線綁到，不能賦予猜測的玩法名稱。

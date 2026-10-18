@@ -45,6 +45,8 @@ kind2／3的目標與累計上下文、完整DWORD回合通知及牛轉仙界踏
 [round466記錄](tw-effect-kind-context-and-bulk-counter-20261019.md)。
 效果outcome的主要動作／累計／自身旗標分流及kind2位置重排，見
 [round467記錄](tw-effect-outcome-owner-and-kind2-remap-20261019.md)。
+自身slot／狀態mask來源、正常死亡路徑更正及逐角色70格效果容量，見
+[round468記錄](tw-self-status-owner-and-native-death-path-20261019.md)。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。

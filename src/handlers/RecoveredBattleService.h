@@ -20,6 +20,9 @@ public:
         bool opening_notice{}; // CUSTOM-0017: exact observed action02+0B, no combat effect.
     };
     struct Policy {
+        // client_actor/client_side match incoming C2S fields. They alone do
+        // not prove current native self slot51 (also written by1C and86/5).
+        // actor_position is the independently authorized Battle actor index.
         std::uint8_t client_actor, client_side, actor_position;
         std::uint32_t context;
         BattleAction basic;

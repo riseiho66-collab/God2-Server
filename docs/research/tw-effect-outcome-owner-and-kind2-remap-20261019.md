@@ -27,6 +27,9 @@ i是累計效果source2C4配置的entry。selector20仍被核心拒絕，沒有�
 35條原始指令及完整switch另以REA核對，Evidence：
 `ev_09fa5bf1e4d66146a90e5d65229978893b4f61c6cc4c77099b1580818dbdba5d`。
 旗標的完整owner／玩法意義仍未閉合，不能猜成死亡、異常狀態或命中資格。
+round468補到86/3狀態mask、86/5與1C的自身slot writer，以及正常死亡路徑
+自行設定DB8的證據，見
+[後續記錄](tw-self-status-owner-and-native-death-path-20261019.md)。
 `owner/owner-index-kind1-conclusion-v2.json`保留16函數、5389條原始指令與連續
 caller資格；5169F0新REA已close且terminal exit0。不同研究支線可能重疊，
 這些指令數不是全EXE去重覆蓋率。

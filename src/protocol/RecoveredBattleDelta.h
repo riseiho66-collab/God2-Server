@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -8,6 +9,10 @@ namespace god2 {
 // 83/0D existing-action, nonzero WORD+11 branch of 0052C520.
 // Received results only: does not calculate attack/defense or skill power.
 struct RecoveredBattleDelta {
+    // 52C520's lazy reset spans70 kind/selector/outcome entries and70 HP/MP
+    // pairs PER source actor. This representation bound grants no generation,
+    // reset, packed-target ownership or original server emission authority.
+    static constexpr std::size_t indexed_capacity=70;
     using Bytes=std::array<std::uint8_t,15>;
     struct Accumulator {std::uint32_t hp{},mp{};bool operator==(const Accumulator&) const=default;};
     class Record {
@@ -35,7 +40,8 @@ struct RecoveredBattleDelta {
         // only selector0 reads it at52CB8E and maps it via52BFC0; other selectors write state0
         // at52CBCC without reading this byte. The mapped outcome's n-1 slot
         // need not equal this effect's i slot: this is no target-binding proof.
-        // Upstream516AE0 still passes raw14 to5169F0 for visual preloading.
+        // Upstream516AE0 still passes raw14 to5169F0 for local self-status
+        // flag updates. That independent client owner is not supplied here.
         // Native table maps0 to death state9,28 to ordinary live state0.
         std::uint8_t targetOutcome() const noexcept{return bytes_[14];}
         bool kind1_accumulator_reads_target_outcome() const noexcept {

@@ -215,9 +215,11 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
         std::span<const RecoveredBattleDelta::Record> records,const NativeDeltaEncode& encode) {
     if(snapshot_.numeric_profile!=BattleNumericProfile::LegacyCustom ||
        !controller || !active() || revision!=snapshot_.revision ||
-       revision==std::numeric_limits<std::uint64_t>::max() || records.empty() || records.size()>64 || !encode)
+       revision==std::numeric_limits<std::uint64_t>::max() || records.empty() ||
+       records.size()>snapshot_.actors.size()*RecoveredBattleDelta::indexed_capacity || !encode)
         throw std::invalid_argument("Invalid native result exchange");
     auto staged=snapshot_;
+    std::array<std::size_t,28> source_counts{};
     // Validate the complete exchange against the pre-exchange ownership snapshot.
     for(const auto& record:records) {
         // Only kind1's direct target-scalar application is qualified here.
@@ -235,12 +237,20 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
         const auto& source=snapshot_.actors[record.source()];
         if(!source || source->controller!=controller || !source->hp)
             throw std::invalid_argument("Native result source is not owned and living");
+        // Capacity belongs to each source's indexed storage, not the complete
+        // trusted exchange. Validate all counts before any resource mutation.
+        // A continuing native i>0 may have fewer free slots: this per-batch
+        // bound does not establish a fresh generation or its initial count.
+        if(++source_counts[record.source()]>RecoveredBattleDelta::indexed_capacity)
+            throw std::invalid_argument("Native result source indexed capacity exceeded");
         const auto target=record.selected_mask_target();
         if(!target || !snapshot_.actors[*target])
             throw std::invalid_argument("Native result selected target absent");
         // 5169F0 returns before presentation flags for opposing side1.
         // A friendly target may be the local self slot: retain its existing
         // outcome contract until the separate client flag owner is qualified.
+        // Both1C identity entry and86/5 can change native self slot51;
+        // a C2S actor matcher or an old prepared grant is not that owner.
         if((record.kind1_accumulator_reads_target_outcome() || *target<14) &&
            record.targetOutcome()!=0 && record.targetOutcome()!=28)
             throw std::invalid_argument("Native result target outcome is unqualified");
