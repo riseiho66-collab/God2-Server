@@ -31,9 +31,16 @@ struct RecoveredBattleDelta {
         // Nonzero logical WORD+11 copied to actor+4D0[index]. Kinds2/3
         // select different actors/sign handling in0052B870, not kind1 deltas.
         std::uint16_t accumulator_kind_bits() const noexcept{return word(11);}
-        // 0052CB8E/0052CBDE reads payload+D (logical14), then0052BFC0.
+        // Raw payload+D (logical14). Within52C520 kind1 accumulator storage,
+        // only selector0 reads it at52CB8E and maps it via52BFC0; other selectors write state0
+        // at52CBCC without reading this byte. The mapped outcome's n-1 slot
+        // need not equal this effect's i slot: this is no target-binding proof.
+        // Upstream516AE0 still passes raw14 to5169F0 for visual preloading.
         // Native table maps0 to death state9,28 to ordinary live state0.
         std::uint8_t targetOutcome() const noexcept{return bytes_[14];}
+        bool kind1_accumulator_reads_target_outcome() const noexcept {
+            return accumulator_kind_bits()==1 && selector()==0;
+        }
         // Context-free indexed accumulator arithmetic only. This is not the
         // complete receive state: kind2/3's52CC05 tail also overwrites the HP accumulator at
         // source239-1, independently of selector or this entry's2C4 index.

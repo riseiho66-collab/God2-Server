@@ -232,24 +232,36 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
         // Its accumulator assignment alone is not an authoritative HP delta.
         if(record.selector()==20)
             throw std::invalid_argument("Native selector20 scalar application is unqualified");
-        if(record.targetOutcome()!=0 && record.targetOutcome()!=28)
-            throw std::invalid_argument("Native result target outcome is unqualified");
         const auto& source=snapshot_.actors[record.source()];
         if(!source || source->controller!=controller || !source->hp)
             throw std::invalid_argument("Native result source is not owned and living");
         const auto target=record.selected_mask_target();
         if(!target || !snapshot_.actors[*target])
             throw std::invalid_argument("Native result selected target absent");
+        // 5169F0 returns before presentation flags for opposing side1.
+        // A friendly target may be the local self slot: retain its existing
+        // outcome contract until the separate client flag owner is qualified.
+        if((record.kind1_accumulator_reads_target_outcome() || *target<14) &&
+           record.targetOutcome()!=0 && record.targetOutcome()!=28)
+            throw std::invalid_argument("Native result target outcome is unqualified");
     }
     for(const auto& record:records) {
         const auto delta=record.accumulate({});
         // Native51E5E0 selects one mask bit, not every marked actor. Separate
         // receive entries remain ordered and use separate fresh accumulators.
-        auto& target=*staged.actors[*record.selected_mask_target()];
+        const auto target_position=*record.selected_mask_target();
+        auto& target=*staged.actors[target_position];
         target.hp=RecoveredBattleDelta::apply(static_cast<std::uint32_t>(target.hp),delta.hp,
             static_cast<std::uint32_t>(target.max_hp));
         target.mp=RecoveredBattleDelta::apply(target.mp,delta.mp,target.max_mp);
-        if((target.hp>0)!=(record.targetOutcome()==28))
+        // Kind1 nonzero selectors' accumulator storage ignores raw outcome14
+        // and stores state0. The opposing side also bypasses5169F0 flags, so
+        // its numeric result must not be rejected based on this unused byte.
+        // Friendly presentation keeps the previous checks as described above.
+        // HP-based side elimination below remains CUSTOM-0007, not recovery
+        // of native actor1EA/death state or full n-1/i outcome ownership.
+        if((record.kind1_accumulator_reads_target_outcome() || target_position<14) &&
+           (target.hp>0)!=(record.targetOutcome()==28))
             throw std::invalid_argument("Native result HP and target outcome disagree");
     }
     std::array<bool,2> living{};

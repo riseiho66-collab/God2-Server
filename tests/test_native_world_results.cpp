@@ -61,6 +61,53 @@ void delta_target_selection_test() {
     ordered.apply_native_deltas(7,1,orderedRecords,encode);
     require(ordered.inspect().actors[14]->hp==50,"Repeated target entries were merged or reordered");
 }
+void delta_outcome_usage_test() {
+    const std::array<BattleActor,2> actors{{{0,7,100,200,50,80,10,10,10,10},
+        {14,0,100,200,50,80,10,10,10,10}}};
+    const auto encode=[](const auto&,auto){return std::vector<std::uint8_t>{1};};
+    // Nonzero kind1 selectors' accumulator storage ignores rawBYTE14, and
+    // opposing side1 bypasses5169F0 flags. Numeric results/RNG must be equal.
+    for(const std::uint8_t selector:{1,2,3,4,5,7,8,9}) {
+        std::optional<BattleCheckpoint> expected;
+        for(const std::uint8_t outcome:{0,28,255}) {
+            auto bytes=result_bytes(selector);bytes[14]=outcome;
+            const auto record=*RecoveredBattleDelta::parse(bytes);
+            require(!record.kind1_accumulator_reads_target_outcome() && record.targetOutcome()==outcome &&
+                RecoveredBattleDelta::encode(record)==bytes,"Ignored raw outcome lost or classified as read");
+            Battle battle(106,actors,123);const std::array records{record};
+            battle.apply_native_deltas(7,1,records,encode);
+            const auto checkpoint=battle.checkpoint();
+            if(expected)require(checkpoint==*expected,"Ignored outcome altered the result or RNG state");
+            else expected=checkpoint;
+            const auto& target=*battle.inspect().actors[14];
+            require(target.hp==(selector<=5?70u:100u) && target.mp==(selector==9?20u:50u) &&
+                battle.inspect().actors[0]==actors[0],"Nonlethal kind1 resource destination changed");
+        }
+        // Friendly targets may include the native self slot, whose raw0/28
+        // change client flags. Keep the old boundary until that owner closes.
+        for(const std::uint8_t outcome:{0,255}) {
+            auto bytes=result_bytes(selector);bytes[5]=1;bytes[7]=0;bytes[14]=outcome;
+            const auto record=*RecoveredBattleDelta::parse(bytes);
+            Battle battle(108,actors,123);const auto before=battle.checkpoint();bool encoded=false;
+            const std::array records{record};
+            rejects([&]{battle.apply_native_deltas(7,1,records,[&](const auto&,auto){
+                encoded=true;return std::vector<std::uint8_t>{1};});});
+            require(!encoded && battle.checkpoint()==before,"Unqualified friendly presentation changed state");
+        }
+    }
+    // Selector0's existing qualified raw0/28 check remains separate. This
+    // does not prove n-1/base-action ownership of arbitrary effect masks.
+    for(const std::uint8_t outcome:{0,255}) {
+        auto bytes=result_bytes();bytes[14]=outcome;
+        const auto record=*RecoveredBattleDelta::parse(bytes);
+        require(record.kind1_accumulator_reads_target_outcome(),"Kind1 selector0 outcome read was lost");
+        Battle battle(107,actors,123);const auto before=battle.checkpoint();bool encoded=false;
+        const std::array records{record};
+        rejects([&]{battle.apply_native_deltas(7,1,records,[&](const auto&,auto){
+            encoded=true;return std::vector<std::uint8_t>{1};});});
+        require(!encoded && battle.checkpoint()==before,"Selector0 invalid result published state");
+    }
+}
 void projection_test(const char* path) {
     SqliteDatabase db(path);db.initialize();db.migrate();
     const std::array<std::uint16_t,2> npcKeys{3793,3954};
@@ -88,6 +135,7 @@ void projection_test(const char* path) {
 }
 void self_test() {
     delta_target_selection_test();
+    delta_outcome_usage_test();
     for(unsigned level=0;level<=65535;++level) {
         const RecoveredMonsterLevel::Record record{static_cast<std::uint16_t>(65535-level),static_cast<std::uint16_t>(level)};
         require(RecoveredMonsterLevel::parse(RecoveredMonsterLevel::encode(record))==record,"Monster level WORD roundtrip mismatch");
