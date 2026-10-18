@@ -6350,6 +6350,25 @@
         "default_activated": false,
         "product_execution": false
       }
+    },
+    {
+    "id": "CUSTOM-0151",
+    "name": "Taiwan fixed bulletin-board panels",
+    "authority": "OWNER_AUTHORIZED_CUSTOM_PLACEMENT_FROM_PINNED_ORIGINAL_TW_RESOURCES",
+    "implementation": ["tools/map_objects/tw_board_patch.cpp", "tools/map_objects/CMakeLists.txt", "tools/map_objects/Apply-TwBoardPatch.ps1"],
+    "document": "tools/map_objects/README.md",
+    "native_gap": "Original TW resources identify the panel artwork, but no original server NPC ID-to-spawn join has been recovered for these seven frames.",
+    "rules": {
+      "maps": ["2/4/0", "5/27/0", "5/51/0"],
+      "panel_counts": [1, 5, 1],
+      "art": "Unmodified original TW npc2584.ROMZ, ACT1101 forward and ACT1701 reverse, palette0, one panel per frame pair",
+      "placement": "Derived from original pillar geometry and ACT pivots; explicit custom fixed map decoration, not a recovered interactive NPC spawn",
+      "collision": "New model Pass0x0; all existing model Pass, MBD and player data preserved",
+      "deployment": "Offline client-resource staging; does not change server packets, executable or game database"
+    },
+    "native_client_acceptance": false,
+    "client_resources_applied": true,
+    "verification_status": "RELEASE_BUILD_AND_INDEPENDENT_TW_ASSET_QA_PASSED_APPLIED_PENDING_NATIVE_CLIENT_LOGIN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
