@@ -6214,12 +6214,16 @@ if(guild_officer_runtime && player_guild(session) &&
                                 return selection && selection->raw_slot>=42 && selection->raw_slot<=44;
                             })) return recovered_world->handle(session,records);
                             if(config.diagnostic_town_door_routes && diagnostic_town_scene_pending.contains(session.id())) {
-                                // A native periodic tick can arrive before the destination
-                                // context receipt, including before the first guide/presence
-                                // tick after login. Do not run world admission while movement
-                                // still has transfer_pending: current_location is unavailable.
-                                if(records.size()==1 &&
-                                   std::holds_alternative<RecoveredWorldRecords::Tick>(records.front()))
+                                // Already queued old-scene steps can arrive in a separate
+                                // native frame before the destination context receipt. Drop
+                                // only movement/tick batches while this owned transfer is
+                                // pending: no ACK, queue advance or saved-position mutation.
+                                // A receipt (including its first destination step) and every
+                                // other record must retain their ordinary admission below.
+                                if(!records.empty() && std::all_of(records.begin(),records.end(),[](const auto& record) {
+                                    return std::holds_alternative<RecoveredWorldRecords::Tick>(record) ||
+                                           std::holds_alternative<RecoveredMovement::Request>(record);
+                                }))
                                     return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});
                                 spdlog::warn("DIAGNOSTIC_DOOR_PENDING_BATCH session_id={} state={} records={} first_variant={} second_variant={}",
                                     session.id(),static_cast<int>(session.state()),records.size(),

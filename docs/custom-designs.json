@@ -6444,7 +6444,7 @@
       "production_activated": true,
       "native_client_acceptance": false,
       "whole_world_complete": false,
-      "verification_status": "RELEASE_SIX_FOCUSED_SUITES_PASS_2399_ROUTES_587_COLD_SCENES_PLUS23_CHAINED_CONTINUATIONS_APPLICATION_TCP_PASS_DEPLOYED_NO_NEW_NATIVE_UI_CLAIM"
+      "verification_status": "FULL_TCP_BASELINE_2399_ROUTES_587_COLD_SCENES_PLUS23_CHAINED_CONTINUATIONS_RETAINED_REA_FOLLOWUP_FIX_RELEASE_WORLD_TESTS_AND12_PENDING_FRAME_TCP_REGRESSIONS_PASS_DEPLOYED_NO_NEW_NATIVE_UI_CLAIM"
     },
     {
       "id": "CUSTOM-0156",
@@ -6462,7 +6462,7 @@
       "production_activated": false,
       "native_client_acceptance": false,
       "npc_gameplay_complete": false,
-      "verification_status": "HOST_LIFECYCLE_FOCUSED_TESTS_PASS_INCLUDING_WORD_ROLLOVER_AND_A9_REOPEN_NO_POSITIVE_NPC_TRAVEL_DEFINITIONS"
+      "verification_status": "REA_FOLLOWUP_FAILED37_REVOKES_OLD_OFFER_FOCUSED_TESTS_PASS_INCLUDING_WORD_ROLLOVER_A9_REOPEN_AND_FAILED_PROJECTION_NO_POSITIVE_NPC_TRAVEL_DEFINITIONS"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

@@ -57,3 +57,19 @@
 外部證據根目錄：`C:/Users/risei/.codex/artifact-archives/god2-server/20261018/board-object-rea/door-repair`。包含來源索引、HMD fixed bindings、Office REA／byte provenance、逐格比對與產品安裝 SHA 收據；完整 TCP 報告在上一層。
 
 切換後保留現用world-release與上一個cross-release回退基準；已確認無執行中程式及現用來源依賴的五個更舊EXE共25,934,336B，移至桌面「要刪除清理/God2-map-transfer-build-intermediates-20261018」。加上先前中間圖資，本輪相關待手動刪除共71,878,677B；C槽內搬移實際回收 **0B**。最終專案邏輯檔案長度19,716,634,789B，低於30,000,000,000B。此數值不是實體磁碟回收量，沒有移動玩家DB、來源、現用資源或設定。
+
+## REA 再審查及兩項後續修正
+
+使用者再要求持續用REA逆向核對。重新確認現用台版 `God2.exe` SHA256 為 `99cde6b666101c0702d712a1a15bf4d83f225a1a521a9c601bd32a6e42debe25`，與先前byte provenance完全相同。REA/Ghidra直接重查9個原生函數，完整選定pseudocode／assembly與Evidence IDs保存在 `rea-teleport-final-review-v1.json`。使用原檔精確pages的分析衍生檔，未執行衍生檔；這是靜態原生證據，不冒稱Frida或新的原版遊戲畫面。
+
+第一項缺陷是已接受的新37互動在選單投影失敗時仍留下舊offer。496750會先呼叫4C84A0結束舊提交狀態，再設定新NPC並送37；新互動不能沿用舊85／Prepared權限。現在合法來源及owner確認後先撤銷舊offer，再建立新選單；null projection、拋例外、header不符均使舊85／Prepared／commit失效，後續可正常重開。外來owner在撤銷之前即被拒，無效install仍保留整份舊設定。新三種失敗測試與既有WORD循環／A9重開測試通過。
+
+第二項缺陷是入口後的另一個舊移動frame在transfer_pending期間使連線關閉。原全量TCP測的是同一frame內入口後尾步丟棄，未涵蓋第二個native frame。`qa-tcp-world-pending-tail-v1.json`在原3f41核心以同一次send串接兩個完整frame，實際記錄pending movement→`Recovered world policy or response rejected`斷線；失敗證據完整保留。REA的46BCC0 full reset分支確認客戶端會清motion/path，但無法撤回已送出的TCP bytes。
+
+Application現在只在實際owned scene_pending期間，對非空且全部是Movement／Tick的batch回accepted空結果；不呼叫movement、不ACK、不推進slot或寫位置。含1C或其他操作的batch不會被此規則吞掉，仍需通過既有owner、saved baseline、receipt及首步檢查。`qa-tcp-world-pending-tail-v2.json`以四種原生destination kind各測純舊movement frame、Tick＋movement frame、receipt＋首步同frame，共 **12例全部通過**，沒有斷線、多餘ACK或額外位置revision。兩項修正再經獨立唯讀審查，未發現同類新缺陷。
+
+`rea-world-build-v1.log`與`rea-world-focused-ctest-v1.log`通過；目前核心仍逐筆通過2399條世界服務測試與587場景還原。先前完整Application TCP／23例連鎖結果作為3f41版本基準保留，本次7f55版本另外完成12例針對性Application TCP，不把舊報告誤寫成新binary全量重跑。
+
+18:24部署新核心SHA256 `7f55bfb320e5c91f6b6485c7f2ea004734b84212157e9cfaeb921e87ea6e8a98`，PID43148，登入2592／角色53180，兩端原始19-byte握手通過；正式設定與DB路徑未變，QA已停止。現用路徑為`build-map-transfer-repair/rea-release`，前一個完整2399版本world-release保留作回退；啟動腳本依部署收據取得正確版本。這些結果只證明明列範圍，NPC definitions=0、缺原圖資26 selector及事件條件缺口仍未解決，whole-game completeness維持false。
+
+REA版本切換後，確認過期cross-release五個EXE共19,548,672B已無執行程式／現用來源依賴，亦移入同一「要刪除清理」目錄；現用rea-release及上一個world-release基準保留。18:25專案邏輯檔案長度19,716,074,449B，相關待手動刪除累計91,427,349B，搬移實際回收仍為0B。

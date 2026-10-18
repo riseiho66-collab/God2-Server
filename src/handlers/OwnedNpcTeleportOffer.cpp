@@ -176,6 +176,8 @@ bool OwnedNpcTeleportOffer::claims(const Identity& owner,
 OwnedNpcTeleportOffer::Result<OwnedNpcTeleportOffer::Issued> OwnedNpcTeleportOffer::open(
     const Identity& owner,const RecoveredNpcInteraction::Request& request,Time now) {
     Operation operation(*this);if(!operation.entered)return {Reason::Reentered,{}};
+    const auto existing=offers_.find(owner.session);
+    if(existing!=offers_.end() && existing->second.owner!=owner)return {Reason::WrongOwner,{}};
     Reason unavailable=Reason::NoDefinition;
     for(const auto& [id,definition]:definitions_) {
         (void)id;
@@ -190,10 +192,15 @@ OwnedNpcTeleportOffer::Result<OwnedNpcTeleportOffer::Issued> OwnedNpcTeleportOff
                 offers_.erase(old);
             continue;
         }
+        // A qualified new37 supersedes this owner's prior conversation even
+        // when constructing its replacement menu fails. Do not leave an old85
+        // or Prepared usable after the client has selected a new interaction.
+        const auto prior=offers_.find(owner.session);
+        if(prior!=offers_.end() && prior->second.owner==owner)offers_.erase(prior);
         if(next_token_==std::numeric_limits<std::uint64_t>::max())return {Reason::TokenExhausted,{}};
         const auto duration=std::chrono::duration_cast<Clock::duration>(definition.lifetime);
         if(now>Time::max()-duration)return {Reason::ClockOverflow,{}};
-        // Allocate the immutable result before replacing a prior offer.
+        // Only publish a new offer after the complete menu is qualified.
         Issued issued{next_token_+1,definition.id,definition.menu,{}};
         if(auto* menu=std::get_if<DialogueMenu>(&issued.menu)) {
             menu->request=static_cast<std::uint16_t>(next_dialogue_request_);

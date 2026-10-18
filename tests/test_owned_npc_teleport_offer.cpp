@@ -20,7 +20,7 @@ void require(bool good,const std::source_location where=std::source_location::cu
 class FixtureAuthority final:public Service::Authority {
 public:
     Service::Observation state;
-    bool available=true,throwing=false,projection_available=true,malformed_projection=false;
+    bool available=true,throwing=false,projection_available=true,projection_throwing=false,malformed_projection=false;
     mutable std::function<void()> callback;
     std::optional<Service::Observation> observe(const Service::Identity&,const Service::Definition&) const override {
         if(callback)callback();
@@ -30,6 +30,7 @@ public:
     }
     std::optional<Service::MenuProjection> project_dialogue(const Service::Definition&,
         const Service::DialogueMenu& menu,const Service::Observation&) const override {
+        if(projection_throwing)throw std::runtime_error("Synthetic projection failure");
         if(!projection_available)return std::nullopt;
         // Explicit synthetic complete packet fixture, never a product encoder
         // or a claim about the actual source text's formatting parameters.
@@ -90,6 +91,40 @@ god2::RecoveredQuestAction::Request reply(const Service::Issued& issued,std::uin
 god2::RecoveredTeleport::Selection selection(const Service::Issued& issued,std::uint8_t destination=5) {
     const auto& m=std::get<god2::RecoveredTeleport::Menu>(issued.menu);
     return {std::uint8_t(god2::RecoveredTeleport::special_context(m.context)?0xa9:0x99),m.context,destination,0xff};
+}
+void failed_reopen_retires_prior_offer() {
+    for(int failure=0;failure<3;++failure) {
+        Fixture f;const auto old=f.open();const auto old_reply=reply(old);
+        const auto old_plan=f.service.select_dialogue(identity,old_reply,instant);require(bool(old_plan));
+        f.host->projection_available=failure!=0;
+        f.host->projection_throwing=failure==1;
+        f.host->malformed_projection=failure==2;
+        const std::vector<Record> new_interaction{god2::RecoveredNpcInteraction::Request{301}};
+        require(f.service.claims(identity,new_interaction,instant));
+        require(f.service.open(identity,{301},instant).reason==Reason::MenuProjectionUnavailable);
+        require(!f.service.has_offer(identity.session));
+        require(!f.service.claims(identity,std::vector<Record>{old_reply},instant));
+        require(f.service.select_dialogue(identity,old_reply,instant).reason==Reason::NoOffer);
+        require(f.service.revalidate(identity,*old_plan.value,instant).reason==Reason::NoOffer);
+        require(!f.service.committed(identity.session,old_plan.value->token));
+        f.host->projection_available=true;f.host->projection_throwing=false;f.host->malformed_projection=false;
+        const auto next=f.open();require(next.token!=old.token);
+        const auto next_plan=f.service.select_dialogue(identity,reply(next),instant);require(bool(next_plan));
+        require(f.service.revalidate(identity,*old_plan.value,instant).reason==Reason::WrongContext);
+        require(bool(f.service.revalidate(identity,*next_plan.value,instant)));
+        require(f.service.committed(identity.session,next_plan.value->token));
+    }
+    Fixture foreign;const auto old=foreign.open();
+    const auto old_plan=foreign.service.select_dialogue(identity,reply(old),instant);require(bool(old_plan));
+    auto other=identity;++other.account;
+    // Even a changed private host observation cannot overwrite an offer still
+    // owned by another identity on this connection; explicit retirement is needed.
+    foreign.host->state.owner=other;foreign.host->projection_throwing=true;
+    require(foreign.service.open(other,{301},instant).reason==Reason::WrongOwner);
+    require(foreign.service.has_offer(identity.session));
+    foreign.host->state.owner=identity;foreign.host->projection_throwing=false;
+    require(bool(foreign.service.revalidate(identity,*old_plan.value,instant)));
+    require(foreign.service.committed(identity.session,old_plan.value->token));
 }
 void missing_definitions_and_authority() {
     Service empty;
@@ -311,7 +346,7 @@ void snapshot_validation() {
 }
 int main() {
     try {
-        missing_definitions_and_authority();dialogue_preparation_and_replay();
+        missing_definitions_and_authority();failed_reopen_retires_prior_offer();dialogue_preparation_and_replay();
         city_and_cancel();correlation_rollover_keeps_normal_use();state_invalidation();snapshot_validation();
         std::cout<<"Owned NPC teleport policy fixtures passed; actual definitions/routes/native gameplay are not qualified.\n";
         return 0;
