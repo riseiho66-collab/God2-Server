@@ -1,5 +1,12 @@
 # CUSTOM-0058 formal learned-skill route
 
+2026-10-19 source correction: current native8 consumes the signed83 amount at
+its deferred hit event, while adjacent86/0 writes final HP during queue drain.
+The current126 skill reply therefore omits per-target HP86 to avoid a second
+client subtraction; friendly MP and barrier-delayed88 remain. Native DWORD
+state checks are retained. See [round464 source](tw-skill-deferred-hp-source-20261019.md).
+Historical tests/releases below were not rerun; this correction is source-only.
+
 Owner authorized deployment of the accepted custom 瞬影三煞斬 on 2026-09-30.
 This is custom kind0/id126, not one of the448 original native skill definitions.
 The original catalog and native icon/bank counts are unchanged.

@@ -54,11 +54,24 @@ int main(){try {
                 for(unsigned i=0;i<count;++i)check(state.actors[enemy+i]->hp==70,"Lua physical31*300%-13 did not equal80");
                 const auto logical=RecoveredWorldFrame::decode(*reply);
                 const unsigned mp_bytes=source<14?17:0;
-                check(logical && logical->size()==mp_bytes+count*32+121 && (*logical)[mp_bytes+count*32]==0x88,
-                    "Formal action omitted cycle88");
+                check(logical && logical->size()==mp_bytes+count*15+121 && (*logical)[mp_bytes+count*15]==0x88,
+                    "Formal action inserted eager HP86 before deferred skill damage or omitted cycle88");
                 if(source<14)check(RecoveredBattleVitals::parse_logical(std::span(*logical).first(17))->current()==20,"MP display mismatch");
-                for(unsigned i=0;i<count;++i)check((*logical)[mp_bytes+i*32]==0x83 && (*logical)[mp_bytes+i*32+11]==126,
-                    "Formal hit lost126 renderer identity");
+                for(unsigned i=0;i<count;++i) {
+                    const auto at=mp_bytes+i*15;
+                    const auto target_mask=at+5+2*(enemy/14);
+                    check((*logical)[at]==0x83 && (*logical)[at+1]==3 && (*logical)[at+2]==source &&
+                          (*logical)[target_mask]==(1u<<i) && (*logical)[target_mask+1]==0 &&
+                          (*logical)[at+9]==0xb0 && (*logical)[at+10]==0xff &&
+                          (*logical)[at+11]==126 && (*logical)[at+12]==0 && (*logical)[at+14]==28,
+                          "Formal hit lost its126 identity, exact negative80 delta or living outcome");
+                }
+                const BattleActionResult projected{source,20,{{static_cast<std::uint8_t>(enemy),80,80,false}}};
+                auto oversized=state;
+                oversized.actors[enemy]->max_hp=std::uint64_t{1}<<32;
+                rejects([&]{shunying_sanshazhan_reply(oversized,projected,7,false);});
+                oversized=state;oversized.actors[enemy]->hp=std::uint64_t{1}<<32;
+                rejects([&]{shunying_sanshazhan_reply(oversized,projected,7,false);});
             }
             auto checkpoint=Battle(5,actors,123).checkpoint();checkpoint.snapshot.actors[enemy+2]->hp=0;
             RecoveredBattleService guarded(rule);guarded.bind(*session,Battle::restore(checkpoint),policy,encoder);
@@ -251,7 +264,17 @@ int main(){try {
             const auto reply=service.handle(*session,commands(0,{14,20,27}));
             check(reply.has_value(),"Repeated manual cast rejected");
             const auto logical=RecoveredWorldFrame::decode(*reply);
-            check(logical && (*logical)[0]==0x83 && (*logical)[11]==ShunyingSanshazhan::id,"Manual display omitted custom clone routing");
+            check(logical && logical->size()==3*15+121 && (*logical)[3*15]==0x88,
+                  "Manual skill inserted eager HP86 before deferred damage or omitted cycle88");
+            for(unsigned i=0;i<3;++i) {
+                const auto at=i*15;
+                const std::array<unsigned,3> masks{1,1u<<6,1u<<13};
+                check((*logical)[at]==0x83 && (*logical)[at+1]==3 && (*logical)[at+2]==0 &&
+                      (*logical)[at+7]==(masks[i]&0xff) && (*logical)[at+8]==(masks[i]>>8) &&
+                      (*logical)[at+9]==0xf6 && (*logical)[at+10]==0xff &&
+                      (*logical)[at+11]==ShunyingSanshazhan::id && (*logical)[at+14]==28,
+                      "Manual skill lost its exact negative10 delta, clone routing or living outcome");
+            }
             const auto before=service.inspect(7);
             check(!service.handle(*session,control(2,0)),"Absent friendly accepted in manual receipt");
             check(service.inspect(7)==before,"Invalid receipt altered HP");
@@ -323,6 +346,16 @@ int main(){try {
         check(lethal_logical && (*lethal_logical)[12]==0 && (*lethal_logical)[32]==0x88 &&
               RecoveredBattleVitals::parse_logical(std::span(*lethal_logical).subspan(15,17))->current()==0,
               "Dead basic target did not retain death route/zeroHP/88");
+        const auto lethal_skill=RecoveredWorldFrame::decode(diagnostic_shunying_manual_reply(dead_state,lethal,13));
+        check(lethal_skill && lethal_skill->size()==15+121 && (*lethal_skill)[0]==0x83 &&
+              (*lethal_skill)[1]==3 && (*lethal_skill)[2]==2 && (*lethal_skill)[9]==0xf6 &&
+              (*lethal_skill)[10]==0xff && (*lethal_skill)[11]==ShunyingSanshazhan::id &&
+              (*lethal_skill)[14]==0 && (*lethal_skill)[15]==0x88,
+              "Dead manual skill target lost deferred damage/death/88 or gained eager HP86");
+        auto oversized=dead_state;oversized.actors[14]->max_hp=std::uint64_t{1}<<32;
+        rejects([&]{diagnostic_shunying_manual_reply(oversized,lethal,13);});
+        oversized=dead_state;oversized.actors[14]->hp=std::uint64_t{1}<<32;
+        rejects([&]{diagnostic_shunying_manual_reply(oversized,lethal,13);});
         rejects([&]{diagnostic_shunying_manual_basic_reply(dead_state,BattleActionResult{2,0,{}},0);});
         rejects([&]{diagnostic_shunying_manual_basic_reply(dead_state,BattleActionResult{28,0,{{14,1,1,false}}},0);});
         rejects([&]{diagnostic_shunying_manual_basic_reply(dead_state,BattleActionResult{2,0,{{28,1,1,false}}},0);});

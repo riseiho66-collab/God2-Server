@@ -14,11 +14,11 @@ inline std::vector<std::uint8_t> shunying_sanshazhan_reply(const BattleSnapshot&
     (void)ShunyingSanshazhan::visual_assignments(result);
     if(!state.actors[result.source]) throw std::invalid_argument("Shunying caster absent");
     std::vector<std::uint8_t> logical;
-    const auto append_vitals=[&](std::uint8_t slot,bool mp) {
-        const auto& actor=*state.actors[slot];
-        RecoveredBattleVitals::Bytes bytes{};bytes[0]=0x86;bytes[1]=mp?1:0;bytes[2]=slot;
-        const auto maximum=RecoveredBattleBootstrap::native_hp_dword(mp?actor.max_mp:actor.max_hp);
-        const auto current=RecoveredBattleBootstrap::native_hp_dword(mp?actor.mp:actor.hp);
+    const auto append_caster_mp=[&] {
+        const auto& actor=*state.actors[result.source];
+        RecoveredBattleVitals::Bytes bytes{};bytes[0]=0x86;bytes[1]=1;bytes[2]=result.source;
+        const auto maximum=RecoveredBattleBootstrap::native_hp_dword(actor.max_mp);
+        const auto current=RecoveredBattleBootstrap::native_hp_dword(actor.mp);
         for(unsigned i=0;i<4;++i) {
             bytes[5+i]=static_cast<std::uint8_t>(maximum>>(8*i));
             bytes[9+i]=static_cast<std::uint8_t>(current>>(8*i));
@@ -27,10 +27,14 @@ inline std::vector<std::uint8_t> shunying_sanshazhan_reply(const BattleSnapshot&
     };
     // Native86/1 only accepts local friendly MP. Opposing actors still pay the
     // authoritative cost; do not forge an unqualified enemy MP display record.
-    if(result.source<14) append_vitals(result.source,true);
+    if(result.source<14) append_caster_mp();
     for(const auto& hit:result.hits) {
         if(!state.actors[hit.target] || hit.hp_loss>0x7fff)
             throw std::invalid_argument("Shunying target/display range invalid");
+        // Retain the native resource representation checks even though an
+        // eager absolute HP record would double-apply the deferred native8 hit.
+        (void)RecoveredBattleBootstrap::native_hp_dword(state.actors[hit.target]->max_hp);
+        (void)RecoveredBattleBootstrap::native_hp_dword(state.actors[hit.target]->hp);
         std::array<std::uint8_t,15> bytes{};
         bytes[0]=0x83;bytes[1]=3;bytes[2]=result.source;
         const auto mask=1u<<(hit.target%14);
@@ -40,7 +44,9 @@ inline std::vector<std::uint8_t> shunying_sanshazhan_reply(const BattleSnapshot&
         bytes[9]=static_cast<std::uint8_t>(delta);bytes[10]=static_cast<std::uint8_t>(delta>>8);
         bytes[11]=ShunyingSanshazhan::id;bytes[12]=ShunyingSanshazhan::kind;
         bytes[14]=state.actors[hit.target]->hp?28:0;
-        logical.insert(logical.end(),bytes.begin(),bytes.end());append_vitals(hit.target,false);
+        logical.insert(logical.end(),bytes.begin(),bytes.end());
+        // 86/0 is consumed before native8's524820 hit event applies WORD28A.
+        // Keep the pre-hit client HP; the single83 delta owns that timed change.
     }
     if(finish_cycle) {
         RecoveredBattleVitalsBatch::Bytes bytes{};bytes[0]=0x88;

@@ -37,6 +37,8 @@ C9快取初始化與mode2面板發出C56的來源，見
 [round462記錄](tw-poison-exact-share-and-tick-frontier-20261019.md)。
 原生累計效果的第一目標選取修正、逐筆消費與持續狀態儲存契約，見
 [round463記錄](tw-status-owner-storage-and-consumption-20261019.md)。
+瞬影三煞斬原生命中扣血與提前HP回覆的重複扣血修正，見
+[round464記錄](tw-skill-deferred-hp-source-20261019.md)。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。
