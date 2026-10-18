@@ -14,6 +14,17 @@ struct RecoveredBattleDelta {
     public:
         std::uint8_t source() const noexcept{return bytes_[2];}
         std::uint16_t targetMask(unsigned side) const noexcept{return side<2?word(5+side*2):0;}
+        // Current TW516AE0 ->51E5E0 scans side0 slots0..13, then side1,
+        // and returns at the first set bit. One52C520 invocation receives
+        // that selected side/slot; the raw masks are not an effect fan-out.
+        // This is mask selection only: kind2 overrides the target with source,
+        // and actor lookup/playback eligibility still belong to the caller.
+        std::optional<std::uint8_t> selected_mask_target() const noexcept {
+            for(unsigned side=0;side<2;++side) for(unsigned slot=0;slot<14;++slot)
+                if(targetMask(side)&(1u<<slot))
+                    return static_cast<std::uint8_t>(side*14+slot);
+            return std::nullopt;
+        }
         std::uint16_t amountBits() const noexcept{return word(9);}
         std::int32_t amount() const noexcept{return amountBits()<0x8000?amountBits():std::int32_t{amountBits()}-65536;}
         std::uint8_t selector() const noexcept{return bytes_[13];}

@@ -1,5 +1,12 @@
 # Native world display and supplied battle result integration
 
+2026-10-19 round463 correction: current516AE0/51E5E0 selects the first set
+target bit, side0 slots0..13 before side1. Battle now validates/applies only
+that target and preserves later raw mask bits; it no longer fans one received
+amount out to every bit. Separate entries retain their ordered scalar clamps.
+See [round463 source](tw-status-owner-storage-and-consumption-20261019.md).
+New regression source has not been built or executed under PHASE1.
+
 2026-10-19 source correction: raw accumulator support is not scalar-application
 authority for every variant. Current selector20 bypasses the selected direct
 HP/MP calls; kinds2/3 change actor/sign handling. The authoritative entry now

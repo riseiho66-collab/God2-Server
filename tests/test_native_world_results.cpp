@@ -15,6 +15,52 @@ RecoveredBattleDelta::Bytes result_bytes(std::uint8_t selector=0,std::uint16_t a
     RecoveredBattleDelta::Bytes b{0x83,0x0d,0,1,0,0,0,1,0,0,0,1};
     b[9]=static_cast<std::uint8_t>(amount);b[10]=static_cast<std::uint8_t>(amount>>8);b[13]=selector;b[14]=28;return b;
 }
+void delta_target_selection_test() {
+    // Native51E5E0 returns the first mask bit, rather than expanding one
+    // received amount to every marked actor. Keep all raw bits on roundtrip.
+    auto bothSides=result_bytes();bothSides[5]=1;
+    const auto first=*RecoveredBattleDelta::parse(bothSides);
+    require(first.selected_mask_target()==0 && RecoveredBattleDelta::encode(first)==bothSides,
+        "Native mask selection or raw bits changed");
+    const std::array<BattleActor,3> actors{{{0,7,100,200,50,80,10,10,10,10},
+        {14,0,100,200,50,80,10,10,10,10},{19,0,100,200,50,80,10,10,10,10}}};
+    const auto encode=[](const auto&,auto){return std::vector<std::uint8_t>{1};};
+    Battle sidePriority(101,actors,123);
+    const std::array firstRecords{first};
+    sidePriority.apply_native_deltas(7,1,firstRecords,encode);
+    require(sidePriority.inspect().actors[0]->hp==70 && sidePriority.inspect().actors[14]->hp==100 &&
+        sidePriority.inspect().actors[19]->hp==100,"Effect fanned out across both sides");
+
+    auto multiple=result_bytes();multiple[7]=0x21;
+    const auto selected=*RecoveredBattleDelta::parse(multiple);
+    require(selected.selected_mask_target()==14 && RecoveredBattleDelta::encode(selected)==multiple,
+        "Native lowest-slot selection or raw mask changed");
+    Battle slotPriority(102,actors,123);
+    const std::array selectedRecords{selected};
+    slotPriority.apply_native_deltas(7,1,selectedRecords,encode);
+    require(slotPriority.inspect().actors[14]->hp==70 && slotPriority.inspect().actors[19]->hp==100,
+        "Effect fanned out across marked slots");
+    const std::array<BattleActor,2> present{{actors[0],actors[1]}};
+    Battle ignoredAbsent(103,present,123);
+    ignoredAbsent.apply_native_deltas(7,1,selectedRecords,encode);
+    require(ignoredAbsent.inspect().actors[14]->hp==70,"Unselected absent actor blocked native target");
+
+    const std::array<BattleActor,2> missing{{actors[0],actors[2]}};
+    Battle selectedAbsent(104,missing,123);
+    const auto before=selectedAbsent.checkpoint();bool encoded=false;
+    rejects([&]{selectedAbsent.apply_native_deltas(7,1,selectedRecords,[&](const auto&,auto){
+        encoded=true;return std::vector<std::uint8_t>{1};});});
+    require(!encoded && selectedAbsent.checkpoint()==before,
+        "Missing first target fell through to a later bit or published state");
+
+    // Each receive entry gets its own indexed accumulator. Applying +150 then
+    // -150 at HP100/max200 yields50; merging or reversing them changes HP.
+    Battle ordered(105,present,123);
+    const std::array orderedRecords{*RecoveredBattleDelta::parse(result_bytes(0,150)),
+        *RecoveredBattleDelta::parse(result_bytes(0,0xff6a))};
+    ordered.apply_native_deltas(7,1,orderedRecords,encode);
+    require(ordered.inspect().actors[14]->hp==50,"Repeated target entries were merged or reordered");
+}
 void projection_test(const char* path) {
     SqliteDatabase db(path);db.initialize();db.migrate();
     const std::array<std::uint16_t,2> npcKeys{3793,3954};
@@ -41,6 +87,7 @@ void projection_test(const char* path) {
     std::cout<<"PASS isolated current-catalog71/72 scene projection\n";
 }
 void self_test() {
+    delta_target_selection_test();
     for(unsigned level=0;level<=65535;++level) {
         const RecoveredMonsterLevel::Record record{static_cast<std::uint16_t>(65535-level),static_cast<std::uint16_t>(level)};
         require(RecoveredMonsterLevel::parse(RecoveredMonsterLevel::encode(record))==record,"Monster level WORD roundtrip mismatch");

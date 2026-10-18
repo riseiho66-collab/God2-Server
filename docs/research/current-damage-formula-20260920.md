@@ -1,5 +1,11 @@
 # Current received-result arithmetic, 2026-09-20
 
+2026-10-19 round463更正：現用516AE0→51E5E0只選兩組mask的第一個set bit，
+不會把一筆收到量展開至每個目標。原生逐entry分配與逐筆scalar clamp保留，
+核心已修正目標選取；詳見
+[round463來源](tw-status-owner-storage-and-consumption-20261019.md)。
+本輪未重跑歷史native helper、C++或遊戲；不提高原始傷害公式的恢復宣告。
+
 2026-10-19更正：下述selector20的scalar數例使用獨立12BB84入口，略過原始
 52BB4A的selector20分支，不能證明收到此變體後自然套用HP。現用aaf0客戶端
 另有kind2／3的actor／符號分流，權威結算已縮限；詳見

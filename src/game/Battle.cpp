@@ -234,21 +234,20 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
         const auto& source=snapshot_.actors[record.source()];
         if(!source || source->controller!=controller || !source->hp)
             throw std::invalid_argument("Native result source is not owned and living");
-        for(unsigned side=0;side<2;++side) for(unsigned slot=0;slot<14;++slot)
-            if(record.targetMask(side)&(1u<<slot))
-                if(!snapshot_.actors[side*14+slot])throw std::invalid_argument("Native result target absent");
+        const auto target=record.selected_mask_target();
+        if(!target || !snapshot_.actors[*target])
+            throw std::invalid_argument("Native result selected target absent");
     }
     for(const auto& record:records) {
         const auto delta=record.accumulate({});
-        for(unsigned side=0;side<2;++side) for(unsigned slot=0;slot<14;++slot) {
-            if(!(record.targetMask(side)&(1u<<slot)))continue;
-            auto& target=*staged.actors[side*14+slot];
-            target.hp=RecoveredBattleDelta::apply(static_cast<std::uint32_t>(target.hp),delta.hp,
-                static_cast<std::uint32_t>(target.max_hp));
-            target.mp=RecoveredBattleDelta::apply(target.mp,delta.mp,target.max_mp);
-            if((target.hp>0)!=(record.targetOutcome()==28))
-                throw std::invalid_argument("Native result HP and target outcome disagree");
-        }
+        // Native51E5E0 selects one mask bit, not every marked actor. Separate
+        // receive entries remain ordered and use separate fresh accumulators.
+        auto& target=*staged.actors[*record.selected_mask_target()];
+        target.hp=RecoveredBattleDelta::apply(static_cast<std::uint32_t>(target.hp),delta.hp,
+            static_cast<std::uint32_t>(target.max_hp));
+        target.mp=RecoveredBattleDelta::apply(target.mp,delta.mp,target.max_mp);
+        if((target.hp>0)!=(record.targetOutcome()==28))
+            throw std::invalid_argument("Native result HP and target outcome disagree");
     }
     std::array<bool,2> living{};
     for(const auto& actor:staged.actors)if(actor && actor->hp)living[actor->position/14]=true;
