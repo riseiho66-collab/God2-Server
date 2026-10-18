@@ -7555,14 +7555,15 @@ if(guild_officer_runtime && player_guild(session) &&
                                                         logical.insert(logical.end(),mp.begin(),mp.end());
                                                     }
                                                     for(const auto& hit:result.hits) {
+                                                        const auto& target=*state.actors[hit.target];
                                                         if(config.diagnostic_battle_animations) {
+                                                            RecoveredBattleAttackPresentation::require_deferred_hp_target(target.max_hp,target.hp);
                                                             const auto animation=config.diagnostic_battle_skill_settlement && result.source==0 && result.mp_cost
                                                                 ? diagnostic_battle_skill_animation(result.source,hit.target,hit.hp_loss,0,state.actors[hit.target]->hp>0,
                                                                     static_cast<std::uint8_t>(config.diagnostic_battle_skill_kind))
                                                                 : diagnostic_battle_basic_animation(result.source,hit.target,hit.hp_loss,result.source==14 ? 1 : 0,state.actors[hit.target]->hp>0);
                                                             logical.insert(logical.end(),animation.begin(),animation.end());
                                                         }
-                                                        const auto& target=*state.actors[hit.target];
                                                         const auto maximum_hp=RecoveredBattleBootstrap::native_hp_dword(target.max_hp);
                                                         const auto current_hp=RecoveredBattleBootstrap::native_hp_dword(target.hp);
                                                         if(!config.diagnostic_battle_animations) {

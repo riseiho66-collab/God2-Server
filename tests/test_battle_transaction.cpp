@@ -5,6 +5,7 @@
 #include "scripting/LuaEngine.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include "protocol/DiagnosticBattleParticipants.h"
+#include "protocol/DiagnosticShunyingManual.h"
 #include <iostream>
 #include <stdexcept>
 #include <memory>
@@ -72,10 +73,39 @@ void signed_endpoint_transaction_test() {
     require(retried==expected&&rejected_wire.checkpoint()==fresh.checkpoint(),
         "Failed endpoint encoding consumed RNG or prevented exact retry");
 }
+void signed_hp_domain_transaction_test() {
+    const BattleAction action{0,{14},false,100,100,8,0,150};
+    const auto rule=[](const CombatRuleInput&){return CombatRuleResult{32768,8,false};};
+    for(const std::uint64_t maximum:{0x7fffffffu,0x80000000u,0x90000000u}){
+        const std::array<BattleActor,2> pair{{{0,7,40000,40000,20,20,31,40,8,10},
+            {14,0,40000,maximum,0,0,20,25,13,6}}};
+        Battle subject(35,pair,987,BattleNumericProfile::ExtendedHealth64);
+        const auto before=subject.checkpoint();
+        const auto deferred=[](const BattleSnapshot& state,const BattleActionResult& result){
+            return diagnostic_shunying_manual_basic_reply(state,result,0);
+        };
+        if(maximum==0x7fffffff){
+            const auto wire=subject.act(7,1,action,rule,deferred);
+            const auto logical=RecoveredWorldFrame::decode(wire);
+            require(logical&&(*logical)[9]==0&&(*logical)[10]==0x80&&
+                subject.inspect().actors[14]->hp==7232,"Signed target boundary lost exact subtraction");
+        }else{
+            rejects([&]{subject.act(7,1,action,rule,deferred);});
+            require(subject.checkpoint()==before,"Deferred HP rejection changed extended state or RNG");
+            Battle control(35,pair,987,BattleNumericProfile::ExtendedHealth64);
+            const auto retried=subject.act(7,1,action,rule,encode);
+            require(retried==control.act(7,1,action,rule,encode)&&subject.checkpoint()==control.checkpoint()&&
+                subject.inspect().actors[14]->hp==7232&&subject.inspect().actors[14]->max_hp==maximum&&
+                subject.inspect().actors[0]->mp==12,
+                "Deferred representation check capped core64, absolute DWORD, rollback or retry");
+        }
+    }
+}
 }
 int main(int argc,char** argv) {
     try {
         signed_endpoint_transaction_test();
+        signed_hp_domain_transaction_test();
         LuaEngine lua(std::filesystem::path(GOD2_SOURCE_DIR)/"scripts",false);
         require(lua.initialize(),"Lua initialization failed");
         const Battle::Rule rule=[&](const CombatRuleInput& input){return lua.combat_damage(input);};

@@ -3,6 +3,7 @@
 #include <array>
 #include <bit>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -24,6 +25,15 @@ struct RecoveredBattleAttackPresentation {
     // and passed as signed DWORD to the HP writer and "HP %+d" formatter.
     // This is a wire endpoint, not a gameplay damage cap or formula.
     static constexpr std::uint64_t maximum_hp_loss=0x8000;
+    // Only a target whose HP is deferred to522FB0/524820 ->528A70 needs
+    // this signed-DWORD domain. Native86 stores full DWORDs, but528A70 uses
+    // result SIGN and a signed maximum comparison; high-bit HP can clear,
+    // increase or fail to decrease. This does not cap core64 or raw86 HP.
+    static void require_deferred_hp_target(std::uint64_t maximum,std::uint64_t current){
+        if(!maximum||maximum>static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max())||
+           current>maximum)
+            throw std::invalid_argument("Deferred native HP requires a qualified signed-DWORD target");
+    }
     using Bytes=std::array<std::uint8_t,15>;
     class Record {
     public:

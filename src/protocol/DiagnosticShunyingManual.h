@@ -98,6 +98,7 @@ inline std::vector<std::uint8_t> diagnostic_shunying_manual_action_reply(
         if(skill && hit.hp_loss>0x7fff)
             throw std::invalid_argument("Manual Shunying exceeds frozen bridge display range");
         const auto& target=*state.actors[hit.target];
+        if(!skill)RecoveredBattleAttackPresentation::require_deferred_hp_target(target.max_hp,target.hp);
         auto animation=skill ?
             diagnostic_battle_skill_animation(result.source,hit.target,hit.hp_loss,0,target.hp>0,0) :
             diagnostic_battle_basic_animation(result.source,hit.target,hit.hp_loss,0,target.hp>0);

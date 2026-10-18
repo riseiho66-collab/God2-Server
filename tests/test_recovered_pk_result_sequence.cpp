@@ -180,8 +180,54 @@ void signed_endpoint_checks(){
             rejected([&]{RecoveredPkActionProjection::logical(state,inconsistent,input,key);},"PK loss exceeded authoritative damage");
         }
 }
+void signed_hp_target_checks(){
+    for(const std::uint8_t source:{0,14})for(const std::uint32_t maximum:{0x7fffffffu,0x80000000u,0x90000000u,0xffffffffu})
+        for(const auto key:{std::optional<std::uint16_t>{},std::optional<std::uint16_t>{1},std::optional<std::uint16_t>{96}}){
+            const auto target=static_cast<std::uint8_t>(14-source);
+            BattleSnapshot state{3,2,BattleState::Active,{}};
+            state.numeric_profile=BattleNumericProfile::ExtendedHealth64;
+            state.actors[0]=BattleActor{0,1,40000,40000,20,120,10,10,10,10};
+            state.actors[14]=BattleActor{14,2,40000,40000,20,120,10,10,10,10};
+            state.actors[target]->max_hp=maximum;state.actors[target]->hp=7232;
+            const BattleActionResult result{source,0,{{target,32768,32768,false}}};
+            RecoveredPkActionProjection::Templates input{{attack(0,key),attack(14,key)},
+                {vital(false,0,40000,static_cast<std::uint32_t>(state.actors[0]->max_hp)),
+                 vital(false,14,40000,static_cast<std::uint32_t>(state.actors[14]->max_hp))},
+                {vital(true,0,20),vital(true,0,20)}, {bulk(),bulk()}};
+            if(maximum>0x7fffffff&&!input.animation[0].requires_absolute_hp_update()){
+                rejected([&]{RecoveredPkActionProjection::logical(state,result,input,key);},
+                    "High-bit native maximum admitted to signed deferred HP arithmetic");
+                continue;
+            }
+            const auto replies=RecoveredPkActionProjection::logical(state,result,input,key);
+            for(const auto& reply:replies){
+                const auto records=RecoveredTaiwanServerRecords::read(reply);
+                require(records&&Grammar::matches_output_sequence(reply),"Qualified HP domain changed result grammar");
+                if(input.animation[0].requires_absolute_hp_update()){
+                    const auto hp=RecoveredBattleVitals::parse_logical((*records)[1].bytes);
+                    require(hp&&hp->maximum()==maximum&&hp->current()==7232,
+                        "Deferred-HP guard narrowed independent absolute DWORD projection");
+                }
+            }
+            // The source is not this action's deferred target. Its independently
+            // represented high maximum must not become a whole-battle cap.
+            if(!input.animation[0].requires_absolute_hp_update()){
+                state.actors[source]->max_hp=0x80000000u;
+                input.hp[source/14]=vital(false,source,40000,0x80000000u);
+                (void)RecoveredPkActionProjection::logical(state,result,input,key);
+            }
+        }
+    RecoveredBattleAttackPresentation::require_deferred_hp_target(0x7fffffff,0x7fffffff);
+    RecoveredBattleAttackPresentation::require_deferred_hp_target(0x7fffffff,0);
+    rejected([]{RecoveredBattleAttackPresentation::require_deferred_hp_target(0x80000000u,7232);},
+        "Low current HP concealed a high-bit native maximum");
+    rejected([]{RecoveredBattleAttackPresentation::require_deferred_hp_target(0x7fffffff,0x80000000u);},
+        "Current HP exceeded the signed target maximum");
+    rejected([]{RecoveredBattleAttackPresentation::require_deferred_hp_target(0x100000001ULL,1);},
+        "Wide native maximum was truncated before the deferred guard");
+}
 }
 int main(){
-    try{grammar_checks();projection_checks();signed_endpoint_checks();}
+    try{grammar_checks();projection_checks();signed_endpoint_checks();signed_hp_target_checks();}
     catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }

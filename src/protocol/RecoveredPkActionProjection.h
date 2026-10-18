@@ -40,6 +40,9 @@ struct RecoveredPkActionProjection {
                input.hp[i].maximum()!=actor.max_hp||input.mp[i].maximum()!=actor.max_mp||
                input.animation[i].skill_key()!=skill_key)
                 throw std::invalid_argument("PK raw result templates do not match actor authority/action family");
+            if(!input.animation[i].requires_absolute_hp_update())
+                RecoveredBattleAttackPresentation::require_deferred_hp_target(
+                    state.actors[hit.target]->max_hp,state.actors[hit.target]->hp);
         }
         Replies replies;
         for(std::uint8_t viewer=0;viewer<2;++viewer){
