@@ -17,6 +17,7 @@
 #include <string>
 #include <fstream>
 #include <charconv>
+#include <optional>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -36,10 +37,12 @@ struct RecoveredSessionPeer {
     static constexpr std::uint64_t account=7,character=0x1234;
     std::uint64_t selected_character=character;
     RecoveredWorldEntry::Frame world_frame;
+    static constexpr std::uint64_t common_generation=11,world_generation=21;
 
     explicit RecoveredSessionPeer(bool movement,WorldHandler world={},
-        std::uint64_t selected=character,std::uint64_t session_id=2):selected_character(selected),
-        world_frame(RecoveredWorldEntry::wire(selected)) {
+        std::uint64_t selected=character,std::uint64_t session_id=2,
+        std::optional<std::uint16_t> scene_handle={}):selected_character(selected),
+        world_frame(RecoveredWorldEntry::wire(scene_handle?std::uint64_t{*scene_handle}:selected)) {
         peer.connect(acceptor.local_endpoint());
         auto socket=acceptor.accept();
         Session::RecoveredCharacterHandlers handlers;
@@ -88,6 +91,25 @@ struct RecoveredSessionPeer {
                 ++world_calls;
                 return world(s,records);
             };
+        }
+        if(scene_handle) {
+            // Explicit test-only common-world admission still goes through the
+            // actual prepared/ready_async hooks and original Session2A Write.
+            auto lifecycle=std::make_shared<Session::CommonWorldLifecycle>();
+            lifecycle->prepared=[this](Session& s,const auto& frame){
+                return s.account_id==account&&s.character_id==selected_character&&frame==world_frame;
+            };
+            lifecycle->prepared_actor=[this,scene_handle](Session&,const auto& frame)->std::optional<std::uint16_t>{
+                return frame==world_frame?scene_handle:std::nullopt;
+            };
+            lifecycle->ready_async=[this](Session& s,auto complete){
+                s.set_state(SessionState::InWorld);
+                s.bind_common_world_delivery_identity(account,selected_character,common_generation);
+                s.bind_world_delivery_identity({account,selected_character,world_generation,s.battle_generation()});
+                complete(true);
+            };
+            lifecycle->cancel=[](Session&){};
+            handlers.common_world_lifecycle=std::move(lifecycle);
         }
         session=std::make_shared<Session>(std::move(socket),io.get_executor(),session_id,false,
             Session::PacketHandler{},Session::DisconnectHandler{},ProtocolMode::God2CharacterConnection,
@@ -215,6 +237,151 @@ void recovered_character_idle_tick_transport() {
         if(checksum_bad) bad.back()^=1;
         peer.send(bad);peer.closed();
         require(peer.selection_calls==0,"Invalid character idle tick selected a character");
+    }
+}
+
+// These fixtures exercise actual Session append_write, paused held output and
+// its original full-write callback. They establish sender custody only, never
+// client R0 adoption or the eventual native meaning of an InBattle output.
+std::vector<std::uint8_t> sender_pk_fixture(std::uint16_t own_actor) {
+    std::vector<std::uint8_t> out;
+    const auto append=[&](const auto& bytes){out.insert(out.end(),bytes.begin(),bytes.end());};
+    std::array<std::uint8_t,9> context{0x82};context[1]=1;append(context);
+    for(const std::uint8_t position:{0,14}) {
+        std::array<std::uint8_t,17> appearance{0x86,4};appearance[2]=position;appearance[3]=1;append(appearance);
+    }
+    for(const std::uint8_t position:{0,14}) {
+        std::array<std::uint8_t,45> identity{0x1c};identity[1]=position;identity[2]=1;
+        const auto actor=static_cast<std::uint16_t>(own_actor+(position?1:0));
+        identity[3]=static_cast<std::uint8_t>(actor);identity[4]=static_cast<std::uint8_t>(actor>>8);
+        identity[6]=0x20;append(identity);
+        std::array<std::uint8_t,17> hp{0x86};hp[2]=position;hp[5]=100;hp[9]=80;append(hp);
+        if(!position){auto mp=hp;mp[1]=1;mp[5]=20;mp[9]=10;append(mp);}
+    }
+    std::array<std::uint8_t,121> bulk{0x88};bulk[1]=1;bulk[5]=80;bulk[9]=10;append(bulk);
+    return out;
+}
+struct SenderPkOwner final:Session::NativePkEntryOwner {
+    std::optional<Session::NativePkEntryHold> held;
+    unsigned held_calls=0,written_calls=0;
+    bool whole_written=false;
+    void native_pk_entry_held(Session&,std::optional<Session::NativePkEntryHold> value)override{
+        ++held_calls;held=std::move(value);
+    }
+    bool native_pk_entry_written(Session&,const Session::NativePkEntryHold&,bool value)override{
+        ++written_calls;whole_written=value;return true;
+    }
+};
+Session::NativePkEntryRequest sender_pk_request(RecoveredSessionPeer& peer,
+        const Session::NormalWorldInitialization& init,std::uint16_t actor) {
+    return {RecoveredSessionPeer::account,peer.selected_character,RecoveredSessionPeer::common_generation,
+        RecoveredSessionPeer::world_generation,peer.session->battle_generation(),init.entry_frame(),
+        init.entry_logical(),init.accepted_tail(),init.config_flag(),sender_pk_fixture(actor)};
+}
+void recovered_world_identity_sender_transport() {
+    constexpr std::uint16_t actor=0x345;
+    constexpr std::uint64_t wide_character=(std::uint64_t{1}<<40)|0x1234;
+    const auto probe=RecoveredWorldFrame::encode(std::array<std::uint8_t,5>{0x25,1,0,0,0});
+    const auto initialize=[&](RecoveredSessionPeer& peer,std::optional<Session::NormalWorldInitialization>& init){
+        peer.select(false);peer.send(RecoveredSessionPeer::tail(actor));peer.silent();
+        peer.send(probe);peer.silent();
+        require(init&&init->qualified_scene_identity()&&init->entry_written()&&init->world_identity_sender_current(),
+            "Actual qualified original2A full write did not establish sender custody");
+        require(peer.session->character_id==wide_character&&peer.session->normal_world_initialization_current_on_game(*init),
+            "Native scene handle narrowed full character ownership or replaced initialization");
+    };
+    const auto capture=[](std::optional<Session::NormalWorldInitialization>& init){
+        return [&init](Session& s,auto)->std::optional<std::vector<std::uint8_t>>{
+            const auto current=s.normal_world_initialization();
+            require(current&&s.normal_world_initialization_current(*current),"Original callback lost NormalInit");
+            if(init)require(init->same_initialization(*current),"Sender metadata replaced the original initialization");
+            init=current;return std::vector<std::uint8_t>{};
+        };
+    };
+    // Unknown or incomplete native records remain unchanged output; only the
+    // separate sender qualification is revoked, not whole NormalInit Current.
+    for(const unsigned conflict:{0u,1u,2u,3u}) {
+        std::optional<Session::NormalWorldInitialization> init;
+        RecoveredSessionPeer peer(false,capture(init),wide_character,200+conflict,actor);initialize(peer,init);
+        const auto original_frame=init->entry_frame();const auto original_logical=init->entry_logical();
+        const auto original_tail=init->accepted_tail();const auto original_config=init->config_flag();
+        auto logical=sender_pk_fixture(actor);
+        if(conflict==0)logical.insert(logical.end(),original_logical.begin(),original_logical.end());
+        else if(conflict==1){std::array<std::uint8_t,177> cf{0xcf};logical.insert(logical.end(),cf.begin(),cf.end());}
+        else if(conflict==2)logical.push_back(0xfe);
+        else logical.push_back(0xcf); // Valid envelope with truncated native record.
+        peer.session->send_world_records(logical);peer.expect(RecoveredWorldFrame::encode(logical));peer.silent();
+        require(!init->world_identity_sender_current()&&peer.session->normal_world_initialization_current_on_game(*init)&&
+            init->entry_frame()==original_frame&&init->entry_logical()==original_logical&&
+            init->accepted_tail()==original_tail&&init->config_flag()==original_config&&init->entry_written(),
+            "Conflicting sender changed original bytes/profile or retired whole NormalInit");
+        peer.send(probe);peer.silent();
+        require(!init->world_identity_sender_current(),"A later callback revived stale sender custody");
+        auto owner=std::make_shared<SenderPkOwner>();bool rejected=false;
+        try{(void)peer.session->prepare_native_pk_entry(sender_pk_request(peer,*init,actor),owner);}
+        catch(const std::exception&){rejected=true;}
+        require(rejected,"A qualified PK prepare reused revoked original2A sender custody");
+    }
+    for(const bool conflict_while_held:{false,true}) {
+        std::optional<Session::NormalWorldInitialization> init;
+        RecoveredSessionPeer peer(false,capture(init),wide_character,210+conflict_while_held,actor);initialize(peer,init);
+        const auto safe=sender_pk_fixture(actor);
+        peer.session->send_world_records(safe);peer.expect(RecoveredWorldFrame::encode(safe));peer.silent();
+        std::array<std::uint8_t,17> grant{0x86,5,0,1,2};
+        peer.session->send_world_records(std::vector<std::uint8_t>(grant.begin(),grant.end()));
+        peer.expect(RecoveredWorldFrame::encode(grant));peer.silent();
+        require(init->world_identity_sender_current(),"Normal1C/86-5 or complete PK bootstrap self-revoked sender");
+        auto owner=std::make_shared<SenderPkOwner>();auto request=sender_pk_request(peer,*init,actor);
+        for(const bool character_field:{false,true}){
+            auto wrong=request;bool rejected=false;
+            if(character_field)wrong.character^=std::uint64_t{1}<<32;
+            else wrong.account^=std::uint64_t{1}<<32;
+            try{(void)peer.session->prepare_native_pk_entry(std::move(wrong),owner);}
+            catch(const std::exception&){rejected=true;}
+            require(rejected&&init->world_identity_sender_current(),"PK owner comparison narrowed64-bit identity");
+        }
+        const auto pending=peer.session->prepare_native_pk_entry(request,owner);
+        for(unsigned spin=0;spin<200&&!owner->held;++spin)peer.pump();
+        require(owner->held&&*owner->held==pending&&owner->held_calls==1&&
+            peer.session->native_pk_entry_current(*owner->held)&&init->world_identity_sender_current(),
+            "Actual held bootstrap bypassed source custody or revoked itself");
+        peer.silent(); // Held FIFO has not released a single bootstrap byte.
+        if(conflict_while_held){
+            const auto conflicting=init->entry_logical();
+            peer.session->send_world_records(conflicting);peer.silent();
+            require(!init->world_identity_sender_current()&&!peer.session->native_pk_entry_current(*owner->held)&&
+                !peer.session->commit_native_pk_entry(*owner->held)&&
+                peer.session->normal_world_initialization_current_on_game(*init),
+                "Conflict was deferred until socket completion or preserved the precommit hold");
+            peer.session->abort_native_pk_entry(*owner->held);
+            peer.expect(RecoveredWorldFrame::encode(conflicting));peer.silent();
+            require(!init->world_identity_sender_current()&&owner->written_calls==1&&!owner->whole_written,
+                "Cancellation of held output restored revoked sender custody");
+        }else{
+            require(peer.session->commit_native_pk_entry(*owner->held)&&
+                peer.session->native_pk_entry_committed_current(*owner->held),"Actual held PK transition failed");
+            peer.session->release_native_pk_entry(*owner->held);
+            peer.expect(RecoveredWorldFrame::encode(request.logical));peer.silent();
+            require(owner->written_calls==1&&owner->whole_written&&
+                peer.session->native_pk_entry_written_current(*owner->held)&&init->world_identity_sender_current(),
+                "PK commit/release/full write self-revoked its original sender custody");
+            std::array<std::uint8_t,177> cf{0xcf};
+            peer.session->send_world_records(std::vector<std::uint8_t>(cf.begin(),cf.end()));
+            peer.expect(RecoveredWorldFrame::encode(cf));peer.silent();
+            require(!init->world_identity_sender_current()&&peer.session->native_pk_entry_written_current(*owner->held),
+                "Unknown future-world output phase revived custody or destroyed the committed hold");
+        }
+    }
+    for(const bool in_battle:{false,true}){
+        std::optional<Session::NormalWorldInitialization> init;
+        RecoveredSessionPeer peer(false,capture(init));
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();peer.send(probe);peer.silent();
+        require(init&&init->world_identity_sender_current()&&peer.session->state()==SessionState::CharacterSelected,
+            "Actual Selected original sender was never established");
+        if(in_battle)peer.session->set_state(SessionState::InBattle); // Transport phase fixture only.
+        peer.session->send_world_records(init->entry_logical());peer.expect(init->entry_frame());peer.silent();
+        require(!init->world_identity_sender_current(),
+            "Selected/InBattle output phase incorrectly exempted later2A sender conflict");
     }
 }
 
@@ -756,6 +923,7 @@ void test_session_state() {
         if(!state_allows(Opcode::C2S_Heartbeat,s)) throw std::runtime_error("Heartbeat state");
     if(state_allows(Opcode::C2S_Heartbeat,SessionState::Disconnected)) throw std::runtime_error("Disconnected heartbeat");
     diagnostic_scalar_codec_unchanged();
+    recovered_world_identity_sender_transport();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {
             return std::vector<std::uint8_t>{};

@@ -28,7 +28,7 @@ public:
                 const std::shared_ptr<SharedWorldPresence>& presence,const SharedWorldPresence::Lease& supplied_lease){
             const auto lease=supplied_lease;
             if(!session||!presence||!session->normal_world_initialization_current_on_game(initialization)||
-               !initialization.entry_written()||!initialization.qualified_scene_identity())return {};
+               !initialization.world_identity_sender_current()||!initialization.qualified_scene_identity())return {};
             const auto phase=session->state();const auto battle=session->battle_generation();
             const auto entry=RecoveredWorldEntryView::read(initialization.entry_frame());
             if(session->closing()||(phase!=SessionState::CharacterSelected&&phase!=SessionState::InWorld)||
@@ -69,12 +69,13 @@ public:
             if(thread_!=std::this_thread::get_id())return false;
             const auto session=session_.lock();const auto presence=presence_.lock();
             if(!session||!presence||!session->normal_world_initialization_current_on_game(initialization_)||
-               !initialization_.entry_written()||session->closing()||session->state()!=phase_||
+               !initialization_.world_identity_sender_current()||session->closing()||session->state()!=phase_||
                !matches_peer(session->id(),session->account_id,session->character_id,session->battle_generation()))return false;
             return presence->ready_lease(lease_.session,lease_.account,lease_.character)==std::optional{lease_}&&
                 session->normal_world_initialization_current_on_game(initialization_)&&!session->closing()&&
                 session->state()==phase_&&matches_peer(session->id(),session->account_id,session->character_id,
-                    session->battle_generation())&&presence->retained_ready_current(lease_);
+                    session->battle_generation())&&presence->retained_ready_current(lease_)&&
+                initialization_.world_identity_sender_current();
         }
         bool operator==(const NativeIdentity& other)const noexcept{
             return lease_==other.lease_&&battle_==other.battle_&&phase_==other.phase_&&thread_==other.thread_&&

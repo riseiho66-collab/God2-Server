@@ -210,6 +210,8 @@ public:
         const std::vector<std::uint8_t>& accepted_tail() const noexcept;
         std::uint8_t config_flag() const noexcept;
         bool entry_written() const noexcept;
+        // Actual original-Write custody only; no remote R0/selfslot authority.
+        bool world_identity_sender_current() const noexcept;
     private:
         friend class Session;
         friend struct Impl;

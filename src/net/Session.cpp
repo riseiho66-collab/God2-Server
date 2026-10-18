@@ -17,6 +17,7 @@
 #include "protocol/RecoveredWorldReady.h"
 #include "protocol/RecoveredWorldEntryView.h"
 #include "game/TaiwanWorldEntryIdentity.h"
+#include "game/TaiwanWorldIdentityWriteFence.h"
 #include "game/TaiwanActorStatusWriteFence.h"
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include "protocol/RecoveredBattleBootstrap.h"
@@ -270,6 +271,7 @@ struct Session::NormalWorldInitialization::Entry {
     const RecoveredWorldEntry::Frame frame;
     const std::vector<std::uint8_t> logical;
     const bool qualified_scene_identity; // Set only by the actual validated prepared_actor hook.
+    TaiwanWorldIdentityWriteFence world_identity_sender; // Separate original-Write custody only.
     std::atomic<bool> written{false},retired{false};
     Entry(std::weak_ptr<Session> owner,std::uint64_t a,std::uint64_t c,std::uint64_t b,
           RecoveredWorldEntry::Frame wire,std::vector<std::uint8_t> bytes,bool qualified=false)
@@ -313,6 +315,9 @@ std::uint8_t Session::NormalWorldInitialization::config_flag() const noexcept {r
 bool Session::NormalWorldInitialization::qualified_scene_identity() const noexcept {return data_->entry->qualified_scene_identity;}
 bool Session::NormalWorldInitialization::entry_written() const noexcept {
     return data_->entry->written.load() && !data_->entry->retired.load();
+}
+bool Session::NormalWorldInitialization::world_identity_sender_current() const noexcept {
+    return entry_written() && data_->entry->world_identity_sender.eligible();
 }
 
 struct Session::NormalWorldOutputHandle::Sync {
@@ -1354,11 +1359,32 @@ struct Session::Impl {
             std::forward<Body>(body));
     }
     void append_write(Write value) {
-        // Before insertion, even if allocation subsequently fails. All actual
-        // queue producers use this sink; game owners are never invoked here.
-        owner.invalidate_actor_status_writes();
-        value.status_writer=owner.begin_actor_status_writer();
-        writes.push_back(std::move(value));
+        // Every actual FIFO producer reaches this sink. Original provenance
+        // must be on Write BEFORE insertion, never attached to writes.back().
+        const auto entry=normal_entry.load();const auto original=value.normal_entry;
+        if(mode==ProtocolMode::God2CharacterConnection){
+            if(original){
+                const bool exact=original==entry && !original->retired.load() &&
+                    original->session.lock().get()==&owner && value.world_entry && !value.held && value.bytes &&
+                    value.bytes->size()==original->frame.size() &&
+                    std::equal(value.bytes->begin(),value.bytes->end(),original->frame.begin());
+                if(!exact || !original->world_identity_sender.admit_original())original->world_identity_sender.revoke();
+                if(entry && !exact)entry->world_identity_sender.revoke();
+            }else if(entry && !entry->retired.load() &&
+                (!value.bytes || TaiwanWorldIdentityWriteFence::conflicts_with_world_identity(*value.bytes))){
+                // A live Entry also exists in CharacterSelected and InBattle.
+                // Complete receiver phase routing is not qualified here. Revoke
+                // only sender custody, not output, whole Init Current or selfslot.
+                entry->world_identity_sender.revoke();
+            }
+        }
+        // Conflict revocation precedes insertion, including failed/cancelled
+        // insertion. A delayed original Written callback cannot undo it.
+        try {
+            owner.invalidate_actor_status_writes();
+            value.status_writer=owner.begin_actor_status_writer();
+            writes.push_back(std::move(value));
+        }catch(...){if(original)original->world_identity_sender.revoke();throw;}
     }
     // Strand-only full contiguous cohort validation. The game task uses the
     // corresponding pure ticket-presence proof, never reads this deque.
@@ -1745,6 +1771,11 @@ struct Session::Impl {
            common_world_identity.load().get()!=data->common.get() || common_entry_identity.load() ||
            normal_initialization.load()!=data->initialization.data_ ||
            !data->initialization.entry_written())return false;
+        // Consume the exact prebattle sender source before commit. The held
+        // bootstrap is already in FIFO; later alias writes follow it. Once
+        // committed, its private battle hold owns output, not old world Current.
+        if(!committed && data->initialization.qualified_scene_identity() &&
+           !data->initialization.world_identity_sender_current())return false;
         if(!committed && data->original_world_identity && world_delivery_identity.load()!=data->original_world_identity)
             return false; // Qualify the actual captured WORLD namespace until PK commit.
         const auto& r=data->request;
@@ -3028,8 +3059,8 @@ struct Session::Impl {
                     if(world_frame) {
                         auto next=std::make_shared<std::vector<std::uint8_t>>(world_frame->begin(),world_frame->end());
                         if(!s.terminal_write_allowed())return;
-                        s.write_bytes+=next->size();s.append_write({next,{},true});
-                        s.writes.back().normal_entry=normal_entry;
+                        Write original{next,{},true};original.normal_entry=normal_entry;
+                        s.write_bytes+=next->size();s.append_write(std::move(original));
                     }
                     s.c2s0002_state=world_frame?C2S0002State::WorldEntrySent:C2S0002State::CharacterSelected;
                     if(world_frame) {
@@ -4066,12 +4097,15 @@ struct Session::Impl {
                 if(const auto entry=s.writes.front().normal_entry) {
                     // Strand-owned exact Write; do not read game-owned IDs or
                     // change legacy write/close policy for passive metadata.
-                    if(!s.writes.front().held && s.writes.front().world_entry &&
-                       s.writes.front().bytes==bytes && transferred==bytes->size() &&
-                       bytes->size()==entry->frame.size() && s.normal_entry.load()==entry &&
-                       entry->session.lock().get()==self.get() && !entry->retired.load() &&
-                       std::equal(bytes->begin(),bytes->end(),entry->frame.begin()))entry->written.store(true);
-                    else entry->retired.store(true);
+                    const bool exact=!s.writes.front().held && s.writes.front().world_entry &&
+                        s.writes.front().bytes==bytes && transferred==bytes->size() &&
+                        bytes->size()==entry->frame.size() && s.normal_entry.load()==entry &&
+                        entry->session.lock().get()==self.get() && !entry->retired.load() &&
+                        std::equal(bytes->begin(),bytes->end(),entry->frame.begin());
+                    if(exact)entry->written.store(true);else entry->retired.store(true);
+                    // Physical Written is historical. Sender eligibility is a
+                    // separate monotonic source and cannot revive after conflict.
+                    (void)entry->world_identity_sender.complete_original(exact);
                 }
                 if(const auto attempt=s.writes.front().observed_world) {
                     if(s.writes.front().held || s.writes.front().bytes!=bytes || attempt->frame!=bytes ||
@@ -5831,6 +5865,8 @@ Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest
     // This is not a caller actor scalar or a mask of incoming S1C identity.
     std::uint64_t own_actor=request.character;
     if(data->entry->qualified_scene_identity){
+        if(!initialization.world_identity_sender_current())
+            throw std::invalid_argument("Native PK entry original world identity sender was revoked");
         const auto entry=RecoveredWorldEntryView::read(data->entry->frame);
         if(!entry||!qualified_taiwan_scene_handle(entry->actor_handle)||
            !std::equal(entry->logical.begin(),entry->logical.end(),
