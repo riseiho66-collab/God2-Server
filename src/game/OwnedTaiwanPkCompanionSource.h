@@ -5,6 +5,7 @@
 #include "net/Session.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include "game/OwnedTaiwanPkPlayerEntrySource.h"
+#include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "protocol/RecoveredRoleVitals.h"
 #include <functional>
 #include <algorithm>
@@ -148,6 +149,25 @@ public:
         explicit LearningSuccessor(std::shared_ptr<const Data> data):data_(std::move(data)){}
         std::shared_ptr<const Data> data_;
     };
+    class SelectionSuccessor {
+    public:
+        const Observation& predecessor()const noexcept{return *data_->before;}
+        const SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource& publication()const noexcept{return data_->publication;}
+        const OwnedTaiwanPkPlayerEntrySource::Observation& player()const noexcept{return data_->player;}
+    private:
+        friend class OwnedTaiwanPkCompanionSource;
+        struct Data {
+            const std::shared_ptr<const Observation> before;
+            const SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource publication;
+            const OwnedTaiwanPkPlayerEntrySource::Observation player;
+            Data(std::shared_ptr<const Observation> b,
+                    SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource p,
+                    OwnedTaiwanPkPlayerEntrySource::Observation actual_player)
+                :before(std::move(b)),publication(std::move(p)),player(std::move(actual_player)){}
+        };
+        explicit SelectionSuccessor(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
+    };
     struct Material {
         Session::NormalWorldInitialization initialization;
         RecoveredOwnedCompanions::Restoration restoration;
@@ -158,6 +178,7 @@ public:
         std::optional<WholeResponseCoverage> whole_response{}; // Absent on the exact legacy path.
         std::optional<ZeroPublication> zero_publication{}; // Original one-shot zero mode only.
         std::optional<LearningSuccessor> learning_successor{}; // Distinct actual Written learning lineage only.
+        std::optional<SelectionSuccessor> selection_successor{}; // Complete actual Written S31 chain only.
     };
     class Observation {
     public:
@@ -196,17 +217,51 @@ public:
         Session::NormalWorldInitialization,const Observation& predecessor,
         const OwnedTaiwanPkPlayerEntrySource::Observation& successor_player,
         OwnedSkillBookLearningService::WrittenLearningSource);
+    static std::optional<Observation> observe_selection(sqlite3*,SqliteCompanionRepository&,
+        RecoveredOwnedCompanions&,const NativeSkillCatalog&,std::shared_ptr<Session>,
+        Session::NormalWorldInitialization,const Observation& predecessor,
+        const OwnedTaiwanPkPlayerEntrySource::Observation& successor_player,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource);
 private:
+    static std::optional<OwnedSkillBookLearningService::LearningPublication> prior_learning(const Material& value) {
+        const auto* node=&value;
+        while(node->selection_successor)node=&node->selection_successor->predecessor().material();
+        if(node->learning_successor)return node->learning_successor->publication().publication();
+        return {};
+    }
+    static bool selection_shape(const Material& m) {
+        if(!m.selection_successor || m.learning_successor || m.zero_publication || m.whole_response || !m.writes.empty())return false;
+        const auto& lineage=*m.selection_successor;const auto& before=lineage.predecessor().material();
+        const auto& publication=lineage.publication();const auto publications=publication.publications();
+        const auto& history=m.restoration.batches();const auto& prior=before.restoration.batches();
+        if(publications.empty() || !lineage.player().matches_selection_source(publication) ||
+           !publication.initialization().same_initialization(m.initialization) ||
+           !before.initialization.same_initialization(m.initialization) ||
+           before.session!=m.session || before.account!=m.account || before.character!=m.character ||
+           before.battle_generation!=m.battle_generation || before.phase!=m.phase ||
+           m.prefix.profile()!=before.prefix.profile() || m.prefix.rows()!=before.prefix.rows() ||
+           m.prefix.roster_count()!=before.prefix.roster_count() || m.prefix.catalog_records()!=before.prefix.catalog_records() ||
+           history.size()!=prior.size()+publications.size() || m.prefix.actual_batches()!=history ||
+           m.restoration.deity_roster().selection()!=std::optional{publications.back().committed().after()})return false;
+        for(std::size_t i=0;i<prior.size();++i)if(history[i]!=prior[i])return false;
+        for(std::size_t i=0;i<publications.size();++i) {
+            const auto raw=publications[i].committed().deity().snapshot.status.encode();
+            const auto& actual=history[prior.size()+i];
+            if(actual.size()!=raw.size() || !std::equal(raw.begin(),raw.end(),actual.begin()))return false;
+        }
+        const auto selected=m.prefix.selected_row();
+        return selected>=0 && selected<m.prefix.roster_count() &&
+            m.prefix.rows()[std::size_t(selected)].row_key==publications.back().committed().after().key;
+    }
     static bool learning_shape(const Material& m) {
-        if(!m.learning_successor || m.zero_publication || m.whole_response || !m.writes.empty() ||
+        if(!m.learning_successor || m.selection_successor || m.zero_publication || m.whole_response || !m.writes.empty() ||
            !m.restoration.learning_source())return false;
         const auto& lineage=*m.learning_successor;const auto& before=lineage.predecessor().material();
         const auto& publication=lineage.publication();const auto& player=lineage.player();
         const auto& appearance=player.combat().appearance();const auto& shape=appearance.material();
         const auto& delta=publication.logical_delta();const auto& history=m.restoration.batches();
         const auto& prior=before.restoration.batches();
-        std::optional<OwnedSkillBookLearningService::LearningPublication> previous;
-        if(before.learning_successor)previous.emplace(before.learning_successor->publication().publication());
+        const auto previous=prior_learning(before);
         if(!publication.follows(previous) || !player.matches_learning_source(publication) ||
            !publication.initialization().same_initialization(m.initialization) ||
            !before.initialization.same_initialization(m.initialization) ||
@@ -226,6 +281,7 @@ private:
     }
     static bool zero_shape(const Material& m) {
         if(!m.zero_publication||!m.whole_response||!m.writes.empty()||
+           m.selection_successor||
            !m.restoration.learning_source()||!m.restoration.learning_source()->activations().empty()||
            !m.restoration.deity_roster().rows().empty()||m.restoration.deity_roster().selection()||
            !m.restoration.batches().empty()||!m.prefix.actual_batches().empty()||
@@ -287,7 +343,14 @@ private:
         // Immutable single-predecessor private construction is acyclic. This
         // loop retains all original receipts without recursively querying old
         // saved tuples or requiring an earlier publication to remain latest.
-        while(node->learning_successor) {
+        while(node->learning_successor || node->selection_successor) {
+            if(node->selection_successor) {
+                if(!selection_shape(*node))return false;
+                const auto& lineage=*node->selection_successor;const auto& written=lineage.publication().response();
+                if(written.status()!=Session::WorldResponseWriteStatus::Written ||
+                   !peer.world_response_write_current_on_game(written))return false;
+                node=&lineage.predecessor().material();continue;
+            }
             if(!learning_shape(*node))return false;
             const auto& lineage=*node->learning_successor;const auto& written=lineage.publication().response();
             if(written.status()!=Session::WorldResponseWriteStatus::Written ||
@@ -342,6 +405,16 @@ private:
                peer->battle_generation()!=m.battle_generation ||
                m.restoration.deity_roster().account()!=m.account ||
                m.restoration.deity_roster().character()!=m.character)return false;
+            if(m.selection_successor) {
+                const auto& lineage=*m.selection_successor;
+                return selection_shape(m) && lineage.predecessor().uses_connection(db) &&
+                    lineage.player().uses_connection(db) && lineage.publication().current(*peer) &&
+                    !reentered && transport_history_current(m,*peer) && lineage.player().current() && !reentered &&
+                    peer->normal_world_initialization_current_on_game(m.initialization) &&
+                    m.initialization.entry_written() && !peer->closing() && peer->state()==m.phase &&
+                    peer->id()==m.session && peer->account_id==m.account && peer->character_id==m.character &&
+                    peer->battle_generation()==m.battle_generation;
+            }
             if(m.learning_successor) {
                 const auto& lineage=*m.learning_successor;
                 return learning_shape(m) && lineage.predecessor().uses_connection(db) &&
@@ -388,7 +461,7 @@ private:
         bool current(const Material& m){
             Read read(*this);if(!read.entered || !identities() || !sqlite3_get_autocommit(db))return false;
             const auto changes=sqlite3_total_changes64(db);
-            if(m.learning_successor)
+            if(m.learning_successor || m.selection_successor)
                 return local(m) && helper.restoration_current(m.restoration) && local(m) &&
                     learning_catalog_current(m) && local(m) &&
                     helper.restoration_current(m.restoration) && local(m) && !reentered &&
@@ -408,6 +481,8 @@ private:
             // SAME Prepared player separately, Active/Finished use their ledger.
             if(m.learning_successor && (!learning_shape(m) ||
                !m.learning_successor->player().uses_connection(actual)))return false;
+            if(m.selection_successor && (!selection_shape(m) ||
+               !m.selection_successor->player().uses_connection(actual)))return false;
             // Only concrete closed SQL reads. Never invoke live helper Current or
             // Session/presence/world-init callbacks inside the room transaction.
             if(!repository.deity_roster_current_in_transaction(m.restoration.deity_roster()))return false;
@@ -444,6 +519,8 @@ inline bool OwnedTaiwanPkCompanionSource::Observation::current()const{
 inline bool OwnedTaiwanPkCompanionSource::Observation::learning_player_matches(
         const OwnedTaiwanPkPlayerEntrySource::Observation& player)const noexcept {
     if(!material_)return false;
+    if(material_->selection_successor)return material_->selection_successor->player()==player &&
+        player.matches_selection_source(material_->selection_successor->publication());
     if(!material_->learning_successor)return true; // Exact legacy Room behavior remains unchanged.
     return material_->learning_successor->player()==player &&
         player.matches_learning_source(material_->learning_successor->publication());
@@ -584,8 +661,7 @@ inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCom
        !original.initialization.same_initialization(initialization) ||
        !publication.initialization().same_initialization(initialization) ||
        original.prefix.profile()!=catalog.taiwan_profile() || !original.restoration.learning_source())return {};
-    std::optional<OwnedSkillBookLearningService::LearningPublication> previous;
-    if(original.learning_successor)previous.emplace(original.learning_successor->publication().publication());
+    const auto previous=prior_learning(original);
     if(!publication.follows(previous))return {};
     const auto& delta=publication.logical_delta();
     const auto framed=RecoveredWorldFrame::encode(delta);
@@ -622,6 +698,63 @@ inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCom
         std::move(*prefix),{},id,account,character,battle,phase,{},{},std::move(lineage)});
     Observation result(std::move(state),std::move(material));
     if(!learning_shape(result.material()) || !result.learning_player_matches(player) || !result.current())return {};
+    return result;
+}
+inline std::optional<OwnedTaiwanPkCompanionSource::Observation> OwnedTaiwanPkCompanionSource::observe_selection(
+        sqlite3* db,SqliteCompanionRepository& repository,RecoveredOwnedCompanions& helper,
+        const NativeSkillCatalog& catalog,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,const Observation& predecessor,
+        const OwnedTaiwanPkPlayerEntrySource::Observation& successor_player,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource publication) {
+    const auto before=predecessor;const auto player=successor_player;
+    if(!db || !repository.uses_connection(db) || !helper.owns_repository(repository) ||
+       !catalog.uses_connection(db) || !session || !before.uses_connection(db) ||
+       !player.uses_connection(db) || !player.matches_selection_source(publication) ||
+       !publication.current(*session))return {};
+    const auto& original=before.material();
+    const auto phase=session->state();const auto id=session->id(),account=session->account_id,
+        character=session->character_id,battle=session->battle_generation();
+    if((phase!=SessionState::CharacterSelected && phase!=SessionState::InWorld) ||
+       !account || !character || original.session!=id || original.account!=account ||
+       original.character!=character || original.battle_generation!=battle || original.phase!=phase ||
+       !original.initialization.same_initialization(initialization) ||
+       !publication.initialization().same_initialization(initialization) ||
+       original.prefix.profile()!=catalog.taiwan_profile())return {};
+    if(original.selection_successor && original.selection_successor->publication().same_source(publication))return {};
+    auto state=std::make_shared<State>(State{db,repository,helper,catalog,session});
+    std::optional<RecoveredOwnedCompanions::Restoration> restoration;
+    std::optional<TaiwanNativeDeityRosterPrefix> prefix;
+    {
+        State::Read read(*state);if(!read.entered)return {};
+        const auto changes=sqlite3_total_changes64(db);
+        const auto local=[&] {
+            return !state->reentered && state->identities() && sqlite3_get_autocommit(db) &&
+                sqlite3_total_changes64(db)==changes && !session->closing() && session->state()==phase &&
+                session->id()==id && session->account_id==account && session->character_id==character &&
+                session->battle_generation()==battle && initialization.entry_written() &&
+                session->normal_world_initialization_current_on_game(initialization) &&
+                player.matches_selection_source(publication);
+        };
+        if(!local() || !publication.current(*session) || !local() ||
+           !transport_history_current(original,*session) || !local())return {};
+        restoration=helper.selection_successor_from_committed(original.restoration,publication.publications());
+        if(!restoration || !local() || !publication.current(*session) || !local())return {};
+        std::vector<std::vector<std::uint8_t>> records;
+        records.reserve(publication.publications().size());
+        for(const auto& item:publication.publications()) {
+            const auto raw=item.committed().deity().snapshot.status.encode();
+            records.emplace_back(raw.begin(),raw.end());
+        }
+        prefix=TaiwanNativeDeityRosterPrefix::advance_written_selection(original.prefix,records);
+        if(!prefix || prefix->actual_batches()!=restoration->batches() || !local() ||
+           !publication.current(*session) || !local() || !player.current() || !local())return {};
+    }
+    SelectionSuccessor lineage(std::make_shared<const SelectionSuccessor::Data>(
+        std::make_shared<const Observation>(before),std::move(publication),player));
+    auto material=std::make_shared<const Material>(Material{std::move(initialization),std::move(*restoration),
+        std::move(*prefix),{},id,account,character,battle,phase,{},{},{},std::move(lineage)});
+    Observation result(std::move(state),std::move(material));
+    if(!selection_shape(result.material()) || !result.learning_player_matches(player) || !result.current())return {};
     return result;
 }
 }

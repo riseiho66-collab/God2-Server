@@ -147,6 +147,11 @@ public:
     };
     // Pure private issuer identity only; never a current-row SQL observation.
     bool issued_selection(const CommittedDeitySelection&) const noexcept;
+    // Pure provisional successor of the SAME private full roster. Only the
+    // selection may advance; callers must qualify the final complete readset
+    // after the whole committed chain, never re-read its consumed predecessor.
+    std::optional<OwnedDeityRosterReadset> selection_roster_successor(
+        const OwnedDeityRosterReadset&,const CommittedDeitySelection&) const;
     // Own IMMEDIATE transaction; both expected values are owned before any
     // observer. Reject stale full rows even for an idempotent selection.
     CommittedDeitySelection select_deity_with_source(std::uint64_t account,std::uint64_t character,

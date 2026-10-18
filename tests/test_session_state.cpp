@@ -12,6 +12,11 @@
 #include "protocol/RecoveredCharacterCreateResult.h"
 #include "protocol/RecoveredWorldStateCandidate.h"
 #include "protocol/DiagnosticBattleParticipants.h"
+#include "db/SqliteMigrationManager.h"
+#include "db/SqliteRecoveredCharacterRepository.h"
+#include "db/SqliteSupport.h"
+#include "handlers/RecoveredOwnedCompanions.h"
+#include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -39,6 +44,7 @@ struct RecoveredSessionPeer {
     std::uint64_t selected_character=character;
     RecoveredWorldEntry::Frame world_frame;
     static constexpr std::uint64_t common_generation=11,world_generation=21;
+    std::uint64_t common_source_generation=common_generation;
 
     explicit RecoveredSessionPeer(bool movement,WorldHandler world={},
         std::uint64_t selected=character,std::uint64_t session_id=2,
@@ -105,7 +111,7 @@ struct RecoveredSessionPeer {
             };
             lifecycle->ready_async=[this](Session& s,auto complete){
                 s.set_state(SessionState::InWorld);
-                s.bind_common_world_delivery_identity(account,selected_character,common_generation);
+                s.bind_common_world_delivery_identity(account,selected_character,common_source_generation);
                 s.bind_world_delivery_identity({account,selected_character,world_generation,s.battle_generation()});
                 complete(true);
             };
@@ -205,6 +211,105 @@ struct RecoveredSessionPeer {
             static_cast<std::uint8_t>(id),static_cast<std::uint8_t>(id>>8),1,0});
     }
 };
+
+void recovered_written_deity_selection_transport() {
+    struct Close {void operator()(sqlite3* db)const {sqlite3_close_v2(db);}};
+    sqlite3* raw=nullptr;require(sqlite3_open(":memory:",&raw)==SQLITE_OK,"Selection fixture DB open failed");
+    std::unique_ptr<sqlite3,Close> db(raw);
+    sqlite_detail::execute(raw,"PRAGMA foreign_keys=ON");
+    SqliteMigrationManager(raw,default_sqlite_migrations()).migrate();
+    sqlite_detail::execute(raw,"INSERT INTO accounts(id,username,password_hash) VALUES(7,'selection-test','hash')");
+    SqliteRecoveredCharacterRepository characters(raw);
+    std::array<std::uint8_t,40> profile{};profile[0]='S';
+    const auto character=characters.create(RecoveredSessionPeer::account,profile).id;
+    const auto position=characters.commit_position(RecoveredSessionPeer::account,character,{},1,1,18,14);
+    SqliteCompanionRepository companions(raw);RecoveredOwnedCompanions helper(companions);
+    for(const std::uint8_t key:{101,102}) {
+        RecoveredDeityState::Declaration::Bytes declaration{0x30,key,'S'};
+        RecoveredDeityState::Status::Bytes status{0x31,key,1};
+        const std::array<std::uint8_t,4> skill{0x34,key,0,1};
+        companions.store_deity(RecoveredSessionPeer::account,character,
+            {*RecoveredDeityState::Declaration::parse(declaration),*RecoveredDeityState::Status::parse(status),
+                {*RecoveredDeityState::Skill::parse(skill)}},{},
+            {SqliteCompanionRepository::source_sha256,"CUSTOM_TEST_NOT_NATIVE","selection-real-session-fixture"});
+    }
+    auto presence=std::make_shared<SharedWorldPresence>(characters);
+    NativeSkillCatalog catalog(raw);
+    auto source=SharedTaiwanOwnedDeitySkillSource::create(presence,companions,catalog,
+        SharedTaiwanOwnedDeitySkillSource::Mode::SelectionPublicationRequired,2);
+    std::optional<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource> previous;
+    unsigned callbacks=0;bool pending_rejected=false,old_retired=false;
+    constexpr std::uint16_t actor=0x345;
+    RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
+        std::vector<std::uint8_t> keys;
+        for(const auto& record:records) {
+            const auto* selected=std::get_if<RecoveredDeitySelection::Request>(&record);
+            require(selected!=nullptr,"Selection fixture accepted a non-C67 input");keys.push_back(selected->key);
+        }
+        auto callback=source->begin_selection_callback(session,keys);
+        require(callback.has_value(),"Actual selection callback was not captured");
+        if(previous)old_retired=!previous->current(session);
+        std::vector<std::uint8_t> reply;
+        for(const auto key:keys) {
+            auto wire=source->select_deity_for_callback(session,helper,{key});
+            require(wire.has_value(),"Actual private selection failed");reply.insert(reply.end(),wire->begin(),wire->end());
+        }
+        require(source->selection_response_matches(session,*callback,reply),"Ordered private S31 components did not match whole reply");
+        const auto write=session.observe_world_response(reply);
+        session.hold_world_input_until_response_written(write);
+        source->publish_selection_callback(session,*callback,write);
+        pending_rejected=!source->observe_selection_publication(session);
+        source->abandon_selection_callback(*callback);++callbacks;return reply;
+    },character,4740,actor);
+    const auto lease=presence->prepare(peer.session->id(),RecoveredSessionPeer::account,character,actor,position);
+    require(lease&&presence->activate(*lease,actor),"Actual common selection lease missing");
+    peer.common_source_generation=lease->generation;
+    peer.select(false);peer.send(RecoveredSessionPeer::tail(actor));peer.silent();
+    const auto expected=[&](std::initializer_list<std::uint8_t> keys) {
+        std::vector<std::uint8_t> wire;
+        for(const auto key:keys) {
+            RecoveredDeityState::Status::Bytes status{0x31,key,1};
+            const auto frame=RecoveredWorldFrame::encode(status);wire.insert(wire.end(),frame.begin(),frame.end());
+        }
+        return wire;
+    };
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,4>{0x67,101,0x67,102}));
+    peer.expect(expected({101,102}));peer.silent();
+    previous=source->observe_selection_publication(*peer.session);
+    require(previous&&pending_rejected&&callbacks==1&&previous->current(*peer.session),"Pending selection minted early or whole Written failed");
+    require(previous->publications().size()==2&&previous->publications()[0].committed().after().key==101&&
+        previous->publications()[1].committed().after().key==102&&
+        previous->publications()[1].committed().before()==std::optional{previous->publications()[0].committed().after()}&&
+        previous->response().wire()==expected({101,102}),"Consecutive C67 private commits/order/history were truncated to last");
+    const auto old=*previous;
+    const auto account=peer.session->account_id;
+    peer.session->account_id^=std::uint64_t{1}<<32;
+    require(!old.current(*peer.session),"Selection source narrowed account identity");peer.session->account_id=account;
+    peer.session->character_id^=std::uint64_t{1}<<32;
+    require(!old.current(*peer.session),"Selection source narrowed character identity");peer.session->character_id=character;
+    RecoveredSessionPeer foreign(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>>{return std::vector<std::uint8_t>{};},
+        character,4741,actor);
+    foreign.select(false);foreign.send(RecoveredSessionPeer::tail(actor));foreign.silent();
+    require(!old.current(*foreign.session)&&!source->observe_selection_publication(*foreign.session),
+        "Another Session/normal-init borrowed equal-owner selection bytes");
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101}));
+    peer.expect(expected({101}));peer.silent();
+    const auto fresh=source->observe_selection_publication(*peer.session);
+    require(fresh&&old_retired&&!old.current(*peer.session)&&!fresh->same_source(old)&&
+        fresh->publications().size()==1&&fresh->publications().front().committed().before()==
+            std::optional{old.publications().back().committed().after()},"New selection revived old token or lost the prior commit boundary");
+    previous=*fresh;
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101}));
+    peer.expect(expected({101}));peer.silent();
+    const auto equal_bytes=source->observe_selection_publication(*peer.session);
+    require(equal_bytes&&old_retired&&!fresh->current(*peer.session)&&!equal_bytes->same_source(*fresh)&&
+        equal_bytes->response().wire()==fresh->response().wire()&&
+        !equal_bytes->publications().front().committed().changed()&&
+        equal_bytes->publications().front().committed().after()==fresh->publications().front().committed().after(),
+        "Idempotent equal-byte S31 revived the old occurrence or changed saved revision");
+    source->release_selection(*peer.session);
+    require(!equal_bytes->current(*peer.session)&&!source->observe_selection_publication(*peer.session),"Released selection occurrence survived");
+}
 
 void recovered_character_idle_tick_transport() {
     const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
@@ -1054,6 +1159,7 @@ void test_session_state() {
     diagnostic_scalar_codec_unchanged();
     recovered_world_identity_sender_transport();
     recovered_battle_self_view_transport();
+    recovered_written_deity_selection_transport();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {
             return std::vector<std::uint8_t>{};

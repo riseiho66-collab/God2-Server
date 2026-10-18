@@ -1,5 +1,6 @@
 #pragma once
 #include "net/Session.h"
+#include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "handlers/RecoveredOwnedCompanions.h"
 #include "protocol/RecoveredInventoryItemRequest.h"
 #include "protocol/RecoveredTargetItemRequest.h"
@@ -125,6 +126,13 @@ public:
     std::optional<std::vector<std::uint8_t>> bootstrap(Session&,
         const std::shared_ptr<SharedWorldPresence>& presence,const RestorationSupplier& restored);
     void bind_bootstrap_response(Session&,const Session::WorldResponseWrite&);
+    // Actual Written S31 continuation only. Preserve the last real learning
+    // chronology while retiring its Current; selection is never learning.
+    // No existing Entry is an explicit no-op, not a new source/publication.
+    bool reanchor_selection(Session&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical_after,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource);
     void release(Session&);
     void stop();
 private:

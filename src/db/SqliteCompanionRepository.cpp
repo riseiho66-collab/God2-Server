@@ -55,6 +55,23 @@ bool SqliteCompanionRepository::issued_selection(const CommittedDeitySelection& 
     const auto identity=value.data_->identity.lock();
     return identity && identity==readset_identity_;
 }
+std::optional<OwnedDeityRosterReadset> SqliteCompanionRepository::selection_roster_successor(
+        const OwnedDeityRosterReadset& before,const CommittedDeitySelection& committed) const {
+    const auto identity=before.identity_.lock();
+    if(!issued_selection(committed) || before.repository_!=this || !identity ||
+       identity!=readset_identity_ || before.account()!=committed.account() ||
+       before.character()!=committed.character() || before.selection()!=committed.before())return {};
+    const auto& selected=committed.deity();
+    const auto key=committed.after().key;
+    if(selected.snapshot.status.key_raw()!=key)return {};
+    const auto found=std::find_if(before.rows().begin(),before.rows().end(),
+        [&](const auto& row){return row.snapshot.status.key_raw()==key;});
+    if(found==before.rows().end() || !same_deity(*found,selected) ||
+       std::count_if(before.rows().begin(),before.rows().end(),
+           [&](const auto& row){return row.snapshot.status.key_raw()==key;})!=1)return {};
+    return OwnedDeityRosterReadset(this,readset_identity_,before.account(),before.character(),
+        before.rows(),committed.after(),before.template_keys());
+}
 void SqliteCompanionRepository::require_owner(std::uint64_t account,std::uint64_t character) {
     if(!account || !character) throw DatabaseError("Invalid companion owner");
     sqlite_detail::Statement row(db_,"SELECT 1 FROM recovered_characters WHERE account_id=? AND id=?");

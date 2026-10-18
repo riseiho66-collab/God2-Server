@@ -16,11 +16,12 @@ struct SharedTaiwanOwnedDeitySkillSource::Publication {
     SessionState phase;
     std::uint64_t battle_generation;
     std::optional<RecoveredOwnedCompanions::SelectionPublication> last;
+    std::vector<RecoveredOwnedCompanions::SelectionPublication> results;
     std::optional<Session::WorldResponseWrite> write;
     Publication(std::weak_ptr<Impl> owner,std::weak_ptr<Session> actual,
-        Session::NormalWorldInitialization init,const Scope& scope)
+        Session::NormalWorldInitialization init,const Scope& scope,std::size_t count)
         :origin(std::move(owner)),session(std::move(actual)),initialization(std::move(init)),
-         lease(scope.lease),phase(scope.phase),battle_generation(scope.battle_generation) {}
+         lease(scope.lease),phase(scope.phase),battle_generation(scope.battle_generation) {results.reserve(count);}
 };
 struct SharedTaiwanOwnedDeitySkillSource::CallbackData {
     std::weak_ptr<Impl> origin;
@@ -38,7 +39,7 @@ struct SharedTaiwanOwnedDeitySkillSource::CallbackData {
         Session::NormalWorldInitialization init,const Scope& scope,std::span<const std::uint8_t> input)
         :origin(owner),session(actual),initialization(init),lease(scope.lease),phase(scope.phase),
          battle_generation(scope.battle_generation),keys(input.begin(),input.end()),results(keys.size()),
-         candidate(std::make_shared<Publication>(std::move(owner),std::move(actual),std::move(init),scope)) {}
+         candidate(std::make_shared<Publication>(std::move(owner),std::move(actual),std::move(init),scope,input.size())) {}
 };
 struct SharedTaiwanOwnedDeitySkillSource::Impl {
     const std::thread::id thread=std::this_thread::get_id();
@@ -294,6 +295,7 @@ std::optional<std::vector<std::uint8_t>> SharedTaiwanOwnedDeitySkillSource::sele
         throw std::runtime_error("TW selection committed source became stale");
     if(data->next && commit.before()!=std::optional{data->results[data->next-1]->committed().after()})
         throw std::runtime_error("TW selection committed prefix changed between original runs");
+    data->candidate->results.push_back(result->publication()); // Capacity allocated before SQL.
     data->results[data->next].emplace(result->publication());++data->next;
     if(const auto at=state->selections.find(session.id());at!=state->selections.end() && at->second->pending==data)
         at->second->published.reset(); // Old equal-key publications cannot resurrect.
@@ -312,11 +314,33 @@ void SharedTaiwanOwnedDeitySkillSource::publish_selection_callback(Session& sess
         throw std::runtime_error("TW selection original response publication mismatch");
     // Candidate/slots were allocated before SQL. Receipt copies retain private
     // ownership only; the Session's whole-frame allocation can still fail earlier.
+    if(data->candidate->results.size()!=data->keys.size())
+        throw std::runtime_error("TW selection whole commit chain incomplete");
     data->candidate->last.emplace(*data->results.back());data->candidate->write.emplace(write);
     const auto at=state->selections.find(session.id());
     if(at==state->selections.end() || at->second->pending!=data)
         throw std::runtime_error("TW selection publication holder changed");
     at->second->published=data->candidate;at->second->pending.reset();data->published=true;state->active.reset();
+}
+std::span<const RecoveredOwnedCompanions::SelectionPublication>
+SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource::publications()const noexcept{return publication_->results;}
+const Session::WorldResponseWrite&
+SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource::response()const noexcept{return *publication_->write;}
+const Session::NormalWorldInitialization&
+SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource::initialization()const noexcept{return publication_->initialization;}
+bool SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource::current(Session& session)const {
+    const auto value=publication_;const auto state=value->origin.lock();
+    if(!state || state->thread!=std::this_thread::get_id())return false;
+    Impl::Read read(*state);return state->publication_current(session,value);
+}
+std::optional<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource>
+SharedTaiwanOwnedDeitySkillSource::observe_selection_publication(Session& session) {
+    const auto self=shared_from_this();const auto state=state_;Impl::Read read(*state);
+    const auto found=state->selections.find(session.id());
+    if(found==state->selections.end())return {};
+    const auto value=found->second->published;
+    if(!value || value->results.empty() || !state->publication_current(session,value))return {};
+    return WrittenSelectionSource(value);
 }
 void SharedTaiwanOwnedDeitySkillSource::abandon_selection_callback(const SelectionCallback& callback) noexcept {
     const auto state=state_;if(state->thread!=std::this_thread::get_id())std::terminate();

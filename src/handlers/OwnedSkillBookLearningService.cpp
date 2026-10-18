@@ -40,6 +40,24 @@ const OwnedInventoryInstance* item_at(const OwnedInventorySnapshot& inventory,st
     }
     return result;
 }
+bool same_roster(const OwnedDeityRosterReadset& a,const OwnedDeityRosterReadset& b) {
+    if(a.account()!=b.account()||a.character()!=b.character()||a.selection()!=b.selection()||
+       a.template_keys()!=b.template_keys()||a.rows().size()!=b.rows().size())return false;
+    for(std::size_t i=0;i<a.rows().size();++i){
+        const auto& x=a.rows()[i];const auto& y=b.rows()[i];
+        if(x.revision!=y.revision||x.provenance!=y.provenance||
+           x.snapshot.declaration.encode()!=y.snapshot.declaration.encode()||
+           x.snapshot.status.encode()!=y.snapshot.status.encode()||x.snapshot.skills.size()!=y.snapshot.skills.size())return false;
+        for(std::size_t n=0;n<x.snapshot.skills.size();++n)
+            if(x.snapshot.skills[n].encode()!=y.snapshot.skills[n].encode())return false;
+    }
+    return true;
+}
+bool same_learning(const SqliteSkillBookLearningRepository::Restoration& a,
+        const SqliteSkillBookLearningRepository::Restoration& b) {
+    return a.inventory()==b.inventory()&&a.equipment()==b.equipment()&&
+        a.activations()==b.activations()&&same_roster(a.roster(),b.roster());
+}
 void append_frame(std::vector<std::uint8_t>& wire,std::span<const std::uint8_t> logical) {
     if(logical.empty())return;
     auto frame=RecoveredWorldFrame::encode(logical);wire.insert(wire.end(),frame.begin(),frame.end());
@@ -52,6 +70,10 @@ struct OwnedSkillBookLearningService::Entry {
     SessionState phase;
     std::uint16_t actor;
     std::shared_ptr<const RecoveredOwnedCompanions::Restoration> original_restoration;
+    struct SelectionAnchor {
+        const SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source;
+    };
+    std::shared_ptr<const SelectionAnchor> selection_anchor;
     bool bootstrap_complete_without_reply=false;
     std::shared_ptr<SharedWorldPresence> presence;
     std::optional<SharedWorldPresence::Lease> lease;
@@ -349,6 +371,48 @@ void OwnedSkillBookLearningService::bind_bootstrap_response(Session& session,con
     }
     entry->bootstrap_response.emplace(response); // Private owning receipt copy, no allocation/second capture.
 }
+bool OwnedSkillBookLearningService::reanchor_selection(Session& session,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source) {
+    Operation operation(*this);
+    const auto found=entries_.find(session.id());
+    if(found==entries_.end())return predecessor&&canonical&&source.current(session); // No Entry is minted.
+    const auto entry=found->second;const auto original=entry->original_restoration;
+    const auto latest=entry->latest_publication;const auto anchor=entry->selection_anchor;
+    const auto local=[&]{
+        return ready(session,entry,true)&&entry->original_restoration==original&&
+            entry->latest_publication==latest&&entry->selection_anchor==anchor&&
+            source.initialization().same_initialization(entry->initialization);
+    };
+    if(!predecessor||!canonical||!predecessor->owns_learning_repository(repository_)||
+       !canonical->owns_learning_repository(repository_)||!predecessor->learning_source()||!canonical->learning_source()||
+       !local()||(anchor&&anchor->source.same_source(source))||!source.current(session)||!local())return false;
+    if(latest && (latest->phase.load()!=LearningPublication::Data::Phase::Bound||!latest->response||
+       latest->response->status()!=Session::WorldResponseWriteStatus::Written||
+       !session.world_response_write_current_on_game(*latest->response)))return false;
+    if(entry->pending_publication && entry->pending_publication!=latest)return false;
+    const auto& before=anchor?*original->learning_source():
+        (latest?latest->after:*original->learning_source());
+    if(!same_learning(before,*predecessor->learning_source()))return false;
+    std::vector<const SqliteCompanionRepository::CommittedDeitySelection*> commits;
+    commits.reserve(source.publications().size());auto history=predecessor->batches();
+    for(const auto& publication:source.publications()){
+        commits.push_back(&publication.committed());
+        const auto raw=publication.committed().deity().snapshot.status.encode();
+        if(raw.size()!=29||raw[0]!=0x31||RecoveredWorldFrame::encode(raw)!=publication.wire())return false;
+        history.emplace_back(raw.begin(),raw.end());
+    }
+    const auto after=repository_.selection_successor(before,commits);
+    if(!after||!local()||!same_learning(*after,*canonical->learning_source())||
+       !same_roster(canonical->deity_roster(),after->roster())||history!=canonical->batches()||
+       !qualify_presence(session,entry,after->equipment())||!local()||!source.current(session)||!local())return false;
+    const auto next=std::make_shared<const Entry::SelectionAnchor>(Entry::SelectionAnchor{source});
+    if(!local())return false;
+    entry->original_restoration=std::move(canonical);entry->selection_anchor=next;
+    entry->pending_publication.reset(); // Historical Bound token is not revived.
+    return ready(session,entry,true);
+}
 bool OwnedSkillBookLearningService::publication_local(Session& session,const std::shared_ptr<Entry>& entry,
         const std::shared_ptr<LearningPublication::Data>& data)const {
     if(!data||data->thread!=std::this_thread::get_id()||!ready(session,entry,true)||
@@ -435,7 +499,7 @@ void OwnedSkillBookLearningService::bind_learning_response(Session& session,cons
     if(!local()||!data->phase.compare_exchange_strong(expected,LearningPublication::Data::Phase::Bound)) {
         revoke_publication(data,true);throw std::logic_error("Skill book response handoff lost its exact publication");
     }
-    entry->latest_publication=data;active_publication_.reset();
+    entry->latest_publication=data;entry->selection_anchor.reset();active_publication_.reset();
     if(!ready(session,entry,true)||entry->pending_publication!=data||entry->latest_publication!=data||
        data->phase.load()!=LearningPublication::Data::Phase::Bound||
        !session.world_response_write_current(response)||response.status()!=Session::WorldResponseWriteStatus::Pending) {
@@ -477,12 +541,15 @@ std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningSe
         if(entry->pending_publication==pending)entry->pending_publication.reset();
     }
     const auto previous=entry?entry->latest_publication:std::shared_ptr<LearningPublication::Data>{};
+    const auto selection=entry?entry->selection_anchor:std::shared_ptr<const Entry::SelectionAnchor>{};
+    if(selection&&(!selection->source.current(session)||!ready(session,entry,true)))return std::nullopt;
     std::shared_ptr<LearningPublication::Data> data;
     const auto slot=std::visit([](const auto& request){return request.raw_slot;},owned_request);
     const auto item_id=std::visit([](const auto& request){return request.client_item_id;},owned_request);
     const auto request_current=[&] {
         // PURE throughout repository.commit: no before/after-source query here.
-        if(!ready(session,entry,true)||entry->presence!=common||(with_source&&entry->latest_publication!=previous))return false;
+        if(!ready(session,entry,true)||entry->presence!=common||entry->selection_anchor!=selection||
+           (with_source&&entry->latest_publication!=previous))return false;
         if(data&&(entry->pending_publication!=data||
            (data->phase.load()!=LearningPublication::Data::Phase::Prepared&&
             data->phase.load()!=LearningPublication::Data::Phase::Committed)))return false;
@@ -507,7 +574,11 @@ std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningSe
         if(policy.consume!=1)return std::nullopt;
         std::optional<SqliteSkillBookLearningRepository::Restoration> before_source;
         if(with_source) {
-            if(previous) {
+            if(selection){
+                if(!entry->original_restoration->learning_source()||!selection->source.current(session)||!request_current())return std::nullopt;
+                before_source.emplace(*entry->original_restoration->learning_source());
+                if(!repository_.restoration_current(*before_source)||!request_current())return std::nullopt;
+            }else if(previous) {
                 if(!publication_current(session,previous)||!request_current())return std::nullopt;
                 before_source.emplace(previous->after);
             }else {

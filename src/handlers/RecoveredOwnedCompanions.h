@@ -81,6 +81,11 @@ public:
         explicit SelectionPublication(std::shared_ptr<const Data> data) noexcept:data_(std::move(data)) {}
         std::shared_ptr<const Data> data_;
     };
+    // Actual private S31 commit chain only. Caller owns its complete Written
+    // publication; this source helper supplies no receipt or native adoption.
+    // Preserve original history/tails and qualify only the full after source.
+    std::optional<Restoration> selection_successor_from_committed(const Restoration&,
+        std::span<const SelectionPublication>);
     class SelectionResult {
     public:
         SelectionResult(SelectionResult&&) noexcept=default;

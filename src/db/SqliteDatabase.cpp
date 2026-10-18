@@ -951,6 +951,100 @@ std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe
     return current&&result->uses_connection(read.connection)&&result->learning_player_matches(player)&&local()?
         std::move(result):std::nullopt;
 }
+std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> SqliteDatabase::observe_owned_taiwan_pk_selection_player(
+        std::shared_ptr<SharedWorldPresence> presence,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,SharedWorldPresence::Lease lease,
+        const OwnedTaiwanPkPlayerEntrySource::Observation& predecessor,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source){
+    const auto identity=predecessor.identity_profile();
+    if(!migrated_||!impl_)throw DatabaseError("TW PK player source requires actual Database");
+    auto* const owner=impl_.get();Impl::PkPlayerReadScope read(*owner);
+    if(!owner->accounts||!owner->recovered_characters||!owner->role_auxiliary||!owner->role_text||
+       !presence||!session||!valid_taiwan_world_entry_identity(identity))return {};
+    auto* const accounts=owner->accounts.get();auto* const characters=owner->recovered_characters.get();
+    auto* const auxiliary=owner->role_auxiliary.get();auto* const texts=owner->role_text.get();
+    const auto fence=[&] {
+        read.fence();
+        if(!migrated_||impl_.get()!=owner||owner->accounts.get()!=accounts||
+           owner->recovered_characters.get()!=characters||owner->role_auxiliary.get()!=auxiliary||
+           owner->role_text.get()!=texts||!accounts->uses_connection(read.connection)||
+           !characters->uses_connection(read.connection)||!auxiliary->uses_connection(read.connection)||
+           !texts->uses_connection(read.connection))
+            throw DatabaseError("TW PK player source lost actual Database owners");
+    };
+    fence();
+    if(!presence->owns_repository(*characters)||
+       !session->normal_world_initialization_current_on_game(initialization)||!initialization.entry_written())return {};
+    const auto phase=session->state();const auto battle=session->battle_generation();
+    const auto local=[&] {
+        fence();
+        return (phase==SessionState::CharacterSelected||phase==SessionState::InWorld)&&
+            session->normal_world_initialization_current_on_game(initialization)&&initialization.entry_written()&&
+            !session->closing()&&session->state()==phase&&session->id()==lease.session&&
+            session->account_id==lease.account&&session->character_id==lease.character&&
+            session->battle_generation()==battle&&presence->owns_repository(*characters)&&
+            presence->retained_ready_current(lease);
+    };
+    if(!local()||!predecessor.uses_connection(read.connection)||!source.current(*session))return {};
+    auto& inventory=owned_inventory_writer();fence();
+    auto& equipment=native_equipment_snapshot_writer();fence();
+    auto& worlds=native_world_entry_writer();fence();
+    auto joint=std::make_shared<SqliteOwnedEquipmentTransaction>(inventory,equipment);fence();
+    const auto sources=[&] {
+        fence();
+        return owner->owned_inventory.get()==&inventory&&owner->native_equipment_snapshots.get()==&equipment&&
+            owner->native_world_entries.get()==&worlds&&inventory.owns_sources(*accounts,*characters)&&
+            equipment.owns_sources(*accounts,*characters)&&worlds.owns_sources(*accounts,*characters)&&
+            joint->owns_sources(*accounts,*characters);
+    };
+    if(!sources()||!local())return {};
+    auto committed=joint->observe_committed(lease.account,lease.character);fence();
+    if(!committed||!sources()||!local())return {};
+    auto appearance=OwnedTaiwanPkAppearanceSource::observe(joint,*accounts,*characters,worlds,presence,
+        session,initialization,lease,std::move(*committed));fence();
+    if(!appearance||!sources()||!local())return {};
+    auto combat=OwnedTaiwanPkCombatSource::observe(read.connection,*characters,*auxiliary,std::move(*appearance));fence();
+    if(!combat||!sources()||!local())return {};
+    auto result=OwnedTaiwanPkPlayerEntrySource::observe_after_selection(read.connection,*texts,
+        std::move(*combat),predecessor,source,session);fence();
+    if(!result||!sources()||!local())return {};
+    const bool current=result->current();fence();
+    // Last saved observer is complete Player Current. Only private/pure cuts
+    // follow it; this method never wraps live Current in an outer SQL scope.
+    return current&&result->matches_selection_source(source)&&result->uses_connection(read.connection)&&result->identity_profile()==identity&&
+        result->combat().appearance().owns_characters(*characters)&&
+        result->combat().appearance().owns_presence(presence)&&
+        result->combat().appearance().owns_initialization(initialization)&&
+        result->combat().appearance().material().lease==lease&&sources()&&local()?
+        std::move(result):std::nullopt;
+}
+std::optional<OwnedTaiwanPkCompanionSource::Observation> SqliteDatabase::observe_owned_taiwan_pk_selection_companions(
+        RecoveredOwnedCompanions& helper,std::shared_ptr<Session> session,
+        Session::NormalWorldInitialization initialization,const OwnedTaiwanPkCompanionSource::Observation& predecessor,
+        const OwnedTaiwanPkPlayerEntrySource::Observation& player,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source){
+    if(!migrated_||!impl_)throw DatabaseError("TW selected companion source requires actual Database");
+    auto* const owner=impl_.get();Impl::PkLearningCompanionReadScope read(*owner);
+    auto* const companions=owner->companions.get();auto* const catalog=owner->native_skill_catalog.get();
+    auto* const characters=owner->recovered_characters.get();
+    const auto local=[&] {
+        read.fence();
+        return migrated_&&impl_.get()==owner&&companions&&catalog&&characters&&
+            owner->companions.get()==companions&&owner->native_skill_catalog.get()==catalog&&
+            owner->recovered_characters.get()==characters&&companions->uses_connection(read.connection)&&
+            catalog->uses_connection(read.connection)&&characters->uses_connection(read.connection)&&
+            helper.owns_repository(*companions)&&predecessor.uses_connection(read.connection)&&
+            player.uses_connection(read.connection)&&player.matches_selection_source(source)&&
+            player.combat().appearance().owns_characters(*characters);
+    };
+    if(!session||!local()||!source.current(*session))return {};
+    auto result=OwnedTaiwanPkCompanionSource::observe_selection(read.connection,*companions,helper,*catalog,
+        session,initialization,predecessor,player,source);read.fence();
+    if(!result||!local())return {};
+    const bool current=result->current();read.fence();
+    return current&&result->uses_connection(read.connection)&&result->learning_player_matches(player)&&local()?
+        std::move(result):std::nullopt;
+}
 bool SqliteDatabase::owned_taiwan_pk_player_current(const OwnedTaiwanPkPlayerEntrySource::Observation& source){
     if(!migrated_||!impl_)throw DatabaseError("TW PK player Current requires actual Database");
     auto* const owner=impl_.get();Impl::PkPlayerReadScope read(*owner);

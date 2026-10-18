@@ -82,6 +82,22 @@ public:
     const std::vector<std::vector<std::uint8_t>>& actual_batches() const noexcept {return actual_batches_;}
 private:
     friend class OwnedTaiwanPkCompanionSource;
+    // Same original reset/roster, followed by actual Written S31 records.
+    // This models only the already-qualified direct selector data prefix;
+    // opaque refresh helpers, constructor events and grants are not inferred.
+    static std::optional<TaiwanNativeDeityRosterPrefix> advance_written_selection(
+            const TaiwanNativeDeityRosterPrefix& before,
+            std::span<const std::vector<std::uint8_t>> records) {
+        if(records.empty())return {};
+        auto next=before;
+        for(const auto& raw:records) {
+            if(raw.size()!=29 || raw[0]!=0x31 ||
+               std::none_of(next.rows_.begin(),next.rows_.begin()+next.roster_count_,
+                   [&](const auto& row){return int(row.row_key)==signed_byte(raw[1]);}))return {};
+            next.apply31(raw);next.actual_batches_.push_back(raw);
+        }
+        return next;
+    }
     // Restricted actual S34/S35/S41 successor. Retain every old physical row,
     // selector and inactive tail; never execute a new normal-entry reset.
     static std::optional<TaiwanNativeDeityRosterPrefix> advance_written_learning(

@@ -240,6 +240,36 @@ struct RecoveredOwnedCompanions::SelectionPublication::Data {
 const SqliteCompanionRepository::CommittedDeitySelection&
 RecoveredOwnedCompanions::SelectionPublication::committed() const noexcept {return *data_->committed;}
 const std::vector<std::uint8_t>& RecoveredOwnedCompanions::SelectionPublication::wire() const noexcept {return data_->wire;}
+std::optional<RecoveredOwnedCompanions::Restoration>
+RecoveredOwnedCompanions::selection_successor_from_committed(const Restoration& before,
+        std::span<const SelectionPublication> publications) {
+    PrefixRead read(*this);
+    const auto owned=before;
+    if(publications.empty())return {};
+    const std::vector<SelectionPublication> retained(publications.begin(),publications.end());
+    auto roster=owned.deity_roster();auto history=owned.batches();
+    std::vector<const SqliteCompanionRepository::CommittedDeitySelection*> commits;
+    commits.reserve(retained.size());
+    for(const auto& publication:retained) {
+        const auto& committed=publication.committed();
+        auto next=repository_.selection_roster_successor(roster,committed);
+        if(!next)return {};
+        const auto raw=committed.deity().snapshot.status.encode();
+        const auto logical=RecoveredWorldFrame::decode(publication.wire());
+        if(!logical || logical->size()!=raw.size() || !std::equal(raw.begin(),raw.end(),logical->begin()))return {};
+        history.emplace_back(raw.begin(),raw.end());commits.push_back(&committed);roster=std::move(*next);
+    }
+    if(owned.learning_source()) {
+        auto* const learning=owned.learning_repository_;
+        if(!learning || !learning->owns_companions(repository_))return {};
+        auto next=learning->selection_successor(*owned.learning_source(),commits);
+        if(!next || prefix_reentered_)return {};
+        auto after_roster=next->roster();
+        return Restoration(std::move(after_roster),std::move(history),std::move(*next),*learning);
+    }
+    if(!repository_.deity_roster_current(roster) || prefix_reentered_)return {};
+    return Restoration(std::move(roster),std::move(history));
+}
 std::optional<RecoveredOwnedCompanions::SelectionResult> RecoveredOwnedCompanions::select_deity_with_source(
         std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request) {
     const auto key=request.key;

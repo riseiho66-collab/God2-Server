@@ -1,0 +1,86 @@
+{
+  "schema": "tw-written-selection-successors/1",
+  "round": 474,
+  "scope": "Taiwan-only CommonWorld Shared C67 actual source continuation",
+  "phase": "PHASE1_SOURCE_STATIC_ONLY",
+  "source_image_sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48",
+  "installed_skill_bin_sha256": "3adcda70a477086da50411fe5d023eec33f915efafd17ec478d55542cae42ea7",
+  "installed_skill_rows": 453,
+  "new_rea_sessions": 2,
+  "new_rea_functions": 5,
+  "rea_handles_closed": true,
+  "original_functions_revalidated": 12,
+  "original_instruction_rows_revalidated": 1426,
+  "evidence": [
+    {
+      "path": "native/issued-skill-initializer-source-conclusion-v1.json",
+      "bytes": 37872,
+      "sha256": "00b1a94dab7637a1987afa8dd7862c9c6c412c66103254d0f04722a542cbece2"
+    },
+    {
+      "path": "scope/selection-source-implementation-v1.json",
+      "bytes": 7272,
+      "sha256": "fd2657fb03bce977a2eb5f91b7fee44e998f3aa22837ef7fee74a0b570b61152"
+    },
+    {
+      "path": "owned-bootstrap/owned-bootstrap-and-selection-source-audit-v1.json",
+      "bytes": 8626,
+      "sha256": "dc46e968c4f6c59d73040da47a871b77df41f9d233f75fc5862c57983713c89c"
+    },
+    {
+      "path": "owned-bootstrap/selection-source-implementation-v1.json",
+      "bytes": 4911,
+      "sha256": "74472b3320be3312bae8f27fdc3fc5063278e7314129018fed468f35b68d5393"
+    },
+    {
+      "path": "root-source-implementation-v1.json",
+      "bytes": 1167,
+      "sha256": "92a52862470bf262c8674576c6784603e4174945f6c79873e49bd4a67c098323"
+    }
+  ],
+  "source_changes": [
+    "private full-roster selection commit successor",
+    "complete ordered C67 publications bound to one original whole Written response",
+    "normal restoration and learning entry selection anchor",
+    "paired existing PK player/companion selection successors",
+    "flat immutable source transport artifact provenance"
+  ],
+  "preserves": [
+    "full sixteen rows and inactive learned/auxiliary tails",
+    "true learning chronology",
+    "original initial sender and old stale token history",
+    "full64 owner identities and numeric domains",
+    "saved bytes and schema"
+  ],
+  "native_corrections": [
+    "complete 51BB80 tail calls secondary reset 51BD70",
+    "full parent 5112C0 resets controls at its qualified final cut",
+    "header 2D12/13 remains unresolved; do not synthesize zero",
+    "normal prefix already retains complete sixteen row and inactive tail material"
+  ],
+  "open_frontier": [
+    "legacy Application C67 whole-Written registry join",
+    "sameWorld/current entry epoch and specific client initialization event",
+    "actual actor observations and unknown secondary header source",
+    "actual initial issuer/issued87/grant/rule chain",
+    "generic C35 authoritative world owner",
+    "original damage/healing amount producer",
+    "periodic effect tick owner and attack/defense/element/resistance formulas"
+  ],
+  "regression_source_added": true,
+  "regression_executed": false,
+  "full_PK_learning_mixed_graph_fixture_covered": false,
+  "new_original_formulas": 0,
+  "new_complete_gameplay": 0,
+  "whole_game_completion_percent": null,
+  "builds": false,
+  "tests": false,
+  "target_execution": false,
+  "vm": false,
+  "codec": false,
+  "game_db_sql": false,
+  "schema_install": false,
+  "activation": false,
+  "deployment": false,
+  "goal_status": "active"
+}

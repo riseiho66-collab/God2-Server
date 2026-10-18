@@ -168,6 +168,64 @@ Json companion_material(const OwnedTaiwanPkCompanionSource::Material& m){
                 lease.position.area,lease.position.scene,lease.position.x,lease.position.y,lease.position.revision})},
             {"scope","same-private-initial-player-graph-and-original-response;no-new-frame-receipt-reset-ACK-or-return-renewal"}};
     }
+    if(m.learning_successor||m.selection_successor){
+        // Artifact provenance only. Walk immutable backwards nodes once and
+        // serialize chronological transport, without recursively copying the
+        // complete sixteen-row prefix or rehydrating any private capability.
+        std::vector<const OwnedTaiwanPkCompanionSource::Material*> nodes;
+        const auto* root=&m;
+        while(root->learning_successor||root->selection_successor){
+            if(root->learning_successor&&root->selection_successor)
+                throw DatabaseError("PK companion history has two transition owners");
+            nodes.push_back(root);
+            root=root->selection_successor?&root->selection_successor->predecessor().material():
+                &root->learning_successor->predecessor().material();
+        }
+        Json origin={{"batch_count",root->restoration.batches().size()}};
+        if(root->whole_response){
+            const auto& whole=*root->whole_response;
+            origin["whole_response"]=Json{{"original_wire",whole.wire()},
+                {"suffix_offset",whole.suffix_offset()},{"suffix_size",whole.suffix_size()},
+                {"batch_count",whole.batch_count()},{"zero_deity_publication",bool(root->zero_publication)}};
+        }else{
+            Json logical=Json::array();for(const auto& write:root->writes)logical.push_back(write.logical());
+            origin["per_frame_logical"]=std::move(logical);
+        }
+        Json history=Json::array();
+        for(auto at=nodes.rbegin();at!=nodes.rend();++at){
+            const auto& node=**at;
+            const auto& before=node.selection_successor?node.selection_successor->predecessor().material():
+                node.learning_successor->predecessor().material();
+            if(node.restoration.batches().size()<before.restoration.batches().size())
+                throw DatabaseError("PK companion history lost its prior batches");
+            Json step={{"before_batch_count",before.restoration.batches().size()},
+                {"added_batch_count",node.restoration.batches().size()-before.restoration.batches().size()}};
+            if(node.selection_successor){
+                const auto& source=node.selection_successor->publication();Json components=Json::array();
+                std::size_t ordinal=0;
+                for(const auto& publication:source.publications()){
+                    const auto& commit=publication.committed();const auto& deity=commit.deity();
+                    Json skills=Json::array();for(const auto& skill:deity.snapshot.skills)skills.push_back(skill.encode());
+                    components.push_back(Json{{"ordinal",ordinal++},{"owner",Json::array({commit.account(),commit.character()})},
+                        {"before_selection",commit.before()?Json::array({commit.before()->key,commit.before()->revision}):Json(nullptr)},
+                        {"after_selection",Json::array({commit.after().key,commit.after().revision})},{"changed",commit.changed()},
+                        {"selected_deity",Json{{"declaration",deity.snapshot.declaration.encode()},
+                            {"status",deity.snapshot.status.encode()},{"skills",skills},{"revision",deity.revision},
+                            {"provenance",Json::array({deity.provenance.source_sha256,deity.provenance.authority,deity.provenance.evidence_id})}}},
+                        {"component_frame",publication.wire()}});
+                }
+                step["kind"]="written_selection";step["whole_source_wire"]=source.response().wire();
+                step["ordered_components"]=std::move(components);
+            }else{
+                const auto& source=node.learning_successor->publication();
+                step["kind"]="written_learning";step["whole_source_wire"]=source.response().wire();
+                step["logical_delta"]=source.logical_delta();
+            }
+            history.push_back(std::move(step));
+        }
+        result["source_transport_history"]=Json{{"origin",std::move(origin)},{"transitions",std::move(history)},
+            {"scope","local-original-whole-Written-history;components-are-not-separate-receipts;not-native-ACK-cast-grant-or-restorable-capability"}};
+    }
     return result;
 }
 bool owned_appearance_current(const SqliteOwnedPkRoomRepository::Input& input,sqlite3* db){

@@ -1218,10 +1218,24 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             enum class CompanionWriteObservation {Pending,InitializationUnavailable,InitializationPending,
                 PrefixUnavailable,NoRecords,WrittenSavedDeityCurrent,WrittenSavedDeityPrefixCurrent,Stale,Failed};
             struct LearnedPkSources {
-                OwnedSkillBookLearningService::WrittenLearningSource source;
                 OwnedTaiwanPkPlayerEntrySource::Observation player;
                 OwnedTaiwanPkCompanionSource::Observation companion;
-                std::shared_ptr<const LearnedPkSources> previous; // Only backwards, no holder/host cycle.
+            };
+            struct CanonicalCompanionSource {
+                std::shared_ptr<const RecoveredOwnedCompanions::Restoration> material;
+                std::shared_ptr<const RecoveredOwnedCompanions::Restoration> learning_origin;
+                std::optional<OwnedSkillBookLearningService::WrittenLearningSource> learning;
+                std::optional<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource> selection;
+                std::optional<OwnedSkillBookLearningService::LearningPublication> latest_learning;
+                std::shared_ptr<const LearnedPkSources> paired;
+                std::shared_ptr<const CanonicalCompanionSource> previous;
+            };
+            struct PendingCompanionSelection {
+                std::shared_ptr<const CanonicalCompanionSource> previous;
+                std::shared_ptr<const RecoveredOwnedCompanions::Restoration> material;
+                std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> player;
+                std::optional<OwnedTaiwanPkCompanionSource::Observation> companion;
+                std::optional<Session::WorldResponseWrite> response;
             };
             struct OwnedCompanionRestorationSource {
                 std::weak_ptr<Session> session;
@@ -1259,7 +1273,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 // CUSTOM-0148: actual typed learning commit + bound original WWR.
                 // Old restoration/player/initial WWR remain admission history.
                 std::optional<OwnedSkillBookLearningService::LearningPublication> learning_publication;
-                std::shared_ptr<const LearnedPkSources> learned_pk_sources; // Paired actual Written learning lineage.
+                std::shared_ptr<const CanonicalCompanionSource> canonical_source; // Distinct Written successors.
+                std::shared_ptr<PendingCompanionSelection> pending_selection; // Actual outer callback only.
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -1385,7 +1400,9 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             };
             auto& supply_repository=static_cast<SqliteRecoveredCharacterRepository&>(database.recovered_characters());
             RecoveredFruitQuests fruit_quests(database.fruit_quests());
+            std::function<void(Session&)> advance_companion_successors;
             const auto observe_companion_restoration_write=[&](Session& session) {
+                if(advance_companion_successors)advance_companion_successors(session);
                 const auto at=owned_companion_restoration_sources.find(session.id());
                 if(at==owned_companion_restoration_sources.end())return;
                 const auto source=at->second;
@@ -1404,6 +1421,25 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 };
                 source->last_observed_write=CompanionWriteObservation::Pending;
                 source->expected_receiving_prefix.reset();
+                if(source->pending_selection)return; // Never query the consumed predecessor during C67.
+                if(const auto canonical=source->canonical_source){
+                    const auto current=[&]{
+                        return local() && source->canonical_source==canonical && source->session.lock().get()==&session &&
+                            !session.closing() && source->normal_initialization &&
+                            session.normal_world_initialization_current_on_game(*source->normal_initialization) &&
+                            ((canonical->learning && canonical->learning->current(session)) ||
+                             (canonical->selection && canonical->selection->current(session)));
+                    };
+                    if(!current() || !owned_companions.restoration_current(*canonical->material) || !current()){
+                        source->last_observed_write=CompanionWriteObservation::Stale;return;
+                    }
+                    auto prefix=owned_companions.normal_entry_prefix(*canonical->material,database.native_skill_catalog());
+                    if(!prefix || !current() ||
+                       !owned_companions.normal_entry_prefix_current(*canonical->material,*prefix,database.native_skill_catalog()) ||
+                       !current())return;
+                    source->expected_receiving_prefix=std::move(prefix);
+                    source->last_observed_write=CompanionWriteObservation::WrittenSavedDeityPrefixCurrent;return;
+                }
                 if(!local()){source->last_observed_write=CompanionWriteObservation::Stale;return;}
                 if(!source->normal_initialization) {
                     source->last_observed_write=CompanionWriteObservation::InitializationUnavailable;return;
@@ -2734,7 +2770,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 const auto at=owned_companion_restoration_sources.find(peer->id());
                 if(at==owned_companion_restoration_sources.end())return;
                 const auto source=at->second;
-                if(source->learning_publication)return; // No old-state remint after any learning.
+                if(source->learning_publication||source->canonical_source||source->pending_selection)return;
                 const auto original_player=pk_original_zero_players(peer,initialization);
                 const auto material=source->material;const auto whole=source->whole_response;
                 const auto wire=source->whole_response_wire;auto companion=source->pk_publication;
@@ -2759,91 +2795,144 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 }
                 if(!local())return;
             };
+            bool companion_advancing=false,companion_reentered=false;
+            advance_companion_successors=[&](Session& session){
+                if(companion_advancing){companion_reentered=true;return;}
+                companion_advancing=true;companion_reentered=false;
+                struct End{bool& flag;~End(){flag=false;}}end{companion_advancing};
+                const auto found=owned_companion_restoration_sources.find(session.id());
+                if(found==owned_companion_restoration_sources.end())return;
+                const auto holder=found->second;const auto previous=holder->canonical_source;
+                const auto original_material=holder->material;const auto original_whole=holder->whole_response;
+                const auto original_wire=holder->whole_response_wire;
+                const auto pending=holder->pending_selection;const auto publication=holder->learning_publication;
+                const auto initial=holder->normal_initialization;const auto world=common_world;
+                const auto host=common_initial_deities;
+                const auto attempt=[&]{
+                    if(host){const auto at=host->attempts.find(session.id());if(at!=host->attempts.end())return at->second;}
+                    return std::shared_ptr<CommonInitialDeityPublisher::Attempt>{};
+                }();
+                const auto original_player=holder->pk_player;const auto original_companion=holder->pk_publication;
+                const auto snapshot=holder->initial_player;const auto frame=holder->initial_player_frame;
+                const auto offset=holder->initial_player_wire_offset;
+                const auto learning=skill_book_learning_service;const auto selection=owned_deity_skill_source;
+                const auto peer=session.weak_from_this().lock();
+                if(!peer||!initial||!holder->material||!world)return;
+                const auto before_material=previous?previous->material:holder->material;
+                const auto local=[&]{
+                    const auto now=owned_companion_restoration_sources.find(session.id());
+                    return !companion_reentered && now!=owned_companion_restoration_sources.end() && now->second==holder &&
+                        holder->session.lock()==peer && holder->canonical_source==previous && holder->pending_selection==pending &&
+                        holder->material==original_material && holder->whole_response==original_whole && holder->whole_response_wire==original_wire &&
+                        common_initial_deities==host && holder->pk_player==original_player && holder->pk_publication==original_companion &&
+                        holder->initial_player==snapshot && holder->initial_player_frame==frame && holder->initial_player_wire_offset==offset &&
+                        (!host || (host->live && !host->busy && !host->reentered &&
+                            host->attempts.find(session.id())!=host->attempts.end() &&
+                            host->attempts.find(session.id())->second==attempt && attempt && attempt->source==holder)) &&
+                        holder->learning_publication==publication && common_world==world && skill_book_learning_service==learning &&
+                        owned_deity_skill_source==selection && holder->normal_initialization &&
+                        holder->normal_initialization->same_initialization(*initial) && !session.closing() &&
+                        session.id()==holder->session.lock()->id() && session.account_id==holder->account &&
+                        session.character_id==holder->character && session.state()==SessionState::InWorld &&
+                        holder->phase_at_restore==SessionState::InWorld && session.recovered_world_ready() &&
+                        holder->all_submission_calls_returned &&
+                        session.battle_generation()==holder->battle_generation_at_restore && initial->entry_written() &&
+                        session.normal_world_initialization_current_on_game(*initial);
+                };
+                if(!local())return;
+                std::optional<OwnedSkillBookLearningService::WrittenLearningSource> written_learning;
+                std::optional<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource> written_selection;
+                std::optional<RecoveredOwnedCompanions::Restoration> after;
+                auto latest_learning=previous?previous->latest_learning:std::optional<OwnedSkillBookLearningService::LearningPublication>{};
+                if(pending){
+                    if(pending->response && pending->response->status()==Session::WorldResponseWriteStatus::Failed){
+                        session.close();throw std::runtime_error("Selection whole response failed; no SQL retry");
+                    }
+                    if(!pending->response || pending->response->status()!=Session::WorldResponseWriteStatus::Written ||
+                       pending->previous!=previous || pending->material!=before_material || !selection)return;
+                    written_selection=selection->observe_selection_publication(session);
+                    if(!written_selection || &written_selection->response().wire()!=&pending->response->wire() || !local()){
+                        session.close();throw std::runtime_error("Written selection lost its private canonical source");
+                    }
+                    after=owned_companions.selection_successor_from_committed(*before_material,written_selection->publications());
+                }else if(publication && (!latest_learning || *latest_learning!=*publication)){
+                    if(!learning)return;
+                    written_learning=learning->written_learning_source(session,*publication);
+                    if(!written_learning || !written_learning->follows(latest_learning) || !local())return;
+                    auto history=before_material->batches();
+                    const auto& delta=written_learning->logical_delta();history.emplace_back(delta.begin(),delta.end());
+                    after=owned_companions.learning_successor_from_committed(*before_material,written_learning->committed(),std::move(history));
+                    latest_learning=publication;
+                }else return;
+                if(!after || !local())return;
+                auto material=std::make_shared<const RecoveredOwnedCompanions::Restoration>(std::move(*after));
+                auto before_player=pending?pending->player:(previous&&previous->paired?std::optional{previous->paired->player}:holder->pk_player);
+                auto before_companion=pending?pending->companion:(previous&&previous->paired?std::optional{previous->paired->companion}:holder->pk_publication);
+                std::shared_ptr<const LearnedPkSources> paired;
+                if(config.owned_initial_player_enabled && before_player && before_companion && attempt){
+                    const auto presence=world->presence();const auto lease=before_player->combat().appearance().material().lease;
+                    if(lease!=attempt->lease || !local())return;
+                    auto player=written_selection?
+                        database.observe_owned_taiwan_pk_selection_player(presence,peer,*initial,lease,*before_player,*written_selection):
+                        database.observe_owned_taiwan_pk_learning_player(presence,peer,*initial,lease,*before_player,*written_learning);
+                    if(player && local()){
+                        auto companion=written_selection?
+                            database.observe_owned_taiwan_pk_selection_companions(owned_companions,peer,*initial,*before_companion,*player,*written_selection):
+                            database.observe_owned_taiwan_pk_learning_companions(owned_companions,peer,*initial,*before_companion,*player,*written_learning);
+                        if(companion && local())paired=std::make_shared<const LearnedPkSources>(LearnedPkSources{*player,*companion});
+                    }
+                }
+                auto next=std::make_shared<const CanonicalCompanionSource>(CanonicalCompanionSource{
+                    material,written_learning?written_learning->original_restoration():material,
+                    written_learning,written_selection,latest_learning,paired,previous});
+                if(!local() || !owned_companions.restoration_current(*material) || !local() ||
+                   (written_learning&&!written_learning->current(session)) ||
+                   (written_selection&&!written_selection->current(session)) || !local())return;
+                if(written_selection && learning && !learning->reanchor_selection(session,before_material,material,*written_selection))
+                    throw std::runtime_error("Written selection could not advance the actual learning entry");
+                if(!local() || (paired && (!paired->player.current() || !local() || !paired->companion.current() || !local()))){
+                    if(learning)learning->release(session);session.close();
+                    throw std::runtime_error("Written companion successor lost its final owner cut");
+                }
+                holder->canonical_source=std::move(next);holder->pending_selection.reset();
+            };
             const auto learned_pk_sources=[&](const std::shared_ptr<Session>& peer,
-                    const Session::NormalWorldInitialization& initialization)->std::shared_ptr<const LearnedPkSources> {
-                if(!config.owned_initial_player_enabled||!peer)return {};
+                    const Session::NormalWorldInitialization& initialization)->std::shared_ptr<const LearnedPkSources>{
+                if(!peer || !config.owned_initial_player_enabled)return {};
                 if(learning_pk_reading){learning_pk_reentered=true;return {};}
                 learning_pk_reading=true;learning_pk_reentered=false;
-                struct End {bool& value;~End(){value=false;}}end{learning_pk_reading};
+                struct End{bool& flag;~End(){flag=false;}}end{learning_pk_reading};
+                advance_companion_successors(*peer);
                 const auto host=common_initial_deities;const auto world=common_world;
-                const auto learning=skill_book_learning_service;
-                if(!host||!world||!learning)return {};
+                if(!host||!world)return {};
                 host->preflight();
-                const auto id=peer->id(),account=peer->account_id,character=peer->character_id;
-                const auto at=owned_companion_restoration_sources.find(id);
-                const auto entered=host->attempts.find(id);
-                if(at==owned_companion_restoration_sources.end()||entered==host->attempts.end())return {};
-                const auto source=at->second;const auto attempt=entered->second;
-                if(attempt->source!=source||!source->learning_publication)return {};
-                const auto publication=*source->learning_publication;
-                const auto previous=source->learned_pk_sources;
-                const auto original_player=source->pk_player;const auto original_companion=source->pk_publication;
-                const auto material=source->material;const auto whole=source->whole_response;
-                const auto wire=source->whole_response_wire;const auto frame=source->initial_player_frame;
-                const auto snapshot=source->initial_player;const auto offset=source->initial_player_wire_offset;
-                const auto presence=world->presence();
-                const auto local=[&] {
-                    const auto now=owned_companion_restoration_sources.find(id);const auto entered_now=host->attempts.find(id);
-                    return !learning_pk_reentered&&host==common_initial_deities&&world==common_world&&
-                        learning==skill_book_learning_service&&host->live&&!host->busy&&!host->reentered&&
-                        now!=owned_companion_restoration_sources.end()&&now->second==source&&
-                        entered_now!=host->attempts.end()&&entered_now->second==attempt&&attempt->source==source&&
-                        source->session.lock()==peer&&source->account==account&&source->character==character&&
-                        source->learning_publication==publication&&source->learned_pk_sources==previous&&
-                        source->pk_player==original_player&&source->pk_publication==original_companion&&
-                        source->material==material&&source->whole_response==whole&&source->whole_response_wire==wire&&
-                        source->initial_player_frame==frame&&source->initial_player==snapshot&&
-                        source->initial_player_wire_offset==offset&&snapshot&&snapshot->role&&frame&&whole&&wire&&material&&
-                        source->all_submission_calls_returned&&source->phase_at_restore==SessionState::InWorld&&
-                        !source->battle_generation_at_restore&&source->normal_initialization&&
-                        source->normal_initialization->same_initialization(initialization)&&
-                        initialization.same_initialization(publication.initialization())&&material==publication.original_restoration()&&
-                        peer->normal_world_initialization_current_on_game(initialization)&&initialization.entry_written()&&
-                        !peer->closing()&&peer->state()==SessionState::InWorld&&!peer->battle_generation()&&
-                        peer->id()==id&&peer->account_id==account&&peer->character_id==character&&peer->recovered_world_ready()&&
-                        attempt->lease.session==id&&attempt->lease.account==account&&attempt->lease.character==character&&
-                        presence->retained_ready_current(attempt->lease)&&
-                        peer->common_world_delivery_current(account,character,attempt->lease.generation)&&
-                        !peer->common_world_entry_current(account,character,attempt->lease.generation)&&
-                        whole->wire()==*wire&&whole->status()==Session::WorldResponseWriteStatus::Written&&
-                        peer->world_response_write_current_on_game(*whole)&&offset<=wire->size()&&
-                        frame->size()<=wire->size()-offset&&std::equal(frame->begin(),frame->end(),wire->begin()+offset);
+                const auto at=owned_companion_restoration_sources.find(peer->id());
+                if(at==owned_companion_restoration_sources.end())return {};
+                const auto holder=at->second;const auto canonical=holder->canonical_source;
+                const auto entered=host->attempts.find(peer->id());
+                if(entered==host->attempts.end())return {};
+                const auto attempt=entered->second;const auto presence=world->presence();
+                if(!canonical || !canonical->paired || holder->pending_selection || !holder->normal_initialization ||
+                   !holder->normal_initialization->same_initialization(initialization))return {};
+                const auto local=[&]{
+                    const auto now=owned_companion_restoration_sources.find(peer->id());
+                    return !learning_pk_reentered && common_initial_deities==host && common_world==world &&
+                        host->live && !host->busy && !host->reentered &&
+                        host->attempts.find(peer->id())!=host->attempts.end() &&
+                        host->attempts.find(peer->id())->second==attempt && attempt->source==holder &&
+                        canonical->paired->player.combat().appearance().material().lease==attempt->lease &&
+                        canonical->paired->player.combat().appearance().owns_presence(presence) &&
+                        canonical->paired->player.combat().appearance().owns_initialization(initialization) &&
+                        now!=owned_companion_restoration_sources.end() && now->second==holder &&
+                        holder->session.lock()==peer && holder->canonical_source==canonical && !holder->pending_selection &&
+                        peer->normal_world_initialization_current_on_game(initialization) && initialization.entry_written() &&
+                        !peer->closing() && peer->state()==SessionState::InWorld && peer->recovered_world_ready() &&
+                        peer->battle_generation()==holder->battle_generation_at_restore &&
+                        holder->phase_at_restore==SessionState::InWorld &&
+                        peer->account_id==holder->account && peer->character_id==holder->character;
                 };
-                const auto joined=[&](const LearnedPkSources& value) {
-                    const auto& appearance=value.player.combat().appearance();const auto& combat=value.player.combat().material();
-                    return local()&&value.source.publication()==publication&&value.player.matches_learning_source(value.source)&&
-                        value.companion.learning_player_matches(value.player)&&
-                        appearance.owns_characters(supply_repository)&&appearance.owns_presence(presence)&&
-                        appearance.owns_initialization(initialization)&&appearance.material().lease==attempt->lease&&
-                        combat.role==*snapshot->role&&combat.resources==snapshot->resources&&
-                        value.companion.material().initialization.same_initialization(initialization);
-                };
-                if(!local())return {};
-                if(previous&&previous->source.publication()==publication){
-                    if(!joined(*previous)||!previous->source.current(*peer)||!local()||
-                       !previous->player.current()||!local()||!previous->companion.current()||!local()||!joined(*previous))return {};
-                    return previous;
-                }
-                auto written=learning->written_learning_source(*peer,publication);
-                if(!written||!local()||!original_player||!original_companion)return {};
-                const auto prior=previous?std::optional<OwnedSkillBookLearningService::LearningPublication>{previous->source.publication()}:
-                    std::nullopt;
-                if(!written->follows(prior))return {};
-                const auto& before_player=previous?previous->player:*original_player;
-                const auto& before_companion=previous?previous->companion:*original_companion;
-                auto player=database.observe_owned_taiwan_pk_learning_player(presence,peer,initialization,
-                    attempt->lease,before_player,*written);
-                if(!player||!local())return {};
-                auto companion=database.observe_owned_taiwan_pk_learning_companions(owned_companions,peer,initialization,
-                    before_companion,*player,*written);
-                if(!companion||!local())return {};
-                auto paired=std::make_shared<const LearnedPkSources>(LearnedPkSources{*written,*player,*companion,previous});
-                if(!joined(*paired)||!paired->source.current(*peer)||!local()||!paired->player.current()||!local()||
-                   !paired->companion.current()||!local()||!joined(*paired))return {};
-                // Only a pure owning-pointer adoption follows the final joined cut.
-                // BOTH providers consume THIS same node; no half-successor escapes.
-                source->learned_pk_sources=paired;
-                return paired;
+                if(!local() || !canonical->paired->player.current() || !local() || !canonical->paired->companion.current() || !local())return {};
+                return canonical->paired;
             };
             bool pk_player_reading=false,pk_player_reentered=false;
             const OwnedTaiwanPkEntryPreparation::Players pk_players=[&](
@@ -2852,7 +2941,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 if(!config.owned_initial_player_enabled)return {};
                 if(peer){
                     const auto at=owned_companion_restoration_sources.find(peer->id());
-                    if(at!=owned_companion_restoration_sources.end()&&at->second->learning_publication){
+                    if(at!=owned_companion_restoration_sources.end()&&(at->second->learning_publication||at->second->canonical_source||at->second->pending_selection)){
                         const auto joined=learned_pk_sources(peer,initialization);
                         return joined?std::optional{joined->player}:std::nullopt;
                     }
@@ -2936,7 +3025,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     ->std::optional<OwnedTaiwanPkCompanionSource::Observation>{
                 if(peer){
                     const auto at=owned_companion_restoration_sources.find(peer->id());
-                    if(at!=owned_companion_restoration_sources.end()&&at->second->learning_publication){
+                    if(at!=owned_companion_restoration_sources.end()&&(at->second->learning_publication||at->second->canonical_source||at->second->pending_selection)){
                         const auto joined=learned_pk_sources(peer,initialization);
                         return joined?std::optional{joined->companion}:std::nullopt;
                     }
@@ -3050,7 +3139,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             !peer->closing() && peer->account_id==account && peer->character_id==character &&
                             peer->state()==phase && peer->battle_generation()==battle;
                     };
-                    if(config.owned_initial_player_enabled&&source&&source->learning_publication){
+                    if(config.owned_initial_player_enabled&&source&&(source->learning_publication||source->canonical_source||source->pending_selection)){
                         if(!initialization||!common_world)return {};
                         const auto paired=learned_pk_sources(peer,*initialization);
                         if(!paired||!local())return {};
@@ -9199,7 +9288,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     // Only the actual original companion sender can supply this
                     // source. Pending writes defer learning; equal saved keys or
                     // a newer INIT alone never reconstruct the old native list.
-                    const auto restored=[&owned_companion_restoration_sources,
+                    const auto restored=[&owned_companion_restoration_sources,&owned_companions,
                         observe_companion_restoration_write](Session& session)
                         ->std::shared_ptr<const RecoveredOwnedCompanions::Restoration> {
                         observe_companion_restoration_write(session);
@@ -9217,6 +9306,12 @@ if(guild_officer_runtime && player_guild(session) &&
                            !source->all_submission_calls_returned ||
                            (source->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityPrefixCurrent &&
                             source->last_observed_write!=CompanionWriteObservation::NoRecords))return {};
+                        if(source->canonical_source){
+                            const auto canonical=source->canonical_source;
+                            if(source->pending_selection || !owned_companions.restoration_current(*canonical->material) ||
+                               source->canonical_source!=canonical)return {};
+                            return canonical->material;
+                        }
                         const auto& batches=source->material->batches();
                         if(source->whole_response) {
                             const auto& write=*source->whole_response;
@@ -9240,6 +9335,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     game_handlers.world_records=[&,learning,original,presence,bag,restored](Session& session,
                         std::span<const RecoveredWorldRecords::Record> records)
                         ->std::optional<std::vector<std::uint8_t>> {
+                        advance_companion_successors(session);
                         learning->preflight(session);
                         if(records.empty())return original(session,records);
                         const bool claimed=std::any_of(records.begin(),records.end(),[&](const auto& record) {
@@ -9292,7 +9388,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(config.owned_initial_player_enabled&&source&&source->normal_initialization){
                                 try{
                                     const auto peer=session.weak_from_this().lock();
-                                    if(previous_learning)(void)learned_pk_sources(peer,*source->normal_initialization);
+                                    if(previous_learning||source->canonical_source)(void)learned_pk_sources(peer,*source->normal_initialization);
                                     else prepare_original_learning_pk(peer,*source->normal_initialization);
                                 }catch(...){} // Existing passive PK observer semantics, never a grant.
                             }
@@ -9309,7 +9405,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                         return publication && source && at!=owned_companion_restoration_sources.end() &&
                                             at->second==source && source->session.lock().get()==&session &&
                                             source->account==session.account_id && source->character==session.character_id &&
-                                            source->material==publication->original_restoration() && source->normal_initialization &&
+                                            (source->canonical_source?source->canonical_source->learning_origin:source->material)==publication->original_restoration() && source->normal_initialization &&
                                             source->normal_initialization->same_initialization(publication->initialization()) &&
                                             source->learning_publication==previous_learning;
                                     };
@@ -9429,10 +9525,13 @@ if(guild_officer_runtime && player_guild(session) &&
                     const auto original=game_handlers.world_records;
                     // LAST wrapper: capture the actual complete original return
                     // after every existing wrapper, including WholeBagMove.
-                    game_handlers.world_records=[weak,original](Session& session,
+                    struct SelectionPreparationFence{bool active=false,poisoned=false;};
+                    const auto preparation=std::make_shared<SelectionPreparationFence>();
+                    game_handlers.world_records=[&,weak,original,preparation](Session& session,
                         std::span<const RecoveredWorldRecords::Record> records)
                         ->std::optional<std::vector<std::uint8_t>> {
                         const auto source=weak.lock();if(!source)return std::nullopt;
+                        if(preparation->active){preparation->poisoned=true;throw std::logic_error("Canonical selection preparation reentered");}
                         source->check_selection_callback_entry(); // Poison reentry BEFORE any key allocation.
                         std::vector<std::uint8_t> keys;
                         keys.reserve(std::count_if(records.begin(),records.end(),[](const auto& record) {
@@ -9440,13 +9539,75 @@ if(guild_officer_runtime && player_guild(session) &&
                         }));
                         for(const auto& record:records)
                             if(const auto* request=std::get_if<RecoveredDeitySelection::Request>(&record))keys.push_back(request->key);
+                        std::shared_ptr<OwnedCompanionRestorationSource> restoration_holder;
+                        std::shared_ptr<PendingCompanionSelection> draft;
+                        std::function<bool()> selection_owner_current;
+                        preparation->active=!keys.empty();preparation->poisoned=false;
+                        struct Preparing{std::shared_ptr<SelectionPreparationFence> fence;~Preparing(){fence->active=false;}} preparing{preparation};
+                        if(!keys.empty()){
+                            observe_companion_restoration_write(session);
+                            const auto at=owned_companion_restoration_sources.find(session.id());
+                            if(at!=owned_companion_restoration_sources.end()){
+                                restoration_holder=at->second;
+                                const auto canonical=restoration_holder->canonical_source;
+                                const auto material=canonical?canonical->material:restoration_holder->material;
+                                const auto peer=session.weak_from_this().lock();
+                                const auto initial=restoration_holder->normal_initialization;
+                                const auto world=common_world;
+                                selection_owner_current=[&,canonical,material,peer,initial,world]{
+                                    const auto now=owned_companion_restoration_sources.find(session.id());
+                                    return !preparation->poisoned && peer && now!=owned_companion_restoration_sources.end() &&
+                                        now->second==restoration_holder && restoration_holder->session.lock()==peer &&
+                                        restoration_holder->canonical_source==canonical && !restoration_holder->pending_selection &&
+                                        (canonical?canonical->material:restoration_holder->material)==material &&
+                                        restoration_holder->normal_initialization && initial &&
+                                        restoration_holder->normal_initialization->same_initialization(*initial) &&
+                                        common_world==world && owned_deity_skill_source==source &&
+                                        session.account_id==restoration_holder->account && session.character_id==restoration_holder->character &&
+                                        !session.closing() && session.state()==SessionState::InWorld && session.recovered_world_ready() &&
+                                        session.battle_generation()==restoration_holder->battle_generation_at_restore &&
+                                        initial->entry_written() && session.normal_world_initialization_current_on_game(*initial);
+                                };
+                                if(!material || restoration_holder->pending_selection ||
+                                   (restoration_holder->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityPrefixCurrent &&
+                                    restoration_holder->last_observed_write!=CompanionWriteObservation::NoRecords) ||
+                                   !selection_owner_current() || !owned_companions.restoration_current(*material) || !selection_owner_current())
+                                    throw std::runtime_error("Selection lacks its current canonical restoration");
+                                if(config.owned_initial_player_enabled && restoration_holder->normal_initialization){
+                                    if(canonical)(void)learned_pk_sources(peer,*restoration_holder->normal_initialization);
+                                    else prepare_original_learning_pk(peer,*restoration_holder->normal_initialization);
+                                }
+                                if(!selection_owner_current())throw std::runtime_error("Selection prewarm lost its canonical owner");
+                                auto player=canonical&&canonical->paired?std::optional{canonical->paired->player}:restoration_holder->pk_player;
+                                auto companion=canonical&&canonical->paired?std::optional{canonical->paired->companion}:restoration_holder->pk_publication;
+                                draft=std::make_shared<PendingCompanionSelection>(PendingCompanionSelection{canonical,material,player,companion,{}});
+                                const auto prewarm_owner=selection_owner_current;
+                                const auto original_player=restoration_holder->pk_player;
+                                const auto original_companion=restoration_holder->pk_publication;
+                                const auto whole=restoration_holder->whole_response;
+                                const auto wire=restoration_holder->whole_response_wire;
+                                selection_owner_current=[&,prewarm_owner,original_player,original_companion,whole,wire]{
+                                    return prewarm_owner() && restoration_holder->pk_player==original_player &&
+                                        restoration_holder->pk_publication==original_companion &&
+                                        restoration_holder->whole_response==whole && restoration_holder->whole_response_wire==wire;
+                                };
+                            }
+                        }
+                        if(preparation->poisoned)throw std::logic_error("Canonical selection preparation was invalidated");
                         auto callback=source->begin_selection_callback(session,keys);
+                        if(callback && selection_owner_current && !selection_owner_current()){
+                            source->abandon_selection_callback(*callback);
+                            throw std::runtime_error("Selection admission lost its canonical owner before SQL");
+                        }
+                        preparation->active=false;
+                        if(callback&&restoration_holder)restoration_holder->pending_selection=draft;
                         if(!callback)return original(session,records);
                         struct End {
                             std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> source;
                             SharedTaiwanOwnedDeitySkillSource::SelectionCallback callback;
                             ~End(){if(const auto owner=source.lock())owner->abandon_selection_callback(callback);}
                         } end{weak,*callback};
+                        if(preparation->poisoned)throw std::logic_error("Canonical selection callback admission reentered");
                         auto response=original(session,records);
                         if(!response || !source->selection_response_matches(session,*callback,*response))
                             throw std::runtime_error("Owned C67 committed prefix lacks its complete original response");
@@ -9455,6 +9616,11 @@ if(guild_officer_runtime && player_guild(session) &&
                         const auto write=session.observe_world_response(*response);
                         session.hold_world_input_until_response_written(write);
                         source->publish_selection_callback(session,*callback,write);
+                        if(restoration_holder){
+                            if(restoration_holder->pending_selection!=draft || !draft)
+                                throw std::runtime_error("Selection lost its original canonical draft");
+                            draft->response.emplace(write); // Same private whole original response, never raw reconstruction.
+                        }
                         return response;
                     };
                     const auto previous=on_disconnect;

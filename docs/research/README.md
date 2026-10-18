@@ -57,6 +57,9 @@ kind2／3的目標與累計上下文、完整DWORD回合通知及牛轉仙界踏
 [round472記錄](tw-battle-self-view-and-friendly-effects-20261019.md)。
 原始量值別名、C9同次初始化來源與兩項過期frontier更正，以及實際技能owner缺口，見
 [round473記錄](tw-combat-generation-frontier-20261019.md)及其同名JSON現用索引。
+實際 CommonWorld 選神後的完整來源、學習 chronology 與 PK 成對延續，
+以及初始化 secondary header／controls 的 REA 補查界線，見
+[round474記錄](tw-written-selection-successors-20261019.md)及其同名JSON。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。

@@ -7,6 +7,7 @@
 #include "protocol/RecoveredInventory.h"
 #include <functional>
 #include <memory>
+#include <span>
 #include <thread>
 
 namespace god2 {
@@ -106,6 +107,11 @@ public:
     std::optional<Committed> commit(const Plan&,Current);
     Restoration restore(std::uint64_t account,std::uint64_t character);
     bool restoration_current(const Restoration&);
+    // Selection-only source continuation. Preserve inventory/equipment and
+    // every activation header/event; qualify the final full State once after
+    // the private commit chain. This never learns, writes or restores records.
+    std::optional<Restoration> selection_successor(const Restoration&,
+        std::span<const SqliteCompanionRepository::CommittedDeitySelection* const>);
     // Original private restoration only, on the actual same connection in an
     // already active transaction. Read-only qualification, not room authority;
     // preserves generic pending-battle rejection and never opens a transaction.

@@ -315,6 +315,23 @@ bool SqliteSkillBookLearningRepository::restoration_current(const Restoration& v
     Operation operation(*this);ReadScope read(inventory_.db_);
     const bool same=state_current(*value.state_);read.finish();return same;
 }
+std::optional<SqliteSkillBookLearningRepository::Restoration>
+SqliteSkillBookLearningRepository::selection_successor(const Restoration& before,
+        std::span<const SqliteCompanionRepository::CommittedDeitySelection* const> commits) {
+    Operation operation(*this);
+    const auto source=before.state_;
+    if(commits.empty() || !source || source->repository!=this || source->identity.lock()!=identity_)return {};
+    auto next=std::make_shared<State>(*source);
+    for(const auto* committed:commits) {
+        if(!committed)return {};
+        auto roster=companions_.selection_roster_successor(next->roster,*committed);
+        if(!roster)return {};
+        next->roster=std::move(*roster);
+    }
+    ReadScope read(inventory_.db_);
+    if(!state_current(*next))return {};
+    read.finish();return Restoration(std::move(next));
+}
 bool SqliteSkillBookLearningRepository::restoration_current_in_transaction(
     const Restoration& value,sqlite3* actual_connection) {
     owner();

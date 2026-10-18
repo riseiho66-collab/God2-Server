@@ -190,6 +190,16 @@ public:
         RecoveredOwnedCompanions&,std::shared_ptr<Session>,Session::NormalWorldInitialization,
         const OwnedTaiwanPkCompanionSource::Observation&,const OwnedTaiwanPkPlayerEntrySource::Observation&,
         OwnedSkillBookLearningService::WrittenLearningSource);
+    // Exact full Written S31 successor; retains original player bytes and
+    // companion tails, with an independent private source after selection.
+    std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> observe_owned_taiwan_pk_selection_player(
+        std::shared_ptr<SharedWorldPresence>,std::shared_ptr<Session>,Session::NormalWorldInitialization,
+        SharedWorldPresence::Lease,const OwnedTaiwanPkPlayerEntrySource::Observation&,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource);
+    std::optional<OwnedTaiwanPkCompanionSource::Observation> observe_owned_taiwan_pk_selection_companions(
+        RecoveredOwnedCompanions&,std::shared_ptr<Session>,Session::NormalWorldInitialization,
+        const OwnedTaiwanPkCompanionSource::Observation&,const OwnedTaiwanPkPlayerEntrySource::Observation&,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource);
     // CUSTOM-0129 same concrete DB/helper/catalog and genuine private Session
     // normal-entry/fullwrite observations. No connection escapes or new sends.
     // Helper, Database and original game owner must outlive every observation.

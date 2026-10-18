@@ -5,6 +5,7 @@
 #include "protocol/RecoveredWorldSkillRequest.h"
 #include "protocol/RecoveredDeitySelection.h"
 #include "net/Session.h"
+#include "handlers/RecoveredOwnedCompanions.h"
 #include <memory>
 
 namespace god2 {
@@ -27,6 +28,25 @@ public:
         explicit SelectionCallback(std::shared_ptr<CallbackData> data) noexcept:data_(std::move(data)) {}
         std::shared_ptr<CallbackData> data_;
     };
+    // Exact original C67 callback's complete private commit chain and whole
+    // Written response. This never becomes learning, native ACK or cast rights.
+    class WrittenSelectionSource {
+    public:
+        WrittenSelectionSource(const WrittenSelectionSource&)=default;
+        WrittenSelectionSource& operator=(const WrittenSelectionSource&)=default;
+        WrittenSelectionSource(WrittenSelectionSource&& value)noexcept:publication_(value.publication_){}
+        WrittenSelectionSource& operator=(WrittenSelectionSource&& value)noexcept {publication_=value.publication_;return *this;}
+        std::span<const RecoveredOwnedCompanions::SelectionPublication> publications()const noexcept;
+        const Session::WorldResponseWrite& response()const noexcept;
+        const Session::NormalWorldInitialization& initialization()const noexcept;
+        bool current(Session&)const;
+        bool same_source(const WrittenSelectionSource& value)const noexcept{return publication_==value.publication_;}
+    private:
+        friend class SharedTaiwanOwnedDeitySkillSource;
+        explicit WrittenSelectionSource(std::shared_ptr<const Publication> value)noexcept:publication_(std::move(value)){}
+        std::shared_ptr<const Publication> publication_;
+    };
+    std::optional<WrittenSelectionSource> observe_selection_publication(Session&);
     struct Scope {
         SharedWorldPresence::Lease lease;
         RecoveredPosition position;

@@ -1,6 +1,7 @@
 #pragma once
 #include "game/OwnedTaiwanPkCombatSource.h"
 #include "handlers/OwnedSkillBookLearningService.h"
+#include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "game/TaiwanWorldEntryIdentity.h"
 #include "db/SqliteRoleTextRepository.h"
 #include "protocol/RecoveredBattleBootstrap.h"
@@ -42,6 +43,7 @@ public:
         RecoveredBattleIdentity::Record identity(std::uint8_t position,std::uint16_t recipient_codepage)const;
         bool current()const;
         bool matches_learning_source(const OwnedSkillBookLearningService::WrittenLearningSource&)const noexcept;
+        bool matches_selection_source(const SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource&)const noexcept;
         bool uses_connection(const sqlite3*)const noexcept;
         bool stored_current_in_room_transaction(sqlite3*)const;
         bool operator==(const Observation&)const=default;
@@ -58,7 +60,15 @@ public:
     static std::optional<Observation> observe_after_learning(sqlite3*,SqliteRoleTextRepository&,
         OwnedTaiwanPkCombatSource::Observation,const Observation&,
         OwnedSkillBookLearningService::WrittenLearningSource,std::shared_ptr<Session>);
+    static std::optional<Observation> observe_after_selection(sqlite3*,SqliteRoleTextRepository&,
+        OwnedTaiwanPkCombatSource::Observation,const Observation&,
+        SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource,std::shared_ptr<Session>);
 private:
+    struct SelectionLineage {
+        const Observation predecessor;
+        const SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source;
+        const std::weak_ptr<Session> session;
+    };
     struct LearningLineage {
         const Observation predecessor;
         const OwnedSkillBookLearningService::WrittenLearningSource source;
@@ -72,6 +82,7 @@ private:
         const std::thread::id thread=std::this_thread::get_id();
         bool reading=false,reentered=false;
         std::shared_ptr<const LearningLineage> learning{}; // Only genuine Written successor mode.
+        std::shared_ptr<const SelectionLineage> selection{}; // Distinct S31 successor, never learning rights.
         struct Operation {
             State& state;
             explicit Operation(State& s):state(s){
@@ -133,6 +144,10 @@ private:
                 std::move(utf8),*secondary,role->level()}};
         }
         bool learning_current(){
+            if(selection){
+                const auto peer=selection->session.lock();
+                return peer&&selection->source.current(*peer)&&!reentered;
+            }
             if(!learning)return true;
             const auto peer=learning->session.lock();
             return peer&&learning->source.current(*peer)&&!reentered;
@@ -208,8 +223,10 @@ inline std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> OwnedTaiwanPkP
         const Observation& predecessor,OwnedSkillBookLearningService::WrittenLearningSource source,
         std::shared_ptr<Session> peer){
     if(!peer||!predecessor.uses_connection(db)||!combat.uses_connection(db)||!source.current(*peer))return {};
-    const auto previous=predecessor.state_->learning?
-        std::optional<OwnedSkillBookLearningService::LearningPublication>{predecessor.state_->learning->source.publication()}:
+    auto latest=predecessor.state_;
+    while(latest->selection)latest=latest->selection->predecessor.state_;
+    const auto previous=latest->learning?
+        std::optional<OwnedSkillBookLearningService::LearningPublication>{latest->learning->source.publication()}:
         std::nullopt;
     if(!source.follows(previous))return {};
     const auto& before=predecessor.combat().appearance();const auto& next=combat.appearance();
@@ -235,6 +252,32 @@ inline std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> OwnedTaiwanPkP
     auto lineage=std::make_shared<const LearningLineage>(LearningLineage{predecessor,source,peer});
     result->state_->learning=std::move(lineage); // New private graph, never changes predecessor.
     if(!result->current()||!result->matches_learning_source(source))return {};
+    return result;
+}
+inline bool OwnedTaiwanPkPlayerEntrySource::Observation::matches_selection_source(
+        const SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource& source)const noexcept{
+    return state_->selection&&state_->selection->source.same_source(source);
+}
+inline std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> OwnedTaiwanPkPlayerEntrySource::observe_after_selection(
+        sqlite3* db,SqliteRoleTextRepository& texts,OwnedTaiwanPkCombatSource::Observation combat,
+        const Observation& predecessor,SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source,
+        std::shared_ptr<Session> peer){
+    if(!peer||!predecessor.uses_connection(db)||!combat.uses_connection(db)||
+       predecessor.matches_selection_source(source)||!source.current(*peer))return {};
+    const auto& before=predecessor.combat().appearance();const auto& next=combat.appearance();
+    const auto& b=before.material();const auto& n=next.material();
+    // Selection changes no player bytes. Compare the complete appearance,
+    // resources/role/auxiliary and text, without asking the consumed old
+    // learning/selection token to be Current again.
+    if(!before.owns_initialization(source.initialization())||!next.owns_initialization(source.initialization())||
+       b.lease!=n.lease||b.battle_generation!=n.battle_generation||b.world!=n.world||
+       b.entry_frame!=n.entry_frame||b.entry_logical!=n.entry_logical||b.accepted_tail!=n.accepted_tail||
+       b.config_flag!=n.config_flag||b.appearance!=n.appearance||b.inventory!=n.inventory||b.equipment!=n.equipment||
+       predecessor.combat().material()!=combat.material())return {};
+    auto result=observe(db,texts,std::move(combat),predecessor.identity_profile());
+    if(!result||result->material()!=predecessor.material()||!source.current(*peer))return {};
+    result->state_->selection=std::make_shared<const SelectionLineage>(SelectionLineage{predecessor,source,peer});
+    if(!result->current()||!result->matches_selection_source(source))return {};
     return result;
 }
 inline std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> OwnedTaiwanPkPlayerEntrySource::observe(

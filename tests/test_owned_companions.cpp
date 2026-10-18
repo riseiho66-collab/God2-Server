@@ -59,9 +59,106 @@ std::vector<std::uint8_t> raw(const StoredPet2Slot& value) {
     if(!value.pet)return {};
     auto result=RecoveredPet2Stats::encode_logical(value.pet->stats);return {result.begin(),result.end()};
 }
+// Synthetic definition bytes qualify only this pure expected-prefix fixture;
+// they are never imported, digest-checked or treated as native gameplay proof.
+NativeSkillRecord prefix_definition(std::uint8_t id=1) {
+    NativeSkillRecord value;
+    value.source={native_taiwan_historical_dataset_id,"test-only/prefix.bin",
+        TaiwanNativeDeityRosterPrefix::historical_catalog_sha256,
+        TaiwanNativeDeityRosterPrefix::historical_catalog_sha256,
+        "149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
+        "test-only","0x1","0x2",448};
+    value.source_record_index=id-1;value.source_offset=8+(id-1)*110;value.record_sha256=std::string(64,'a');
+    value.raw_record.assign(110,0);value.raw_record[0]=id;value.definition_id=id;
+    return value;
+}
+void selection_source_regression() {
+    Fixture f;auto repo=f.repo();RecoveredOwnedCompanions helper(repo);
+    for(unsigned key=1;key<=16;++key) {
+        sqlite_detail::Statement metadata(f.db.get(),"INSERT INTO native_companion_metadata VALUES('GOD',?,?,1,X'41',?,zeroblob(396))");
+        metadata.bind(1,2800+key);metadata.bind(2,std::string(SqliteCompanionRepository::source_sha256));
+        metadata.bind(3,std::string(64,'a'));metadata.done();
+        repo.store_deity(1,f.character,deity(static_cast<std::uint8_t>(key)),{},provenance());
+    }
+    const auto before=helper.restore_with_source(1,f.character);
+    require(before.deity_roster().rows().size()==16 && !before.deity_roster().selection(),"Full saved roster fixture missing");
+    auto first=helper.select_deity_with_source(1,f.character,{2});
+    auto second=helper.select_deity_with_source(1,f.character,{16});
+    require(first&&second,"Actual selection commit chain missing");
+    const std::array publications{first->publication(),second->publication()};
+    require(second->committed().before()==std::optional{first->committed().after()},"Consecutive C67 did not chain selection revisions");
+    const auto intermediate=repo.selection_roster_successor(before.deity_roster(),first->committed());
+    const auto final=intermediate?repo.selection_roster_successor(*intermediate,second->committed()):std::nullopt;
+    require(intermediate&&final&&!repo.deity_roster_current(before.deity_roster())&&
+        !repo.deity_roster_current(*intermediate)&&repo.deity_roster_current(*final),"Consumed before selection was revived or final roster refused");
+    const auto after=helper.selection_successor_from_committed(before,publications);
+    require(after&&helper.restoration_current(*after)&&!helper.restoration_current(before),"Full restoration selection successor failed");
+    require(after->deity_roster().selection()==std::optional{second->committed().after()}&&
+        after->deity_roster().template_keys()==before.deity_roster().template_keys()&&
+        after->deity_roster().rows().size()==16,"Selection changed full roster/template ownership");
+    for(std::size_t i=0;i<16;++i) {
+        const auto& a=before.deity_roster().rows()[i];const auto& b=after->deity_roster().rows()[i];
+        require(a.revision==b.revision&&a.provenance==b.provenance&&
+            a.snapshot.declaration.encode()==b.snapshot.declaration.encode()&&a.snapshot.status.encode()==b.snapshot.status.encode()&&
+            a.snapshot.skills.size()==b.snapshot.skills.size()&&a.snapshot.skills.front().encode()==b.snapshot.skills.front().encode(),
+            "Selection altered a saved row instead of its selector");
+    }
+    require(after->batches().size()==before.batches().size()+2,"Selection invented restoration batches");
+    for(std::size_t i=0;i<before.batches().size();++i)require(before.batches()[i]==after->batches()[i],"Original S30/S34 history changed");
+    for(std::size_t i=0;i<2;++i) {
+        const auto& delta=after->batches()[before.batches().size()+i];
+        const auto wire=RecoveredWorldFrame::decode(publications[i].wire());
+        require(delta.size()==29&&delta[0]==0x31&&wire&&*wire==delta,"Selection replayed S30 or lost actual S31 order");
+    }
+    const std::array definitions{prefix_definition()};
+    const auto prefix=TaiwanNativeDeityRosterPrefix::from_reset_and_records(before.batches(),definitions);
+    const auto next=TaiwanNativeDeityRosterPrefix::from_reset_and_records(after->batches(),definitions);
+    require(prefix&&next&&next->roster_count()==16&&next->rows()==prefix->rows()&&
+        next->rows()[std::size_t(next->selected_row())].row_key==16,"S31 history changed physical roster/skill tails");
+    for(const auto& row:next->rows()) {
+        require(row.learned_definitions.size()==100&&row.auxiliary_definitions.size()==100,"Inactive tail capacity lost");
+        for(std::size_t i=1;i<100;++i)require(!row.learned_definitions[i]&&!row.auxiliary_definitions[i]&&row.learned_flags[i]==0,
+            "Selection fabricated inactive learned/auxiliary entries");
+    }
+    // Separate pure prefix case exercises nonzero inactive tails from actual
+    // supported direct30/34/35 footprints; it mints no private Written source.
+    std::vector<std::uint8_t> logical;
+    const auto append=[&](const auto& bytes){logical.insert(logical.end(),bytes.begin(),bytes.end());};
+    auto declaration=deity(101).declaration.encode();append(declaration);
+    append(std::array<std::uint8_t,4>{0x34,101,0,1});append(std::array<std::uint8_t,4>{0x34,101,0,2});
+    append(std::array<std::uint8_t,4>{0x35,101,0,1});append(std::array<std::uint8_t,4>{0x35,101,0,2});
+    declaration[18]=1;append(declaration); // reset count only, preserving old physical tails
+    append(std::array<std::uint8_t,4>{0x34,101,0,3});
+    for(std::uint8_t key=1;key<=15;++key)append(deity(key).declaration.encode());
+    const std::array tail_definitions{prefix_definition(1),prefix_definition(2),prefix_definition(3)};
+    const std::array tail_history{logical};
+    const auto tails=TaiwanNativeDeityRosterPrefix::from_reset_and_records(tail_history,tail_definitions,true);
+    append(deity(1).status.encode());const std::array selected_history{logical};
+    const auto selected_tails=TaiwanNativeDeityRosterPrefix::from_reset_and_records(selected_history,tail_definitions,true);
+    require(tails&&selected_tails&&tails->roster_count()==16&&tails->rows()[0].learned_count==1&&
+        tails->rows()[0].auxiliary_count==0&&tails->rows()[0].learned_definitions[1]&&
+        tails->rows()[0].auxiliary_definitions[1]&&selected_tails->rows()==tails->rows()&&
+        selected_tails->selected_row()==1,"S31 reset nonzero inactive learned/auxiliary tails or reordered16 rows");
+    const std::array reversed{second->publication(),first->publication()};
+    const std::array duplicated{first->publication(),first->publication()};
+    require(!helper.selection_successor_from_committed(before,reversed)&&
+        !helper.selection_successor_from_committed(before,duplicated),"Wrong C67 order/repeated commit adopted");
+    auto foreign=f.repo();
+    require(!foreign.selection_roster_successor(before.deity_roster(),first->committed()),"Equal DB connection borrowed another private issuer");
+    auto other_profile=std::array<std::uint8_t,40>{};other_profile[0]='B';
+    const auto other=f.roles().create(2,other_profile).id;
+    repo.store_deity(2,other,deity(101),{},provenance());
+    const auto other_before=repo.load_deity_roster(2,other);
+    require(!repo.selection_roster_successor(other_before,first->committed()),"Other account/character borrowed commit chain");
+    auto changed=deity(3);auto status=changed.status.encode();status[8]=77;changed.status=*RecoveredDeityState::Status::parse(status);
+    repo.store_deity(1,f.character,changed,1,provenance());
+    require(!helper.selection_successor_from_committed(before,publications),"Changed unselected full row escaped final restoration Current");
+    require(repo.load_deity_selection(1,f.character)==std::optional{second->committed().after()},"Metadata refusal rolled back durable selection");
+}
 }
 int main() {
     try {
+        selection_source_regression();
         Fixture f;auto repo=f.repo();RecoveredOwnedCompanions service(repo);const auto c=f.character;
         require(service.restore(1,c).empty(),"Absent ownership emitted packets");
         require(!repo.selected_deity_has_skill(1,c,0,126),"Absent ownership granted custom skill");
