@@ -6368,7 +6368,8 @@
     },
     "native_client_acceptance": false,
     "client_resources_applied": true,
-    "verification_status": "RELEASE_BUILD_AND_INDEPENDENT_TW_ASSET_QA_PASSED_APPLIED_PENDING_NATIVE_CLIENT_LOGIN"
+    "native_scene_2_4_panel_display_observed": true,
+    "verification_status": "APPLIED_NATIVE_TW_2_4_DISPLAY_OBSERVED_OTHER_SCENES_AND_OCCLUSION_PENDING"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
