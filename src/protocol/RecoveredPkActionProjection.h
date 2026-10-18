@@ -51,7 +51,11 @@ struct RecoveredPkActionProjection {
                 append(out,vital(input.mp[viewer],0,state.actors[14*viewer]->mp));
             append(out,RecoveredBattleAttackPresentation::hit(input.animation[viewer],source,target,hit.hp_loss,
                 state.actors[hit.target]->hp!=0));
-            append(out,vital(input.hp[hit.target/14],target,state.actors[hit.target]->hp));
+            // BASIC522FB0 and ordinary skill524820 apply the signed83 HP at
+            // their animation event. The special526890 skill branch uses the
+            // outcome as a pose only and still requires its absolute HP86.
+            if(input.animation[viewer].requires_absolute_hp_update())
+                append(out,vital(input.hp[hit.target/14],target,state.actors[hit.target]->hp));
             if(emit_cycle_bulk){
                 auto bulk=RecoveredBattleVitalsBatch::encode_logical(input.bulk[viewer]);
                 if(std::all_of(bulk.begin()+1,bulk.begin()+5,[](auto b){return b==0xff;}))

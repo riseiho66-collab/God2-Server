@@ -860,7 +860,7 @@ SqliteOwnedPkRoomRepository::terminal_resources_in_scope(const Ticket& ticket,co
     while(rows.row()){
         const auto bytes=rows.blob(1,1,RecoveredWorldFrame::max_logical_size);const auto submitted=rows.integer(2);
         if(viewer>=2||rows.number<std::uint8_t>(0)!=viewer||(submitted!=0&&submitted!=1)||
-           !RecoveredTaiwanPkTerminalNotification::matches_result_sequence(bytes)||
+           !RecoveredTaiwanPkTerminalNotification::matches_retained_result_sequence(bytes)||
            !std::equal(terminal.begin(),terminal.end(),bytes.end()-terminal.size()))
             throw DatabaseError("PK terminal resource final output mismatch");
         result.outputs[viewer].assign(bytes.begin(),bytes.end());
@@ -1466,6 +1466,12 @@ void SqliteOwnedPkRoomRepository::settle(const Ticket& ticket,const BattleCheckp
     // Reject malformed/corrupt outcome and RNG before durable publication.
     (void)Battle::restore(expected);(void)Battle::restore(next);
     replies_valid(replies);
+    // New rows must use the actual per-action native HP policy. Legacy all-HP86
+    // compatibility belongs only to retained reads, never fresh settlement.
+    for(const auto& reply:replies)
+        if(!RecoveredTaiwanPkTerminalNotification::matches_output_sequence(reply)||
+           RecoveredTaiwanPkTerminalNotification::matches_result_sequence(reply)!=next_round.terminal_notification())
+            throw DatabaseError("PK fresh result differs from its native consumer HP policy");
     if(next_round.terminal_notification()){
         const auto terminal=OwnedTaiwanPkTerminalSource::prepare(ticket,next.snapshot,next_round);
         for(const auto& reply:replies)
@@ -1595,7 +1601,7 @@ OwnedPkRound SqliteOwnedPkRoomRepository::read_round(const Ticket& ticket,bool r
                 throw DatabaseError("PK notification receipt precedes its own result submission");
             if(terminal){
                 const auto logical=rows.blob(2,1,RecoveredWorldFrame::max_logical_size);
-                if(!RecoveredTaiwanPkTerminalNotification::matches_result_sequence(logical)||
+                if(!RecoveredTaiwanPkTerminalNotification::matches_retained_result_sequence(logical)||
                    !std::equal(terminal->begin(),terminal->end(),logical.end()-terminal->size()))
                     throw DatabaseError("PK retained terminal row differs from its private result policy");
             }

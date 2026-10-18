@@ -88,10 +88,10 @@ int main(int argc,char** argv) {
             require(setup.checkpoint()==before);
             const auto bytes=diagnostic_revival_death_setup(9,setup,
                 [&](const CombatRuleInput& input){return lua.combat_damage(input);});
-            require(bytes.size()==528 && bytes[375]==0x83 && bytes[377]==14 && bytes[380]==2);
-            require(bytes[407]==0x88 && bytes[420]==0 && bytes[424]==5);
+            require(bytes.size()==511 && bytes[375]==0x83 && bytes[377]==14 && bytes[380]==2);
+            require(bytes[390]==0x88 && bytes[403]==0 && bytes[407]==5);
             require(bytes[378]==0);
-            require(bytes[387]==0 && bytes[390]==0x86 && bytes[392]==1 && bytes[399]==0);
+            require(bytes[384]==0xfc && bytes[385]==0xff && bytes[387]==0);
             require(bytes[358]==0x86 && bytes[359]==5);
             require(setup.inspect().revision==2 && setup.inspect().actors[1]->hp==0 && setup.active());
             require(setup.inspect().actors[0]->mp==80);

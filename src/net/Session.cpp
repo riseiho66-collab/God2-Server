@@ -6891,41 +6891,12 @@ void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSk
        impl_->common_ready_thread!=std::this_thread::get_id() || !common)
         throw std::invalid_argument("Native PK output recipient identity mismatch");
     const auto records=RecoveredTaiwanServerRecords::read(delivery->logical);
-    // CUSTOM-0126 only a canonical final89 after the final88 may use this
-    // accepted-entry writer. No arbitrary experience record/standalone89.
-    const bool terminal=records&&records->size()>=4&&records->back().opcode==0x89&&
-        RecoveredTaiwanPkTerminalNotification::matches(records->back().bytes);
-    bool valid=false;
-    if(records && records->size()==1 && records->front().opcode==0x86 &&
-       RecoveredBattlePlayerGrant::parse(records->front().bytes))valid=true;
-    else if(records && records->size()>=3 &&
-            (*records)[records->size()-1-(terminal?1:0)].opcode==0x88 &&
-            RecoveredBattleVitalsBatch::parse_logical((*records)[records->size()-1-(terminal?1:0)].bytes)){
-        // Current RecoveredPkActionProjection: one/two scalar action groups,
-        // each [own MP?],83,matching target HP; one final friendly bulk.
-        std::size_t at=0;unsigned groups=0,seen=0;valid=true;
-        const auto end=records->size()-1-(terminal?1:0);
-        while(at<end){
-            bool own_mp=false;
-            if((*records)[at].opcode==0x86){
-                const auto mp=RecoveredBattleVitals::parse_logical((*records)[at].bytes);
-                if(!mp || mp->resource()!=RecoveredBattleVitals::Resource::Mp || mp->position()!=0){valid=false;break;}
-                own_mp=true;++at;
-            }
-            if(at>=end){valid=false;break;}
-            const auto& animation=(*records)[at++];
-            const auto attack=RecoveredBattleAttackPresentation::parse(animation.bytes);
-            if(!attack || (attack->source()!=0&&attack->source()!=14) ||
-               (animation.bytes[5]&~1u)||animation.bytes[6]||(animation.bytes[7]&~1u)||animation.bytes[8] ||
-               (own_mp&&attack->source()!=0) || at>=end){valid=false;break;}
-            const auto side=static_cast<unsigned>(attack->source()/14);
-            if(seen&(1u<<side)){valid=false;break;}seen|=1u<<side;
-            const auto hp=RecoveredBattleVitals::parse_logical((*records)[at++].bytes);
-            if(!hp || hp->resource()!=RecoveredBattleVitals::Resource::Hp ||
-               hp->position()!=14*(1-side) || ++groups>2){valid=false;break;}
-        }
-        valid=valid&&at==end&&groups>=1;
-    }
+    // Exact retained outbox bytes can use either the current per-consumer HP
+    // policy or the old all-HP86 policy. Publication still binds this delivery
+    // to the private room and exact persisted row; grammar grants no authority.
+    const bool grant=records&&records->size()==1&&records->front().opcode==0x86&&
+        RecoveredBattlePlayerGrant::parse(records->front().bytes).has_value();
+    const bool valid=grant||RecoveredTaiwanPkTerminalNotification::matches_retained_output_sequence(delivery->logical);
     if(!valid)throw std::invalid_argument("Native PK output requires standalone primary grant or qualified scalar result records");
     const auto charge=delivery->logical.size()+3;
     auto budget=impl_->budget;std::shared_ptr<Reservation> reservation;

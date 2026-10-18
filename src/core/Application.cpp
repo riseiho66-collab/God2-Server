@@ -7565,16 +7565,21 @@ if(guild_officer_runtime && player_guild(session) &&
                                                         const auto& target=*state.actors[hit.target];
                                                         const auto maximum_hp=RecoveredBattleBootstrap::native_hp_dword(target.max_hp);
                                                         const auto current_hp=RecoveredBattleBootstrap::native_hp_dword(target.hp);
-                                                        RecoveredBattleVitals::Bytes record{};
-                                                        record[0]=0x86;record[2]=hit.target;
-                                                        for(unsigned i=0;i<4;++i) {
-                                                            record[5+i]=static_cast<std::uint8_t>(maximum_hp>>(8*i));
-                                                            record[9+i]=static_cast<std::uint8_t>(current_hp>>(8*i));
+                                                        if(!config.diagnostic_battle_animations) {
+                                                            // BASIC and the configured kind0/1,id1 skill
+                                                            // apply their83 signed delta at the native hit.
+                                                            // Only a nonanimated result needs immediate HP86.
+                                                            RecoveredBattleVitals::Bytes record{};
+                                                            record[0]=0x86;record[2]=hit.target;
+                                                            for(unsigned i=0;i<4;++i) {
+                                                                record[5+i]=static_cast<std::uint8_t>(maximum_hp>>(8*i));
+                                                                record[9+i]=static_cast<std::uint8_t>(current_hp>>(8*i));
+                                                            }
+                                                            const auto parsed=RecoveredBattleVitals::parse_logical(record);
+                                                            if(!parsed) throw std::runtime_error("Diagnostic damage encoding rejected");
+                                                            const auto bytes=RecoveredBattleVitals::encode_logical(*parsed);
+                                                            logical.insert(logical.end(),bytes.begin(),bytes.end());
                                                         }
-                                                        const auto parsed=RecoveredBattleVitals::parse_logical(record);
-                                                        if(!parsed) throw std::runtime_error("Diagnostic damage encoding rejected");
-                                                        const auto bytes=RecoveredBattleVitals::encode_logical(*parsed);
-                                                        logical.insert(logical.end(),bytes.begin(),bytes.end());
                                                     }
                                                     if(terminal && !player && state.state==BattleState::Finished) {
                                                         const auto outcome=diagnostic_battle_zero_result();

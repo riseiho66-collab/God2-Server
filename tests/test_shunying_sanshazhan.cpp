@@ -327,10 +327,10 @@ int main(){try {
             const auto reply=center_service.handle(*session,basic(14));
             check(reply.has_value(),"Manual basic click rejected");
             const auto logical=RecoveredWorldFrame::decode(*reply);
-            check(logical && logical->size()==153 && (*logical)[0]==0x83 && (*logical)[1]==1 &&
-                  (*logical)[2]==2 && (*logical)[12]==28 && (*logical)[15]==0x86 &&
-                  (*logical)[32]==0x88 && (*logical)[33]==12,
-                  "Manual basic reply omitted native animation/HP/current-cycle88 or became a skill");
+            check(logical && logical->size()==136 && (*logical)[0]==0x83 && (*logical)[1]==1 &&
+                  (*logical)[2]==2 && (*logical)[9]==0xf6 && (*logical)[10]==0xff && (*logical)[12]==28 &&
+                  (*logical)[15]==0x88 && (*logical)[16]==12,
+                  "Manual basic reply inserted eager HP86 or lost timed damage/current-cycle88");
             const auto before_receipt=center_service.inspect(7);
             check(!center_service.diagnostic_round_ready(*session),"Basic input reopened before receipt");
             check(center_service.handle(*session,control(0,1,2)).has_value() &&
@@ -343,9 +343,9 @@ int main(){try {
         auto dead_state=center_service.inspect(7);dead_state.actors[14]->hp=0;
         const BattleActionResult lethal{2,0,{{14,10,10,false}}};
         const auto lethal_logical=RecoveredWorldFrame::decode(diagnostic_shunying_manual_basic_reply(dead_state,lethal,13));
-        check(lethal_logical && (*lethal_logical)[12]==0 && (*lethal_logical)[32]==0x88 &&
-              RecoveredBattleVitals::parse_logical(std::span(*lethal_logical).subspan(15,17))->current()==0,
-              "Dead basic target did not retain death route/zeroHP/88");
+        check(lethal_logical && lethal_logical->size()==136 && (*lethal_logical)[12]==0 &&
+              (*lethal_logical)[9]==0xf6 && (*lethal_logical)[10]==0xff && (*lethal_logical)[15]==0x88,
+              "Dead basic target lost its timed damage/death/88 or gained eager HP86");
         const auto lethal_skill=RecoveredWorldFrame::decode(diagnostic_shunying_manual_reply(dead_state,lethal,13));
         check(lethal_skill && lethal_skill->size()==15+121 && (*lethal_skill)[0]==0x83 &&
               (*lethal_skill)[1]==3 && (*lethal_skill)[2]==2 && (*lethal_skill)[9]==0xf6 &&

@@ -1,5 +1,10 @@
 # Current Revival Evidence
 
+2026-10-19現用EXE續追見
+[round465](tw-basic-skill-revival-hp-policy-20261019.md)：kind3/id8的type59恢復路徑
+與傷害HP消費不同，保留既有絕對HP回覆。HP1／MP66仍是CUSTOM-0017；
+下述2026-09-21技能書描述及當時來源不直接證明現用gamedata或原服生成公式。
+
 Scope: current Taiwan client, source-pinned descriptions and original metadata
 lookup only. No retired archive, official server or production gameplay changes.
 

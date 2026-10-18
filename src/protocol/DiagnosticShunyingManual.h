@@ -99,18 +99,10 @@ inline std::vector<std::uint8_t> diagnostic_shunying_manual_action_reply(
             diagnostic_battle_basic_animation(result.source,hit.target,hit.hp_loss,0,target.hp>0);
         if(skill) animation[11]=ShunyingSanshazhan::id; // client captures126 then uses native8 events
         logical.insert(logical.end(),animation.begin(),animation.end());
-        const auto maximum=RecoveredBattleBootstrap::native_hp_dword(target.max_hp);
-        const auto current=RecoveredBattleBootstrap::native_hp_dword(target.hp);
-        if(!skill) {
-            // BASIC has a different native consumer; preserve its qualified
-            // absolute update.126/native8 instead applies WORD28A on the hit.
-            RecoveredBattleVitals::Bytes hp{};hp[0]=0x86;hp[2]=hit.target;
-            for(unsigned i=0;i<4;++i) {
-                hp[5+i]=static_cast<std::uint8_t>(maximum>>(i*8));
-                hp[9+i]=static_cast<std::uint8_t>(current>>(i*8));
-            }
-            logical.insert(logical.end(),hp.begin(),hp.end());
-        }
+        // BASIC522FB0 and126/native8 both apply the signed amount on their
+        // native hit. Keep resource projection guards without an eager HP86.
+        (void)RecoveredBattleBootstrap::native_hp_dword(target.max_hp);
+        (void)RecoveredBattleBootstrap::native_hp_dword(target.hp);
     }
     RecoveredBattleVitalsBatch::Bytes bulk{};bulk[0]=0x88;
     for(unsigned i=0;i<4;++i) bulk[1+i]=static_cast<std::uint8_t>(cycle>>(i*8));

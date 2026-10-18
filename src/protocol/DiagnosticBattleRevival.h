@@ -106,9 +106,9 @@ inline std::vector<std::uint8_t> diagnostic_revival_death_setup(
                 throw std::invalid_argument("Revival prelude did not produce isolated ally defeat");
             // First queued action uses group0; group1 is a subsequent exchange.
             const auto effect=diagnostic_battle_basic_animation(14,1,4,0,false);
-            RecoveredBattleVitals::Bytes hp{};hp[0]=0x86;hp[2]=1;hp[5]=120;
+            // This prelude is BASIC damage: its hit event owns the HP4->0
+            // change. The separate revival projection below still needs HP86.
             std::vector<std::uint8_t> bytes(effect.begin(),effect.end());
-            bytes.insert(bytes.end(),hp.begin(),hp.end());
             return bytes;
         });
     logical.insert(logical.end(),damage.begin(),damage.end());

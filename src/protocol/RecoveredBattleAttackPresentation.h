@@ -30,6 +30,18 @@ struct RecoveredBattleAttackPresentation {
             if(basic())return {};
             return static_cast<std::uint16_t>((std::uint16_t{bytes_[12]}<<8)|bytes_[11]);
         }
+        // Current TW529020 dispatch for this scalar grammar (skill R13=0,
+        // R14=0/28). BASIC522FB0 and default skill524820 apply the received
+        // signed HP delta at their hit event; an eager final HP86 would apply
+        // it twice. These special kind0/1 IDs instead select526890, where the
+        // mapped0/9 states do not add that amount and need absolute HP86.
+        // This is a consumer policy, never skill eligibility or a formula.
+        bool requires_absolute_hp_update()const noexcept{
+            if(basic())return false;
+            const auto id=bytes_[11];
+            if(bytes_[12]==0)return id>=96 && id<=103;
+            return (id<46 && (id-1)%8==2) || (id>=89 && id<=93);
+        }
     private:
         friend struct RecoveredBattleAttackPresentation;
         explicit Record(Bytes bytes):bytes_(bytes){}

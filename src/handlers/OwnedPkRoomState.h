@@ -247,7 +247,7 @@ public:
         auto& current=find(room);const auto phase=repository_.round(current.ticket);
         if(!phase.terminal_notification())return false;
         const auto expected=OwnedTaiwanPkTerminalSource::prepare(current.ticket,current.battle.inspect(),phase);
-        return RecoveredTaiwanPkTerminalNotification::matches_result_sequence(bytes)&&
+        return RecoveredTaiwanPkTerminalNotification::matches_retained_result_sequence(bytes)&&
             std::equal(expected.begin(),expected.end(),bytes.end()-expected.size());
     }
     std::vector<Repository::Delivery> pending(std::uint64_t room){
