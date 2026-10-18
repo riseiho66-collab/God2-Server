@@ -1,3 +1,10 @@
+> 現用來源界線（2026-10-19，round455）：以下是2026-09-20的448筆／149c...歷史研究，
+> 文中的 current、測試結果及381/448只適用當時所固定來源。現用 EXE為aaf0...，
+> 技能BIN為3adc...的453筆，gamedata.csvZ為ef297...；保留SKB381 matrix則來自
+> 舊raw70a4...／decoded75c3...。未取得現用SKB rows的獨立身分驗證前，不把舊
+> 技能書配對或描述套到現用453筆。完整雜湊、REA重核及限制見
+> [round455續追](tw-skill-producers-and-source-identity-20261019.md)。本輪沒有重跑以下測試。
+
 # Original skill identity to book binding
 
 ## What is executed
