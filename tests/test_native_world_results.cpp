@@ -124,6 +124,28 @@ void self_test() {
             nextResources.revision=saved.resource_revision;checkpoint=std::move(saved);resources=nextResources;
         });
     const auto seed=checkpoint;
+    // Preserve selector20's raw accumulator view, but reject a mixed exchange
+    // before encoding/persistence: native playback skips its HP/MP updates.
+    const std::array replacementRecords{*RecoveredBattleDelta::parse(result_bytes()),
+        *RecoveredBattleDelta::parse(result_bytes(20))};
+    bool replacementEncoded=false;
+    rejects([&]{service.apply_native_deltas(session,1,replacementRecords,
+        [&](const auto&,auto){replacementEncoded=true;return std::vector<std::uint8_t>{1};});});
+    require(!replacementEncoded && service.inspect(91)==seed.checkpoint.snapshot &&
+        repository.load_checkpoint(7,character.id,id)==seed,"Selector20 exchange published scalar state");
+    for(const std::uint16_t kind:{2,3,65535}) {
+        auto rawKind=result_bytes();rawKind[11]=static_cast<std::uint8_t>(kind);
+        rawKind[12]=static_cast<std::uint8_t>(kind>>8);
+        const auto parsedKind=RecoveredBattleDelta::parse(rawKind);
+        require(parsedKind && parsedKind->accumulator_kind_bits()==kind &&
+            RecoveredBattleDelta::encode(*parsedKind)==rawKind,"Accumulator kind raw bits lost");
+        const std::array kindRecords{*RecoveredBattleDelta::parse(result_bytes()),*parsedKind};
+        bool kindEncoded=false;
+        rejects([&]{service.apply_native_deltas(session,1,kindRecords,
+            [&](const auto&,auto){kindEncoded=true;return std::vector<std::uint8_t>{1};});});
+        require(!kindEncoded && service.inspect(91)==seed.checkpoint.snapshot &&
+            repository.load_checkpoint(7,character.id,id)==seed,"Unqualified accumulator kind published scalar state");
+    }
     auto inconsistent=result_bytes();inconsistent[14]=0;
     const std::array inconsistentRecords{*RecoveredBattleDelta::parse(inconsistent)};
     rejects([&]{service.apply_native_deltas(session,1,inconsistentRecords,

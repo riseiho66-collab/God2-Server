@@ -17,9 +17,15 @@ struct RecoveredBattleDelta {
         std::uint16_t amountBits() const noexcept{return word(9);}
         std::int32_t amount() const noexcept{return amountBits()<0x8000?amountBits():std::int32_t{amountBits()}-65536;}
         std::uint8_t selector() const noexcept{return bytes_[13];}
+        // Nonzero logical WORD+11 copied to actor+4D0[index]. Kinds2/3
+        // select different actors/sign handling in0052B870, not kind1 deltas.
+        std::uint16_t accumulator_kind_bits() const noexcept{return word(11);}
         // 0052CB8E/0052CBDE reads payload+D (logical14), then0052BFC0.
         // Native table maps0 to death state9,28 to ordinary live state0.
         std::uint8_t targetOutcome() const noexcept{return bytes_[14];}
+        // Receive-side accumulator arithmetic only. Selector20 replaces HP
+        // accumulator bits, but0052B870/0052BC50 skip scalar HP/MP application
+        // when its stored selector is20. This is not a ready-to-apply delta.
         Accumulator accumulate(Accumulator current) const noexcept {
             const auto delta=static_cast<std::uint32_t>(amount());
             if(selector()<=5)current.hp+=delta;

@@ -1,5 +1,12 @@
 # Native world display and supplied battle result integration
 
+2026-10-19 source correction: raw accumulator support is not scalar-application
+authority for every variant. Current selector20 bypasses the selected direct
+HP/MP calls; kinds2/3 change actor/sign handling. The authoritative entry now
+rejects kind!=1 or selector20 before publication, while preserving raw parsing.
+See [round459 evidence](tw-battle-accumulator-application-boundary-20261019.md).
+Historical tests/deployment below are retained, not rerun or current acceptance.
+
 ## Implemented contracts
 
 * S2C72 -> 004CC380: exact21 logical bytes, selectors+1, facing+9 high3,

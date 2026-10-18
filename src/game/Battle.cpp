@@ -203,6 +203,15 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
     auto staged=snapshot_;
     // Validate the complete exchange against the pre-exchange ownership snapshot.
     for(const auto& record:records) {
+        // Only kind1's direct target-scalar application is qualified here.
+        // Kinds2/3 change actor selection/sign handling in0052B870.
+        if(record.accumulator_kind_bits()!=1)
+            throw std::invalid_argument("Native result accumulator kind is unqualified");
+        // Current TW 0052CB78 preserves selector20 in actor+5A2[index].
+        // 0052BB4A/0052BE90 then bypass both HP/MP scalar updates for it.
+        // Its accumulator assignment alone is not an authoritative HP delta.
+        if(record.selector()==20)
+            throw std::invalid_argument("Native selector20 scalar application is unqualified");
         if(record.targetOutcome()!=0 && record.targetOutcome()!=28)
             throw std::invalid_argument("Native result target outcome is unqualified");
         const auto& source=snapshot_.actors[record.source()];

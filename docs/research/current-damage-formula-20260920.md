@@ -1,5 +1,11 @@
 # Current received-result arithmetic, 2026-09-20
 
+2026-10-19更正：下述selector20的scalar數例使用獨立12BB84入口，略過原始
+52BB4A的selector20分支，不能證明收到此變體後自然套用HP。現用aaf0客戶端
+另有kind2／3的actor／符號分流，權威結算已縮限；詳見
+[round459來源更正](tw-battle-accumulator-application-boundary-20261019.md)。
+歷史raw算術、分段執行與結果保持，不提升為全分支連續執行證據。
+
 Recovered a new computation: **inbound battle-result WORDs accumulate into
 per-target DWORDs, which the client applies to actor scalars using wrapping
 addition, a sign-based zero floor, and a signed cap comparison**. This changes
