@@ -212,12 +212,20 @@ std::vector<std::uint8_t> Battle::act(std::uint64_t controller, std::uint64_t re
     return wire;
 }
 std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,std::uint64_t revision,
-        std::span<const RecoveredBattleDelta::Record> records,const NativeDeltaEncode& encode) {
+        std::span<const RecoveredBattleDelta::Record> records,const NativeDeltaEncode& encode,
+        std::optional<NativeDeltaView> view) {
     if(snapshot_.numeric_profile!=BattleNumericProfile::LegacyCustom ||
        !controller || !active() || revision!=snapshot_.revision ||
        revision==std::numeric_limits<std::uint64_t>::max() || records.empty() ||
        records.size()>snapshot_.actors.size()*RecoveredBattleDelta::indexed_capacity || !encode)
         throw std::invalid_argument("Invalid native result exchange");
+    if(view && (view->battle_!=snapshot_.id || view->revision_!=revision || view->controller_!=controller ||
+       view->primary_slot_>=14 || !snapshot_.actors[view->primary_slot_]))
+        throw std::invalid_argument("Native result view differs from the exact battle exchange");
+    const auto reads_outcome=[&](const RecoveredBattleDelta::Record& record,std::uint8_t target){
+        return record.kind1_accumulator_reads_target_outcome() ||
+            (target<14 && (!view || target==view->primary_slot_));
+    };
     auto staged=snapshot_;
     std::array<std::size_t,28> source_counts{};
     // Validate the complete exchange against the pre-exchange ownership snapshot.
@@ -247,11 +255,11 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
         if(!target || !snapshot_.actors[*target])
             throw std::invalid_argument("Native result selected target absent");
         // 5169F0 returns before presentation flags for opposing side1.
-        // A friendly target may be the local self slot: retain its existing
-        // outcome contract until the separate client flag owner is qualified.
-        // Both1C identity entry and86/5 can change native self slot51;
-        // a C2S actor matcher or an old prepared grant is not that owner.
-        if((record.kind1_accumulator_reads_target_outcome() || *target<14) &&
+        // Without the current Session view every friendly target may be self.
+        // A qualified nonself friendly target bypasses5169F0 too; only kind1
+        // nonzero selectors then ignore raw14. Self/selector0 retain the old
+        // outcome contract; this view supplies no self-status flag contents.
+        if(reads_outcome(record,*target) &&
            record.targetOutcome()!=0 && record.targetOutcome()!=28)
             throw std::invalid_argument("Native result target outcome is unqualified");
     }
@@ -267,10 +275,10 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
         // Kind1 nonzero selectors' accumulator storage ignores raw outcome14
         // and stores state0. The opposing side also bypasses5169F0 flags, so
         // its numeric result must not be rejected based on this unused byte.
-        // Friendly presentation keeps the previous checks as described above.
+        // Friendly self/unknown-view presentation keeps the previous checks.
         // HP-based side elimination below remains CUSTOM-0007, not recovery
         // of native actor1EA/death state or full n-1/i outcome ownership.
-        if((record.kind1_accumulator_reads_target_outcome() || target_position<14) &&
+        if(reads_outcome(record,target_position) &&
            (target.hp>0)!=(record.targetOutcome()==28))
             throw std::invalid_argument("Native result HP and target outcome disagree");
     }

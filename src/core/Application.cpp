@@ -3705,6 +3705,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             if(native_records_lab && lab_action && lab_action->actor_position==0 && lab_action->side_flag==0 &&
                                lab_action->target_masks==std::array<std::uint16_t,2>{0,1} &&
                                diagnostic_combat->inspect(session.id()).revision==1) {
+                                const auto self_view=session.battle_self_view();
                                 // Synthetic trusted effects, after the real client attack command.
                                 RecoveredBattleDelta::Bytes hp{0x83,13,0};
                                 hp[7]=1;hp[9]=0xe2;hp[10]=0xff;hp[11]=1;hp[14]=28;
@@ -3722,7 +3723,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                         const auto close=diagnostic_battle_basic_animation(14,0,0,1,true);
                                         logical.insert(logical.end(),close.begin(),close.end());
                                         return RecoveredWorldFrame::encode(logical);
-                                    });
+                                    },self_view);
                                 spdlog::info("ISOLATED_NATIVE_DELTA_SENT enemy_hp={} player_mp={} no_followup86_or88_snapshot",
                                     diagnostic_combat->inspect(session.id()).actors[14]->hp,
                                     diagnostic_combat->inspect(session.id()).actors[0]->mp);

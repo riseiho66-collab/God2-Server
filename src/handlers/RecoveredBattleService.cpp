@@ -145,10 +145,12 @@ void RecoveredBattleService::bind(Session& session, Battle battle, Policy policy
                roster[slot]->identity_word()==owner->identity_word())
                 throw std::invalid_argument("Battle pose native identity has ambiguous first match");
     }
+    const auto native_delta_generation=session.battle_generation();
     const auto pose_generation=session.battle_generation();
     bindings_.emplace(session.id(),Bound{&session,session.account_id,session.character_id,
                                       std::move(battle),std::move(policy),std::move(encode),std::move(commit),std::move(checkpoint_commit)});
     bindings_.at(session.id()).pose_battle_generation=pose_generation;
+    bindings_.at(session.id()).native_delta_battle_generation=native_delta_generation;
     bindings_.at(session.id()).pose_session=pose_session;
     bindings_.at(session.id()).owned_checkpoint_commit=std::move(owned_checkpoint_commit);
     bindings_.at(session.id()).owned_bootstrap_write=std::move(owned_bootstrap_write);
@@ -613,7 +615,8 @@ const BattleSnapshot& RecoveredBattleService::inspect(std::uint64_t session) con
     return bindings_.at(session).battle.inspect();
 }
 std::vector<std::uint8_t> RecoveredBattleService::apply_native_deltas(Session& session,std::uint64_t revision,
-        std::span<const RecoveredBattleDelta::Record> records,const Battle::NativeDeltaEncode& encode) {
+        std::span<const RecoveredBattleDelta::Record> records,const Battle::NativeDeltaEncode& encode,
+        std::optional<Session::BattleSelfView> view) {
     reject_owned_skill_reentry(session.id());
     const auto found=bindings_.find(session.id());
     if(found==bindings_.end())throw std::invalid_argument("Native results require a bound battle");
@@ -623,12 +626,31 @@ std::vector<std::uint8_t> RecoveredBattleService::apply_native_deltas(Session& s
         throw std::invalid_argument("Native result session or phase mismatch");
     for(const auto& record:records)if(record.source()!=bound.policy.actor_position)
         throw std::invalid_argument("Native result source differs from authorized actor");
+    const auto generation=session.battle_generation();
+    const auto account=session.account_id,character=session.character_id;
+    const auto view_current=[&]{
+        return !view || (session.battle_self_view_current(*view) &&
+            session.battle_generation()==generation && bound.native_delta_battle_generation==generation &&
+            bound.session==&session && session.account_id==account && session.character_id==character &&
+            bound.account==account && bound.character==character && session.state()==SessionState::InBattle);
+    };
+    std::optional<Battle::NativeDeltaView> native_view;
+    if(view){
+        if(!view_current() || view->primary_slot()>=14 || !bound.battle.inspect().actors[view->primary_slot()])
+            throw std::invalid_argument("Native results lack a current Written primary receiver view");
+        // Source actor authorization remains independent: a controlled pet can
+        // act while the recipient's actual primary selfslot is another actor.
+        native_view=Battle::NativeDeltaView(bound.battle.inspect().id,revision,character,view->primary_slot());
+    }
     auto staged=bound.battle;
     const auto validated=[&](const BattleSnapshot& state,std::span<const RecoveredBattleDelta::Record> deltas) {
         if(!encode)throw std::invalid_argument("Missing native result encoder");
-        auto wire=encode(state,deltas);validate_reply(wire);return wire;
+        auto wire=encode(state,deltas);validate_reply(wire);
+        if(!view_current())throw std::invalid_argument("Native result receiver view retired during encoding");
+        return wire;
     };
-    auto reply=staged.apply_native_deltas(session.character_id,revision,records,validated);
+    auto reply=staged.apply_native_deltas(session.character_id,revision,records,validated,native_view);
+    if(!view_current())throw std::invalid_argument("Native result receiver view retired before commit");
     if(bound.commit)bound.commit(bound.battle.inspect(),staged.inspect());
     if(bound.checkpoint_commit)bound.checkpoint_commit(bound.battle.checkpoint(),staged.checkpoint());
     bound.battle=std::move(staged);bound.action_received=true;

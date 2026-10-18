@@ -132,6 +132,20 @@ public:
         explicit WorldResponseWrite(std::shared_ptr<Data> data):data_(std::move(data)) {}
         std::shared_ptr<Data> data_;
     };
+    // Opaque actual whole-response primary-writer custody. Neither this source
+    // nor its slot is client adoption, a skill/turn grant or native R0 equality.
+    class BattleSelfView {
+    public:
+        BattleSelfView(const BattleSelfView&)=default;
+        BattleSelfView& operator=(const BattleSelfView&)=default;
+        std::uint8_t primary_slot() const noexcept;
+    private:
+        friend class Session;
+        friend struct Impl;
+        struct Data;
+        explicit BattleSelfView(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
     // Opt-in original movement callback sender custody only. Full local write
     // is not native ACK, ring/reset authority or permission for another move.
     enum class MovementResponseWriteStatus {Pending,Queued,Written,Failed};
@@ -644,6 +658,8 @@ public:
     WorldResponseWrite observe_world_response(std::span<const std::uint8_t> wire);
     bool world_response_write_current(const WorldResponseWrite&) const;
     bool world_response_write_current_on_game(const WorldResponseWrite&) const;
+    std::optional<BattleSelfView> battle_self_view() const;
+    bool battle_self_view_current(const BattleSelfView&) const;
     // CUSTOM-0141: only the exact current original callback receipt may opt in.
     // Subsequent raw world input waits for this exact full write; not native ACK.
     void hold_world_input_until_response_written(const WorldResponseWrite&);
@@ -870,6 +886,9 @@ private:
     friend class shared::SharedActorVisibility;
     friend class SharedTaiwanMovement;
     friend class RecoveredMovementService;
+    // Sender-only admission before cross-executor handoff. Never an input-work fence.
+    std::uint64_t retire_battle_self_view_logical_output(std::span<const std::uint8_t>) noexcept;
+    std::uint64_t retire_battle_self_view_wire_output(std::span<const std::uint8_t>) noexcept;
     class NormalMovementBatchWrite final {
     public:
         struct Destination {

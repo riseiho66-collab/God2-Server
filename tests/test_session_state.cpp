@@ -11,6 +11,7 @@
 #include "protocol/RecoveredCharacterBootstrap.h"
 #include "protocol/RecoveredCharacterCreateResult.h"
 #include "protocol/RecoveredWorldStateCandidate.h"
+#include "protocol/DiagnosticBattleParticipants.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -382,6 +383,134 @@ void recovered_world_identity_sender_transport() {
         peer.session->send_world_records(init->entry_logical());peer.expect(init->entry_frame());peer.silent();
         require(!init->world_identity_sender_current(),
             "Selected/InBattle output phase incorrectly exempted later2A sender conflict");
+    }
+}
+
+void recovered_battle_self_view_transport() {
+    constexpr std::uint16_t actor=0x345;
+    constexpr std::uint64_t character=(std::uint64_t{1}<<40)|0x1234;
+    const auto probe=RecoveredWorldFrame::encode(std::array<std::uint8_t,5>{0x25,1,0,0,0});
+    const std::array<std::uint8_t,17> primary{0x86,5,0,1,0};
+    const auto grant=RecoveredWorldFrame::encode(primary);
+    const auto bootstrap=[&]{
+        std::vector<std::uint8_t> logical;
+        const auto append=[&](const auto& bytes){logical.insert(logical.end(),bytes.begin(),bytes.end());};
+        append(std::array<std::uint8_t,9>{0x82});
+        for(const std::uint8_t position:{0,1,14}){
+            std::array<std::uint8_t,45> identity{0x1c};identity[1]=position;identity[2]=1;identity[6]=0x20;
+            identity[3]=static_cast<std::uint8_t>(actor+position);identity[4]=static_cast<std::uint8_t>((actor+position)>>8);append(identity);
+            std::array<std::uint8_t,17> hp{0x86};hp[2]=position;hp[5]=120;hp[9]=position==1?50:100;append(hp);
+            if(position<14){auto mp=hp;mp[1]=1;mp[5]=30;mp[9]=position==1?12:20;append(mp);}
+        }
+        std::array<std::uint8_t,121> bulk{0x88};bulk[1]=1;bulk[5]=100;bulk[9]=20;bulk[13]=50;bulk[17]=12;
+        append(bulk);append(primary);return RecoveredWorldFrame::encode(logical);
+    }();
+    const std::array<BattleActor,3> actors{{{0,character,100,120,20,30,10,10,10,10},
+        {1,character,50,120,12,30,10,10,10,10},{14,0,100,120,0,0,10,10,10,10}}};
+    const auto effect=[](std::uint8_t target,std::uint8_t outcome,std::uint8_t selector=9){
+        RecoveredBattleDelta::Bytes raw{0x83,13,0};raw[5+2*(target/14)]=static_cast<std::uint8_t>(1u<<(target%14));
+        raw[9]=0xfe;raw[10]=0xff;raw[11]=1;raw[13]=selector;raw[14]=outcome;return raw;
+    };
+    const auto encode=[](const BattleSnapshot&,auto entries){
+        const auto prime=diagnostic_battle_basic_animation(0,14,0,0,true);
+        std::vector<std::uint8_t> logical(prime.begin(),prime.end());
+        for(const auto& entry:entries){const auto raw=RecoveredBattleDelta::encode(entry);logical.insert(logical.end(),raw.begin(),raw.end());}
+        const auto close=diagnostic_battle_basic_animation(14,0,0,1,true);logical.insert(logical.end(),close.begin(),close.end());
+        return RecoveredWorldFrame::encode(logical);
+    };
+    for(const std::uint8_t outcome:{0,28,255}){
+        RecoveredBattleService service([](const CombatRuleInput& input){return CombatRuleResult{1,input.mp_cost,false};});
+        RecoveredBattleService::Policy policy{0,0,0,0,{0,{14},false,100,100,0,0,150},{}};
+        unsigned commits=0;bool bootstrapped=false;
+        const auto checkpoint=[&](const BattleCheckpoint& before,const BattleCheckpoint& after){
+            require(before.random_state==after.random_state,"Native self-view effects changed RNG");++commits;
+        };
+        const auto bind=[&](Session& session){
+            service.bind(session,Battle(2000+outcome+session.battle_generation(),actors,123),policy,
+                [](const auto&,const auto&){return RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x85,0});},
+                {},checkpoint);
+        };
+        RecoveredSessionPeer peer(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>>{
+            if(!bootstrapped){session.set_state(SessionState::InBattle);bind(session);bootstrapped=true;return bootstrap;}
+            return grant; // A fresh actual game callback, not a generic slot setter.
+        },character,500+outcome,actor);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail(actor));peer.silent();peer.send(probe);peer.expect(bootstrap);peer.silent();
+        auto view=peer.session->battle_self_view();
+        require(view&&view->primary_slot()==0&&peer.session->battle_self_view_current(*view),
+            "Actual full Written bootstrap did not supply its primary self-view");
+        const auto initial=service.inspect(peer.session->id());
+        const auto rejected=[&](auto action){bool failed=false;try{action();}catch(const std::exception&){failed=true;}
+            require(failed&&service.inspect(peer.session->id())==initial&&!commits,
+                "Unqualified self-view result published state or persistence");};
+        const std::array nonself{*RecoveredBattleDelta::parse(effect(1,255))};
+        rejected([&]{service.apply_native_deltas(*peer.session,1,nonself,encode);});
+        for(const auto raw:{effect(0,255),effect(1,255,0),effect(1,255,20)}){
+            const std::array entries{*RecoveredBattleDelta::parse(raw)};
+            rejected([&]{service.apply_native_deltas(*peer.session,1,entries,encode,view);});
+        }
+        auto kind=effect(1,255);kind[11]=2;const std::array kinds{*RecoveredBattleDelta::parse(kind)};
+        rejected([&]{service.apply_native_deltas(*peer.session,1,kinds,encode,view);});
+        auto wrong_source=effect(1,255);wrong_source[2]=1;
+        const std::array wrong{*RecoveredBattleDelta::parse(wrong_source)};
+        rejected([&]{service.apply_native_deltas(*peer.session,1,wrong,encode,view);});
+        const std::array mixed{nonself.front(),*RecoveredBattleDelta::parse(effect(0,255))};
+        rejected([&]{service.apply_native_deltas(*peer.session,1,mixed,encode,view);});
+        if(outcome==255){
+            bool foreign_bootstrap=false;
+            RecoveredSessionPeer foreign(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>>{
+                if(!foreign_bootstrap){session.set_state(SessionState::InBattle);foreign_bootstrap=true;return bootstrap;}return grant;
+            },character,900,actor);
+            foreign.select(false);foreign.send(RecoveredSessionPeer::tail(actor));foreign.silent();foreign.send(probe);
+            foreign.expect(bootstrap);foreign.silent();const auto other=foreign.session->battle_self_view();
+            require(other&&!peer.session->battle_self_view_current(*other),"Another Session's Written grant borrowed this view");
+            rejected([&]{service.apply_native_deltas(*peer.session,1,nonself,encode,other);});
+            const auto account=peer.session->account_id;peer.session->account_id^=std::uint64_t{1}<<32;
+            require(!peer.session->battle_self_view_current(*view),"Self-view narrowed account identity");peer.session->account_id=account;
+            peer.session->character_id^=std::uint64_t{1}<<32;
+            require(!peer.session->battle_self_view_current(*view),"Self-view narrowed character identity");peer.session->character_id=character;
+            // A generic equal-byte grant is not the original accepted callback source.
+            peer.session->send_world_records(std::vector<std::uint8_t>(primary.begin(),primary.end()));peer.expect(grant);peer.silent();
+            require(!peer.session->battle_self_view_current(*view)&&!peer.session->battle_self_view(),
+                "An unowned generic grant minted or revived a view");
+            rejected([&]{service.apply_native_deltas(*peer.session,1,nonself,encode,view);});
+            peer.send(probe);peer.expect(grant);peer.silent();view=peer.session->battle_self_view();
+            require(view&&peer.session->battle_self_view_current(*view),"Fresh original callback failed to qualify a new occurrence");
+            std::array<std::uint8_t,45> identity{0x1c};
+            peer.session->send_world_records(std::vector<std::uint8_t>(identity.begin(),identity.end()));
+            peer.expect(RecoveredWorldFrame::encode(identity));peer.silent();
+            require(!peer.session->battle_self_view_current(*view),"Later identity writer preserved a stale self-view");
+            peer.send(probe);peer.expect(grant);peer.silent();view=peer.session->battle_self_view();
+            require(view.has_value(),"Fresh primary source after invalidation remained unavailable");
+            // Fault injection: the writer has been posted, but its strand has
+            // not run yet. It will precede any returned native result on wire.
+            auto next_primary=primary;next_primary[4]=1;
+            rejected([&]{service.apply_native_deltas(*peer.session,1,nonself,[&](const auto& state,auto entries){
+                peer.session->send_world_records(std::vector<std::uint8_t>(next_primary.begin(),next_primary.end()));
+                return encode(state,entries);
+            },view);});
+            require(!peer.session->battle_self_view_current(*view),"Posted writer left an old nonself view current");
+            peer.expect(RecoveredWorldFrame::encode(next_primary));peer.silent();
+            peer.send(probe);peer.expect(grant);peer.silent();view=peer.session->battle_self_view();
+            require(view.has_value(),"Original callback after posted writer did not refresh its view");
+            // Fault injection: a user encoder changes the phase after staging.
+            rejected([&]{service.apply_native_deltas(*peer.session,1,nonself,[&](const auto& state,auto entries){
+                auto wire=encode(state,entries);peer.session->set_state(SessionState::InWorld);return wire;
+            },view);});
+            require(!peer.session->battle_self_view_current(*view),"Leaving battle did not retire the view occurrence");
+            peer.session->set_state(SessionState::InBattle);peer.send(probe);peer.expect(grant);peer.silent();
+            view=peer.session->battle_self_view();require(view.has_value(),"New battle generation lacked its new grant source");
+            rejected([&]{service.apply_native_deltas(*peer.session,1,nonself,encode,view);});
+            service.remove(peer.session->id());bind(*peer.session); // Explicitly bind this new generation.
+        }
+        const std::array entries{*RecoveredBattleDelta::parse(effect(1,outcome))};
+        const auto wire=service.apply_native_deltas(*peer.session,1,entries,encode,view);
+        const auto decoded=RecoveredWorldFrame::decode(wire);
+        const auto& after=service.inspect(peer.session->id());
+        require(decoded&&decoded->size()==45&&after.revision==2&&after.actors[1]->mp==10&&
+            after.actors[0]->mp==20&&after.actors[0]->hp==100&&after.actors[1]->hp==50&&
+            after.actors[14]->hp==100&&commits==1,
+            "Current nonself view lost exact friendly MP effect, framing or single atomic commit");
+        service.remove(peer.session->id());
     }
 }
 
@@ -924,6 +1053,7 @@ void test_session_state() {
     if(state_allows(Opcode::C2S_Heartbeat,SessionState::Disconnected)) throw std::runtime_error("Disconnected heartbeat");
     diagnostic_scalar_codec_unchanged();
     recovered_world_identity_sender_transport();
+    recovered_battle_self_view_transport();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {
             return std::vector<std::uint8_t>{};

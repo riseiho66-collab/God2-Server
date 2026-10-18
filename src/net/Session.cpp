@@ -18,6 +18,7 @@
 #include "protocol/RecoveredWorldEntryView.h"
 #include "game/TaiwanWorldEntryIdentity.h"
 #include "game/TaiwanWorldIdentityWriteFence.h"
+#include "game/TaiwanBattleSelfViewWriteFence.h"
 #include "game/TaiwanActorStatusWriteFence.h"
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include "protocol/RecoveredBattleBootstrap.h"
@@ -174,16 +175,33 @@ const std::vector<std::uint8_t>& Session::WorldRecordsWrite::logical() const noe
 struct Session::WorldResponseWrite::Data {
     const std::thread::id game_thread=std::this_thread::get_id();
     const std::weak_ptr<Session> session;
-    const std::uint64_t account,character,battle;
+    const std::uint64_t account,character,battle,self_view_intent;
     const SessionState phase;
     const std::vector<std::uint8_t> wire;
     std::atomic<WorldResponseWriteStatus> status{WorldResponseWriteStatus::Pending};
     Data(std::weak_ptr<Session> owner,std::uint64_t a,std::uint64_t c,std::uint64_t b,
-         SessionState p,std::span<const std::uint8_t> raw)
-        :session(std::move(owner)),account(a),character(c),battle(b),phase(p),wire(raw.begin(),raw.end()) {}
+         SessionState p,std::span<const std::uint8_t> raw,std::uint64_t intent)
+        :session(std::move(owner)),account(a),character(c),battle(b),self_view_intent(intent),
+         phase(p),wire(raw.begin(),raw.end()) {}
 };
 Session::WorldResponseWriteStatus Session::WorldResponseWrite::status() const noexcept {return data_->status.load();}
 const std::vector<std::uint8_t>& Session::WorldResponseWrite::wire() const noexcept {return data_->wire;}
+
+struct Session::BattleSelfView::Data {
+    const std::weak_ptr<Session> session;
+    const std::uint64_t session_id,account,character,battle,epoch,intent;
+    const std::uint8_t slot;
+    const std::thread::id game_thread;
+    const std::shared_ptr<const void> source; // Exact pure original-response occurrence.
+    const std::shared_ptr<std::vector<std::uint8_t>> frame;
+    TaiwanBattleSelfViewWriteFence::Occurrence completion;
+    Data(std::weak_ptr<Session> owner,std::uint64_t id,std::uint64_t a,std::uint64_t c,
+         std::uint64_t b,std::uint64_t generation,std::uint64_t writer_intent,std::uint8_t primary,std::thread::id game,
+         std::shared_ptr<const void> original,std::shared_ptr<std::vector<std::uint8_t>> bytes)
+        :session(std::move(owner)),session_id(id),account(a),character(c),battle(b),epoch(generation),intent(writer_intent),
+         slot(primary),game_thread(game),source(std::move(original)),frame(std::move(bytes)){}
+};
+std::uint8_t Session::BattleSelfView::primary_slot() const noexcept {return data_->slot;}
 
 struct Session::MovementStepWrite::Data {
     const std::weak_ptr<Session> session;
@@ -1233,6 +1251,9 @@ struct Session::Impl {
     std::optional<RecoveredWorldReady> world_ready;
     std::atomic<std::shared_ptr<NormalWorldInitialization::Entry>> normal_entry;
     std::atomic<std::shared_ptr<const NormalWorldInitialization::Data>> normal_initialization;
+    TaiwanBattleSelfViewWriteFence battle_self_view_fence;
+    TaiwanBattleSelfViewWriteFence battle_self_view_intents; // Pre-post output admission, not input work.
+    std::atomic<std::shared_ptr<BattleSelfView::Data>> battle_self_view_source;
     // Serial GAME only. Original INIT tail/config remain immutable history.
     std::shared_ptr<const NativeTaiwanReceiverSelector::Data> receiver_selector;
     std::uint64_t receiver_selector_revision=0;
@@ -1350,7 +1371,8 @@ struct Session::Impl {
         std::optional<TaiwanActorStatusPublication::FrameSeal> status_seal{}; // Existing pure exact frame version.
         std::shared_ptr<InitialEntryQueueTicket> initial_entry{}; // LAST: exact initial cohort membership.
         std::shared_ptr<OutwardStatusWrite> outward_status{}; // Existing ready whole86 status publication.
-        std::shared_ptr<MovementResponseAttempt> movement_response{}; // LAST: pure actual original sender custody.
+        std::shared_ptr<MovementResponseAttempt> movement_response{}; // Existing original sender custody.
+        std::shared_ptr<BattleSelfView::Data> battle_self_view{}; // LAST: exact whole-Write occurrence.
     };
     std::deque<Write> writes;
     template<class Executor,class Body>
@@ -1378,13 +1400,50 @@ struct Session::Impl {
                 entry->world_identity_sender.revoke();
             }
         }
+        // Self-view is a different source from original world identity. Every
+        // relevant enqueue retires the prior epoch, even if it never writes.
+        if(mode==ProtocolMode::God2CharacterConnection &&
+           (entry || owner.state()==SessionState::InBattle || battle_self_view_source.load())){
+            const auto analysis=value.bytes ? TaiwanBattleSelfViewWriteFence::inspect(*value.bytes) :
+                TaiwanBattleSelfViewWriteFence::Analysis{true,{}};
+            if(analysis.changes_view){
+                const auto epoch=battle_self_view_fence.advance();
+                if(const auto old=battle_self_view_source.exchange({}))old->completion.revoke();
+                const auto response=value.observed_response;
+                const auto source=response?response->receipt:nullptr;
+                // Only one complete original callback Write qualifies. Generic
+                // grants, split/cohort frames and native PK publications retire
+                // the old source but do not mint one through this bounded path.
+                if(epoch && analysis.primary_slot && source && value.bytes && response->frame==value.bytes &&
+                   !value.held && source->session.lock().get()==&owner && source->account && source->character &&
+                   source->phase==SessionState::InBattle && owner.state()==SessionState::InBattle &&
+                   source->battle==owner.battle_generation() && source->wire==*value.bytes &&
+                   battle_self_view_intents.current(source->self_view_intent) &&
+                   source->status.load()==WorldResponseWriteStatus::Pending){
+                    try {
+                        value.battle_self_view=std::make_shared<BattleSelfView::Data>(owner.weak_from_this(),id,
+                            source->account,source->character,source->battle,epoch,source->self_view_intent,*analysis.primary_slot,
+                            source->game_thread,source,value.bytes);
+                        battle_self_view_source.store(value.battle_self_view);
+                    }catch(...){/* Optional sender metadata never changes legacy output. */}
+                }
+            }
+        }
+        const auto self_view=value.battle_self_view;
         // Conflict revocation precedes insertion, including failed/cancelled
         // insertion. A delayed original Written callback cannot undo it.
         try {
             owner.invalidate_actor_status_writes();
             value.status_writer=owner.begin_actor_status_writer();
             writes.push_back(std::move(value));
-        }catch(...){if(original)original->world_identity_sender.revoke();throw;}
+        }catch(...){
+            if(original)original->world_identity_sender.revoke();
+            if(self_view){
+                self_view->completion.revoke();auto expected=self_view;
+                battle_self_view_source.compare_exchange_strong(expected,{});
+            }
+            throw;
+        }
     }
     // Strand-only full contiguous cohort validation. The game task uses the
     // corresponding pure ticket-presence proof, never reads this deque.
@@ -3789,7 +3848,7 @@ struct Session::Impl {
             // Only this actual TLS handler could mint it. No later generic ACK
             // can qualify it; rejection/throw never acknowledges acceptance.
             const auto terminal_ack=std::exchange(s.native_pk_terminal_callback_capture,{});
-            const auto response_write=std::exchange(s.world_response_callback_capture,{});
+            auto response_write=std::exchange(s.world_response_callback_capture,{});
             const auto input_lease=std::exchange(s.owned_input_callback_lease,{});
             auto normal_response=std::exchange(s.normal_response_callback_capture,{});
             const auto admission=std::exchange(s.normal_callback_admission_capture,{});
@@ -3812,6 +3871,19 @@ struct Session::Impl {
                 s.receiver_selector.reset();accepted=false;
                 if(normal_response)normal_response->fail();
                 if(response_write)response_write->fail();
+            }
+            // Genuine final original response, captured on its actual game owner.
+            // This does not install a public observer, owned DB bootstrap flag or
+            // input barrier. Existing captures keep their exact original source.
+            if(accepted && !response_write && !response.empty() &&
+               s.mode==ProtocolMode::God2CharacterConnection && self->state()==SessionState::InBattle &&
+               self->account_id && self->character_id){
+                try {
+                    response_write=std::make_shared<Impl::WorldResponseAttempt>(
+                        std::make_shared<WorldResponseWrite::Data>(self,self->account_id,self->character_id,
+                            self->battle_generation(),self->state(),response,
+                            self->retire_battle_self_view_wire_output(response)));
+                }catch(...){/* Missing optional metadata grants no sender qualification. */}
             }
             if(admission && !accepted)admission->fail(); // Existing response-prefix checks apply symmetrically.
             if(movement_write && !accepted)movement_write->fail();
@@ -3856,8 +3928,8 @@ struct Session::Impl {
                                    normal_response->receipt->status.load()==NormalWorldResponseStatus::Pending &&
                                    (!admission || (admission->receipt->status.load()==NormalWorldCallbackAdmissionStatus::Pending &&
                                     s.normal_output_transport_current_locked(admission->receipt->source)))) {
-                                    s.append_write({bytes,{}});s.write_bytes+=bytes->size();
-                                    s.writes.back().observed_response=response_write;
+                                    Impl::Write output{bytes,{}};output.observed_response=response_write;
+                                    s.append_write(std::move(output));s.write_bytes+=bytes->size();
                                     auto pending=NormalWorldResponseStatus::Pending;
                                     queued=normal_response->receipt->status.compare_exchange_strong(pending,NormalWorldResponseStatus::Queued);
                                 }
@@ -3869,14 +3941,14 @@ struct Session::Impl {
                                 std::lock_guard lock(admission->receipt->source->sync->mutex);
                                 if(admission->receipt->status.load()==NormalWorldCallbackAdmissionStatus::Pending &&
                                    s.normal_output_transport_current_locked(admission->receipt->source)) {
-                                    s.append_write({bytes,{}});s.write_bytes+=bytes->size();
-                                    s.writes.back().observed_response=response_write;queued=true;
+                                    Impl::Write output{bytes,{}};output.observed_response=response_write;
+                                    s.append_write(std::move(output));s.write_bytes+=bytes->size();queued=true;
                                 }
                             }
                             if(!queued){admission->fail();s.fail("Original callback prefix source retired");return;}
                         } else {
-                            s.write_bytes+=bytes->size();s.append_write({bytes,{}});
-                            s.writes.back().observed_response=response_write;
+                            Impl::Write output{bytes,{}};output.observed_response=response_write;
+                            s.write_bytes+=bytes->size();s.append_write(std::move(output));
                         }
                         if(movement_write) {
                             s.writes.back().movement_response=movement_write;
@@ -4130,6 +4202,20 @@ struct Session::Impl {
                         if(!attempt->receipt->status.compare_exchange_strong(pending,WorldResponseWriteStatus::Written)) {
                             s.fail("Observed original world response already retired");return;
                         }
+                    }
+                }
+                if(const auto view=s.writes.front().battle_self_view){
+                    const auto response=s.writes.front().observed_response;
+                    const bool exact=response && response->receipt && view->source==response->receipt &&
+                        response->receipt->status.load()==WorldResponseWriteStatus::Written &&
+                        !s.writes.front().held && s.writes.front().bytes==bytes && view->frame==bytes &&
+                        transferred==bytes->size() && view->session.lock().get()==self.get() &&
+                        view->session_id==s.id && self->state()==SessionState::InBattle &&
+                        self->battle_generation()==view->battle && s.battle_self_view_source.load()==view &&
+                        s.battle_self_view_fence.current(view->epoch) &&
+                        s.battle_self_view_intents.current(view->intent);
+                    if(!view->completion.complete(exact)){
+                        auto expected=view;s.battle_self_view_source.compare_exchange_strong(expected,{});
                     }
                 }
                 if(s.writes.front().advertisement) {
@@ -4473,6 +4559,8 @@ void Session::start() {
         [self = shared_from_this()] { self->impl_->start(); });
 }
 void Session::send(Packet packet) {
+    // Fixture Packet is not an owned native-world envelope at this handoff.
+    (void)retire_battle_self_view_wire_output({});
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if (impl_->close_requested.load()) return;
@@ -4823,7 +4911,7 @@ Session::WorldResponseWrite Session::observe_world_response(std::span<const std:
        !account_id || !character_id || wire.empty() || !Impl::valid_world_response(wire))
         throw std::invalid_argument("World response capture requires complete original framed response and ready owner");
     auto data=std::make_shared<WorldResponseWrite::Data>(weak_from_this(),account_id,character_id,
-        battle_generation(),state(),wire);
+        battle_generation(),state(),wire,retire_battle_self_view_wire_output(wire));
     impl_->world_response_callback_capture=std::make_shared<Impl::WorldResponseAttempt>(data);
     observed_response_status=&data->status;
     return WorldResponseWrite(std::move(data));
@@ -4840,6 +4928,40 @@ bool Session::world_response_write_current_on_game(const WorldResponseWrite& obs
     if(actual.get()!=this)return false;
     return !closing() && recovered_world_ready() && impl_->mode==ProtocolMode::God2CharacterConnection &&
         state()==data->phase && battle_generation()==data->battle && account_id==data->account && character_id==data->character;
+}
+std::uint64_t Session::retire_battle_self_view_logical_output(std::span<const std::uint8_t> logical) noexcept {
+    if(impl_->mode!=ProtocolMode::God2CharacterConnection ||
+       (!impl_->normal_entry.load() && state()!=SessionState::InBattle && !impl_->battle_self_view_source.load()))return 0;
+    if(!TaiwanBattleSelfViewWriteFence::inspect_logical(logical).changes_view)return 0;
+    const auto intent=impl_->battle_self_view_intents.advance();
+    if(const auto old=impl_->battle_self_view_source.exchange({}))old->completion.revoke();
+    return intent;
+}
+std::uint64_t Session::retire_battle_self_view_wire_output(std::span<const std::uint8_t> wire) noexcept {
+    if(impl_->mode!=ProtocolMode::God2CharacterConnection ||
+       (!impl_->normal_entry.load() && state()!=SessionState::InBattle && !impl_->battle_self_view_source.load()))return 0;
+    if(!TaiwanBattleSelfViewWriteFence::inspect(wire).changes_view)return 0;
+    const auto intent=impl_->battle_self_view_intents.advance();
+    if(const auto old=impl_->battle_self_view_source.exchange({}))old->completion.revoke();
+    return intent;
+}
+std::optional<Session::BattleSelfView> Session::battle_self_view() const {
+    const auto data=impl_->battle_self_view_source.load();
+    if(!data)return {};
+    const BattleSelfView view(data);
+    if(!battle_self_view_current(view))return {};
+    return view;
+}
+bool Session::battle_self_view_current(const BattleSelfView& view) const {
+    const auto data=view.data_;
+    if(!data || data->game_thread!=std::this_thread::get_id())return false;
+    const auto actual=data->session.lock();
+    if(actual.get()!=this || data->session_id!=id() || closing() || !recovered_world_ready() ||
+       impl_->mode!=ProtocolMode::God2CharacterConnection || state()!=SessionState::InBattle ||
+       account_id!=data->account || character_id!=data->character ||
+       battle_generation()!=data->battle || data->slot>=14)return false;
+    return impl_->battle_self_view_source.load()==data && impl_->battle_self_view_fence.current(data->epoch) &&
+        impl_->battle_self_view_intents.current(data->intent) && data->completion.written();
 }
 void Session::hold_world_input_until_response_written(const WorldResponseWrite& write) {
     if(observed_world_callback!=this || (observed_response_poison && *observed_response_poison)) {
@@ -4932,6 +5054,7 @@ bool Session::normal_world_output_current_on_game(const NormalWorldOutputHandle&
 }
 Session::NormalWorldOutputAttempt Session::send_normal_world_records(
         const NormalWorldOutputHandle& handle,std::vector<std::uint8_t> logical) {
+    (void)retire_battle_self_view_logical_output(logical);
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     auto data=std::make_shared<NormalWorldOutputAttempt::Data>();
@@ -5070,6 +5193,7 @@ bool Session::normal_world_response_callback_current(const NormalWorldResponseAt
 }
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         std::shared_ptr<WorldRecordsWrite::Data> observed) {
+    (void)retire_battle_self_view_logical_output(logical);
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     const auto attempt=observed?std::make_shared<Impl::WorldWriteAttempt>(std::move(observed)):
@@ -5203,6 +5327,7 @@ bool Session::common_world_entry_current(std::uint64_t account,std::uint64_t cha
 void Session::send_common_world_entry_with_publication(std::vector<std::uint8_t> logical,
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
     std::function<bool()> publish,std::function<void(bool)> queued,std::optional<InitialActorStatusInput> status) {
+    (void)retire_battle_self_view_logical_output(logical);
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     if(impl_->common_ready_thread!=std::this_thread::get_id())
@@ -5438,6 +5563,7 @@ void Session::send_common_world_records_with_publication(std::vector<std::uint8_
     std::uint64_t account,std::uint64_t character,std::uint64_t generation,
     std::function<bool()> publish,std::function<void(bool)> queued,std::optional<ActorStatusOutputInput> status,
     std::optional<SharedWorldPresence::Lease> publication_recipient) {
+    (void)retire_battle_self_view_logical_output(logical);
     std::shared_ptr<std::atomic<Impl::CommonPublicationReleasePhase>> release;
     std::shared_ptr<Impl::InitialEntryAttempt> ready_attempt;
     std::optional<TaiwanActorStatusWriteFence::Writer> ready_status_writer;
@@ -5604,6 +5730,7 @@ std::size_t Session::common_world_publication_capacity() noexcept {return max_wr
 void Session::send_actor_status_output(std::vector<std::uint8_t> logical,
         std::uint64_t account,std::uint64_t character,std::uint64_t generation,
         std::function<bool()> publish,std::function<void(bool)> queued,ActorStatusOutputInput input) {
+    (void)retire_battle_self_view_logical_output(logical);
     if(impl_->common_ready_thread==std::thread::id{}||impl_->common_ready_thread!=std::this_thread::get_id())
         throw std::logic_error("Typed outward publication requires actual game owner");
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
@@ -5724,6 +5851,7 @@ void Session::send_actor_status_output(std::vector<std::uint8_t> logical,
 }
 void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     std::weak_ptr<NativeBattleSkillPublicationOwner> source) {
+    if(delivery)(void)retire_battle_self_view_logical_output(delivery->logical);
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     // Game-owner-only entry. All game-owned fields are checked here or in the
@@ -5814,6 +5942,7 @@ bool Session::same_native_pk_game_executor(const Session& other)const noexcept {
 }
 Session::NativePkEntryHold Session::prepare_native_pk_entry(NativePkEntryRequest request,
         std::weak_ptr<NativePkEntryOwner> source) {
+    (void)retire_battle_self_view_logical_output(request.logical);
     const auto common=impl_->common_world_identity.load();
     const auto data=impl_->normal_initialization.load();
     if(!common || !data || impl_->common_ready_thread!=std::this_thread::get_id() ||
@@ -6517,6 +6646,8 @@ Session::NativePkReturnOutputHold Session::hold_native_pk_return_output(
         for(std::size_t index=0;index<data->recipients.size();++index){
             const auto session=data->recipients[index]->session;
             session->invalidate_actor_status_writes(); // Before held return-group handoff.
+            for(const auto& frame:data->recipients[index]->frames)
+                (void)session->retire_battle_self_view_wire_output(*frame->bytes);
             session->impl_->post_status_work(session->impl_->strand,[session,data,index,owned=std::move(markers[index]),attempt]()mutable{
                 session->impl_->stage_native_pk_return_output(data,index,std::move(owned),attempt);
             });
@@ -6913,6 +7044,7 @@ bool Session::complete_native_pk_return_finalisation(const NativePkReturnFinalis
 }
 void Session::send_native_pk_output(const NativePkEntryHold& hold,NativeBattleSkill delivery,
         std::weak_ptr<NativeBattleSkillPublicationOwner> source){
+    if(delivery)(void)retire_battle_self_view_logical_output(delivery->logical);
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     // CUSTOM-0115 explicit exact accepted entry. Raw output is never room,
@@ -7048,6 +7180,7 @@ void Session::abort_native_pk_entry(const NativePkEntryHold& hold) {
 }
 void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logical,
     std::uint64_t expected_account,std::uint64_t expected_character,std::uint64_t expected_world_generation,std::uint64_t expected_battle_generation,std::function<void(bool)> acceptance) {
+    (void)retire_battle_self_view_logical_output(logical);
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
     auto complete=[callback=std::move(acceptance)](bool enqueued) mutable {if(callback){auto once=std::move(callback);try{once(enqueued);}catch(...){}}};
@@ -7132,6 +7265,11 @@ void Session::set_state(SessionState state) noexcept {
     auto current = state_.load();
     while(current!=SessionState::Disconnected) {
         if(current!=state) {
+            // No old battle occurrence survives a phase boundary, even if a
+            // later original response callback completes with the old bytes.
+            (void)impl_->battle_self_view_fence.advance();
+            (void)impl_->battle_self_view_intents.advance();
+            if(const auto view=impl_->battle_self_view_source.exchange({}))view->completion.revoke();
             if(const auto pair=impl_->native_pk_return.load())fail_native_pk_return_reservation(pair);
             impl_->retire_normal_output(); // Before phase/battle mutation, even same final pose.
         }

@@ -53,6 +53,8 @@ kind2／3的目標與累計上下文、完整DWORD回合通知及牛轉仙界踏
 [round470記錄](tw-deferred-hp-signed-domain-and-identity-lifetime-20261019.md)。
 實際Session原始2A sender資格、輸出FIFO失效與PK交接，見
 [round471記錄](tw-world-identity-sender-fence-20261019.md)。
+實際 Written primary86/5 的自身視角來源、友方非自身效果與失效回滾，見
+[round472記錄](tw-battle-self-view-and-friendly-effects-20261019.md)。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。

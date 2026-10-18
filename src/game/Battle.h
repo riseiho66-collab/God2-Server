@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 namespace god2 {
+class RecoveredBattleService;
 enum class BattleState { Pending, Active, Finished };
 // A resource refusal is distinguishable only after identity and target validation.
 class InsufficientBattleMp final : public std::invalid_argument {
@@ -75,6 +76,21 @@ struct BattleRevivalResult {
 // authorized server policy, not blindly from client fields.
 class Battle {
 public:
+    // One service-qualified receiver view for this exact exchange. Only the
+    // real Session bridge may supply it; actor policy/pose is not selfslot.
+    class NativeDeltaView {
+    public:
+        NativeDeltaView(const NativeDeltaView&)=default;
+        NativeDeltaView& operator=(const NativeDeltaView&)=default;
+    private:
+        friend class Battle;
+        friend class RecoveredBattleService;
+        NativeDeltaView(std::uint64_t battle,std::uint64_t revision,std::uint64_t controller,
+                        std::uint8_t primary_slot)
+            :battle_(battle),revision_(revision),controller_(controller),primary_slot_(primary_slot){}
+        std::uint64_t battle_,revision_,controller_;
+        std::uint8_t primary_slot_;
+    };
     using Rule = std::function<CombatRuleResult(const CombatRuleInput&)>;
     using Encode = std::function<std::vector<std::uint8_t>(const BattleSnapshot&, const BattleActionResult&)>;
     using RevivalRule = std::function<RevivalResult(const RevivalInput&)>;
@@ -98,7 +114,8 @@ public:
     // Trusted already-computed server results only, never incoming client83.
     // Existing action, fresh zeroed per-entry accumulators; no reset/formatting emulation.
     std::vector<std::uint8_t> apply_native_deltas(std::uint64_t controller,std::uint64_t revision,
-        std::span<const RecoveredBattleDelta::Record> records,const NativeDeltaEncode& encode);
+        std::span<const RecoveredBattleDelta::Record> records,const NativeDeltaEncode& encode,
+        std::optional<NativeDeltaView> view=std::nullopt);
     // CUSTOM-0017: caller must authorize the owned skill. Active battle only;
     // no revival after elimination, no RNG draw and no storage/send in callbacks.
     std::vector<std::uint8_t> revive(std::uint64_t controller,std::uint64_t revision,

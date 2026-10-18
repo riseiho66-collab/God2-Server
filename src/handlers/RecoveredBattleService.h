@@ -97,8 +97,12 @@ public:
     }
     // In-process server-result boundary. Never registered in the C2S decoder.
     // Uses the same atomic checkpoint callback as command-driven combat.
+    // Optional receiver view must be the actual current Session primary full
+    // write. Missing view keeps conservative friendly checks; policy/pose
+    // cannot substitute. It supplies no status bits, source or turn authority.
     std::vector<std::uint8_t> apply_native_deltas(Session& session,std::uint64_t revision,
-        std::span<const RecoveredBattleDelta::Record> records,const Battle::NativeDeltaEncode& encode);
+        std::span<const RecoveredBattleDelta::Record> records,const Battle::NativeDeltaEncode& encode,
+        std::optional<Session::BattleSelfView> view=std::nullopt);
     // Trusted diagnostic operation only; no C2S field is treated as this revision.
     void rearm_diagnostic(Session& session, std::uint64_t expected_revision);
     bool diagnostic_round_ready(const Session& session) const noexcept;
@@ -143,6 +147,8 @@ private:
         std::optional<Session::WorldResponseWrite> owned_bootstrap_write;
         // CUSTOM-0140: separate opt-in actual bootstrap identity; not cosmetic.
         std::uint64_t owned_bootstrap_battle_generation{};
+        // Captured by every actual bind, independent of cosmetic/owned bootstrap.
+        std::uint64_t native_delta_battle_generation{};
     };
     void reject_owned_skill_reentry(std::uint64_t session);
     Battle::Rule rule_;
