@@ -97,7 +97,7 @@ def report(round_name, catalog_name=None, round_directory=None):
     wrapper = json.loads(wrapper_path.read_text(encoding='utf-8'))
     wrapper_frontier_path = ROOT / 'c2s-wrapper-frontier-v1.json'
     wrapper_frontier = json.loads(wrapper_frontier_path.read_text(encoding='utf-8'))
-    s2c_frontier_path = ROOT / 's2c-world-consumer-frontier-v27.json'
+    s2c_frontier_path = ROOT / 's2c-world-consumer-frontier-v28.json'
     s2c_frontier = json.loads(s2c_frontier_path.read_text(encoding='utf-8'))
     battle_frontier_path = ROOT / 's2c-battle-dispatch-frontier-v1.json'
     battle_frontier = json.loads(battle_frontier_path.read_text(encoding='utf-8'))

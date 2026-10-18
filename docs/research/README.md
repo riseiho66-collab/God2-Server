@@ -25,6 +25,8 @@ TW/CN、四個WebSocket入口、多版本共用目標與「繼續／保留」要
 [round456記錄](tw-combat-queue-authority-and-skill-copies-20261019.md)。
 其後D5預設關閉接點及戰鬥來源到Winsock的閉合，見
 [round457記錄](tw-d5-skill-selection-and-network-origin-20261019.md)。
+FC窗口格式、D5確認鏈與無損槽數比對，見
+[round458記錄](tw-fc-selection-window-and-confirmation-20261019.md)。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。

@@ -50,6 +50,8 @@ raw_identity=id|(kind<<8)，sender沒有再轉碼。這只是source identity，
 `d5-source-conclusion-v1.json` 保存sender、N來源、唯一原始caller及BIN逐row核對。
 485C53→489DE0的上游dispatcher／原生S2C選取窗口仍須另行資格化，
 不能由相鄰FC比較就宣布完整request/reply配對。
+後續round458已以WORLD原始table及logical+1指標證實S2C FC來源，並補確認回呼；
+仍未形成完整權威服務，詳見[續追記錄](tw-fc-selection-window-and-confirmation-20261019.md)。
 
 ## C++格式與預設關閉的接點
 
