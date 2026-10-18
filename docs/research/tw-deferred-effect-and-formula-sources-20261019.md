@@ -101,6 +101,12 @@ REA 進一步恢復 `0051D300/0051D3D0/0051D4E0`：
 
 ## 攻防、五行與角色指標轉送
 
+2026-10-19 round456更正：下述v1的11個forward只屬候選，其中partial-register
+寫入可能破壞role指標，push後改ECX也可能造成漏列。不可把11個全部視為真正
+role callees。已獨立REA核對的4E63F0→4AC070/4AC2C0鏈仍有自己的來源證據；
+其餘候選及新exact32/stack追蹤見
+[round456續追](tw-combat-queue-authority-and-skill-copies-20261019.md)。
+
 `element-role-qualified-consumers-v1.json` 保存357處 `[owner+86888]` 指標載入與
 限定直線別名；所見九個指定欄位使用點是既知4E6600的寫入。
 `element-callee-field-leads-v1.json` 保留11個原始轉送目標及1049個raw位移候選。
