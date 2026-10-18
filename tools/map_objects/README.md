@@ -83,3 +83,25 @@ v2補片已套用到現用台版客戶端，六檔雜湊核對通過。原版God
 現用服務端的移動scene registry目前未登錄area5的27/51兩張城市地圖。
 其六組補片已套用且靜態驗證通過，仍不能算從目前服務端實際進圖驗收；
 不得改玩家存檔或偽造NPC來冒充通過。
+
+## 神廟／客棧場景索引（CUSTOM-0152）
+
+同一個獨立 CMake 專案另提供 `god2-tw-town-door-can.exe`。此工具只產生
+staging：原 CAN 的36筆64-byte記錄保持原樣，僅將 scene10／12／22 的
+WORD 索引改用原檔既有34／33／29記錄，對應 TP_Nor_L、TP_Nor_R、hotel01。
+三個 WORD 合計6 bytes，其中實際差異只有3 bytes；其餘127個索引不變。
+
+```powershell
+<建置目錄>/Release/god2-tw-town-door-can.exe --client-root <台版目錄> --output-root <全新staging絕對路徑>
+./tools/map_objects/Apply-TwTownDoorCan.ps1 -ClientRoot <台版目錄> -StagingRoot <staging目錄> -ReceiptRoot <全新外部收據目錄>
+```
+
+套用前須關閉該客戶端與登入器，重新啟動後才會重載 CAN。套用程式核對原檔、
+候選雜湊與三個差異 offset，保留2580-byte原始檔，寫入驗證失敗便還原。
+回復時同樣關閉客戶端，再將收據 `Island01.original.can` 複製回原位置。
+原有神廟／客棧 HMD 與圖片不修改。這是固定場景 join 修復，不是恢復官方
+服務端授權；服務端另須載入 `resources/world/tw/town-doors-v2.json` 的26房版本。
+原23房 bundle仍可使用。CAN staging本身不會切換服務端或修改角色資料。
+
+完整根因、原生 REA 指令及野外傳送的 CUSTOM-0153 界線見
+`docs/research/tw-door-wilderness-repair-20261018.md`。

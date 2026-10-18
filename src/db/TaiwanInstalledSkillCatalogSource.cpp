@@ -1,5 +1,6 @@
 #include "db/TaiwanInstalledSkillCatalogSource.h"
 #include <optional>
+#include <limits>
 #include <string>
 #include <utility>
 #ifdef _WIN32
@@ -23,7 +24,7 @@ std::optional<std::string> sha256(std::span<const std::uint8_t> bytes) {
         BCRYPT_HASH_HANDLE value=nullptr;
         ~Hash(){if(value)BCryptDestroyHash(value);}
     };
-    if(bytes.size()>MAXULONG ||
+    if(bytes.size()>std::numeric_limits<ULONG>::max() ||
        BCryptOpenAlgorithmProvider(&algorithm.value,BCRYPT_SHA256_ALGORITHM,nullptr,0)<0)
         return std::nullopt;
     DWORD length=0,returned=0;

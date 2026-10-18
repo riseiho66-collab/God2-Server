@@ -6371,6 +6371,63 @@
     "native_scene_2_4_panel_display_observed": true,
     "verification_status": "APPLIED_NATIVE_TW_2_4_DISPLAY_OBSERVED_OTHER_SCENES_AND_OCCLUSION_PENDING"
     }
+    ,{
+      "id": "CUSTOM-0152",
+      "name": "Taiwan temple and inn scene selector repair",
+      "authority": "OWNER_AUTHORIZED_CUSTOM_JOIN_FROM_PINNED_ORIGINAL_TW_ASSETS_AND_NATIVE_CAN_READER",
+      "implementation": ["tools/map_objects/tw_door_can_patch.cpp", "tools/map_objects/Apply-TwTownDoorCan.ps1", "resources/world/tw/town-doors-v2.json", "scripts/gameplay/current_town_doors_data.lua", "src/handlers/RecoveredMovementService.cpp"],
+      "document": "docs/research/tw-door-wilderness-repair-20261018.md",
+      "rules": {
+        "client": "Preserve all original CAN records and change scene10/12/22 WORD selectors to original records34/33/29 for TP_Nor_L/TP_Nor_R/hotel01",
+        "server": "Preserve all23 old rooms and26 old point pairs; append3 rooms and6 exact reciprocal door pairs; accept only the pinned whole26-room bundle SHA",
+        "storage": "No schema or saved character edits; authoritative normal movement and transfer transactions remain unchanged"
+      },
+      "native_gap": "Original client loader and original room geometry are recovered; the repaired scene-selector join and server entry policy are owner-authorized custom composition.",
+      "client_resources_applied": true,
+      "production_activated": true,
+      "native_client_acceptance": false,
+      "native_room_round_trips_observed": [12, 22],
+      "owner_room_entry_confirmation": true,
+      "verification_status": "RELEASE_BUILD_FOCUSED_TESTS_APPLICATION_TCP_PASS_DEPLOYED_OWNER_ROOMS_PASS_SCENE10_AND_ALL_POINTS_NOT_SEPARATELY_NATIVE_OBSERVED"
+    },
+    {
+      "id": "CUSTOM-0153",
+      "name": "Taiwan qualified Island01 and Island03 wilderness reciprocal transfers",
+      "authority": "OWNER_AUTHORIZED_CUSTOM_TRIGGER_POLICY_WITH_NATIVE_SAME_SLOT_DESTINATION_GEOMETRY",
+      "implementation": ["src/game/RecoveredWildernessTransfers.h", "src/handlers/RecoveredMovementService.cpp", "src/core/Application.cpp", "scripts/gameplay/current_wilderness_transfers_data.lua", "scripts/gameplay/diagnostic_door.lua", "tests/test_wilderness_transfers.cpp"],
+      "document": "docs/research/tw-door-wilderness-repair-20261018.md",
+      "rules": {
+        "scope": "Exactly98 directed reciprocal tuples: retained28 in area2/scene0 and qualified70 in area4/scene0, from pinned original reciprocal model anchors and matching native marker slots;49 coordinate pairs across two already enabled parent maps",
+        "example": "407,256 to384,275 and reverse;383,275 is not the native same-slot arrival",
+        "admission": "Existing area2 Island or area4 Kunlun parent route flag; exact full tuple independently checked in C++ and Lua; owner/readiness/revision/source and target navigation retained",
+        "transaction": "Normal movement ACK before SC61, native full motion/path reset with bit16 clear, pending receipt fence, no-op guard to prevent arrival bounce; existing town reuse unchanged; no invented fee/item"
+      },
+      "native_gap": "Native448DC0 destination resolver recovered through48980/43F1C0/442990/449BB0. Its original caller/C2S producer and original server activation rules remain unrecovered. Walking onto an exact registered marker is custom policy, not a recovered native server rule.",
+      "production_activated": true,
+      "native_client_acceptance": false,
+      "whole_world_complete": false,
+      "native_area2_one_pair_and_post_transfer_movement": true,
+      "native_area4_acceptance": false,
+      "verification_status": "98_TUPLE_SERVICE_TESTS_PASS_APPLICATION_TCP_ONE_PAIR_EACH_AREA_PASS_DEPLOYED_NATIVE_AREA2_ONE_PAIR_POST_WALK_PASS_OTHER_POINTS_PENDING"
+    }
+    ,{
+    "id": "CUSTOM-0154",
+    "name": "Taiwan pinned cross-MDL Biyou Palace and directly connected Island01 caves",
+    "authority": "OWNER_AUTHORIZED_CUSTOM_TRIGGER_AND_ARRIVAL_POLICY_FROM_PINNED_ORIGINAL_TW_RECORDS",
+    "implementation": ["src/game/RecoveredCrossMapNavigation.cpp", "src/handlers/RecoveredMovementService.cpp", "src/core/Application.cpp", "scripts/gameplay/current_cross_map_transfers_data.lua", "resources/world/tw/cross-map-v4.json", "tests/test_cross_map_transfers.cpp"],
+    "document": "docs/research/tw-door-wilderness-repair-20261018.md",
+    "rules": {
+      "scope": "48 exact directed routes between area2/scene0 and kind3 MDT scenes2,32,43,108;1968 original navigation windows crosschecked; no other scenes enabled",
+      "geometry": "Pinned original reciprocal attached-reference records and marker0/1 triggers to opposite marker2/3 arrivals; slot choice is custom server policy, not native448980 same-slot query behavior",
+      "cave02": "Only parent394,96 and cave60,77 may use all-known-nonzero01/02 traversal; preserve all other conflicts and blocked/unknown rejection. Exact reciprocal attached record47 is explicitly selected by original MDL SHA and record offset/hash; native first-anchor selection remains unresolved",
+      "state": "Host independently checks full tuple, ownership, ready/pending state, source and destination navigation and durable revision; SC61 full reset, receipt and saved-scene restore retain kind3"
+    },
+    "native_gap": "Official server trigger/arrival selection remains unrecovered. Native442990 compares anchor coordinates without a visible class filter; Cave02 anchor64,69 overlaps model15 and model47. This fixed server route uses explicit attached-record identity and absolute SC61 coordinates, without claiming the client query would select model47. Native01/02 equality is limited to selected nonzero traversal consumers, not pathfinding as a whole.",
+    "production_activated": true,
+    "native_client_acceptance": false,
+    "whole_world_complete": false,
+    "verification_status": "RELEASE_BUILD_FOUR_FOCUSED_SUITES_PASS_ALL48_DIRECTIONS_APPLICATION_TCP_BLACK_BOX_PASS_DEPLOYED_NATIVE_UI_NOT_CLAIMED"
+    }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
 }

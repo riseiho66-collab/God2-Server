@@ -10,6 +10,7 @@ struct DiagnosticDoorInput {
     bool allow_all_town_doors=false; // CUSTOM-0052: explicitly configured current point bundle.
     bool allow_kunlun_doors=false;
     bool allow_kunlun_parent=false; // CUSTOM-0053 native points/custom activation.
+    bool allow_cross_map=false; // CUSTOM-0154 only with a loaded source-pinned bundle.
 };
 struct DiagnosticDoorPlan {
     std::uint32_t area{},scene{},x{},y{};

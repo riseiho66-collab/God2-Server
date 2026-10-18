@@ -3,7 +3,9 @@
 #include "db/SqliteBeastSnapshotRepository.h"
 #include "protocol/RecoveredInventoryMoveRequest.h"
 #include "protocol/RecoveredInventoryDiscard.h"
-#include <map>
+#include <string>
+#include <utility>
+#include <vector>
 namespace god2 {
 class OwnedBagProjectionService;
 // CUSTOM-0085: whole ordinary-bag swap including PET and qualified neighbouring
@@ -15,7 +17,12 @@ class SqliteBeastBagRepository {
 public:
     enum class Domain {OrdinaryBag,BeastEquipment};
     using Rows=std::vector<std::vector<std::uint8_t>>;
-    using Preservation=std::map<std::string,Rows>;
+    // Map-key order and exact typed rows, stored without a tree sentinel:
+    // MSVC map move can allocate, which is unsafe when returning after COMMIT.
+    struct Preservation {
+        std::vector<std::pair<std::string,Rows>> ordered;
+        bool operator==(const Preservation&) const=default;
+    };
     struct Snapshot {
         RecoveredInventoryMoveRequest::Request request;
         Domain domain=Domain::OrdinaryBag;

@@ -1,5 +1,6 @@
 #pragma once
 #include "handlers/RecoveredVisibility.h"
+#include "game/RecoveredCrossMapNavigation.h"
 #include "protocol/RecoveredCharacterListCandidate.h"
 #include "protocol/RecoveredWorldFrame.h"
 
@@ -11,7 +12,8 @@ struct RecoveredPlayerPresence {
         std::uint64_t session,std::uint64_t account,std::uint64_t character,
         std::span<const std::uint8_t> wire,const std::array<std::uint8_t,40>& profile,
         const RecoveredRemoteActor::Record& spawn_template,
-        const RecoveredRemoteActorRemove::Record& removal_template) {
+        const RecoveredRemoteActorRemove::Record& removal_template,
+        std::optional<std::uint16_t> qualified_kind=std::nullopt) {
         if(!session || !account || !character || character>0xfff ||
            !RecoveredCharacterListCandidate::valid_profile(profile))
             throw std::invalid_argument("Player presence identity/profile rejected");
@@ -34,11 +36,15 @@ struct RecoveredPlayerPresence {
         // Scope this projection to those qualified source scenes; kind1 is
         // not a generic authority for another world map.
         const bool island_kind=world_kind==1 && scene==0 && (area==2 || area==4);
+        // CUSTOM-0154: qualified cross-MDL CAN entries are MDT/kind3. Require the loaded host registry's
+        // exact kind too; an arbitrary kind3 full entry remains inadmissible.
+        const bool cross_mdl_kind=world_kind==3 && RecoveredCrossMapNavigation::supported_scene(area,scene) && qualified_kind==3;
         if((u32(0)&0x3fff)!=character || area<1 || area>16 || x>0x7ff || y>0x7ff ||
-           (world_kind!=0 && world_kind!=2 && !island_kind) || (scene==15 && world_kind!=2))
+           (world_kind!=0 && world_kind!=2 && !island_kind && !cross_mdl_kind) ||
+           (qualified_kind && *qualified_kind!=world_kind) || (scene==15 && world_kind!=2))
             throw std::invalid_argument("Player presence world binding/position rejected");
         // The template was captured indoors(kind2). Preserve owning 2A kind0
-        // city / kind1 qualified island / kind2 indoor in the peer6F low bits.
+        // city / kind1 qualified island / kind2 indoor / qualified kind3 MDT.
         auto normalized=original;
         normalized[13]=static_cast<std::uint8_t>((normalized[13]&~3u)|world_kind);
         auto spawn=RecoveredRemoteActor::with_identity(

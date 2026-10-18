@@ -93,6 +93,7 @@
 #include "game/FixtureBattle.h"
 #include "game/DiagnosticBattleRecovery.h"
 #include "game/DiagnosticDoorRule.h"
+#include "game/RecoveredWildernessTransfers.h"
 #include "db/SqliteDatabase.h"
 #include "db/ServerSqliteMigrations.h"
 #include "db/SqliteRecoveredCharacterRepository.h"
@@ -1606,6 +1607,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                                          const RecoveredPosition& position) {
                 if(!((position.area==2 && (position.scene==4 || position.scene==15 ||
                       (config.diagnostic_town_island_routes && position.scene==0) ||
+                      (config.diagnostic_town_island_routes && recovered_movement && recovered_movement->registered_cross_map_scene(position.area,position.scene)) ||
                       (config.diagnostic_town_all_door_routes && recovered_movement && recovered_movement->registered_door_pair(4,position.scene)))) ||
                      (position.area==4 && !config.character_birthplace_navigation.empty() &&
                       (position.scene==3 || (config.diagnostic_kunlun_parent_routes && position.scene==0) ||
@@ -1613,9 +1615,9 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                      (config.fruit_village_quests_enabled && position.area==13 && position.scene==12)))
                     throw std::runtime_error("Town visibility location projection rejected");
                 auto bytes=RecoveredRemoteActor::encode_logical(source.spawn);
-                const unsigned kind=position.area==2 ? (position.scene==4?0u:(position.scene==0?1u:2u)) :
-                    (position.area==4 ? (position.scene==0?1u:(position.scene==3?0u:2u)) : 0u);
-                bytes[13]=static_cast<std::uint8_t>((bytes[13]&~3u)|kind);
+                const auto kind=recovered_movement?recovered_movement->qualified_scene_kind(position.area,position.scene):std::nullopt;
+                if(!kind)throw std::runtime_error("Visibility scene kind is not qualified");
+                bytes[13]=static_cast<std::uint8_t>((bytes[13]&~3u)|*kind);
                 const auto normalized=RecoveredRemoteActor::parse_logical(bytes);
                 const auto projected=normalized ? RecoveredRemoteActor::with_position(
                     *normalized,position.x,position.y) : std::nullopt;
@@ -1694,7 +1696,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                             config.diagnostic_town_x,config.diagnostic_town_y,config.diagnostic_town_source_consensus,
                             config.diagnostic_town_indoor_navigation,config.diagnostic_town_island_navigation,
                             config.character_birthplace_navigation,config.character_birthplace_x,config.character_birthplace_y,config.fruit_village_quests_enabled?config.fruit_navigation:std::filesystem::path{},config.diagnostic_town_indoor_scenes,config.diagnostic_kunlun_indoor_scenes,
-                            config.diagnostic_kunlun_parent_routes?config.diagnostic_kunlun_parent_navigation:std::filesystem::path{}});
+                            config.diagnostic_kunlun_parent_routes?config.diagnostic_kunlun_parent_navigation:std::filesystem::path{},
+                            config.diagnostic_cross_map_navigation});
                     spdlog::warn("Town diagnostic: {}, supplied test placement; live acceptance pending",
                         config.diagnostic_town_source_consensus?"CUSTOM-0019 source agreement gate":"fixed navigation window");
                     if(!config.character_birthplace_navigation.empty())
@@ -3441,8 +3444,12 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                     DiagnosticRemoteActor::logical(0,config.diagnostic_remote_actor_language)).value();
                                 const auto removal=RecoveredRemoteActorRemove::parse_logical(
                                     DiagnosticRemoteActor::logical(2,config.diagnostic_remote_actor_language)).value();
+                                const auto entry=RecoveredWorldEntryView::read(frame);
+                                if(!entry)throw std::runtime_error("Visibility entry geometry rejected");
                                 auto presence=RecoveredPlayerPresence::from_world_entry(
-                                    session,account,character,frame,found->profile,spawn,removal);
+                                    session,account,character,frame,found->profile,spawn,removal,
+                                    recovered_movement?recovered_movement->qualified_scene_kind(
+                                        entry->area,entry->scene):std::nullopt);
                                 if(const auto saved=database.role_text().load(account,character)) {
                                     const auto text=SqliteRoleTextRepository::project(*saved,
                                         RecoveredRemoteRoleText::source_codepage(presence.spawn));
@@ -3518,33 +3525,64 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             }
                             if(config.diagnostic_town_door_routes) {
                                 std::optional<DiagnosticDoorPlan> door_plan;
-                                auto moved=recovered_movement->move_committed(session.id(),session.account_id,
-                                    session.character_id,requests,[&](const RecoveredMovementService::MovePreview& move) {
-                                    if(!move.displaced_steps) return;
-                                    if(config.diagnostic_town_island_routes && move.scene==0)
-                                        spdlog::info("DIAGNOSTIC_ISLAND_STEP session_id={} from=({}, {}) to=({}, {}) steps={}",
-                                            session.id(),move.before_x,move.before_y,move.x,move.y,move.displaced_steps);
-                                    door_plan=lua.diagnostic_door({move.area,move.scene,
+                                const auto qualify_door_step=[&](const RecoveredMovementService::MovePreview& move)
+                                    ->std::optional<DiagnosticDoorPlan> {
+                                    if(!move.displaced_steps)return std::nullopt;
+                                    auto plan=lua.diagnostic_door({move.area,move.scene,
                                         move.before_x,move.before_y,move.x,move.y,
-                                        config.diagnostic_town_island_routes,config.diagnostic_town_all_door_routes,config.diagnostic_kunlun_door_routes,config.diagnostic_kunlun_parent_routes});
-                                    if(door_plan) {
-                                        if(door_plan->area!=move.area || !((move.area==2 && move.scene==4 && door_plan->scene==15) ||
-                                                             (move.area==2 && move.scene==15 && door_plan->scene==4) ||
+                                        config.diagnostic_town_island_routes,config.diagnostic_town_all_door_routes,config.diagnostic_kunlun_door_routes,config.diagnostic_kunlun_parent_routes,
+                                        recovered_movement->has_cross_map_navigation()});
+                                    if(plan) {
+                                        // CUSTOM-0153: same-MDL transfers require an exact
+                                        // original source/paired-target tuple, not scene0 alone.
+                                        const bool wilderness_route=move.scene==0 && plan->scene==0 &&
+                                            ((move.area==2 && config.diagnostic_town_island_routes) ||
+                                             (move.area==4 && config.diagnostic_kunlun_parent_routes)) &&
+                                            plan->area==move.area && plan->x<0x4000 && plan->y<=0x7fff &&
+                                            qualified_wilderness_transfer(move.area,move.scene,move.x,move.y,
+                                                static_cast<std::uint16_t>(plan->x),static_cast<std::uint16_t>(plan->y));
+                                        const bool cross_map_route=move.area==2 && config.diagnostic_town_island_routes &&
+                                            plan->area==move.area && plan->scene<=1023 && plan->x<0x4000 && plan->y<=0x7fff &&
+                                            recovered_movement->qualified_cross_map_transfer(
+                                                static_cast<std::uint16_t>(move.area),static_cast<std::uint16_t>(move.scene),
+                                                static_cast<std::uint16_t>(move.x),static_cast<std::uint16_t>(move.y),
+                                                static_cast<std::uint16_t>(plan->scene),static_cast<std::uint16_t>(plan->x),static_cast<std::uint16_t>(plan->y));
+                                        if(plan->area!=move.area || !((move.area==2 && move.scene==4 && plan->scene==15) ||
+                                                             (move.area==2 && move.scene==15 && plan->scene==4) ||
                                                              (((move.area==2 && config.diagnostic_town_all_door_routes) ||
                                                                (move.area==4 && config.diagnostic_kunlun_door_routes)) &&
-                                                              recovered_movement->registered_door_pair(static_cast<std::uint16_t>(move.area),static_cast<std::uint16_t>(move.scene),static_cast<std::uint16_t>(door_plan->scene))) ||
+                                                              recovered_movement->registered_door_pair(static_cast<std::uint16_t>(move.area),static_cast<std::uint16_t>(move.scene),static_cast<std::uint16_t>(plan->scene))) ||
                                                              (move.area==2 && config.diagnostic_town_island_routes &&
-                                                              ((move.scene==4 && door_plan->scene==0) ||
-                                                               (move.scene==0 && door_plan->scene==4))) ||
+                                                              ((move.scene==4 && plan->scene==0) ||
+                                                               (move.scene==0 && plan->scene==4))) ||
                                                              (move.area==4 && config.diagnostic_kunlun_parent_routes &&
-                                                              recovered_movement->registered_parent_pair(4,static_cast<std::uint16_t>(move.scene),static_cast<std::uint16_t>(door_plan->scene)))) ||
+                                                              recovered_movement->registered_parent_pair(4,static_cast<std::uint16_t>(move.scene),static_cast<std::uint16_t>(plan->scene))) ||
+                                                             wilderness_route || cross_map_route) ||
                                            !recovered_movement->qualifies_transfer_destination(
-                                               static_cast<std::uint16_t>(door_plan->area),
-                                               static_cast<std::uint16_t>(door_plan->scene),
-                                               static_cast<std::uint16_t>(door_plan->x),
-                                               static_cast<std::uint16_t>(door_plan->y)))
+                                               static_cast<std::uint16_t>(plan->area),
+                                               static_cast<std::uint16_t>(plan->scene),
+                                               static_cast<std::uint16_t>(plan->x),
+                                               static_cast<std::uint16_t>(plan->y)))
                                             throw std::runtime_error("Door proposal outside registered scene pair");
                                     }
+                                    return plan;
+                                };
+                                std::optional<RecoveredMovementService::MovePreview> last_validated_step;
+                                auto moved=recovered_movement->move_committed(session.id(),session.account_id,
+                                    session.character_id,requests,[&](const RecoveredMovementService::MovePreview& move) {
+                                    // Recheck the exact final step, not the batch's original
+                                    // origin: directional boundary admission is step-local.
+                                    if(!last_validated_step || last_validated_step->area!=move.area ||
+                                       last_validated_step->scene!=move.scene || last_validated_step->x!=move.x ||
+                                       last_validated_step->y!=move.y)
+                                        throw std::runtime_error("Door prefix endpoint preview mismatch");
+                                    door_plan=qualify_door_step(*last_validated_step);
+                                    if(config.diagnostic_town_island_routes && move.scene==0 && move.displaced_steps)
+                                        spdlog::info("DIAGNOSTIC_ISLAND_STEP session_id={} from=({}, {}) to=({}, {}) steps={}",
+                                            session.id(),move.before_x,move.before_y,move.x,move.y,move.displaced_steps);
+                                },[&](const RecoveredMovementService::MovePreview& step) {
+                                    last_validated_step=step;
+                                    return qualify_door_step(step).has_value();
                                 });
                                 if(config.diagnostic_town_player_visibility)
                                     publish_visibility_movement(session,moved);
@@ -3553,9 +3591,19 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                     // five-second tick. Keep the committed step ACK first, then
                                     // transfer immediately so no old-scene move is authorized.
                                     std::vector<std::uint8_t> transfer;
+                                    bool full_reset_navigation_route=false;
                                     const auto destination_x=static_cast<std::uint16_t>(door_plan->x);
                                     const auto destination_y=static_cast<std::uint16_t>(door_plan->y);
-                                    if(((moved.after.area==2 && config.diagnostic_town_all_door_routes) ||
+                                    if(recovered_movement->qualified_cross_map_transfer(moved.after.area,moved.after.scene,
+                                        moved.after.x,moved.after.y,static_cast<std::uint16_t>(door_plan->scene),destination_x,destination_y)) {
+                                        transfer=recovered_movement->begin_registered_cross_map_transfer(session.id(),session.account_id,
+                                            session.character_id,moved.after,static_cast<std::uint16_t>(door_plan->scene),destination_x,destination_y);
+                                        full_reset_navigation_route=true;
+                                    } else if(moved.after.scene==0 && door_plan->scene==0) {
+                                        transfer=recovered_movement->begin_registered_wilderness_transfer(session.id(),session.account_id,
+                                            session.character_id,moved.after,destination_x,destination_y);
+                                        full_reset_navigation_route=true;
+                                    } else if(((moved.after.area==2 && config.diagnostic_town_all_door_routes) ||
                                         (moved.after.area==4 && config.diagnostic_kunlun_door_routes)) && recovered_movement->registered_door_pair(
                                            moved.after.area,moved.after.scene,static_cast<std::uint16_t>(door_plan->scene)))
                                         transfer=recovered_movement->begin_registered_door_transfer(session.id(),session.account_id,
@@ -3575,6 +3623,11 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                     else
                                         transfer=recovered_movement->begin_outdoor_return(session.id(),session.account_id,
                                             session.character_id,moved.after,destination_x,destination_y);
+                                    // These routes explicitly clear SC61 bit16, which clears
+                                    // native actor pools even when (area,scene) stays equal.
+                                    // Invalidate only after durable transfer preparation;
+                                    // the owned arrival receipt will restore supplied actors.
+                                    if(full_reset_navigation_route)world_display_scene.erase(session.id());
                                     if(config.diagnostic_town_player_visibility) {
                                         const auto destination=database.recovered_characters().load_position(
                                             session.account_id,session.character_id);
@@ -3742,7 +3795,8 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                 session.id(),session.character_id,request.key);
                             return reply;
                         });
-                        guild_ordered_world_records=[&](Session& session,std::span<const RecoveredWorldRecords::Record> records) {
+                        guild_ordered_world_records=[&](Session& session,std::span<const RecoveredWorldRecords::Record> records)
+                            ->std::optional<std::vector<std::uint8_t>> {
                             observe_companion_restoration_write(session);
                             if(config.owned_pk_invitation_enabled){
                                 pk_invitations.expire(OwnedPkInvitationService::Clock::now());
@@ -6019,7 +6073,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                         session.shared_from_this(),std::chrono::steady_clock::now()});
                                 }
                                 spdlog::info("OWNED_WORLD_SNAPSHOT_RESTORED session_id={} character_id={} saved_player={} companion_batches={}",
-                                    session.id(),session.character_id,player.has_value(),companions.size());
+                                    session.id(),session.character_id,player.has_value(),companions->batches().size());
                             }
                             // Restore explicitly qualified71/72 records after scene admission.
                             // Empty source means no actors; never infer spawn rows from catalogs.
@@ -6314,7 +6368,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                 const bool town_location=position && position->area==2 && (position->scene==4 ||
                                    ((config.diagnostic_town_scene_indoor_transfer || config.diagnostic_town_door_routes) && position->scene==15) ||
                                    (config.diagnostic_town_all_door_routes && recovered_movement->registered_door_pair(4,position->scene)) ||
-                                   (config.diagnostic_town_island_routes && position->scene==0));
+                                   (config.diagnostic_town_island_routes && (position->scene==0 ||
+                                    recovered_movement->registered_cross_map_scene(position->area,position->scene))));
                                 const bool kunlun_location=position && position->area==4 && !config.character_birthplace_navigation.empty() &&
                                     (position->scene==3 || (config.diagnostic_kunlun_parent_routes && position->scene==0) ||
                                      (config.diagnostic_kunlun_door_routes && recovered_movement->registered_door_pair(4,3,position->scene)));

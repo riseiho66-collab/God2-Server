@@ -115,6 +115,8 @@ struct Config {
     std::filesystem::path diagnostic_kunlun_indoor_scenes;
     std::filesystem::path diagnostic_kunlun_parent_navigation;
     std::filesystem::path diagnostic_town_island_navigation;
+    // CUSTOM-0154: optional exact-source cross-MDL navigation/route bundle.
+    std::filesystem::path diagnostic_cross_map_navigation;
     std::filesystem::path character_birthplace_navigation;
     std::uint16_t character_birthplace_x{},character_birthplace_y{};
     bool diagnostic_town_source_consensus=false;

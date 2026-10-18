@@ -243,6 +243,13 @@ Config Config::load(const std::filesystem::path& path) {
         if(c.diagnostic_town_island_routes &&
            (!c.diagnostic_town_door_routes || c.diagnostic_town_island_navigation.empty()))
             throw std::runtime_error("Island routes require doors/navigation");
+        if(town.contains("diagnostic_cross_map_navigation")) {
+            const auto& path=town.at("diagnostic_cross_map_navigation");
+            if(!path.is_string() || path.get_ref<const std::string&>().empty() ||
+               !c.diagnostic_town_island_routes || !c.diagnostic_town_source_consensus)
+                throw std::runtime_error("Cross-map navigation requires Island routes, consensus and a nonempty bundle path");
+            c.diagnostic_cross_map_navigation=resolve(path.get<std::string>());
+        }
         c.diagnostic_town_battle_after_quest=town.value("battle_after_quest",false);
         c.diagnostic_town_return_after_battle=town.value("return_after_battle",false);
         c.diagnostic_town_door_after_battle=town.value("door_after_battle",false);

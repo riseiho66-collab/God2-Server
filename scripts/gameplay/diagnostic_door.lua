@@ -3,10 +3,22 @@
 local town_doors = require("gameplay.current_town_doors_data")
 local island_boundaries = require("gameplay.current_island_boundaries_data")
 local kunlun_doors = require("gameplay.current_kunlun_doors_data")
+local wilderness_transfers = require("gameplay.current_wilderness_transfers_data")
+local cross_map_transfers = require("gameplay.current_cross_map_transfers_data")
 return {
     plan = function(input)
         if input.before_x == input.x and input.before_y == input.y then
             return nil
+        end
+        -- CUSTOM-0154: exact source-pinned cross-MDL points. The host requires
+        -- the loaded bundle, exact complete tuple and both navigation endpoints.
+        if input.area == 2 and input.allow_island and input.allow_cross_map then
+            for _, transfer in ipairs(cross_map_transfers) do
+                if transfer[1] == input.area and transfer[2] == input.scene and
+                   transfer[3] == input.x and transfer[4] == input.y then
+                    return {area=input.area,scene=transfer[5],x=transfer[6],y=transfer[7]}
+                end
+            end
         end
         -- CUSTOM-0053: exact original mutual anchors. City only exposes point2;
         -- displaced movement activation and firstpoint0 landing are custom.
@@ -26,6 +38,18 @@ return {
                 end
                 if input.scene == door[1] and input.x == door[8] and input.y == door[9] then
                     return {area=4,scene=3,x=door[4],y=door[5]}
+                end
+            end
+        end
+        -- CUSTOM-0153: source-qualified same-map marker0/1 transfers.
+        -- The displaced guard above prevents an arrival/no-op from bouncing.
+        -- The C++ host independently checks this entire exact tuple and state.
+        if input.scene == 0 and ((input.area == 2 and input.allow_island) or
+                               (input.area == 4 and input.allow_kunlun_parent)) then
+            for _, transfer in ipairs(wilderness_transfers) do
+                if transfer[1] == input.area and transfer[2] == input.scene and
+                   transfer[3] == input.x and transfer[4] == input.y then
+                    return {area=input.area,scene=input.scene,x=transfer[5],y=transfer[6]}
                 end
             end
         end

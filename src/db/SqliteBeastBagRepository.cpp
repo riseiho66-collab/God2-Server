@@ -8,6 +8,7 @@
 #include <bit>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <initializer_list>
 #include <nlohmann/json.hpp>
 #include <type_traits>
@@ -19,6 +20,14 @@ std::uint64_t advance(std::uint64_t value){require(value&&value<limit,"Beast bag
 // Typed whole-save preservation, reused as a new source consumer. Main schema,
 // all other characters, protected slots and opaque peripheral values survive.
 #include "../relations53/preservation.inc"
+SqliteBeastBagRepository::Preservation ordered_preservation(Guard&& values){
+    SqliteBeastBagRepository::Preservation result;result.ordered.reserve(values.size());
+    // std::map iteration retains its canonical key order. Move every original
+    // typed row byte unchanged; all allocations happen before the transaction's
+    // COMMIT, and the resulting value snapshot has a nonallocating default move.
+    for(auto& [key,rows]:values)result.ordered.emplace_back(key,std::move(rows));
+    return result;
+}
 Exclusions exclusions(std::uint64_t character,const RecoveredInventoryMoveRequest::Request& use){
     const auto actor="character_id="+std::to_string(character);
     const auto cells=" AND slot IN("+std::to_string(use.source_slot)+","+std::to_string(use.destination_slot)+")";
@@ -155,7 +164,7 @@ SqliteBeastBagRepository::Snapshot SqliteBeastBagRepository::capture(std::uint64
         }
     }
     require(at(saved.beasts,use.source_slot,[](const auto& row){return row.inventory_slot;})||at(saved.beasts,use.destination_slot,[](const auto& row){return row.inventory_slot;}),"Beast move contains no owned beast");
-    saved.peripheral=guard(db_,exclusions(character,use));if(owns)sqlite_detail::execute(db_,"COMMIT");end.done=true;return saved;
+    saved.peripheral=ordered_preservation(guard(db_,exclusions(character,use)));if(owns)sqlite_detail::execute(db_,"COMMIT");end.done=true;return saved;
 }
 SqliteBeastBagRepository::Result SqliteBeastBagRepository::move(const Snapshot& expected){
     require(sqlite3_get_autocommit(db_)!=0,"Beast move requires standalone transaction");
@@ -206,7 +215,7 @@ SqliteBeastBagRepository::Result SqliteBeastBagRepository::move(const Snapshot& 
         q.bind_id(1,next.selection->custody_revision);q.bind_id(2,next.selection->revision);q.bind_id(3,actor);q.bind(4,expected.selection->selector);q.bind_id(5,expected.selection->custody_revision);q.bind_id(6,expected.selection->revision);q.done();require(sqlite3_changes(db_)==1,"Beast move selection CAS conflict");
     }
     require(armor_.load_snapshot(expected.bag.account,actor)==next.bag&&beasts_.load_owned(expected.bag.account,actor)==next.beasts&&beasts_.load_selection_record(expected.bag.account,actor)==next.selection,"Beast move full resulting custody mismatch");
-    require(guard(db_,exclusions(actor,expected.request),&expected.peripheral)==expected.peripheral,"Beast move changed unrelated saved rows/schema");
+    require(ordered_preservation(guard(db_,exclusions(actor,expected.request)))==expected.peripheral,"Beast move changed unrelated saved rows/schema");
     sqlite_detail::Statement foreign_keys(db_,"PRAGMA foreign_key_check");require(!foreign_keys.row(),"Beast move foreign key mismatch");
     tx.commit();result.changed=true;return result;
 }
@@ -258,7 +267,7 @@ SqliteBeastBagRepository::Result SqliteBeastBagRepository::discard(const Snapsho
     require(journal.row()&&journal.number<std::uint64_t>(0)==account&&journal.number<std::uint64_t>(1)==actor&&journal.integer(2)==39&&journal.number<std::uint16_t>(3)==use.item&&journal.number<std::uint8_t>(4)==use.slot&&journal.integer(5)==1&&journal.number<std::uint64_t>(6)==old_revision&&journal.number<std::uint64_t>(7)==next.bag.scalar[use.slot]->revision&&journal.text(8)==audit&&journal.text(9)=="CUSTOM-0085"&&!journal.row(),"Beast discard exact journal readback conflict");
     require(projector_.capture_proof(account,actor).snapshot()==next.bag&&beasts_.load_owned(account,actor)==next.beasts&&beasts_.load_selection_record(account,actor)==next.selection,"Beast discard resulting complete bag/custody/selection mismatch");
     auto allowed=exclusions(actor,expected.request);allowed["character_beast_discard_receipts_0085"]="receipt<>'"+receipt+"'";
-    require(guard(db_,allowed,&expected.peripheral)==expected.peripheral,"Beast discard changed unrelated saved values/schema/receipt history");
+    require(ordered_preservation(guard(db_,allowed))==expected.peripheral,"Beast discard changed unrelated saved values/schema/receipt history");
     no_battle();sqlite_detail::Statement foreign(db_,"PRAGMA foreign_key_check");require(!foreign.row(),"Beast discard foreign key mismatch");
     tx.commit();return result;
 }

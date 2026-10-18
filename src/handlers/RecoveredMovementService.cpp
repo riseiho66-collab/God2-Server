@@ -5,6 +5,7 @@
 #include "protocol/RecoveredWorldFrame.h"
 #include "protocol/RecoveredWorldEntryView.h"
 #include "game/TaiwanWorldEntryIdentity.h"
+#include "game/RecoveredWildernessTransfers.h"
 #include <algorithm>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -76,6 +77,7 @@ std::map<std::uint16_t,RecoveredIndoorGrid> load_indoor_scenes(const std::filesy
     if(file.bad() || file.gcount()<=0 || static_cast<std::size_t>(file.gcount())>limit)
         throw std::invalid_argument("Door navigation bundle size rejected");
     bytes.resize(static_cast<std::size_t>(file.gcount()));
+    std::size_t expected_count=kunlun?6u:23u;
 #ifdef _WIN32
     BCRYPT_ALG_HANDLE algorithm=nullptr; BCRYPT_HASH_HANDLE hash=nullptr;
     std::array<unsigned char,32> digest{};
@@ -89,15 +91,19 @@ std::map<std::uint16_t,RecoveredIndoorGrid> load_indoor_scenes(const std::filesy
         throw std::runtime_error("Door navigation SHA256 failed");
     std::string actual;
     for(auto byte:digest) {actual+="0123456789abcdef"[byte>>4];actual+="0123456789abcdef"[byte&15];}
-    const auto expected=kunlun?"9c3af8c338c2c26a5d5ee2156d0105cdf9d893666c656814aaae3973d7333f35":"08ccfb33262913f97383da9abcc8bba58b2705e377fbbec004ee5cdfc35013c2";
-    if(actual!=expected)
+    // CUSTOM-0152: keep the deployed 23-room bundle valid; the independently
+    // pinned 26-room Taiwan bundle supplies the three original missing rooms.
+    // A count is selected by whole-file SHA, never by caller-controlled JSON.
+    if(!kunlun && actual=="cec9ce29fffd1b09e7988d28bc22c330841e7efad2c41a26a0e0cc3a6b1e2868")
+        expected_count=26;
+    else if(actual!=(kunlun?"9c3af8c338c2c26a5d5ee2156d0105cdf9d893666c656814aaae3973d7333f35":"08ccfb33262913f97383da9abcc8bba58b2705e377fbbec004ee5cdfc35013c2"))
         throw std::invalid_argument("Door navigation bundle source changed");
 #else
     throw std::runtime_error("Door navigation requires qualified SHA256 backend");
 #endif
     const auto j=nlohmann::json::parse(bytes);
     if(j.at("schema")!=(kunlun?"god2-current-kunlun-doors-v1":"god2-current-town-doors-v1") || j.at("custom_design")!="CUSTOM-0052" ||
-       j.at("navigation").size()!=(kunlun?6:23) || j.at("routes").size()!=(kunlun?6:23))
+       j.at("navigation").size()!=expected_count || j.at("routes").size()!=expected_count)
         throw std::invalid_argument("Door navigation bundle contract rejected");
     std::map<std::uint16_t,RecoveredIndoorGrid> result;
     for(const auto& row:j.at("navigation")) {
@@ -154,11 +160,32 @@ RecoveredMovementService::RecoveredMovementService(RecoveredCharacterRepository&
         if(!cell_available(4,3,town.birthplace_x,town.birthplace_y))throw std::invalid_argument("Kunlun birthplace cell unavailable");
         initial_area_=4;scene_=3;kind_=0;initial_x_=town.birthplace_x;initial_y_=town.birthplace_y;
     }
+    if(!town.cross_map_navigation.empty()) {
+        if(!town.source_consensus || !island_full_)
+            throw std::invalid_argument("Cross-map bundle requires full qualified parent navigation");
+        cross_maps_.emplace(town.cross_map_navigation);
+        // Validate both ends against the actual loaded authorities. A pinned
+        // scene alone cannot create an edge into missing/blocked parent cells.
+        for(const auto& route:cross_maps_->routes())
+            if(!cell_available(route.area,route.source_scene,route.source_x,route.source_y) ||
+               !cell_available(route.area,route.target_scene,route.target_x,route.target_y))
+                throw std::invalid_argument("Cross-map endpoint navigation unavailable");
+    }
 }
 bool RecoveredMovementService::cell_available(int x,int y) const noexcept {
     return cell_available(initial_area_,scene_,x,y);
 }
 bool RecoveredMovementService::cell_available(std::uint16_t area,std::uint16_t scene,int x,int y) const noexcept {
+    if(cross_maps_ && cross_maps_->kind(area,scene)) {
+        const auto value=cross_maps_->cell(area,scene,x,y);
+        // CUSTOM-0154: only original Cave02 record47's exact trigger has
+        // unanimous nonzero 01/02 observations across its nine windows.
+        // Native502BF0/502F20 accept either for traversal; 5035B0's separate
+        // compare2 branch is not generalized. Every other conflict still fails.
+        if(!value && area==2 && scene==2 && x==60 && y==77)
+            return cross_maps_->consistently_walkable(area,scene,x,y);
+        return value && *value!=0;
+    }
     if(area==4 && scene==0 && kunlun_parent_) {
         const auto value=kunlun_parent_->consistent_cell(x,y);
         return value && *value!=0;
@@ -192,6 +219,10 @@ bool RecoveredMovementService::cell_available(std::uint16_t scene,int x,int y) c
     }
     if(scene==0 && (island_ || island_full_)) {
         const auto value=island_full_?island_full_->consistent_cell(x,y):island_->consistent_cell(x,y);
+        // The paired parent trigger is enabled only with the whole pinned
+        // Cave02 bundle. No blanket conversion of 01/02 conflicts to walkable.
+        if(!value && island_full_ && cross_maps_ && cross_maps_->kind(2,2) && x==394 && y==96)
+            return island_full_->consistently_walkable(x,y);
         return value && *value!=0;
     }
     const auto room=indoor_scenes_.find(scene);
@@ -254,6 +285,7 @@ void RecoveredMovementService::prepare_native(std::uint64_t session,std::uint64_
     const auto saved=characters_.load_position(account,character);
     if(!saved || !saved->revision || saved->area!=full->area || saved->scene!=full->scene ||
        saved->x!=full->x || saved->y!=full->y ||
+       (registered_cross_map_scene(full->area,full->scene) && qualified_scene_kind(full->area,full->scene)!=full->kind) ||
        !cell_available(full->area,full->scene,full->x,full->y))
         throw std::invalid_argument("Native movement actual saved geometry unavailable or mismatched");
     // slot/ready/transfer are the existing operational start state, not native
@@ -283,6 +315,7 @@ void RecoveredMovementService::prepare_native_scene(std::uint64_t session,std::u
     const auto saved=characters_.load_position(account,character);
     if(!saved || !saved->revision || saved->area!=full->area || saved->scene!=full->scene ||
        saved->x!=full->x || saved->y!=full->y ||
+       (registered_cross_map_scene(full->area,full->scene) && qualified_scene_kind(full->area,full->scene)!=full->kind) ||
        !cell_available(full->area,full->scene,full->x,full->y))
         throw std::invalid_argument("Native scene movement actual saved geometry unavailable or mismatched");
     Position position{account,character,static_cast<int>(full->x),static_cast<int>(full->y),
@@ -391,6 +424,58 @@ std::vector<std::uint8_t> RecoveredMovementService::begin_island_return(
     reject_owned_movement_mutation();
     return begin_transfer(session,account,character,expected,0,4,x,y);
 }
+std::vector<std::uint8_t> RecoveredMovementService::begin_registered_wilderness_transfer(
+    std::uint64_t session,std::uint64_t account,std::uint64_t character,
+    const RecoveredPosition& expected,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
+    const auto it=active_.find(session);
+    // CUSTOM-0153: immutable, source-qualified same-MDL endpoint pairs only.
+    // Recheck the committed movement endpoint here; Lua proposal admission is
+    // insufficient to authorize another source point or arbitrary destination.
+    if(!town_ || !town_source_consensus_ || it==active_.end() || !it->second.ready ||
+       it->second.transfer_pending || it->second.account!=account || it->second.character!=character ||
+       (expected.area!=2 && expected.area!=4) || expected.scene!=0 ||
+       it->second.area!=expected.area || it->second.scene!=0 ||
+       it->second.x!=expected.x || it->second.y!=expected.y ||
+       it->second.saved!=std::optional{expected} || !expected.revision ||
+       expected.revision>=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) ||
+       !qualified_wilderness_transfer(expected.area,expected.scene,expected.x,expected.y,x,y) ||
+       !qualifies_transfer_destination(expected.area,0,expected.x,expected.y) ||
+       !qualifies_transfer_destination(expected.area,0,x,y) ||
+       characters_.load_position(account,character)!=std::optional{expected})
+        throw std::invalid_argument("Unqualified registered wilderness endpoint or baseline");
+    // CUSTOM-0153: moving kind1 parent transfers need the original full reset
+    // to clear the old path/motion and rebuild the destination window. The
+    // qualified short-range kind0 reuse path does not prove kind1 reuse safe.
+    // Preserve the existing revision/pending/ACK-first flow, but omit bit16.
+    return begin_transfer(session,account,character,expected,0,0,x,y,expected.area,false);
+}
+bool RecoveredMovementService::registered_cross_map_scene(std::uint16_t area,std::uint16_t scene) const noexcept {
+    return cross_maps_ && cross_maps_->kind(area,scene).has_value();
+}
+bool RecoveredMovementService::qualified_cross_map_transfer(std::uint16_t area,std::uint16_t source_scene,
+    std::uint16_t source_x,std::uint16_t source_y,std::uint16_t target_scene,
+    std::uint16_t target_x,std::uint16_t target_y) const noexcept {
+    return cross_maps_ && cross_maps_->contains({area,source_scene,source_x,source_y,target_scene,target_x,target_y});
+}
+std::vector<std::uint8_t> RecoveredMovementService::begin_registered_cross_map_transfer(
+    std::uint64_t session,std::uint64_t account,std::uint64_t character,
+    const RecoveredPosition& expected,std::uint16_t scene,std::uint16_t x,std::uint16_t y) {
+    reject_owned_movement_mutation();
+    const auto it=active_.find(session);
+    if(!town_ || !town_source_consensus_ || it==active_.end() || !it->second.ready ||
+       it->second.transfer_pending || it->second.account!=account || it->second.character!=character ||
+       it->second.area!=expected.area || it->second.scene!=expected.scene ||
+       it->second.x!=expected.x || it->second.y!=expected.y ||
+       it->second.saved!=std::optional{expected} || !expected.revision ||
+       expected.revision>=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) ||
+       !qualified_cross_map_transfer(expected.area,expected.scene,expected.x,expected.y,scene,x,y) ||
+       !qualifies_transfer_destination(expected.area,expected.scene,expected.x,expected.y) ||
+       !qualifies_transfer_destination(expected.area,scene,x,y) ||
+       characters_.load_position(account,character)!=std::optional{expected})
+        throw std::invalid_argument("Unqualified registered cross-map endpoint or baseline");
+    return begin_transfer(session,account,character,expected,expected.scene,scene,x,y,expected.area,false);
+}
 RecoveredMovementService::OwnedIslandReturnPlan RecoveredMovementService::prepare_owned_island_return(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     const RecoveredPosition& expected) const {
@@ -426,7 +511,8 @@ void RecoveredMovementService::commit_owned_island_return(
 }
 std::vector<std::uint8_t> RecoveredMovementService::begin_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
-    const std::optional<RecoveredPosition>& expected,std::uint16_t source_scene,std::uint16_t scene,std::uint16_t x,std::uint16_t y,std::uint16_t area) {
+    const std::optional<RecoveredPosition>& expected,std::uint16_t source_scene,std::uint16_t scene,std::uint16_t x,std::uint16_t y,std::uint16_t area,
+    bool reuse_same_scene) {
     reject_owned_movement_mutation();
     const auto it=active_.find(session);
     if(!town_ || !town_source_consensus_ || it==active_.end() || !it->second.ready ||
@@ -439,7 +525,7 @@ std::vector<std::uint8_t> RecoveredMovementService::begin_transfer(
     logical[1]=static_cast<std::uint8_t>(selector);logical[2]=static_cast<std::uint8_t>(selector>>8);
     const auto packed=(std::uint32_t{x}<<2)|(std::uint32_t{y}<<17)|
         scene_kind(area,scene)|
-        (source_scene==scene?0x10000u:0u);
+        (source_scene==scene && reuse_same_scene?0x10000u:0u);
     for(unsigned i=0;i<4;++i) logical[5+i]=static_cast<std::uint8_t>(packed>>(8*i));
     auto reply=RecoveredWorldFrame::encode(logical);
     auto next=it->second;
@@ -472,7 +558,12 @@ std::vector<std::uint8_t> RecoveredMovementService::begin_registered_door_transf
     return begin_transfer(session,account,character,expected,expected.scene,scene,x,y,expected.area);
 }
 std::uint16_t RecoveredMovementService::scene_kind(std::uint16_t area,std::uint16_t scene) const {
+    if(const auto kind=qualified_scene_kind(area,scene))return *kind;
+    throw std::invalid_argument("Unregistered source scene kind");
+}
+std::optional<std::uint16_t> RecoveredMovementService::qualified_scene_kind(std::uint16_t area,std::uint16_t scene) const noexcept {
     // Explicit source-qualified kind registry; scene numbers alias across areas.
+    if(cross_maps_)if(const auto kind=cross_maps_->kind(area,scene))return kind;
     if(area==4 && scene==3 && kunlun_)return 0;
     if(area==4 && scene==0 && kunlun_parent_)return 1;
     if(area==4 && kunlun_indoor_scenes_.contains(scene))return 2;
@@ -480,7 +571,7 @@ std::uint16_t RecoveredMovementService::scene_kind(std::uint16_t area,std::uint1
     if(area==2 && scene==4 && town_)return 0;
     if(area==2 && scene==0 && (island_ || island_full_))return 1;
     if(area==2 && (indoor_scenes_.contains(scene) || (scene==15 && grid_)))return 2;
-    throw std::invalid_argument("Unregistered source scene kind");
+    return std::nullopt;
 }
 bool RecoveredMovementService::registered_parent_pair(std::uint16_t area,std::uint16_t source_scene,std::uint16_t destination_scene) const noexcept {
     return area==4 && kunlun_ && kunlun_parent_ &&
@@ -517,42 +608,63 @@ void RecoveredMovementService::reject_owned_movement_mutation() const {
     }
 }
 RecoveredMovementService::PreparedMove RecoveredMovementService::prepare_move_batch(
-    const Position& position,std::span<const RecoveredMovement::Request> requests) const {
+    const Position& position,std::span<const RecoveredMovement::Request> requests,
+    const std::function<bool(const MovePreview&)>& stop_after_step) const {
     auto next=position;
     std::size_t displaced_steps=0;
     std::vector<std::uint8_t> response;
     std::vector<CommittedMove::Step> path;
     path.reserve(requests.size());
     for(const auto& request:requests) {
+        const auto before_x=static_cast<std::uint16_t>(next.x),before_y=static_cast<std::uint16_t>(next.y);
         const auto expected=static_cast<std::uint8_t>((next.slot+1)%40);
-        if(request.sequence!=expected || std::abs(static_cast<int>(request.x)-next.x)>1 ||
-           std::abs(static_cast<int>(request.y)-next.y)>1 || !cell_available(next.area,next.scene,request.x,request.y))
-            throw std::invalid_argument("Movement queue, step or navigation rejected");
+        // Keep the original short-circuit check order; construct diagnostic
+        // details only on rejection, without adding authority or relaxing a step.
+        if(request.sequence!=expected)
+            throw std::invalid_argument("Movement queue, step or navigation rejected reason=sequence expected="+
+                std::to_string(expected)+" request="+std::to_string(request.sequence)+
+                " from="+std::to_string(next.x)+","+std::to_string(next.y)+
+                " target="+std::to_string(request.x)+","+std::to_string(request.y));
+        if(std::abs(static_cast<int>(request.x)-next.x)>1 || std::abs(static_cast<int>(request.y)-next.y)>1)
+            throw std::invalid_argument("Movement queue, step or navigation rejected reason=step from="+
+                std::to_string(next.x)+","+std::to_string(next.y)+
+                " target="+std::to_string(request.x)+","+std::to_string(request.y));
+        if(!cell_available(next.area,next.scene,request.x,request.y))
+            throw std::invalid_argument("Movement queue, step or navigation rejected reason=navigation area="+
+                std::to_string(next.area)+" scene="+std::to_string(next.scene)+
+                " target="+std::to_string(request.x)+","+std::to_string(request.y));
         const auto ack=RecoveredMovement::ack(request.sequence);
         response.insert(response.end(),ack.begin(),ack.end());
-        if(next.x!=request.x || next.y!=request.y) {
+        const bool displaced=next.x!=request.x || next.y!=request.y;
+        if(displaced) {
             ++displaced_steps;
             path.push_back({request.x,request.y});
         }
         next.x=request.x;next.y=request.y;next.slot=request.sequence;
+        // CUSTOM-0153: stop at the first admitted portal after its own validated
+        // step. Old-scene tail requests must not advance queue, ACK or position.
+        if(stop_after_step && stop_after_step(MovePreview{next.area,next.scene,
+            before_x,before_y,request.x,request.y,displaced?1u:0u}))break;
     }
     return {std::move(next),std::move(response),std::move(path),displaced_steps};
 }
 RecoveredMovementService::CommittedMove RecoveredMovementService::move_committed(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,
     std::span<const RecoveredMovement::Request> requests,
-    const std::function<void(const MovePreview&)>& precommit) {
+    const std::function<void(const MovePreview&)>& precommit,
+    const std::function<bool(const MovePreview&)>& stop_after_step) {
     reject_owned_movement_mutation();
     auto it=active_.find(session);
     if(it==active_.end() || !it->second.ready || it->second.transfer_pending || it->second.account!=account || it->second.character!=character || requests.empty())
         throw std::invalid_argument("Unbound movement rejected");
-    auto prepared=prepare_move_batch(it->second,requests);
+    auto prepared=prepare_move_batch(it->second,requests,stop_after_step);
     auto& next=prepared.next;
     const auto before=next.saved;
     auto& response=prepared.response;
     auto& path=prepared.path;
     const auto displaced_steps=prepared.displaced_steps;
-    // Validate the entire batch, then commit before publishing state or ACKs.
+    // Validate the selected whole batch/prefix, then commit before publishing
+    // state or ACKs. Default callers retain their complete legacy batch recipe.
     if(precommit) precommit(MovePreview{next.area,next.scene,
         static_cast<std::uint16_t>(it->second.x),static_cast<std::uint16_t>(it->second.y),
         static_cast<std::uint16_t>(next.x),static_cast<std::uint16_t>(next.y),displaced_steps});

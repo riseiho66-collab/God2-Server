@@ -33,6 +33,7 @@ RecoveredParentNavigation::RecoveredParentNavigation(const std::filesystem::path
     require(area==2||area==4);
     const int columns=area==4?20:35,rows=area==4?52:37;
     width=columns*21;height=rows*21;cells_.assign(static_cast<std::size_t>(width*height),255);
+    observed_masks_.assign(cells_.size(),0);
     std::ifstream file(path,std::ios::binary);if(!file)throw std::invalid_argument("Parent navigation unavailable");
     constexpr std::size_t limit=11*1024*1024;
     std::string bytes(limit+1,'\0');file.read(bytes.data(),static_cast<std::streamsize>(bytes.size()));
@@ -58,6 +59,7 @@ RecoveredParentNavigation::RecoveredParentNavigation(const std::filesystem::path
             const int wx=bx*21-21+x,wy=by*21-21+y;
             if(wx<0||wy<0||wx>=width||wy>=height)continue;
             const auto value=static_cast<std::uint8_t>(encoded[offset+1]-'0');
+            observed_masks_[static_cast<std::size_t>(wy*width+wx)]|=static_cast<std::uint8_t>(1u<<value);
             auto& previous=cells_[static_cast<std::size_t>(wy*width+wx)];
             if(previous==255)previous=value;else if(previous!=value)previous=254;
         }
@@ -72,5 +74,10 @@ std::optional<std::uint8_t> RecoveredParentNavigation::consistent_cell(int x,int
     if(x<0||y<0||x>=width||y>=height)return std::nullopt;
     const auto value=cells_[static_cast<std::size_t>(y*width+x)];
     return value>2?std::nullopt:std::optional<std::uint8_t>{value};
+}
+bool RecoveredParentNavigation::consistently_walkable(int x,int y) const noexcept {
+    if(x<0||y<0||x>=width||y>=height)return false;
+    const auto mask=observed_masks_[static_cast<std::size_t>(y*width+x)];
+    return mask!=0 && !(mask&1u);
 }
 }

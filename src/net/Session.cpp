@@ -2745,10 +2745,10 @@ struct Session::Impl {
                 });
             });
             try {
-                if(s.close_requested.load()) complete(0,{});
+                if(s.close_requested.load()) complete(std::uint64_t{0},std::exception_ptr{});
                 else if(s.character_handlers.authenticate_async)
                     s.character_handlers.authenticate_async(request,complete);
-                else complete(s.recovered_login(request),{});
+                else complete(s.recovered_login(request),std::exception_ptr{});
             } catch(...) { complete(0,std::current_exception()); }
         });
     }

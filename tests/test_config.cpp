@@ -372,6 +372,21 @@ void test_config() {
     island_town["development"]["diagnostic_town"]["island_routes"]=true;
     check(god2::Config::load(fixture.write(island_town)).diagnostic_town_island_routes,
           "Explicit isolated Island01 route flag");
+    check(god2::Config::load(fixture.write(island_town)).diagnostic_cross_map_navigation.empty(),
+          "Cross-map navigation defaults off");
+    auto cross_map=island_town;
+    cross_map["development"]["diagnostic_town"]["diagnostic_cross_map_navigation"]="resources/world/tw/cross-map-v4.json";
+    check(god2::Config::load(fixture.write(cross_map)).diagnostic_cross_map_navigation==
+          fixture.root()/"resources/world/tw/cross-map-v4.json","Explicit cross-map bundle path resolution");
+    for(const auto& value:std::vector<Json>{"",true,7,nullptr}) {
+        auto bad_cross=cross_map;
+        bad_cross["development"]["diagnostic_town"]["diagnostic_cross_map_navigation"]=value;
+        rejects(bad_cross,"Cross-map bundle requires nonempty path string");
+    }
+    for(const auto* field:{"island_routes","source_consensus","door_routes"}) {
+        auto bad_cross=cross_map;bad_cross["development"]["diagnostic_town"][field]=false;
+        rejects(bad_cross,"Cross-map bundle requires complete Island transfer prerequisites");
+    }
     island_town["development"]["diagnostic_town"]["player_visibility"]=true;
     island_town["development"]["diagnostic_remote_actor_language"]=0;
     check(god2::Config::load(fixture.write(island_town)).diagnostic_town_player_visibility,

@@ -1054,7 +1054,8 @@ std::optional<DiagnosticDoorPlan> LuaEngine::diagnostic_door(const DiagnosticDoo
         "x",input.x,"y",input.y,"allow_island",input.allow_island,
         "allow_all_town_doors",input.allow_all_town_doors,
         "allow_kunlun_doors",input.allow_kunlun_doors,
-        "allow_kunlun_parent",input.allow_kunlun_parent));
+        "allow_kunlun_parent",input.allow_kunlun_parent,
+        "allow_cross_map",input.allow_cross_map));
     if(result.return_count()!=1) throw std::runtime_error("Door plan must return one value");
     if(result.get_type()==sol::type::nil) return std::nullopt;
     if(result.get_type()!=sol::type::table) throw std::runtime_error("Door plan must be table or nil");
