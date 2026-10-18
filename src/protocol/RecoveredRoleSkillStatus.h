@@ -9,6 +9,9 @@
 
 namespace god2 {
 // TW S2C C9 -> WORLD46B2C6/46B2CE ->4E72F0(logical+1).
+// BATTLE519370/51982D also forwards logical+1 through its retained B+20
+// owner to4E72F0; the selected Main initialization supplies that owner.
+// This forwarding does not generate duration, periodic ticks or HP/MP amounts.
 // Received role status/display data only; not C2S, a grant or a DoT rule.
 struct RecoveredRoleSkillStatus {
     static constexpr std::uint8_t opcode=0xc9;

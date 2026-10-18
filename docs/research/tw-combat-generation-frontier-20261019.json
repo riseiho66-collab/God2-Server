@@ -1,0 +1,85 @@
+{
+  "schema": "god2-current-combat-generation-frontier/1",
+  "round": 473,
+  "baseline_commit": "230edfeb50337dfd40b2134bca827909f29f256a",
+  "mode": "SOURCE_STATIC_ONLY",
+  "source_image_sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48",
+  "installed_skill_bin_sha256": "3adcda70a477086da50411fe5d023eec33f915efafd17ec478d55542cae42ea7",
+  "installed_skill_rows": 453,
+  "original_generation_restored": {
+    "damage_healing": false,
+    "hit_evasion_critical": false,
+    "attack_defense_elements_resistance": false,
+    "periodic_hp_mp_effects": false
+  },
+  "evidence_root": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/combat-source-frontier-round473",
+  "evidence": [
+    {
+      "path": "formulas/magnitude-producer-alias-audit-v1.json",
+      "sha256": "9235bbf3b1764952c1458c25068996005e1eae412b68c30ead13c7462fd2996b",
+      "scope": "17 retained CFGs; 4204 original rows reverified; finite same-owner alias audit"
+    },
+    {
+      "path": "status/c9-source-lifecycle-conclusion-v1.json",
+      "sha256": "efe92558f80159ccb50d30a2de2f1bae68a967f802eae4f8510d41507c316d07",
+      "scope": "9 selected functions; 3004 original rows reverified; selected initialization and status owner linkage"
+    },
+    {
+      "path": "scope/authoritative-combat-source-audit-v1.json",
+      "sha256": "2e0fe1759475d9608f031b48a960aa0a2425848965c9646a7b2f893f5691ee91",
+      "scope": "38 source pins; actual hosted rule, persistence, issuance and missing owner inventory"
+    }
+  ],
+  "frontier_corrections": [
+    {
+      "prior": "round470 logical83 WORD9 before5140C0",
+      "current": "Client recv-to-logical-to-battle queue already closed in round457; the missing authoritative producer is before the original server sends the amount.",
+      "do_not_repeat": "Known socket assembly, result labels and same received-WORD application are not new formula producers."
+    },
+    {
+      "prior": "round470 C9 caller519832 and role44B8 known bulk lifetime",
+      "current": "519832 belongs to known519370 dispatch; round461 already qualified selected bulk clear and pointer replacement. Round473 joins the selected Main-to-B20-to-current-role chain.",
+      "do_not_repeat": "Mode3 display expiry does not free a slot or generate a periodic HP/MP tick."
+    }
+  ],
+  "qualified_boundaries": {
+    "amount": "Logical83 WORD9 is received input. Known same-owner28A aliases initialize zero or read signedWORD for application; no newly qualified stat/coefficient-to-amount writer emerged.",
+    "definition": "EC4 and manager+A7FBC78 association retain selected definition pointers. UnknownWORD46 and other raw numeric fields are not recovered probabilities or coefficients.",
+    "status": "Selected Main D8=U becomes B20; battle C9 forwards logical+1 to4E72F0, which reads current U86888=O and copies receivedDWORD5 into one of three20-byte O44B8 entries.",
+    "status_lifetime": "Known mode0 and text expiry retain slots; selected named2A/NULL bulk clear covers all60 bytes. Pointer replacement changes the selected O without itself clearing either object.",
+    "identity_limit": "Same World configuration, current entry/role epoch and every later alias are not globally proven. No static proof of remote adoption is claimed."
+  },
+  "actual_source_inventory": {
+    "owned_pk_basic": "Hosted saved resources/auxiliary stats and explicit BasicParameters -> Battle::act -> CUSTOM-0006 -> paired checkpoint/resource/outbox transaction.",
+    "formal_custom126_150": "Hosted opt-in current owned deity skill readset and full bootstrap/87 Written source, explicit formal actions and atomic checkpoint/resource CAS. This route does not consume the separate LearningPublication handle and is not a generic C35 owner.",
+    "written_learning_pk_lineage": "Separately hosted Written LearningPublication feeds normal-init PK player/companion source successors; that lineage does not itself authorize formal skill casting.",
+    "extended_health_rule": "CUSTOM-0090 extends exact integer arithmetic; it is not recovered original damage or balance.",
+    "generic_c35": "No concrete SharedTaiwanNativeSkillCommandSource::WorldOwner or actual issued_primary_skills/with_native_skills supplier caller in the audited src.",
+    "installed453": "Definition provenance only; client MP threshold is not authoritative charge, learned permission, action grant or runtime adoption.",
+    "pve_encounters": "Actual original spawn/encounter assignment remains missing; gated diagnostic actors do not supply it.",
+    "reload_policy": "Existing serial owner and VM module cache keep one resolver/multi-hit call on one VM. Later turns may use a reloaded VM; no new battle-wide freeze policy was introduced."
+  },
+  "next_required_sources": [
+    "Same-owner stat/skill/status/element inputs -> concrete amount writer with exact widths, order, rounding and clamps, or the original server-side producer.",
+    "Concrete computed/bulk/interior-pointer writer to source28A or selected-role status entries; matching displacement in a different object is insufficient.",
+    "Non-display periodic trigger tied to the same effect generation, authoritative HP/MP magnitude, lifecycle and atomic settlement.",
+    "Actual initializer/rebuild event and complete16-row issued material with inactive tails, selectors, control/actor state and required secondary data; bind real output and Written source before generic C35 WorldOwner actions."
+  ],
+  "unchanged": {
+    "poison_ratio": "Owner-directed current maximumHP/10 exact quotient and remainder; fractional rounding and tick lifecycle not assumed.",
+    "role_status_runtime_emission_enabled": false,
+    "role_status_runtime_mutation_enabled": false,
+    "skill_profile_selection_or_saved_data_changed": false,
+    "gameplay_rules_or_runtime_behavior_changed": false
+  },
+  "limits": [
+    "Finite selected evidence; computed references, unqualified aliases and indirect callees are not globally excluded.",
+    "Missing original formulas remain unknown; result-only captures with incomplete inputs do not uniquely identify them.",
+    "No builds, tests, target/VM/codec execution, game DB SQL, schema, migration, activation or deployment."
+  ],
+  "new_rea_sessions": 0,
+  "new_original_formulas": 0,
+  "new_complete_gameplay": 0,
+  "whole_game_completion_percent": null,
+  "goal_status": "active"
+}
