@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include "scripting/LuaEngine.h"
 #include "protocol/RecoveredWorldFrame.h"
+#include "protocol/DiagnosticBattleParticipants.h"
 #include <iostream>
 #include <stdexcept>
 #include <memory>
@@ -40,9 +41,41 @@ std::vector<std::uint8_t> encode(const BattleSnapshot& state,const BattleActionR
     }
     return RecoveredWorldFrame::encode(logical);
 }
+void signed_endpoint_transaction_test() {
+    const std::array<BattleActor,2> pair{{{0,7,40000,40000,20,20,31,40,8,10},
+        {14,0,40000,40000,0,0,20,25,13,6}}};
+    const BattleAction action{0,{14},false,100,100,8,0,150};
+    unsigned visits=0;
+    const auto encode_native=[&](const BattleSnapshot& state,const BattleActionResult& result){
+        ++visits;const auto& hit=result.hits.front();
+        const auto raw=diagnostic_battle_basic_animation(result.source,hit.target,hit.hp_loss,0,
+            state.actors[hit.target]->hp!=0);
+        return RecoveredWorldFrame::encode(raw);
+    };
+    Battle rejected_wire(33,pair,123);const auto original=rejected_wire.checkpoint();
+    rejects([&]{rejected_wire.act(7,1,action,[](const CombatRuleInput&){
+        return CombatRuleResult{32769,8,false};},encode_native);});
+    require(visits==1&&rejected_wire.checkpoint()==original,
+        "Unrepresentable native endpoint changed HP/MP/revision/RNG before successful encode");
+    for(const std::uint64_t loss:{32767u,32768u}) {
+        Battle direct(34,pair,123);
+        const auto wire=direct.act(7,1,action,[loss](const CombatRuleInput&){
+            return CombatRuleResult{loss,8,false};},encode_native);
+        const auto decoded=RecoveredWorldFrame::decode(wire);
+        require(decoded&&decoded->size()==15&&(*decoded)[9]==(loss==32768?0:1)&&(*decoded)[10]==0x80&&
+            direct.inspect().actors[14]->hp==40000-loss&&direct.inspect().actors[0]->mp==12&&
+            direct.inspect().revision==2,"Native endpoint action lost exact bytes or single resource settlement");
+    }
+    const auto exact=[](const CombatRuleInput&){return CombatRuleResult{32768,8,false};};
+    const auto retried=rejected_wire.act(7,1,action,exact,encode_native);
+    Battle fresh(33,pair,123);const auto expected=fresh.act(7,1,action,exact,encode_native);
+    require(retried==expected&&rejected_wire.checkpoint()==fresh.checkpoint(),
+        "Failed endpoint encoding consumed RNG or prevented exact retry");
+}
 }
 int main(int argc,char** argv) {
     try {
+        signed_endpoint_transaction_test();
         LuaEngine lua(std::filesystem::path(GOD2_SOURCE_DIR)/"scripts",false);
         require(lua.initialize(),"Lua initialization failed");
         const Battle::Rule rule=[&](const CombatRuleInput& input){return lua.combat_damage(input);};

@@ -28,7 +28,8 @@ struct RecoveredPkActionProjection {
         for(std::size_t i=0;i<state.actors.size();++i)
             if(state.actors[i].has_value()!=(i==0||i==14))throw std::invalid_argument("PK projection actor topology changed");
         const auto& hit=result.hits.front();
-        if((hit.target!=0&&hit.target!=14)||hit.target==result.source||hit.hp_loss>hit.damage||hit.hp_loss>0x7fff)
+        if((hit.target!=0&&hit.target!=14)||hit.target==result.source||hit.hp_loss>hit.damage||
+           hit.hp_loss>RecoveredBattleAttackPresentation::maximum_hp_loss)
             throw std::invalid_argument("PK actual hit cannot be represented by scalar signed16 presentation");
         for(std::size_t i=0;i<2;++i){
             const auto& actor=*state.actors[14*i];

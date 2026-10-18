@@ -6,7 +6,11 @@
 #include <span>
 
 namespace god2 {
-// Current image RVA6AE12/111409; see current-battle-entry-20260919.md.
+// Current aaf image: 46AE12 logical DWORD1/5 -> Main context T+28/T+2C;
+// 511409/51140F -> battle B+3C/B+40. See
+// tw-battle-identity-and-signed-loss-boundary-20261019.md, round469 identity v2.
+// B+48 is separate: 4657CA captures current World R0 into T0, then 51141A
+// copies T0 to B+48. Neither raw82 context establishes that self identity.
 // Raw contexts only: no encounter, map, monster or turn semantics established.
 struct RecoveredBattleEntry {
     static constexpr std::size_t logical_size=9;

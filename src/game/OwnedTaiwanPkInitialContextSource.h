@@ -11,8 +11,12 @@
 namespace god2 {
 // CUSTOM-0111 complete initial82/88 producer from exact private owned sources.
 // ContextA is a checked future Session battle generation, NOT a global nonce
-// or recovered native timestamp. Counter/window/display/empty slots are explicit
-// initial-only server policy, never original defaults or packet padding.
+// or recovered native timestamp. Native82 contexts feed B+3C/B+40; B+48
+// separately captures current World R0, qualified named2A low14 at its write.
+// This producer does not supply that native identity or a native selfslot receipt.
+// Counter/window/display/empty slots are explicit initial-only server policy,
+// never original defaults or packet padding. See round469 identity v2 in
+// tw-battle-identity-and-signed-loss-boundary-20261019.md.
 class OwnedTaiwanPkInitialContextSource final {
 public:
     class Observation {
@@ -27,6 +31,9 @@ public:
         const RecoveredBattleVitalsBatch::Bytes& bulk_bytes()const noexcept{return bulk_;}
         RecoveredBattleEntry::Record context()const{return *RecoveredBattleEntry::parse_logical(context_);}
         RecoveredBattleVitalsBatch::Record bulk()const{return *RecoveredBattleVitalsBatch::parse_logical(bulk_);}
+        // Existing private player/vital Current fences only. Their prebattle
+        // epoch validity does not silently transfer across InBattle transition;
+        // it does not attest current native R0, selfslot or client adoption.
         bool current()const{return player_.current()&&vital_.current()&&player_.current();}
         bool uses_connection(const sqlite3* db)const noexcept{
             return player_.uses_connection(db)&&vital_.uses_connection(db);

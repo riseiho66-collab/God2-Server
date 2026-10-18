@@ -142,12 +142,25 @@ void assertions() {
             "Retaliation action group must preserve signed display delta");
     require(zero[9]==0 && zero[10]==0,"Zero HP delta");
     const auto maximum=diagnostic_battle_basic_animation(14,0,32767);
-    require(maximum[9]==1 && maximum[10]==0x80,"Maximum qualified loss is negative signed16");
+    require(maximum[9]==1 && maximum[10]==0x80,"Loss32767 is negative signed16");
+    for(const std::uint8_t source:{0,14})for(const bool alive:{false,true}) {
+        const auto target=static_cast<std::uint8_t>(14-source);
+        const auto endpoint=diagnostic_battle_basic_animation(source,target,32768,37,alive);
+        require(endpoint[9]==0&&endpoint[10]==0x80&&endpoint[2]==source&&endpoint[3]==37&&
+            endpoint[12]==(alive?28:0),"BASIC -32768 endpoint or outcome changed");
+        for(const std::uint8_t kind:{0,1}) {
+            const auto spell=diagnostic_battle_skill_animation(source,target,32768,37,alive,kind);
+            require(spell[9]==0&&spell[10]==0x80&&spell[11]==1&&spell[12]==kind&&
+                spell[14]==(alive?28:0),"Standard skill -32768 endpoint or identity changed");
+        }
+    }
     rejected([]{diagnostic_battle_basic_animation(28,0,18);});
     rejected([]{diagnostic_battle_basic_animation(0,28,18);});
     rejected([]{diagnostic_battle_basic_animation(0,1,18);});
-    rejected([]{diagnostic_battle_basic_animation(0,14,32768);});
-    rejected([]{diagnostic_battle_skill_animation(0,14,32768);});
+    rejected([]{diagnostic_battle_basic_animation(0,14,32769);});
+    rejected([]{diagnostic_battle_skill_animation(0,14,32769);});
+    rejected([]{diagnostic_battle_basic_animation(0,14,0x100008000ULL);});
+    rejected([]{diagnostic_battle_skill_animation(0,14,0x100008000ULL);});
     rejected([]{diagnostic_battle_skill_animation(0,1,54);});
     rejected([]{diagnostic_battle_skill_animation(28,0,54);});
     const auto skill_zero=diagnostic_battle_skill_animation(0,14,0);

@@ -1,5 +1,6 @@
 #pragma once
 #include "protocol/RecoveredBattleBootstrap.h"
+#include "protocol/RecoveredBattleAttackPresentation.h"
 #include "protocol/RecoveredBattleExperience.h"
 #include "protocol/RecoveredRoleProgress.h"
 #include "protocol/RecoveredRoleLevel.h"
@@ -55,7 +56,8 @@ inline RecoveredBattleVitals::Bytes diagnostic_battle_mp(
 // CUSTOM-0009: known basic-action route, explicit native target outcome mapping.
 inline std::array<std::uint8_t,15> diagnostic_battle_basic_animation(
         std::uint8_t source,std::uint8_t target,std::uint64_t hp_loss,std::uint8_t group=0,bool target_alive=true) {
-    if(source>=28 || target>=28 || source/14==target/14 || hp_loss>0x7fff)
+    if(source>=28 || target>=28 || source/14==target/14 ||
+       hp_loss>RecoveredBattleAttackPresentation::maximum_hp_loss)
         throw std::invalid_argument("Diagnostic animation exceeds qualified positions/display range");
     std::array<std::uint8_t,15> record{};
     record[0]=0x83;record[1]=1;record[2]=source;

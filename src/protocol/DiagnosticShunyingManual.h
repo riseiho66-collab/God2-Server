@@ -93,6 +93,10 @@ inline std::vector<std::uint8_t> diagnostic_shunying_manual_action_reply(
     for(const auto& hit:result.hits) {
         if(hit.target>=state.actors.size() || !state.actors[hit.target])
             throw std::invalid_argument("Manual hit target absent");
+        // CUSTOM-0058 keeps its frozen bridge range. The shared standard
+        // native helper's -32768 endpoint does not expand this custom skill.
+        if(skill && hit.hp_loss>0x7fff)
+            throw std::invalid_argument("Manual Shunying exceeds frozen bridge display range");
         const auto& target=*state.actors[hit.target];
         auto animation=skill ?
             diagnostic_battle_skill_animation(result.source,hit.target,hit.hp_loss,0,target.hp>0,0) :

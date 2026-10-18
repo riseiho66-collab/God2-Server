@@ -20,6 +20,10 @@ namespace god2 {
 // This is not a complete carried list or ownership proof; catalog/resources,
 // fresh actor lifetime, native cache bounds and rendering still matter.
 struct RecoveredBattleAttackPresentation {
+    // Signed native WORD losses include -32768 (8000), as read with MOVSX
+    // and passed as signed DWORD to the HP writer and "HP %+d" formatter.
+    // This is a wire endpoint, not a gameplay damage cap or formula.
+    static constexpr std::uint64_t maximum_hp_loss=0x8000;
     using Bytes=std::array<std::uint8_t,15>;
     class Record {
     public:
@@ -68,7 +72,7 @@ struct RecoveredBattleAttackPresentation {
     // shared hit. Unknown bits, skill identity and batch group are preserved.
     static Bytes hit(const Record& prototype,std::uint8_t source,std::uint8_t target,
                      std::uint64_t hp_loss,bool target_alive){
-        if(source>=28||target>=28||source/14==target/14||hp_loss>0x7fff)
+        if(source>=28||target>=28||source/14==target/14||hp_loss>maximum_hp_loss)
             throw std::invalid_argument("PK scalar attack presentation outside recovered range");
         auto bytes=prototype.bytes_;bytes[2]=source;
         bytes[5]=bytes[6]=bytes[7]=bytes[8]=0;

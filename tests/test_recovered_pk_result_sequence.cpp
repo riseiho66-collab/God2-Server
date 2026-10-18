@@ -13,9 +13,11 @@ template<class F>void rejected(F action,const char* message){
     bool threw=false;try{action();}catch(const std::invalid_argument&){threw=true;}require(threw,message);
 }
 template<class Range>void append(Bytes& out,const Range& bytes){out.insert(out.end(),bytes.begin(),bytes.end());}
-RecoveredBattleVitals::Record vital(bool mp,std::uint8_t position,std::uint32_t current=82){
+RecoveredBattleVitals::Record vital(bool mp,std::uint8_t position,std::uint32_t current=82,
+        std::uint32_t maximum=120){
     RecoveredBattleVitals::Bytes bytes{};bytes[0]=0x86;bytes[1]=mp?1:0;bytes[2]=position;
-    bytes[5]=120;bytes[9]=static_cast<std::uint8_t>(current);
+    for(unsigned i=0;i<4;++i){bytes[5+i]=static_cast<std::uint8_t>(maximum>>(8*i));
+        bytes[9+i]=static_cast<std::uint8_t>(current>>(8*i));}
     return *RecoveredBattleVitals::parse_logical(bytes);
 }
 RecoveredBattleAttackPresentation::Record attack(std::uint8_t source,
@@ -139,8 +141,47 @@ void projection_checks(){
             "Consumer HP policy lost lethal outcome");
     }
 }
+void signed_endpoint_checks(){
+    static_assert(RecoveredBattleAttackPresentation::maximum_hp_loss==32768);
+    for(const std::uint8_t source:{0,14})for(const std::uint64_t loss:{32767u,32768u})
+        for(const auto key:{std::optional<std::uint16_t>{},std::optional<std::uint16_t>{1},std::optional<std::uint16_t>{96}}){
+            const auto target=static_cast<std::uint8_t>(14-source);
+            BattleSnapshot state{2,2,BattleState::Active,{}};
+            state.actors[0]=BattleActor{0,1,40000,40000,20,120,10,10,10,10};
+            state.actors[14]=BattleActor{14,2,40000,40000,20,120,10,10,10,10};
+            state.actors[target]->hp-=loss;
+            const BattleActionResult result{source,0,{{target,loss,loss,false}}};
+            RecoveredPkActionProjection::Templates input{{attack(0,key),attack(14,key)},
+                {vital(false,0,40000,40000),vital(false,14,40000,40000)},
+                {vital(true,0,20),vital(true,0,20)}, {bulk(),bulk()}};
+            require(input.hp[0].current()==40000&&input.hp[0].maximum()==40000,"Wide test fixture lost DWORD HP");
+            const auto replies=RecoveredPkActionProjection::logical(state,result,input,key);
+            for(std::uint8_t viewer=0;viewer<2;++viewer){
+                const auto records=RecoveredTaiwanServerRecords::read(replies[viewer]);
+                require(records&&Grammar::matches_output_sequence(replies[viewer]),"Native signed endpoint rejected by PK grammar");
+                const auto& animation=records->front().bytes;
+                require(animation[9]==(loss==32768?0:1)&&animation[10]==0x80&&
+                    animation[2]==RecoveredPkRelativeView::position(source,viewer),
+                    "Signed endpoint bytes or relative source changed");
+                const auto local_target=RecoveredPkRelativeView::position(target,viewer);
+                require(animation[5+2*(local_target/14)]==1&&animation[6+2*(local_target/14)]==0,
+                    "Signed endpoint changed relative target");
+                if(input.animation[viewer].requires_absolute_hp_update()){
+                    const auto hp=RecoveredBattleVitals::parse_logical((*records)[1].bytes);
+                    require(hp&&hp->current()==40000-loss&&hp->maximum()==40000,
+                        "Pose-only endpoint lost absolute HP projection");
+                }
+            }
+            auto overflow=result;overflow.hits[0].damage=32769;overflow.hits[0].hp_loss=32769;
+            rejected([&]{RecoveredPkActionProjection::logical(state,overflow,input,key);},"Unrepresentable -32769 PK endpoint accepted");
+            rejected([&]{RecoveredBattleAttackPresentation::hit(input.animation[0],source,target,32769,true);},
+                "Unrepresentable -32769 presentation accepted");
+            auto inconsistent=result;inconsistent.hits[0].damage=loss-1;
+            rejected([&]{RecoveredPkActionProjection::logical(state,inconsistent,input,key);},"PK loss exceeded authoritative damage");
+        }
+}
 }
 int main(){
-    try{grammar_checks();projection_checks();}
+    try{grammar_checks();projection_checks();signed_endpoint_checks();}
     catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }

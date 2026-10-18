@@ -361,7 +361,16 @@ int main(){try {
         rejects([&]{diagnostic_shunying_manual_basic_reply(dead_state,BattleActionResult{2,0,{{28,1,1,false}}},0);});
         rejects([&]{diagnostic_shunying_manual_basic_reply(dead_state,BattleActionResult{2,0,{{0,1,1,false}}},0);});
         rejects([&]{diagnostic_shunying_manual_basic_reply(dead_state,BattleActionResult{2,0,{{2,1,1,false}}},0);});
-        rejects([&]{diagnostic_shunying_manual_basic_reply(dead_state,BattleActionResult{2,0,{{14,1,32768,false}}},0);});
+        auto boundary=dead_state;boundary.actors[14]->max_hp=40000;boundary.actors[14]->hp=7232;
+        const BattleActionResult endpoint{2,0,{{14,32768,32768,false}}};
+        const auto endpoint_logical=RecoveredWorldFrame::decode(diagnostic_shunying_manual_basic_reply(boundary,endpoint,13));
+        check(endpoint_logical&&endpoint_logical->size()==136&&(*endpoint_logical)[9]==0&&
+            (*endpoint_logical)[10]==0x80&&(*endpoint_logical)[12]==28&&(*endpoint_logical)[15]==0x88,
+            "Manual BASIC lost representable -32768 endpoint");
+        rejects([&]{diagnostic_shunying_manual_reply(boundary,endpoint,13);});
+        rejects([&]{shunying_sanshazhan_reply(boundary,endpoint,13);});
+        auto beyond=boundary;--beyond.actors[14]->hp;
+        rejects([&]{diagnostic_shunying_manual_basic_reply(beyond,BattleActionResult{2,0,{{14,32769,32769,false}}},0);});
     }
     std::cout<<"Shunying policy: both sides, 1/2/3 targets, caps, rejection, atomic MP, visual mapping, rollback passed\n";
     return 0;
