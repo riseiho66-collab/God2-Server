@@ -964,32 +964,62 @@ struct Session::Impl {
         std::shared_ptr<const std::atomic_bool> source_live={}){
         const auto capture=reply_push_capture;
         try{
-            if(!capture||capture->thread!=std::this_thread::get_id()||observed_world_callback!=&owner||!callback_output_active||reply_push_failed||capture->finished||capture->encoding||
-               capture->window!=reply_window()||!reply_push_current(capture->pending,true)||!capture->profile||logical.empty()||logical.size()>RecoveredWorldFrame::max_logical_size||reply_push_frames>=max_writes)
+            if(logical.empty()||logical.size()>RecoveredWorldFrame::max_logical_size)throw std::logic_error("Captured logical bounds rejected");
+            // Copy borrowed caller storage before any allocation or supplier can
+            // reenter and retire that storage. Neither view escapes this call.
+            const auto logical_size=logical.size();
+            std::array<std::uint8_t,RecoveredWorldFrame::max_logical_size> original_bytes;
+            std::copy_n(logical.begin(),logical_size,original_bytes.begin());
+            const std::span<const std::uint8_t> original(original_bytes.data(),logical_size);
+            const auto expected_copy=expected?std::optional<WorldDeliveryIdentity>{*expected}:std::nullopt;
+            const auto current=[&]{
+                return capture&&reply_push_capture==capture&&capture->thread==std::this_thread::get_id()&&observed_world_callback==&owner&&callback_output_active&&
+                    !reply_push_failed&&!capture->finished&&callback_reply_window&&callback_reply_window->active.load()&&!callback_reply_window->poisoned.load()&&
+                    capture->window==callback_reply_window&&reply_push_current(capture->pending,true)&&(!source_live||source_live->load());
+            };
+            if(!current()||capture->encoding||!capture->profile||reply_push_frames>=max_writes)
                 throw std::logic_error("Original-run world push capture retired/reentered");
+            capture->encoding=true;struct Reset {bool& flag;~Reset(){flag=false;}} reset{capture->encoding};
+            // Moving is noexcept. invalidate/finish may clear Data::profile,
+            // but cannot destroy the callable currently executing on GAME.
+            auto encoder=std::move(capture->profile);
             const auto pending=capture->pending;const auto delivery=pending->delivery;
-            if(expected&&(expected->account!=delivery->account||expected->character!=delivery->character||expected->world_generation!=delivery->world_generation||expected->battle_generation!=delivery->battle_generation))
+            if(expected_copy&&(expected_copy->account!=delivery->account||expected_copy->character!=delivery->character||expected_copy->world_generation!=delivery->world_generation||expected_copy->battle_generation!=delivery->battle_generation))
                 throw std::logic_error("Captured push expected delivery tuple differs");
-            const auto charge=logical.size()+3;
+            // The provider sees only this owned mutable copy, never the
+            // caller's memory or the private original used for qualification.
+            std::vector<std::uint8_t> provider_logical(original.begin(),original.end());
+            const auto charge=logical_size+3;
             auto reservation=std::make_shared<Reservation>(budget,charge,1,false);
             {std::lock_guard lock(budget->mutex);if(charge>max_buffer-budget->bytes||budget->count>=max_writes)throw std::overflow_error("Captured world push producer budget");
                 budget->bytes+=charge;++budget->count;reservation->charged=true;}
-            capture->encoding=true;struct Reset {bool& flag;~Reset(){flag=false;}} reset{capture->encoding};
-            if(source_live&&!source_live->load())throw std::logic_error("Captured world push source retired before profile");
-            auto framed=capture->profile(owner,logical);
-            // Opaque one-envelope framing only. The existing final callback
-            // validator still owns protocol validity; no fallback codec exists.
+            if(!current())throw std::logic_error("Captured world push source retired before profile");
+            auto framed=encoder(owner,provider_logical);
             if(!framed||framed->size()!=charge||framed->size()<4||std::size_t((*framed)[0])+256u*(*framed)[1]!=framed->size()||
-               pending->wire.size()>max_buffer-framed->size()||pending->frames.size()>=max_writes||reply_push_failed||!reply_push_current(pending,true)||(source_live&&!source_live->load()))
+               !current()||provider_logical.size()!=logical_size||!std::equal(original.begin(),original.end(),provider_logical.begin()))
                 throw std::logic_error("Captured world push profile/source/bounds mismatch");
+            // Preserve the provider's exact returned bytes in private bounded
+            // storage before decoder/reserve allocations can reenter suppliers.
+            std::array<std::uint8_t,RecoveredWorldFrame::max_logical_size+3> original_wire;
+            std::copy_n(framed->begin(),charge,original_wire.begin());
+            const std::span<const std::uint8_t> wire(original_wire.data(),charge);
+            const auto decoded=RecoveredWorldFrame::decode(wire);
+            if(!decoded||decoded->size()!=logical_size||!std::equal(original.begin(),original.end(),decoded->begin())||!current())
+                throw std::logic_error("Captured world push differs from original fixed-profile logical");
             // Complete every potentially allocating growth before moving the
             // sole acceptance callback into a noexcept Frame commit.
+            if(pending->wire.size()>max_buffer-charge||pending->frames.size()>=max_writes)throw std::overflow_error("Captured world push aggregate bounds");
             pending->frames.reserve(pending->frames.size()+1);
-            pending->wire.reserve(pending->wire.size()+framed->size());
+            pending->wire.reserve(pending->wire.size()+charge);
+            if(!current()||reply_push_frames>=max_writes||pending->frames.size()>=max_writes||pending->wire.size()>max_buffer-charge||
+               provider_logical.size()!=logical_size||!std::equal(original.begin(),original.end(),provider_logical.begin())||
+               callback_output_activity==std::numeric_limits<std::size_t>::max())
+                throw std::logic_error("Captured world push retired during allocation");
+            static_assert(std::is_nothrow_move_constructible_v<ReplyPushPending::Frame>);
             pending->frames.push_back({std::move(reservation),std::move(callback),std::move(source_live)});++reply_push_frames;
-            pending->wire.insert(pending->wire.end(),framed->begin(),framed->end());
-            if(callback_output_activity==std::numeric_limits<std::size_t>::max())throw std::overflow_error("Captured world push callback activity");
+            pending->wire.insert(pending->wire.end(),wire.begin(),wire.end());
             ++callback_output_activity; // No independent observed component/Write.
+            capture->profile=std::move(encoder);
         }catch(...){fail_reply_pushes();if(callback)try{callback(false);}catch(...){}throw;}
     }
     bool reply_push_slices(const std::shared_ptr<ReplyPushFinal>& final,std::span<const std::uint8_t> actual,bool game) const {

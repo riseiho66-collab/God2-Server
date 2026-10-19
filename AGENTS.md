@@ -114,3 +114,11 @@ archives; they are not active dependencies or runtime capabilities.
   destinations, three real endpoints and game-owned scene lifecycle. Use REA
   for unknown selection/switch contracts. A6 bytes, masks or07 route keys alone
   are not channel identity or transfer authority. Keep PHASE1 static.
+
+## Owner pause after round501 (2026-10-19)
+
+- The owner requested stopping after the next round during round500. Finish
+  round501 source/static receipts and authorized publication, then pause this
+  thread goal and its4-discord heartbeat. Do not start round502 without an
+  explicit human resume. Full Taiwan-only acceptance remains unchanged and
+  incomplete; pause is not completion or a blocked-state assertion.

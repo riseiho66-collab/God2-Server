@@ -296,6 +296,56 @@ void refused_capture(Failure failure){
     peer.pump();require(ack.no==refusals,"Failure cleanup repeated the throwing refusal callback");
 }
 
+void captured_profiles_preserve_original_message(){
+    enum class Failure {Body,Opcode,Checksum,ForeignCipher,MutatedInput,Invalidate};
+    for(const auto failure:{Failure::Body,Failure::Opcode,Failure::Checksum,Failure::ForeignCipher,Failure::MutatedInput,Failure::Invalidate}){
+        unsigned encodings=0,provider_drops=0;bool caught=false,survived_invalidation=false;Acknowledgements ack;
+        struct Lifetime {unsigned* drops;explicit Lifetime(unsigned* value):drops(value){}~Lifetime(){++*drops;}};
+        Peer peer([&](Session& actual,auto)->std::optional<Bytes>{
+            CallbackExtent extent(ack.inside);
+            try{
+                Session::WorldReplyPushCapture* active=nullptr;
+                auto lifetime=std::make_shared<Lifetime>(&provider_drops);
+                auto encoder=[&,keep=lifetime](Session& source,std::span<const std::uint8_t> logical)->std::optional<Bytes>{
+                    require(&source==&actual,"Captured original-message framer borrowed another Session");++encodings;
+                    if(encodings==1)return framed(logical);
+                    require(encodings==2,"Invalid captured profile was retried");
+                    if(failure==Failure::Invalidate){
+                        const std::weak_ptr<Lifetime> weak=keep;auto* scope=active;auto* survived=&survived_invalidation;
+                        scope->invalidate();
+                        *survived=!weak.expired(); // No target member is accessed after invalidation.
+                        return framed(logical);
+                    }
+                    if(failure==Failure::MutatedInput){const_cast<std::uint8_t*>(logical.data())[1]^=1;return framed(logical);}
+                    if(failure==Failure::Body||failure==Failure::Opcode){
+                        Bytes changed(logical.begin(),logical.end());changed[failure==Failure::Body?1:0]^=1;return framed(changed);
+                    }
+                    auto wire=framed(logical);if(failure==Failure::Checksum){wire.back()^=1;return wire;}
+                    // Explicit synthetic alternate-key fixture, not a native
+                    // negotiated profile or an authority to alter captured data.
+                    auto checksum=static_cast<std::uint8_t>(wire[0]+wire[1]+2*0x3c);
+                    for(const auto byte:logical)checksum=static_cast<std::uint8_t>(checksum+byte+0x3c);
+                    std::uint8_t previous=0;
+                    for(std::size_t i=2;i<wire.size();++i){
+                        const auto plain=i+1==wire.size()?checksum:logical[i-2];
+                        wire[i]=static_cast<std::uint8_t>((plain^(recovered_zero_seed_key[(i-2)&255]^0x80))+previous-3);previous=plain;
+                    }
+                    return wire;
+                };
+                auto capture=actual.capture_world_reply_pushes(std::move(encoder));active=&capture;lifetime.reset();
+                accepted(actual,row(61),ack.callback('a',true));
+                accepted(actual,row(62),ack.callback('b',true));
+                return capture.finish(0);
+            }catch(const std::exception&){caught=true;return Bytes{};}
+        });
+        peer.ready();peer.invoke();peer.closed_without_output();
+        require(caught&&encodings==2&&provider_drops==1&&!ack.yes&&ack.no==2&&ack.order==std::vector<char>{'a','b'}&&peer.world_calls==1,
+            "Second bad profile leaked first output, lost provider custody or failed once-only whole-capture refusal");
+        if(failure==Failure::Invalidate)require(survived_invalidation,"Invalidation destroyed the callable while it was executing");
+        peer.pump();require(ack.no==2&&provider_drops==1,"Retiring the failed capture repeated callbacks or provider destruction");
+    }
+}
+
 void qualified_capture_retains_source_cancellation(){
     // Future socket cases for the actual qualified API's active-capture branch.
     // Explicit fixture framing remains test-only, never native qualification.
@@ -404,7 +454,7 @@ void test_world_reply_push_capture(){
     static_assert(!std::is_move_constructible_v<Session::WorldReplyPushCapture>);
     static_assert(!std::is_copy_assignable_v<Session::WorldReplyPushCapture>);
     static_assert(!std::is_move_assignable_v<Session::WorldReplyPushCapture>);
-    final_fifo_and_original_callback_order();empty_scope_and_relative_base();finished_old_scope_cannot_poison_successor();qualified_capture_retains_source_cancellation();qualified_async_requires_current_profile_and_original_logical();outside_callback_is_not_authority();
+    final_fifo_and_original_callback_order();empty_scope_and_relative_base();finished_old_scope_cannot_poison_successor();captured_profiles_preserve_original_message();qualified_capture_retains_source_cancellation();qualified_async_requires_current_profile_and_original_logical();outside_callback_is_not_authority();
     for(const auto failure:{Failure::Drop,Failure::Invalidate,Failure::Nested,Failure::ProfileThrow,Failure::ProfileReentry,
         Failure::ProfileNull,Failure::ProfileLength,Failure::WrongOffset,Failure::OverflowOffset,Failure::AlteredFinal,
         Failure::Account,Failure::Character,Failure::ExpectedAccount,Failure::ExpectedCharacter,Failure::Delivery,

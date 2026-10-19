@@ -161,3 +161,10 @@ ownership, discard durable progress or silently choose another channel.
 Native configuration, advertisement, three actual endpoints and complete
 handoff/scene lifecycle must agree. Three labels or advertisements alone are
 insufficient. Follow THREE_CHANNEL_PLAN_20261019.md; PHASE1 still applies.
+
+## Owner-requested pause after round501 (2026-10-19)
+
+After round501 source/static publication, pause this thread goal and its
+4-discord heartbeat, as requested during round500. No automatic round502.
+The full requirements above remain incomplete and preserved for an explicit
+human resume; a paused goal is not a completed server or accepted gameplay.

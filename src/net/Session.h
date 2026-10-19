@@ -353,6 +353,8 @@ public:
     using WorldReplyPushWire=std::function<std::optional<std::vector<std::uint8_t>>(Session&,std::span<const std::uint8_t>)>;
     // Actual synchronous original-run sender custody. The supplied GAME-only
     // profile frames each captured push; no default codec or input hold exists.
+    // Returned wire must decode under the existing fixed zero profile to the
+    // private original logical. Provider input is an owned copy, never caller storage.
     class WorldReplyPushCapture final {
     public:
         ~WorldReplyPushCapture() noexcept;

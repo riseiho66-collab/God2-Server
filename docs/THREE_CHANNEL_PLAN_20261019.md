@@ -210,3 +210,13 @@ unchanged. Arbitrary negotiated profiles/exporter remain OPEN. Native07/2A
 producer inputs and current/149c lineage are still missing; reuse current485/480
 receiver evidence and continue Main rawlist/token/route consumers, not another
 unused wrapper. See research/tw-native-seed-profile-20261019.md. No execution.
+
+Round501 connects original-run captured push validation to the original logical
+message, checksum and existing fixed profile before immutable wire custody.
+Bounded copies and local encoder ownership cover reentry/lifetime; full GAME
+fences follow reserve, with once-only whole-capture failure. Six future C++
+cases remain unexecuted. Current REA qualifies Main rawlist/L-to-G flag copy,
+selected-character token and configured route low-byte consumer (41235E is
+inside412310). Consumer evidence supplies no native producers or channel grant.
+See research/tw-three-channel-capture-route-20261019.md. Publish this final
+authorized round then pause goal/4-discord; no round502 without human resume.

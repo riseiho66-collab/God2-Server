@@ -1,0 +1,212 @@
+{
+  "round": 501,
+  "previous_goal_turn": "progress",
+  "previous_commit": "c8bffe79129bc940a39c08e1787b296f0a7f9069",
+  "goal_status_at_source_seal": "active",
+  "requested_end_state": "paused",
+  "authority": "CUSTOM-0159_ACTUAL_ORIGINAL_RUN_CAPTURE_CONTENT_AND_CURRENT_NATIVE_ROUTE_CONSUMERS",
+  "source_integration": [
+    "Actual original-run per-push fixed-profile checksum/exact original logical before private wire custody",
+    "Bounded borrowed snapshots, owned provider input and local encoder lifetime through reentry",
+    "Full GAME current after allocations; no-allocation sole callback commit and once whole-capture failure",
+    "Native Main rawlist/L-G flag, character token and BYTEroute consumer traced; no producer or channel grant inferred"
+  ],
+  "source_review": {
+    "independent": true,
+    "eol": [
+      {
+        "path": "src/net/Session.h",
+        "baseline_cr": 105,
+        "current_cr": 105,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 2
+      },
+      {
+        "path": "src/net/Session.cpp",
+        "baseline_cr": 737,
+        "current_cr": 737,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 43
+      },
+      {
+        "path": "tests/test_world_reply_push_capture.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 51
+      },
+      {
+        "path": "src/protocol/RecoveredPostCreateSelect.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/protocol/RecoveredWorldFrame.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/core/Application.cpp",
+        "baseline_cr": 8183,
+        "current_cr": 8183,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/core/TaiwanThreeChannelPlan.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/game/TaiwanNativeClientGroupConfiguration.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "AGENTS.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 8
+      },
+      {
+        "path": "docs/GOAL_ACCEPTANCE.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 7
+      },
+      {
+        "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 10
+      },
+      {
+        "path": "docs/custom-designs.json",
+        "baseline_cr": 6467,
+        "current_cr": 6467,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 5
+      },
+      {
+        "path": "docs/research/tw-three-channel-capture-route-20261019.md",
+        "new_file": true
+      }
+    ],
+    "custom_registry_other_design_bytes_unchanged": true,
+    "registry_prefix_sha256": "5e4aafbd7b19ea39433d0b9e692f91796957a2b88165d86eadd290bf2b02e8a8",
+    "registry_suffix_sha256": "2812f892d65822f3bd1cd6a240c30d764a3ef9a1aa2740d234d984b4b0cca15c",
+    "future_negative_case_count": 6,
+    "tests_not_executed": true,
+    "original_wire_transcoded": false,
+    "arbitrary_profile_connected": false
+  },
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-capture-route-round501/findings-v1.json",
+    "sha256": "3431ced628620e685656ef86139deba68b1334b1c753161ded262a7ad67bf69b",
+    "members_verified": 20,
+    "opened_targets": 2,
+    "closed_targets": 2,
+    "successful_function_requests": 4,
+    "unique_original_functions": 4,
+    "preserved_failed_requests": 2,
+    "containing_function_correction": "41235e resolves412310",
+    "original_sections_verified": 13,
+    "synthetic_callers_not_original": true
+  },
+  "stop_request": {
+    "human_request": "下一輪結束後停止工作",
+    "received_during_round": 500,
+    "stop_after_round": 501,
+    "required_after_publication": [
+      "Pause existing4-discord heartbeat preserving name/prompt/schedule/target",
+      "Pause goal with update_goal statuspaused",
+      "Report actual returned status and stop; no round502"
+    ],
+    "full_scope_preserved": true,
+    "not_completion": true
+  },
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/net/Session.h",
+      "sha256": "b54567e333b95c9ee0759ce084487c7075977929d19c9b9822757ccbb39a6977"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "888768de6e16728dfa16632d8b0efe1edefe930ebd4015354b2d3535ce084b30"
+    },
+    {
+      "path": "tests/test_world_reply_push_capture.cpp",
+      "sha256": "6d56f69668fc666c2f4622d0d0dc1fbc070b7ba8dead49c00bc8bf93ff3d7151"
+    },
+    {
+      "path": "src/protocol/RecoveredPostCreateSelect.h",
+      "sha256": "6d1d78966b4002d7abd2276b90329f2ab2ff15b975a344f2fda35b79ae686b43"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldFrame.h",
+      "sha256": "b602ba7a6c86d4cff700e4a65123e8dbdec64b1a2b60b28ae21dd3bf76523d1f"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "d2c19d073933d4be266f717c11b0ea1144c2ba2371097b1b7821718852914cc8"
+    },
+    {
+      "path": "src/core/TaiwanThreeChannelPlan.h",
+      "sha256": "c6667812d9cd5555db653a5df8f81ea6da9ec123d0baecb8ff4bde80fb3b3420"
+    },
+    {
+      "path": "src/game/TaiwanNativeClientGroupConfiguration.h",
+      "sha256": "8439f62a008b4b52d39a05eb9843dcaa8a0559fb89686c03c2d5251807f6b306"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "aa090e8f43bff83409b402254d8a929f9373dc8b53cfb34f3096a42f5bd57f85"
+    },
+    {
+      "path": "docs/GOAL_ACCEPTANCE.md",
+      "sha256": "a4a888414459398fff9592abd24d8502a1bc8527b662002f71ad6281ba72ea20"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "141f1c1d6d8819b7d8ea46b97b3c7e9eb04675cace8274f50f03fb7afc4e52ac"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "4a7a6920af24254335fcc2ca013d37824fdfd5f3274d8f8b93392d362f04d42e"
+    },
+    {
+      "path": "docs/research/tw-three-channel-capture-route-20261019.md",
+      "sha256": "cc7ef392558eea1676dea072e952b70250589ce353731c234d7556a655e9a403"
+    }
+  ]
+}
