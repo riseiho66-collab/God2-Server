@@ -957,6 +957,26 @@ SharedTaiwanNativeWorldHostPlan::Sources::with_actor_status_incarnations(const C
     return sources;
 }
 SharedTaiwanNativeWorldHostPlan::Sources
+SharedTaiwanNativeWorldHostPlan::Sources::with_can_hmd_movement_resources(
+    const Context& context,TaiwanNativeHmdBundleSource::Configuration configuration,
+    TaiwanNativeHmdBundleSource::PoseSource pose,Sources sources) {
+    if(!context.common_world||!sources.actual_session_capacity||sources.movement_resources)
+        throw std::invalid_argument("TW CAN/HMD resources require an unselected actual common host supplier");
+    auto source=TaiwanNativeHmdBundleSource::create(context.maps,context.common_world->presence(),
+        sources.actual_session_capacity,std::move(configuration),std::move(pose));
+    sources.movement_resources=source->input_source();return sources;
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_can_hmd_movement_resources(
+    const Context& context,TaiwanNativeHmdBundleSource::Configuration configuration,
+    TaiwanNativeHmdBundleSource::PoseSource pose,StoredSources sources) {
+    if(!context.common_world||!sources.actual_session_capacity||sources.movement_resources)
+        throw std::invalid_argument("TW stored CAN/HMD resources require an unselected actual common host supplier");
+    auto source=TaiwanNativeHmdBundleSource::create(context.maps,context.common_world->presence(),
+        sources.actual_session_capacity,std::move(configuration),std::move(pose));
+    sources.movement_resources=source->input_source();return sources;
+}
+SharedTaiwanNativeWorldHostPlan::Sources
 SharedTaiwanNativeWorldHostPlan::Sources::with_database_owned_ordinary_movement(
     const Context& context,std::string profile,std::size_t max_profiles,std::chrono::milliseconds reload_interval,Sources sources) {
     sources.movement_resources=database_ordinary_movement_input(context,std::move(profile),max_profiles,reload_interval,

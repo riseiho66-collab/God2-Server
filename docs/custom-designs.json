@@ -6482,6 +6482,43 @@
       "poison_gameplay_complete": false,
       "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_NO_BUILD_TEST_LUA_EXECUTION_OR_DEPLOYMENT"
     }
+,
+    {
+      "id": "CUSTOM-0158",
+      "name": "Taiwan immutable CAN-selected HMD movement bundle",
+      "authority": "OWNER_AUTHORIZED_SERVER_ASSET_PUBLICATION_NOT_NATIVE_DISPATCH_OR_REMOTE_CLIENT_ATTESTATION",
+      "implementation": [
+        "src/game/TaiwanNativeCanAsset.h",
+        "src/game/TaiwanNativeCanAsset.cpp",
+        "src/game/TaiwanNativeHmdBundleSource.h",
+        "src/game/TaiwanNativeHmdBundleSource.cpp",
+        "src/game/TaiwanNativeHmdPreparedBundle.h",
+        "src/game/TaiwanNativeHmdPreparedBundle.cpp",
+        "src/game/TaiwanNativeSceneSourceLifetime.h",
+        "src/game/TaiwanNativeSceneSourceLifetime.cpp",
+        "src/game/TaiwanNativeSceneResourceOwner.h",
+        "src/game/TaiwanNativeSceneResourceOwner.cpp",
+        "src/game/SharedTaiwanNativeMovementHost.cpp",
+        "src/core/SharedTaiwanNativeWorldHostPlan.h",
+        "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+        "tests/test_taiwan_native_hmd_bundle_source.cpp",
+        "tests/test_main.cpp",
+        "tests/CMakeLists.txt"
+      ],
+      "document": "docs/research/tw-can-hmd-bundle-source-20261019.md",
+      "rules": {
+        "selection": "Complete SHA256-pinned CAN and raw Map_City_Coordniate base-row selectors/path; explicit qualified ASCII absolute client root, configured HMD tag, total size limits and bounded shared map cache",
+        "resources": "Original selected logical HMD request backslash directory supplies ROM prefix; original Selection and MapAsset/RomAsset readers and composition retained, immutable grid shared across actual Sessions",
+        "ownership": "Private issuer supplies full Session/Lease revocation token, server version/resource/scene epochs and private prepared bundle; actual Host/ResourceOwner retires token synchronously before external cleanup",
+        "authority": "Actual pose supplier mandatory; no default direction, Authority, rate or policy. Existing CUSTOM-0150 decorator is applied last and remains sole ordinary movement/CAS authority",
+        "reload": "Validate every CAN and rebuild every previously cached map before whole publication; invalid candidate retains old version, successful publication revokes old supplies; no input-time game DB SQL"
+      },
+      "native_gap": "Relative native448300 manager-root expansion, CAN-tag dispatcher, outdoor MDL integration, actual Main full2A/Entered/scene/pose supply and remote native resource/window authority remain open. Server epochs only name immutable server publications.",
+      "production_activated": false,
+      "native_client_acceptance": false,
+      "whole_world_complete": false,
+      "verification_status": "SOURCE_AND_BOUNDED_STATIC_REVIEW_ONLY_REGRESSION_SOURCE_REGISTERED_NOT_BUILT_OR_RUN"
+    }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
 }

@@ -6,6 +6,13 @@
 #include <utility>
 
 namespace god2 {
+namespace {
+struct MovementSourceAdmission {
+    std::shared_ptr<TaiwanNativeSceneSourceLifetime> source;
+    bool admitted=false;
+    ~MovementSourceAdmission(){if(source&&!admitted)source->revoke();}
+};
+}
 struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State> {
     enum class Kind {Idle,Install,Replace,Remove,Movement};
     enum class Phase {Preparing,Installed};
@@ -14,12 +21,15 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
         const std::weak_ptr<Session> connection;
         const std::uint64_t resource_generation,scene_generation;
         const std::optional<std::uint64_t> owned_battle_generation;
+        const std::shared_ptr<TaiwanNativeSceneSourceLifetime> source_lifetime;
         Phase phase=Phase::Preparing;
         bool active=true,controller_bound=false;
         Slot(const std::shared_ptr<Session>& session,const Lease& actual,const Input& input)
             :lease(actual),connection(session),resource_generation(input.actual_resource_generation),
              scene_generation(input.actual_initial_scene_generation),
-             owned_battle_generation(input.owned_ordinary?std::optional<std::uint64_t>(session->battle_generation()):std::nullopt) {}
+             owned_battle_generation(input.owned_ordinary?std::optional<std::uint64_t>(session->battle_generation()):std::nullopt),
+             source_lifetime(input.source_lifetime) {}
+        ~Slot(){if(source_lifetime)source_lifetime->revoke();}
     };
     const std::thread::id thread=std::this_thread::get_id();
     const std::shared_ptr<SharedWorldPresence> presence;
@@ -48,6 +58,7 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
         if(thread!=std::this_thread::get_id())throw std::logic_error("TW native movement host game owner mismatch");
     }
     void detach(const std::shared_ptr<Slot>& slot) {
+        if(slot->source_lifetime)slot->source_lifetime->revoke();
         slot->active=false;
         const auto found=slots.find(slot->lease.session);
         if(found!=slots.end() && found->second==slot)slots.erase(found);
@@ -84,13 +95,20 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
         return current && *current==lease;
     }
     bool phase_current(Session& session,const std::shared_ptr<Slot>& slot) const noexcept {
-        return (!slot->owned_battle_generation || *slot->owned_battle_generation==session.battle_generation()) &&
+        return (!slot->source_lifetime || (slot->source_lifetime->current()&&slot->source_lifetime->owned_by(session,slot->lease))) &&
+            (!slot->owned_battle_generation || *slot->owned_battle_generation==session.battle_generation()) &&
             (!battle_refresh || battle_refresh->battle_generation==session.battle_generation());
     }
     bool stored(Session& session,const std::shared_ptr<Slot>& slot) const {
         const auto found=slots.find(slot->lease.session);
         return slot->active && slot->connection.lock().get()==&session && session.id()==slot->lease.session &&
             found!=slots.end() && found->second==slot;
+    }
+    bool source_retained(const std::shared_ptr<TaiwanNativeSceneSourceLifetime>& source) const {
+        if(!source)return false;
+        if(active_slot&&active_slot->source_lifetime==source)return true;
+        for(const auto& row:slots)if(row.second->source_lifetime==source)return true;
+        return false;
     }
     bool qualification(const std::shared_ptr<Slot>& slot,SharedTaiwanNativeMovementScene::Check check,
         const SharedTaiwanNativeMovementScene::Scope& scope,const SharedTaiwanNativeMovementScene::Resources& images) const {
@@ -130,13 +148,18 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
         // owner is allowed to clean a mismatched successor generation.
     }
     bool install_internal(const std::shared_ptr<Session>& session,const Lease& lease,const Input& supplied) {
+        owner();
+        if(supplied.source_lifetime && (!session || !supplied.source_lifetime->owned_by(*session,lease) ||
+           source_retained(supplied.source_lifetime)))return false;
+        MovementSourceAdmission admission{supplied.source_lifetime};
         std::optional<Input> owned;
         if(supplied.owned_ordinary)owned.emplace(supplied);
         const Input& input=owned?*owned:supplied;
         const bool custom=bool(input.owned_ordinary);
         const auto retained=resources;
         if(!session || !ready(*session,lease) || slots.contains(lease.session) || slots.size()>=capacity ||
-           !input.current || bool(input.authority)==input.owned_ordinary.has_value() ||
+           !input.current || (input.source_lifetime&&!input.source_lifetime->current()) ||
+           bool(input.authority)==input.owned_ordinary.has_value() ||
            (input.owned_ordinary && input.owned_ordinary->rules!=rules) || !retained)return false;
         const auto saved=presence->saved_position(lease);
         if(!saved || *saved!=input.actual_position)return false;
@@ -147,11 +170,11 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
             if(!retained->install(session,lease,qualified) || !ready(*session,lease) ||
                presence->saved_position(lease)!=saved || !slot->active || !phase_current(*session,slot) ||
                (custom && !retained->owned_ordinary_retained_current(*session,lease))) {
-                retained->remove(*session,lease);slot->active=false;return false;
+                detach(slot);retained->remove(*session,lease);return false;
             }
             slot->phase=Phase::Installed;
             if(!slots.emplace(lease.session,slot).second) {
-                retained->remove(*session,lease);slot->active=false;return false;
+                detach(slot);retained->remove(*session,lease);return false;
             }
             if(custom) {
                 // Drain both copied callbacks before the last pure custody
@@ -160,9 +183,10 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
                 if(reentered || !stored(*session,slot) || !phase_current(*session,slot) ||
                    !retained->owned_ordinary_retained_current(*session,lease)) {cleanup(*session,slot);return false;}
             }
-            return true;
+            if(!phase_current(*session,slot)){cleanup(*session,slot);return false;}
+            admission.admitted=true;return true;
         }catch(...) {
-            slot->active=false;
+            detach(slot);
             try {retained->remove(*session,lease);}catch(...) {}
             throw;
         }
@@ -179,11 +203,15 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
             if(!saved)return {};
             const SharedTaiwanNativeMovementScene::FactoryScope scope{lease,*saved};
             const auto supply=input_source;auto input=supply(session,scope);
+            if(input&&input->source_lifetime&&(!input->source_lifetime->owned_by(session,lease)||
+               source_retained(input->source_lifetime)))return {};
+            MovementSourceAdmission admission{input?input->source_lifetime:nullptr};
             if(battle_refresh && (!input || !input->owned_ordinary ||
                input->actual_initial_scene_generation==battle_refresh->old_scene_generation ||
                session.battle_generation()!=battle_refresh->battle_generation))return {};
             if(!input || !ready(session,lease) || presence->saved_position(lease)!=saved ||
                input->actual_position!=*saved || !install_internal(session.shared_from_this(),lease,*input))return {};
+            admission.admitted=true;
             found=slots.find(lease.session);
         }
         if(found==slots.end())return {};
@@ -204,6 +232,10 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
             active_slot=found->second;
             if(active_slot->lease!=*lease || !stored(session,active_slot))
                 throw std::invalid_argument("TW native movement host stale Session/resource generation");
+            if(active_slot->source_lifetime&&!active_slot->source_lifetime->current()) {
+                cleanup(session,active_slot);
+                throw std::invalid_argument("TW native movement source lifetime retired");
+            }
             if(!phase_current(session,active_slot)) {
                 // Same ready Lease after real battle completion still has a
                 // different phase fingerprint. Retire exact old controller and
@@ -232,13 +264,19 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
         }
     }
     bool replace(const std::shared_ptr<Session>& session,const Lease& lease,const Input& supplied) {
+        owner();
+        if(supplied.source_lifetime && (!session || !supplied.source_lifetime->owned_by(*session,lease) ||
+           source_retained(supplied.source_lifetime)))return false;
+        MovementSourceAdmission admission{supplied.source_lifetime};
         Operation guard(*this,Kind::Replace);
         std::optional<Input> owned;
         if(supplied.owned_ordinary)owned.emplace(supplied);
         const Input& input=owned?*owned:supplied;
         const bool custom=bool(input.owned_ordinary);
         const auto retained=resources;const auto retire=actual.retire;
-        if(!session || !ready(*session,lease) || !input.current || bool(input.authority)==input.owned_ordinary.has_value() ||
+        if(!session || !ready(*session,lease) || !input.current ||
+           (input.source_lifetime&&!input.source_lifetime->current()) ||
+           bool(input.authority)==input.owned_ordinary.has_value() ||
            (input.owned_ordinary && input.owned_ordinary->rules!=rules) || !retained || !retire)return false;
         const auto found=slots.find(lease.session);
         if(found==slots.end() || found->second->lease!=lease || !stored(*session,found->second))return false;
@@ -246,6 +284,7 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
         const auto saved=presence->saved_position(lease);
         if(!saved || *saved!=input.actual_position)return false;
         try {
+            if(previous->source_lifetime)previous->source_lifetime->revoke();
             const bool retired=retire(*session,lease);
             if((previous->controller_bound && !retired) || !ready(*session,lease) || !stored(*session,previous)) {
                 cleanup(*session,previous);return false;
@@ -265,7 +304,8 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
                 if(reentered || !stored(*session,next) || !phase_current(*session,next) ||
                    !retained->owned_ordinary_retained_current(*session,lease)) {cleanup(*session,next);return false;}
             }
-            return true;
+            if(!phase_current(*session,next)){cleanup(*session,next);return false;}
+            admission.admitted=true;return true;
         }catch(...) {
             const auto failure=std::current_exception();
             if(active_slot)try {cleanup(*session,active_slot);}catch(...) {}
@@ -303,10 +343,13 @@ struct SharedTaiwanNativeMovementHost::State:std::enable_shared_from_this<State>
     void shutdown() noexcept {
         if(thread!=std::this_thread::get_id())std::terminate();
         closed=true;reentered=true;
+        for(auto& row:slots) {
+            if(row.second->source_lifetime)row.second->source_lifetime->revoke();
+            row.second->active=false;
+        }
         const auto callbacks=actual;const auto retained_resources=resources;
         if(callbacks.invalidate_active)try {callbacks.invalidate_active();}catch(...) {}
         if(retained_resources)try {retained_resources->invalidate_active();}catch(...) {}
-        for(auto& row:slots)row.second->active=false;
         auto retired=std::move(slots);slots.clear();
         for(auto& row:retired)if(const auto session=row.second->connection.lock()) {
             try {callbacks.retire(*session,row.second->lease);}catch(...) {}
@@ -338,7 +381,12 @@ std::shared_ptr<SharedTaiwanNativeMovementHost> SharedTaiwanNativeMovementHost::
 }
 SharedTaiwanNativeMovementHost::~SharedTaiwanNativeMovementHost() {state_->shutdown();}
 bool SharedTaiwanNativeMovementHost::install(const std::shared_ptr<Session>& session,const Lease& lease,const Input& input) {
-    const auto state=state_;State::Operation guard(*state,State::Kind::Install);return state->install_internal(session,lease,input);
+    state_->owner();
+    if(input.source_lifetime && (!session || !input.source_lifetime->owned_by(*session,lease) ||
+       state_->source_retained(input.source_lifetime)))return false;
+    MovementSourceAdmission admission{input.source_lifetime};
+    const auto state=state_;State::Operation guard(*state,State::Kind::Install);
+    const bool installed=state->install_internal(session,lease,input);admission.admitted=installed;return installed;
 }
 bool SharedTaiwanNativeMovementHost::replace(const std::shared_ptr<Session>& session,const Lease& lease,const Input& input) {
     const auto state=state_;return state->replace(session,lease,input);

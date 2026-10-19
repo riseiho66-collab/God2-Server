@@ -2,10 +2,12 @@
 #include "game/TaiwanNativeMapAsset.h"
 #include "game/TaiwanNativeResourceSelection.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
+#include "game/TaiwanNativeSceneSourceLifetime.h"
 #include <memory>
 #include <vector>
 
 namespace god2 {
+class TaiwanNativeHmdPreparedBundle;
 // Game-owned selected-source lineage for the existing TW native scene factory.
 // Registry identity never supplies native resource/window authority or a5D.
 class TaiwanNativeSceneResourceOwner final {
@@ -49,6 +51,10 @@ public:
         // Actual original selected resources/Current remain mandatory. No default
         // rate/seed/policy or implicit fallback; ordinary CUSTOM mode only.
         std::optional<OwnedOrdinary> owned_ordinary;
+        // LAST optional revocation-only source custody; ordinary Input copies
+        // never retire an admitted source merely by being destroyed.
+        std::shared_ptr<TaiwanNativeSceneSourceLifetime> source_lifetime={};
+        std::shared_ptr<const TaiwanNativeHmdPreparedBundle> prepared_bundle={};
     };
     static std::shared_ptr<TaiwanNativeSceneResourceOwner> create(
         std::shared_ptr<SharedWorldPresence>,std::size_t actual_session_capacity);

@@ -17,6 +17,7 @@
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "game/OwnedTaiwanPkReturnSceneSource.h"
 #include "game/TaiwanNativeActorResourceSource.h"
+#include "game/TaiwanNativeHmdBundleSource.h"
 #include "game/TaiwanActorStatusOwnedSource.h"
 #include <utility>
 #include <optional>
@@ -119,6 +120,10 @@ public:
         static Sources with_actor_status_write_fence(const SharedWorldHostPlan::Context&,Sources);
         static Sources with_actor_status_incarnations(const SharedWorldHostPlan::Context&,Sources);
         static Sources with_owned_inventory_movement(const SharedWorldHostPlan::Context&,Sources);
+        // CUSTOM-0158 actual same-Context immutable CAN/HMD/ROM supplier.
+        // Apply before the database-owned ordinary movement decorator.
+        static Sources with_can_hmd_movement_resources(const SharedWorldHostPlan::Context&,
+            TaiwanNativeHmdBundleSource::Configuration,TaiwanNativeHmdBundleSource::PoseSource,Sources);
         // CUSTOM-0150 same-Database whole-version policy selection. Call on
         // actual game Context; real resource supplier must select no authority.
         // Explicit positive interval registers this exact cache with the real
@@ -187,6 +192,8 @@ public:
         static StoredSources with_actor_status_write_fence(const SharedWorldHostPlan::Context&,StoredSources);
         static StoredSources with_actor_status_incarnations(const SharedWorldHostPlan::Context&,StoredSources);
         static StoredSources with_owned_inventory_movement(const SharedWorldHostPlan::Context&,StoredSources);
+        static StoredSources with_can_hmd_movement_resources(const SharedWorldHostPlan::Context&,
+            TaiwanNativeHmdBundleSource::Configuration,TaiwanNativeHmdBundleSource::PoseSource,StoredSources);
         static StoredSources with_database_owned_ordinary_movement(
             const SharedWorldHostPlan::Context&,std::string profile_key,
             std::size_t max_profiles,std::chrono::milliseconds reload_interval,StoredSources);

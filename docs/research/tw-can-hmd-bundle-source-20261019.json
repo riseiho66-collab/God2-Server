@@ -1,0 +1,113 @@
+{
+  "round": 483,
+  "scope": "Taiwan-only CAN-selected HMD supplier and real movement resource lifecycle; source/static only",
+  "custom_id": "CUSTOM-0158",
+  "native_evidence_reused": "docs/research/tw-selection-learning-chronology-and-hmd-prefix-20261019.json",
+  "native_observations": [
+    "437900 actual logical request truncates to backslash-inclusive directory",
+    "4379D9 map+78, 437AE8 map+98 model manager and 4370C9 model+1C prefix",
+    "44D750/44D520/44C6D0 actual HMD/ROM consumers"
+  ],
+  "server_policy": [
+    "Absolute qualified ASCII client root instead of unknown relative-manager expansion",
+    "Configured CAN HMD tag, allocation/cache limits, immutable server epochs",
+    "Mandatory actual pose source and existing authority applied separately"
+  ],
+  "source_path": [
+    "HostPlan source factory -> CAN/base-row whole publication -> actual selected HMD -> logical directory ROM prefix -> immutable parsed binding/Grid",
+    "Input prepared bundle/lifetime -> MovementHost -> SceneResourceOwner -> existing native scene factory and CUSTOM0150 sole authority/CAS",
+    "Actual retirement/replacement/remove/shutdown -> token revoke -> old raw Current refusal"
+  ],
+  "open": [
+    "Main full2A/Entered/initial scene and actual pose issuer",
+    "Native relative-root expansion and CAN dispatcher",
+    "Outdoor MDL composition",
+    "Successful real post-battle return INIT integration and runtime acceptance"
+  ],
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "migration": false,
+    "deployment": false
+  },
+  "source_review": "Parent and bounded independent read-only audit; no additional concrete defect after stage metadata copy correction",
+  "sources": [
+    {
+      "path": "src/game/TaiwanNativeCanAsset.h",
+      "sha256": "a9753f4fb7880774d197f10601bb8a99c627227ff83e062b70fc77a2b6fb4140"
+    },
+    {
+      "path": "src/game/TaiwanNativeCanAsset.cpp",
+      "sha256": "91a9e181d700ba4ff07b73494c651939b3e3fdae69865d4abf9f87456a83937d"
+    },
+    {
+      "path": "src/game/TaiwanNativeHmdBundleSource.h",
+      "sha256": "439147d9b443896e0a264dac3f04a23db36eb5a07aa4b104ff8a7e2e1336613b"
+    },
+    {
+      "path": "src/game/TaiwanNativeHmdBundleSource.cpp",
+      "sha256": "5935b97794cb030aa7fd31c7e6444b3455d41dd3c6ed2f8c8f046bc3a47787ac"
+    },
+    {
+      "path": "src/game/TaiwanNativeHmdPreparedBundle.h",
+      "sha256": "916b1c841188eccebb88ae9398bba6820176307de039fd05a1a15468e4d45147"
+    },
+    {
+      "path": "src/game/TaiwanNativeHmdPreparedBundle.cpp",
+      "sha256": "2a786e768d67341da5201e52f959575c86a6a482ef85051509df146f1fbb34f9"
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneSourceLifetime.h",
+      "sha256": "120fb5e42646a5cced96530a74fb0b1cd68bc6cc0ed72e13df8fbe49726b6cae"
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneSourceLifetime.cpp",
+      "sha256": "172431f933f09f22e2641b54553b417fc12f7789a2efca3ab35f4b164d7d4a4d"
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneResourceOwner.h",
+      "sha256": "50c97977e95a4e137136532b04b5f142045f250e7c7d73c04bb5537662967d14"
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneResourceOwner.cpp",
+      "sha256": "f09985d44e4b00fca98af79a6253a494fa99862065cb00b4259e648d8512eaa9"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeMovementHost.cpp",
+      "sha256": "0cb46cd51a61b734c01695be63486469f1f13733a767d1b6fdf058609e0b6bac"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.h",
+      "sha256": "c44c61b2d8ad7467bbc97924d7bf548a1aa4254fb37afe1cfd68de7c95e51360"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "sha256": "18d8eaf9b414302399ea4dc1dc00217217cc6c9fa0011777af052e064e192076"
+    },
+    {
+      "path": "tests/test_taiwan_native_hmd_bundle_source.cpp",
+      "sha256": "d74760994bdf2c7b08b8a428034e2dcb15db80e7fdb2def897f0ed13de052fdc"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "822d3b2025aa97ca327246fcf68c479b364afa68a22d3ee19ee5588f3e673067"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "7056815a5c1a40687d7659c2a08f6dae1d64d40b7fe03aa22b50f1d590300b73"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "900c11e4ab70f24353f1523f28eb5e9712a495249fd5887439879725e3208077"
+    },
+    {
+      "path": "docs/research/tw-can-hmd-bundle-source-20261019.md",
+      "sha256": "34e294a181444fe9b9af6d0a8a5a02ae284bea47f2bf152623d00531f67b146f"
+    }
+  ]
+}

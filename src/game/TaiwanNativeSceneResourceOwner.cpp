@@ -1,5 +1,6 @@
 #include "game/TaiwanNativeSceneResourceOwner.h"
 #include "game/OwnedTaiwanOrdinaryMovementAuthority.h"
+#include "game/TaiwanNativeHmdPreparedBundle.h"
 #include <exception>
 #include <map>
 #include <stdexcept>
@@ -7,6 +8,13 @@
 #include <utility>
 
 namespace god2 {
+namespace {
+struct SceneSourceAdmission {
+    std::shared_ptr<TaiwanNativeSceneSourceLifetime> source;
+    bool admitted=false;
+    ~SceneSourceAdmission(){if(source&&!admitted)source->revoke();}
+};
+}
 struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State> {
     struct Incarnation {}; // Private exact supply identity, never a native counter.
     struct Pending {
@@ -20,6 +28,7 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
         const TaiwanNativeMapAsset::RomBound binding;
         const Scene::Resources resources;
         const ResourceCurrent actual_current;
+        const std::shared_ptr<TaiwanNativeSceneSourceLifetime> source_lifetime;
         std::shared_ptr<Scene::Authority> actual_authority;
         // Only the concrete CUSTOM leaf can be installed in this private slot.
         std::shared_ptr<OwnedTaiwanOrdinaryMovementAuthority> ordinary_authority;
@@ -31,8 +40,9 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
         Entry(const std::shared_ptr<Session>& session,const Lease& identity,Sources original,
             TaiwanNativeMapAsset::RomBound bound,Scene::Resources images,const Input& input)
             :lease(identity),connection(session),sources(std::move(original)),binding(std::move(bound)),
-             resources(std::move(images)),actual_current(input.current),actual_authority(input.authority),
+             resources(std::move(images)),actual_current(input.current),source_lifetime(input.source_lifetime),actual_authority(input.authority),
              actor_position(input.actual_position),actor_direction(input.actual_direction) {}
+        ~Entry(){if(source_lifetime)source_lifetime->revoke();}
     };
     const std::thread::id thread=std::this_thread::get_id();
     std::shared_ptr<SharedWorldPresence> presence;
@@ -49,6 +59,7 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
     void poison() {
         reentered=true;
         if(const auto entry=affected.lock()) {
+            if(entry->source_lifetime)entry->source_lifetime->revoke();
             if(entry->ordinary_authority)entry->ordinary_authority->retire();
             entry->active=false;
             const auto found=entries.find(entry->lease.session);
@@ -70,6 +81,7 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
     void shutdown() noexcept {
         if(thread!=std::this_thread::get_id())std::terminate();
         closed=true;reentered=true;busy=true;
+        for(auto& row:entries)if(row.second->source_lifetime)row.second->source_lifetime->revoke();
         for(auto& row:entries) {
             if(row.second->ordinary_authority)row.second->ordinary_authority->retire();
             row.second->active=false;
@@ -88,12 +100,21 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
         return actual && *actual==lease;
     }
     bool installed(const std::shared_ptr<Entry>& entry) const {
-        if(!entry || !entry->active || closed || reentered)return false;
+        if(!entry || !entry->active || closed || reentered ||
+           (entry->source_lifetime&&!entry->source_lifetime->current()))return false;
         const auto found=entries.find(entry->lease.session);
         const auto session=entry->connection.lock();
-        return found!=entries.end() && found->second==entry && session && ready(*session,entry->lease);
+        return found!=entries.end() && found->second==entry && session &&
+            (!entry->source_lifetime||entry->source_lifetime->owned_by(*session,entry->lease)) && ready(*session,entry->lease);
+    }
+    bool source_retained(const std::shared_ptr<TaiwanNativeSceneSourceLifetime>& source) const {
+        if(!source)return false;
+        if(const auto entry=affected.lock();entry&&entry->source_lifetime==source)return true;
+        for(const auto& row:entries)if(row.second->source_lifetime==source)return true;
+        return false;
     }
     void terminal(const std::shared_ptr<Entry>& entry) {
+        if(entry->source_lifetime)entry->source_lifetime->revoke();
         if(entry->ordinary_authority)entry->ordinary_authority->retire();
         entry->active=false;entry->pending.reset();
         const auto found=entries.find(entry->lease.session);
@@ -242,13 +263,19 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
         }
     };
     bool put(const std::shared_ptr<Session>& session,const Lease& lease,const Input& supplied,bool replacing) {
+        owner();
+        if(supplied.source_lifetime && (!session || !supplied.source_lifetime->owned_by(*session,lease) ||
+           source_retained(supplied.source_lifetime)))return false;
+        SceneSourceAdmission admission{supplied.source_lifetime};
         Operation operation(*this);
         // Own all new-mode inputs before real repository/source observers.
         // The original supplied-native path keeps its existing copy behavior.
         std::optional<Input> owned;
         if(supplied.owned_ordinary)owned.emplace(supplied);
         const Input& input=owned?*owned:supplied;
-        if(!session || !ready(*session,lease) || !input.current || bool(input.authority)==input.owned_ordinary.has_value() || input.actual_direction>7 ||
+        if(!session || !ready(*session,lease) || !input.current ||
+           (input.source_lifetime&&(!input.source_lifetime->current()||!input.source_lifetime->owned_by(*session,lease))) ||
+           bool(input.authority)==input.owned_ordinary.has_value() || input.actual_direction>7 ||
            !input.sources.actual_hmd_generation || !input.actual_resource_generation ||
            !input.actual_initial_scene_generation || !input.max_hmd_plain_bytes || !input.max_rom_plain_bytes ||
            input.actual_position.area!=lease.position.area || input.actual_position.scene!=lease.position.scene)return false;
@@ -259,11 +286,20 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
         affected=previous;
         if(replacing) {
             if(found==entries.end() || found->second->lease!=lease || found->second->connection.lock()!=session)return false;
+            if(previous->source_lifetime)previous->source_lifetime->revoke();
         }else if(found!=entries.end() || entries.size()>=capacity)return false;
         // Copy all public vectors before private const ownership. Immutable
         // Selection handles retain request/probe/selected original bytes.
         Sources sources=input.sources;
         try {
+            std::optional<TaiwanNativeMapAsset::RomBound> binding;
+            std::optional<Scene::Resources> images;
+            if(input.prepared_bundle) {
+                if(!input.source_lifetime || !input.source_lifetime->current() ||
+                   !input.prepared_bundle->matches(input))return false;
+                binding.emplace(input.prepared_bundle->binding());
+                images.emplace(input.prepared_bundle->resources());
+            }else {
             if(sources.hmd.request().kind!=TaiwanNativeResourceSelection::Kind::TextFile)return false;
             auto hmd=TaiwanNativeMapAsset::from_selected_resource(sources.hmd.actual_source(),
                 sources.hmd.encoded_bytes(),input.max_hmd_plain_bytes);
@@ -282,16 +318,18 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
                 if(!rom)return false; // Selected0516 parse failure has no plain fallback.
                 slots.push_back({i,reference,row.actual_resource_generation,std::move(*rom)});
             }
-            auto binding=hmd->bind_rom_sources(std::move(slots));
+            binding=hmd->bind_rom_sources(std::move(slots));
             if(!binding)return false;
-            auto images=binding->resources(input.actual_resource_generation,input.actual_initial_scene_generation);
+            images=binding->resources(input.actual_resource_generation,input.actual_initial_scene_generation);
             if(!images)return false;
+            }
             auto entry=std::make_shared<Entry>(session,lease,std::move(sources),std::move(*binding),std::move(*images),input);
-            if(input.owned_ordinary)affected=entry; // Late caught reentry revokes this actual new entry.
+            if(input.owned_ordinary || input.source_lifetime)affected=entry; // Late caught reentry retires this actual new entry.
             const Scene::Scope scope{lease,*saved,input.actual_direction,input.actual_initial_scene_generation};
             const bool actual=entry->actual_current(Scene::Check::Adopt,scope,entry->resources,entry->sources);
             const auto after=presence->saved_position(lease);
-            if(!actual || !ready(*session,lease) || !after || *after!=*saved) {
+            if(!actual || !ready(*session,lease) || !after || *after!=*saved ||
+               (entry->source_lifetime&&(!entry->source_lifetime->current()||!entry->source_lifetime->owned_by(*session,lease)))) {
                 if(reentered && previous)terminal(previous);
                 return false;
             }
@@ -313,7 +351,8 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
                    !ordinary->retained_current())return false;
                 entry->ordinary_authority=ordinary;entry->actual_authority=std::move(ordinary);
             }
-            if(!entry->actual_authority)return false;
+            if(!entry->actual_authority || (entry->source_lifetime&&
+               (!entry->source_lifetime->current()||!entry->source_lifetime->owned_by(*session,lease))))return false;
             const auto published=entry;
             entries.emplace(lease.session,std::move(entry));
             if(owned) {
@@ -322,11 +361,15 @@ struct TaiwanNativeSceneResourceOwner::State:std::enable_shared_from_this<State>
                 // follows the final private installed/leaf fence.
                 owned.reset();
                 const auto found=entries.find(lease.session);
-                if(closed || reentered || !published->active || found==entries.end() ||
+                if(closed || reentered || !published->active ||
+                   (published->source_lifetime&&(!published->source_lifetime->current()||
+                    !published->source_lifetime->owned_by(*session,lease))) || found==entries.end() ||
                    found->second!=published || !published->ordinary_authority ||
                    !published->ordinary_authority->retained_current()) {terminal(published);return false;}
             }
-            return true;
+            if(published->source_lifetime&&(!published->source_lifetime->current()||
+               !published->source_lifetime->owned_by(*session,lease))){terminal(published);return false;}
+            admission.admitted=true;return true;
         }catch(const std::logic_error&) {
             if(previous)terminal(previous);
             if(reentered)throw;
@@ -372,6 +415,7 @@ bool TaiwanNativeSceneResourceOwner::remove(Session& session,const Lease& lease)
     const auto found=state_->entries.find(lease.session);
     if(found==state_->entries.end() || found->second->lease!=lease || found->second->connection.lock().get()!=&session)return false;
     auto retired=found->second;
+    if(retired->source_lifetime)retired->source_lifetime->revoke();
     if(retired->ordinary_authority)retired->ordinary_authority->retire();
     retired->active=false;state_->entries.erase(found);retired.reset();
     return !state_->reentered && !state_->closed;
@@ -383,6 +427,7 @@ bool TaiwanNativeSceneResourceOwner::owned_ordinary_retained_current(Session& se
     if(found==state_->entries.end())return false;
     const auto entry=found->second;
     return entry->active && entry->lease==lease && entry->connection.lock().get()==&session &&
+        (!entry->source_lifetime||(entry->source_lifetime->current()&&entry->source_lifetime->owned_by(session,lease))) &&
         entry->ordinary_authority && entry->ordinary_authority->retained_current();
 }
 TaiwanNativeSceneResourceOwner::Scene::MaterialSource TaiwanNativeSceneResourceOwner::material_source() {

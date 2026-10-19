@@ -16,6 +16,7 @@ void test_recovered_character_list();
 void test_post_create_select();
 void test_recovered_movement_service();
 void test_recovered_position_repository();
+void test_taiwan_native_hmd_bundle_source();
 int main(int argc,char** argv) {
     const std::pair<const char*,void(*)()> suites[]={
         {"packet",test_packet},{"decoder",test_decoder},{"dispatcher",test_dispatcher},{"lua",test_lua},
@@ -31,7 +32,8 @@ int main(int argc,char** argv) {
         {"recovered_character_list",test_recovered_character_list},
         {"post_create_select",test_post_create_select},
         {"recovered_movement_service",test_recovered_movement_service},
-        {"recovered_position_repository",test_recovered_position_repository}
+        {"recovered_position_repository",test_recovered_position_repository},
+        {"taiwan_native_hmd_bundle_source",test_taiwan_native_hmd_bundle_source}
     };
     try {
         bool found=false;
