@@ -1,0 +1,94 @@
+{
+  "schema": "tw-legacy-callback-output-and-allocation/1",
+  "round": 476,
+  "baseline_commit": "be3fd23657d4780d6d88ca984141443bb01f513e",
+  "phase": "PHASE1_SOURCE_STATIC_ONLY",
+  "scope": "Taiwan-only",
+  "source_image_sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48",
+  "installed_skill_bin_sha256": "3adcda70a477086da50411fe5d023eec33f915efafd17ec478d55542cae42ea7",
+  "installed_skill_rows": 453,
+  "evidence": [
+    {
+      "path": "identity/allocator-zero-custody-conclusion-v1.json",
+      "bytes": 22151,
+      "sha256": "7c7313dc032fc3962f5d34dac889921aefa63408c41a1fed4dbfcea05ede90fe"
+    },
+    {
+      "path": "scope/legacy-causal-output-design-v1.json",
+      "bytes": 14005,
+      "sha256": "955c8277692ef88441f81921b2a2905df512f538430551b993b320539fcced03"
+    },
+    {
+      "path": "scope/session-callback-output-implementation-v1.json",
+      "bytes": 10883,
+      "sha256": "8d3d094f66d158506c1e61a211974025199cdc981f4be32ed45e9cfeac37dd6e"
+    },
+    {
+      "path": "root-source-implementation-v2.json",
+      "bytes": 1194,
+      "sha256": "0560024fb141d030682062aa2ecf8a3dd3891b56f49c403ad037d3ca41038303"
+    }
+  ],
+  "source_changes": [
+    "actual Session private synchronous callback composite retains original three self-senders and nonempty final return as distinct original Writes",
+    "only actual accepted sealed all-components-full-Written becomes CompositeWritten; accepted empty uses NoOutput without fake Write",
+    "independent raw input hold coexists with old single-WWR hold and retires on failure",
+    "actual outermost legacy C67 Application capture and hold before SQL/self-output, bounded latest exact-Session observations and exact disconnect cleanup",
+    "one-use private original C67 ordinal/full-payload claim supports copied adapters; component cursor is not same-frame causal provenance"
+  ],
+  "new_rea_sessions": 1,
+  "new_rea_functions": 4,
+  "rea_handles_closed": true,
+  "native_evidence_id": "ev_ae5e1c0f2d5602f558bd18023f703dfba88cb7b0e6b3764db35ea3386bb934fd",
+  "native_scopes": {
+    "allocator_cfg_scopes": 6,
+    "allocator_original_rows": 126,
+    "reused_wrapper_scopes": 2,
+    "reused_wrapper_rows": 27,
+    "reused_actual_parent_rows": 19,
+    "counts_are_separate_scopes_not_unique_union": true
+  },
+  "native_findings": [
+    "547985 new-handler retry flag6F6EB8 differs from actual heap6F70D4",
+    "selected large-object allocation reaches HeapAlloc with flags0 after align16 under qualified threshold lifecycle",
+    "no whole-object/header2D12/13 zero guarantee; literal global inventory does not prove computed alias absence"
+  ],
+  "regression_source": {
+    "real_Session_loopback_fixture": true,
+    "source_receipt": "scope/session-callback-output-implementation-v1.json",
+    "details": null,
+    "executed": false,
+    "Application_dispatch_integration_executed": false,
+    "true_learning_commit_selection_learning": false,
+    "full_PK_graph": false
+  },
+  "legacy_callback_output_hosted": true,
+  "legacy_private_selection_registry_joined": false,
+  "legacy_exact_causal_emission_tagging": false,
+  "legacy_full_restoration_learning_selection_joined": false,
+  "shared_PK_changed": false,
+  "secondary_opaque_header_restored": false,
+  "original_damage_healing_formula_restored": false,
+  "new_status_tick_owner": false,
+  "generic_skill_world_owner_hosted": false,
+  "next_sources": [
+    "typed C67 private emission sidecar through actual leaf, eight prefix splitter senders and guild53 return append relocation",
+    "actual same-callback baseline before source and distinct Written restoration occurrences",
+    "full Legacy private registry and restoration/learning join without borrowing Shared leases",
+    "concrete original header/whole-object writer or proven consumer; closed allocator wrappers do not recover missing header",
+    "authoritative original magnitude producer and sameWorld issued87/grant owner"
+  ],
+  "new_original_formulas": 0,
+  "new_complete_gameplay": 0,
+  "whole_game_completion_percent": null,
+  "builds": false,
+  "tests": false,
+  "target_execution": false,
+  "vm": false,
+  "codec": false,
+  "game_db_sql": false,
+  "schema_install": false,
+  "activation": false,
+  "deployment": false,
+  "goal_status": "active"
+}

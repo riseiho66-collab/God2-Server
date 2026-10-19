@@ -66,3 +66,5 @@ secondary／播放目標欄位的新增 REA 界線，見
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。
+舊流程整組實際輸出、原始輸入等待與配置清零界線，見
+[round476記錄](tw-legacy-callback-output-and-allocation-20261019.md)。

@@ -40,6 +40,7 @@ struct RecoveredSessionPeer {
     asio::ip::tcp::socket peer{io};
     std::shared_ptr<Session> session;
     unsigned ready_calls=0,movement_calls=0,selection_calls=0,world_calls=0;
+    bool drain_on_destroy=true; // One source-only regression deliberately drops posted handlers.
     static constexpr std::uint64_t account=7,character=0x1234;
     std::uint64_t selected_character=character;
     RecoveredWorldEntry::Frame world_frame;
@@ -130,6 +131,7 @@ struct RecoveredSessionPeer {
     ~RecoveredSessionPeer() {
         asio::error_code ignored;
         peer.close(ignored);
+        if(!drain_on_destroy)return;
         session->close();
         io.restart();io.run_for(std::chrono::milliseconds(20));
     }
@@ -211,6 +213,189 @@ struct RecoveredSessionPeer {
             static_cast<std::uint8_t>(id),static_cast<std::uint8_t>(id>>8),1,0});
     }
 };
+
+// Real Session/loopback source regressions, not a test-only receipt factory.
+// Synthetic S31 bytes exercise transport custody, not original selection policy.
+void recovered_callback_output_transport() {
+    using Status=Session::WorldCallbackOutputStatus;
+    const auto logical=[](std::uint8_t key){
+        RecoveredDeityState::Status::Bytes row{0x31,key,1};
+        return std::vector<std::uint8_t>(row.begin(),row.end());
+    };
+    for(const bool in_world:{false,true})for(const bool final_nonempty:{false,true}){
+        std::optional<Session::WorldCallbackOutput> output;
+        std::optional<Session::WorldRecordsWrite> old_push;
+        std::optional<Session::WorldCallbackSelectionInput> first_input,second_input;
+        std::optional<Session::WorldCallbackOutputCursor> before,after_first;
+        bool queued=false,pending_inside=false,successor_after_written=false;
+        RecoveredSessionPeer other(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>>{
+            return std::vector<std::uint8_t>{};
+        },0x2345,47601);
+        other.select(false);other.send(RecoveredSessionPeer::tail());other.silent();
+        const auto first=logical(101),second=logical(102),third=logical(103),last=logical(104);
+        RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>>{
+            if(output){
+                require(records.size()==1&&std::holds_alternative<RecoveredWorldRecords::Tick>(records.front()),
+                    "Raw suffix changed after callback output barrier");
+                successor_after_written=output->status()==Status::Written&&output->callback_accepted()&&
+                    session.world_callback_output_current_on_game(*output)&&
+                    !session.callback_output_selection_current(*output,*first_input);
+                return std::vector<std::uint8_t>{};
+            }
+            const auto init=session.normal_world_initialization();require(init.has_value(),"Composite actual INIT missing");
+            output=session.capture_world_callback_output(*init);require(output.has_value(),"Composite capture rejected actual callback");
+            require(output->selection_keys().size()==2&&output->selection_keys()[0].ordinal==0&&
+                output->selection_keys()[1].record_index==1&&output->selection_keys()[0].key==101&&
+                output->selection_keys()[1].key==101,"Composite original C67 order/payload changed");
+            // Explicit copied-adapter contract. Equal payload still mints two
+            // distinct actual original-input occurrences in source order.
+            RecoveredDeitySelection::Request copied{101};
+            first_input=session.claim_next_callback_selection(*output,copied);
+            second_input=session.claim_next_callback_selection(*output,copied);
+            require(first_input&&second_input&&!first_input->same_occurrence(*second_input)&&
+                first_input->selection_ordinal()==0&&second_input->selection_ordinal()==1&&
+                session.callback_output_selection_current(*output,*first_input),"C67 one-use input occurrence claim changed");
+            before=session.capture_world_callback_output_cursor(*output);require(before.has_value(),"Composite initial cursor missing");
+            session.hold_world_input_until_callback_output_written(*output);
+            old_push=session.send_world_records_observed(first);
+            after_first=session.capture_world_callback_output_cursor(*output);
+            other.session->send_world_records(std::vector<std::uint8_t>{0x73,8,0,0,0});
+            session.bind_world_delivery_identity({session.account_id,session.character_id,21,session.battle_generation()});
+            session.send_world_records_with_acceptance(second,session.account_id,session.character_id,21,
+                session.battle_generation(),[&](bool value){queued=value;});
+            const auto recipient=session.capture_normal_world_output(*init);require(recipient.has_value(),"Composite normal output handle missing");
+            const auto normal=session.send_normal_world_records(*recipient,third);
+            pending_inside=output->status()==Status::Pending&&!output->sealed()&&!output->callback_accepted()&&
+                output->components().empty()&&old_push->status()==Session::WorldRecordsWriteStatus::Pending&&
+                normal.status()==Session::NormalWorldOutputStatus::Pending;
+            return final_nonempty?RecoveredWorldFrame::encode(last):std::vector<std::uint8_t>{};
+        },in_world?(std::uint64_t{1}<<32)|RecoveredSessionPeer::character:RecoveredSessionPeer::character,
+            47602,in_world?std::optional<std::uint16_t>{0x345}:std::nullopt);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail(in_world?0x345:RecoveredSessionPeer::character));peer.silent();
+        auto input=RecoveredWorldFrame::encode(std::array<std::uint8_t,4>{0x67,101,0x67,101});
+        const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
+        input.insert(input.end(),tick.begin(),tick.end()); // Separate raw frame, not a parsed record replay.
+        peer.send(input);
+        peer.expect(RecoveredWorldFrame::encode(first));peer.expect(RecoveredWorldFrame::encode(second));
+        peer.expect(RecoveredWorldFrame::encode(third));if(final_nonempty)peer.expect(RecoveredWorldFrame::encode(last));
+        peer.silent();other.expect(RecoveredWorldFrame::encode(std::array<std::uint8_t,5>{0x73,8,0,0,0}));other.silent();
+        require(output&&pending_inside&&queued&&successor_after_written&&peer.world_calls==2&&
+            output->status()==Status::Written&&output->sealed()&&output->callback_accepted()&&
+            old_push->status()==Session::WorldRecordsWriteStatus::Written,"Composite completed early or lost legacy receipt/raw hold");
+        const auto parts=output->components();require(parts.size()==(final_nonempty?4u:3u),"Other peer/empty return became a self Write");
+        require(parts[0].kind()==Session::WorldCallbackOutput::Kind::WorldRecords&&
+            parts[1].kind()==Session::WorldCallbackOutput::Kind::AcceptedWorldRecords&&
+            parts[2].kind()==Session::WorldCallbackOutput::Kind::NormalWorldRecords&&
+            parts[0].logical()==first&&parts[1].logical()==second&&parts[2].logical()==third&&
+            !parts[0].same_occurrence(parts[1]),"Original self sender order/encoding identity changed");
+        for(std::size_t i=0;i<parts.size();++i)require(parts[i].ordinal()==i&&parts[i].status()==Status::Written&&
+            parts[i].wire()&&!parts[i].wire()->empty(),"Composite component lacked exact full Write");
+        require(after_first&&after_first->first_component_ordinal()==1&&
+            !peer.session->callback_output_component_after_cursor(*output,*after_first,parts[0])&&
+            peer.session->callback_output_component_after_cursor(*output,*after_first,parts[1])&&
+            peer.session->callback_output_component_after_cursor(*output,*before,parts[0]),"Private component frontier borrowed older output");
+        require(output->final_return_wire().size()==(final_nonempty?RecoveredWorldFrame::encode(last).size():0),
+            "Original final return was recombined with side sends");
+        const auto account=peer.session->account_id,character=peer.session->character_id;
+        peer.session->account_id^=std::uint64_t{1}<<32;
+        require(!peer.session->world_callback_output_current_on_game(*output),"Composite narrowed account");peer.session->account_id=account;
+        peer.session->character_id^=std::uint64_t{1}<<32;
+        require(!peer.session->world_callback_output_current_on_game(*output),"Composite narrowed character");peer.session->character_id=character;
+        require(!other.session->world_callback_output_current_on_game(*output)&&
+            !peer.session->capture_world_callback_output_cursor(*output)&&
+            !peer.session->claim_next_callback_selection(*output,{101}),"Stale callback/foreign Session reclaimed private input");
+    }
+    // Public passive Data may be dropped; the real post/Write still owns its
+    // whole source. Observation lifetime must not close unchanged output.
+    {
+        unsigned calls=0;const auto row=logical(101);
+        RecoveredSessionPeer peer(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>>{
+            if(++calls==1){
+                const auto init=*session.normal_world_initialization();
+                {const auto temporary=session.capture_world_callback_output(init);
+                 require(temporary.has_value(),"Passive capture missing");session.send_world_records(row);}
+            }
+            return std::vector<std::uint8_t>{};
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101}));
+        peer.expect(RecoveredWorldFrame::encode(row));peer.silent();
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0}));peer.silent();
+        require(calls==2&&!peer.session->closing(),"Dropped public observer revoked an actual retained Write");
+    }
+    // A genuinely accepted empty callback releases its independent raw hold,
+    // with an explicit NoOutput terminal rather than a fabricated Written.
+    {
+        std::optional<Session::WorldCallbackOutput> empty;bool resumed=false;
+        RecoveredSessionPeer peer(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>>{
+            if(empty){resumed=empty->status()==Status::NoOutput&&empty->callback_accepted();return std::vector<std::uint8_t>{};}
+            empty=session.capture_world_callback_output(*session.normal_world_initialization());
+            require(empty.has_value(),"Empty actual callback capture missing");
+            session.hold_world_input_until_callback_output_written(*empty);return std::vector<std::uint8_t>{};
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        auto input=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101});
+        const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});input.insert(input.end(),tick.begin(),tick.end());
+        peer.send(input);peer.silent();require(empty&&resumed&&peer.world_calls==2&&empty->sealed()&&
+            empty->status()==Status::NoOutput&&empty->components().empty()&&empty->final_return_wire().empty(),
+            "Accepted no-output callback closed, stalled or minted a fake Write");
+    }
+    // Duplicate capture, wrong input order and unsupported own sender all
+    // poison the optional transcript; ordinary side-send bytes remain original.
+    for(unsigned failure=0;failure<4;++failure){
+        std::optional<Session::WorldCallbackOutput> failed;bool rejected=false;
+        const auto row=logical(101);
+        RecoveredSessionPeer peer(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>>{
+            const auto init=*session.normal_world_initialization();
+            if(failure==0){session.send_world_records(row);rejected=!session.capture_world_callback_output(init);return std::vector<std::uint8_t>{};}
+            failed=session.capture_world_callback_output(init);require(failed.has_value(),"Failure fixture capture missing");
+            if(failure==1)rejected=!session.capture_world_callback_output(init);
+            if(failure==2)rejected=!session.claim_next_callback_selection(*failed,{102});
+            if(failure==3){session.send(Packet{});rejected=failed->status()==Status::Failed;}
+            return std::vector<std::uint8_t>{};
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101}));
+        if(failure==0){peer.expect(RecoveredWorldFrame::encode(row));peer.silent();require(!failed&&rejected,"Late capture borrowed prior output");}
+        else if(failure<3){peer.silent();require(rejected&&failed&&failed->status()==Status::Failed,
+            "Duplicate capture or wrong original input revived composite");}
+        else {for(unsigned i=0;i<8;++i)peer.pump();require(rejected&&failed&&failed->status()==Status::Failed&&peer.session->closing(),
+            "Unsupported fixture Packet sender silently became Written");}
+    }
+    // Phase retirement and close-before-queue cannot expose a Written source.
+    for(const bool phase_change:{false,true}){
+        std::optional<Session::WorldCallbackOutput> failed;
+        RecoveredSessionPeer peer(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>>{
+            failed=session.capture_world_callback_output(*session.normal_world_initialization());
+            session.hold_world_input_until_callback_output_written(*failed);
+            session.send_world_records(logical(101));
+            if(phase_change)session.set_state(SessionState::InBattle);else session.close();
+            return std::vector<std::uint8_t>{};
+        });
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101}));
+        for(unsigned i=0;i<8;++i)peer.pump();require(failed&&failed->status()==Status::Failed&&peer.session->closing()&&
+            !peer.session->world_callback_output_current_on_game(*failed),"Retired phase or unqueued close minted Written");
+    }
+    // Destroy a stopped real IO owner with side/final posts still pending.
+    // Retained Data cannot keep its private delivery Attempt Pending forever.
+    {
+        std::optional<Session::WorldCallbackOutput> dropped;
+        {
+            RecoveredSessionPeer* actual=nullptr;
+            RecoveredSessionPeer peer(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>>{
+                dropped=session.capture_world_callback_output(*session.normal_world_initialization());
+                session.hold_world_input_until_callback_output_written(*dropped);session.send_world_records(logical(101));
+                actual->drain_on_destroy=false;actual->io.stop();return std::vector<std::uint8_t>{};
+            });actual=&peer;
+            peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+            peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101}));peer.pump();
+            require(dropped&&dropped->status()==Status::Pending&&dropped->sealed()&&!dropped->callback_accepted(),
+                "Dropped-post fixture did not retain real unrun side/final posts");
+        }
+        require(dropped->status()==Status::Failed,"Destroyed actual post handlers left retained composite Pending");
+    }
+}
 
 void recovered_written_deity_selection_transport() {
     struct Close {void operator()(sqlite3* db)const {sqlite3_close_v2(db);}};
@@ -1159,6 +1344,7 @@ void test_session_state() {
     diagnostic_scalar_codec_unchanged();
     recovered_world_identity_sender_transport();
     recovered_battle_self_view_transport();
+    recovered_callback_output_transport();
     recovered_written_deity_selection_transport();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {

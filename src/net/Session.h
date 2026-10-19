@@ -234,6 +234,85 @@ public:
         explicit NormalWorldInitialization(std::shared_ptr<const Data> data):data_(std::move(data)) {}
         std::shared_ptr<const Data> data_;
     };
+    // One actual synchronous callback's self-output transcript. Components are
+    // distinct original Writes, never a combined WorldResponseWrite or ACK.
+    // NoOutput is accepted+sealed with zero actual Writes, never Written/ACK.
+    enum class WorldCallbackOutputStatus {Pending,Written,NoOutput,Failed};
+    class WorldCallbackOutput {
+    public:
+        WorldCallbackOutput(const WorldCallbackOutput&)=default;
+        WorldCallbackOutput& operator=(const WorldCallbackOutput&)=default;
+        enum class Kind {WorldRecords,AcceptedWorldRecords,NormalWorldRecords,FinalResponse};
+        struct SelectionKey {std::size_t ordinal,record_index;std::uint8_t key;};
+        class Component {
+        public:
+            Component(const Component&)=default;
+            Component& operator=(const Component&)=default;
+            WorldCallbackOutputStatus status() const noexcept;
+            Kind kind() const noexcept;
+            std::size_t ordinal() const noexcept;
+            const std::vector<std::uint8_t>& logical() const noexcept;
+            std::shared_ptr<const std::vector<std::uint8_t>> wire() const noexcept;
+            bool same_occurrence(const Component& other) const noexcept {return data_==other.data_;}
+        private:
+            friend class Session;friend struct Impl;
+            struct Data;
+            explicit Component(std::shared_ptr<Data> data):data_(std::move(data)){}
+            std::shared_ptr<Data> data_;
+        };
+        WorldCallbackOutputStatus status() const noexcept;
+        bool sealed() const noexcept;
+        bool callback_accepted() const noexcept;
+        bool same_occurrence(const WorldCallbackOutput& other) const noexcept {return data_==other.data_;}
+        std::span<const SelectionKey> selection_keys() const noexcept;
+        // Empty until seal-acquire. Thereafter the ordered vector is immutable.
+        std::span<const Component> components() const noexcept;
+        // Empty original return is retained here, but never creates a Write.
+        std::span<const std::uint8_t> final_return_wire() const noexcept;
+    private:
+        friend class Session;friend struct Impl;
+        struct Data;
+        explicit WorldCallbackOutput(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class WorldCallbackSelectionInput {
+    public:
+        WorldCallbackSelectionInput(const WorldCallbackSelectionInput&)=default;
+        WorldCallbackSelectionInput& operator=(const WorldCallbackSelectionInput&)=default;
+        const RecoveredDeitySelection::Request& request() const noexcept;
+        std::size_t selection_ordinal() const noexcept;
+        std::size_t record_index() const noexcept;
+        bool same_occurrence(const WorldCallbackSelectionInput& other) const noexcept {return data_==other.data_;}
+    private:
+        friend class Session;friend struct Impl;
+        struct Data;
+        explicit WorldCallbackSelectionInput(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
+    };
+    class WorldCallbackOutputCursor {
+    public:
+        WorldCallbackOutputCursor(const WorldCallbackOutputCursor&)=default;
+        WorldCallbackOutputCursor& operator=(const WorldCallbackOutputCursor&)=default;
+        std::size_t first_component_ordinal() const noexcept;
+    private:
+        friend class Session;friend struct Impl;
+        struct Data;
+        explicit WorldCallbackOutputCursor(std::shared_ptr<const Data> data):data_(std::move(data)){}
+        std::shared_ptr<const Data> data_;
+    };
+    std::optional<WorldCallbackOutput> capture_world_callback_output(const NormalWorldInitialization&);
+    bool world_callback_output_current_on_game(const WorldCallbackOutput&) const;
+    // Explicit one-use input claim: actual original C67 order/full payload,
+    // not Request-address identity. Record-copy adapters remain supported.
+    std::optional<WorldCallbackSelectionInput> claim_next_callback_selection(
+        const WorldCallbackOutput&,const RecoveredDeitySelection::Request&);
+    bool callback_output_selection_current(const WorldCallbackOutput&,const WorldCallbackSelectionInput&) const;
+    std::optional<WorldCallbackOutputCursor> capture_world_callback_output_cursor(const WorldCallbackOutput&);
+    bool callback_output_component_after_cursor(const WorldCallbackOutput&,
+        const WorldCallbackOutputCursor&,const WorldCallbackOutput::Component&) const noexcept;
+    // Independent opt-in raw input barrier. Original single-WWR holds retain
+    // their identity and release rules; either pending hold pauses raw input.
+    void hold_world_input_until_callback_output_written(const WorldCallbackOutput&);
     // Private actual Written normal-entry output recipient, minted by its OWN
     // callback or the trusted SAME game owner from its exact private INIT.
     // No peer TLS impersonation, ACK, adoption or gameplay entitlement.

@@ -9635,6 +9635,69 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(failure)std::rethrow_exception(failure);
                     };
                 }
+                if(!common_world && game_handlers.world_records) {
+                    // Legacy callbacks may side-send many original frames before
+                    // returning. Keep their actual output custody distinct from
+                    // the Shared host's single whole-response selection source.
+                    struct LegacySelectionOutputCustody {
+                        struct Attempt {
+                            std::weak_ptr<Session> peer;
+                            Session::NormalWorldInitialization initialization;
+                            Session::WorldCallbackOutput output;
+                        };
+                        std::map<std::uint64_t,Attempt> attempts;
+                    };
+                    const auto custody=std::make_shared<LegacySelectionOutputCustody>();
+                    const auto capacity=config.max_sessions;
+                    const auto original=game_handlers.world_records;
+                    game_handlers.world_records=[original,custody,capacity](Session& session,
+                        std::span<const RecoveredWorldRecords::Record> records)
+                        ->std::optional<std::vector<std::uint8_t>> {
+                        const auto peer=session.weak_from_this().lock();
+                        const auto prior=custody->attempts.find(session.id());
+                        if(prior!=custody->attempts.end()) {
+                            if(!peer || prior->second.peer.lock()!=peer)
+                                throw std::logic_error("Legacy selection output Session incarnation conflict");
+                            const auto status=prior->second.output.status();
+                            if(status!=Session::WorldCallbackOutputStatus::Written &&
+                               status!=Session::WorldCallbackOutputStatus::NoOutput)
+                                throw std::runtime_error("Legacy selection input crossed incomplete callback output");
+                        }
+                        const bool selection=std::any_of(records.begin(),records.end(),[](const auto& record) {
+                            return std::holds_alternative<RecoveredDeitySelection::Request>(record);
+                        });
+                        const auto phase=session.state();
+                        if(!selection || (phase!=SessionState::CharacterSelected && phase!=SessionState::InWorld) ||
+                           !session.recovered_world_ready())
+                            return original(session,records);
+                        if(!peer || session.closing())throw std::runtime_error("Legacy selection output owner unavailable");
+                        if(prior==custody->attempts.end() && custody->attempts.size()>=capacity)
+                            throw std::runtime_error("Legacy selection output capacity exhausted");
+                        const auto initialization=session.normal_world_initialization();
+                        if(!initialization || !initialization->entry_written() ||
+                           !session.normal_world_initialization_current_on_game(*initialization))
+                            throw std::runtime_error("Legacy selection lacks its actual normal initialization");
+                        const auto output=session.capture_world_callback_output(*initialization);
+                        if(!output || output->selection_keys().empty())
+                            throw std::runtime_error("Legacy selection lacks its actual callback output custody");
+                        // Arm BEFORE original dispatch can perform any SQL or
+                        // side-send. The real Session completion path seals the
+                        // accepted return and releases only after every Write.
+                        session.hold_world_input_until_callback_output_written(*output);
+                        custody->attempts.insert_or_assign(session.id(),
+                            LegacySelectionOutputCustody::Attempt{peer,*initialization,*output});
+                        return original(session,records); // Once; original ordering and boundaries retained.
+                    };
+                    const auto previous=on_disconnect;
+                    on_disconnect=[custody,previous](std::shared_ptr<Session> session) {
+                        if(session) {
+                            const auto at=custody->attempts.find(session->id());
+                            if(at!=custody->attempts.end() && at->second.peer.lock()==session)
+                                custody->attempts.erase(at); // Exact incarnation, before throwing observers.
+                        }
+                        if(previous)previous(std::move(session));
+                    };
+                }
                 character_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),
                     config.host,config.character_port,config.max_sessions,config.packet_dump,
                     on_packet,on_disconnect,ProtocolMode::God2CharacterConnection,recovered_login,std::move(game_handlers));
