@@ -37,6 +37,15 @@ are not implemented or accepted yet.
    Callback failure is surfaced after drain; infrastructure abort is distinct
    from completion. This is not a durable save, logout ACK or object-destruction
    receipt and does not select the three-channel owner in Main yet.
+   Round489 actual Application now retains its complete mutable gameplay cohort
+   in a GAME-owned C++20 suspended frame. The stable coroutine callable and its
+   DB/account-hashing host survive that frame. The existing single event loop
+   drains before resuming the shutdown tail, with an explicit actual NET-join
+   publication checked first. This makes a separately owned cohort possible
+   without returning dangling reference captures. It still instantiates only
+   one cohort: export sources/tick/retire to the host, build all three cohorts,
+   route L issuance by retained selected-channel receipt and compose shared
+   handoff/guild invalidation before enabling three listeners in Main.
 3. Carry explicit authoritative channel identity through connection/handoff/
    world ownership. Share account/character storage; isolate presence, actors,
    monsters, encounters, proximity and local broadcasts. Audit per-listener
@@ -72,6 +81,12 @@ are not implemented or accepted yet.
    40DE80 maps return6 to415730(2,2,1), sending G02/reason2 and waiting03.
    This case does not set login mode1 as the separate return2 path does.
    UI+232DE4 creation/name remains open; do not name it a channel action.
+   Round489483BD0 now proves the WORD widget-handle write at483C10.483B40
+   accepts encoded message text through476570;483A80/483AB0 open encoded/direct
+   text with DWORD232F68=1.4820A0 uses that flag to make dismissal request world
+   exit. This is a shared message widget with exit-required mode, not evidence
+   of channel selection. Qualify469294/465DC5/46B5BD/501FA6 actual containing
+   functions and message inputs next; numeric19000 is not named a resource ID.
 5. After source closure, verify original UI selection for all three channels,
    all six directed cross-channel switches, same-channel action, invalid/full/
    unavailable targets, duplicate ownership attempts, disconnect/retry, save

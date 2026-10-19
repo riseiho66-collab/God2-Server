@@ -6555,9 +6555,11 @@
         "tests/test_taiwan_channel_servers.cpp",
         "src/net/SessionManager.h",
         "src/net/SessionManager.cpp",
-        "src/core/Application.cpp"
+        "src/core/Application.cpp",
+        "src/core/ApplicationGameFrame.h",
+        "tests/test_application_game_frame.cpp"
       ],
-      "document": "docs/research/tw-three-channel-disconnect-drain-20261019.md",
+      "document": "docs/research/tw-three-channel-application-frame-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6572,13 +6574,15 @@
         "channel_binding": "Private actual-listener endpoint/world descriptor, weak affine ownership, per-Session this/full64-ID/local-endpoint constructor correlation; GAME pre/post checks on selection/readiness/records/lifecycle and exact handoff native destination constrain bound Sessions; no public rebind, authentication/issuer authority unchanged",
         "retirement": "Descriptor retirement precedes posted socket stop, including infrastructure abort. Exact GAME cleanup/abandon/application disconnect are independently attempted before exact accepted Session removal; accept/retry cancellation and final GAME marker qualify copied listener stop observations. Callback failure is terminal complete but unsuccessful; infrastructure abort never counts as completion. Sources/worlds/repositories still outlive full NET/GAME drain; no save, client ACK or object destruction is certified.",
         "host_drain": "Actual existing Application joins account/G observations before releasing only the network pool work guard, retains natural NET/GAME join, surfaces callback failure after drain. Three-listener owner returns all three actual observations.10ms polling is CUSTOM host service cadence, never native timeout or timeout-to-success.",
-        "native_exit_followup": "Qualified GUI-26/state2 reaches46597E cleanup thenreturn6;40DE80 invokes415730(2,2,1), G02 reason2 and wait03, without setting login mode1 as return2 does. Widget identity/opening remains unknown; this is not named channel-switch authority."
+        "native_exit_followup": "UI+232DE4 is a WORD shared message-widget handle written483C10;483B40 accepts encoded character data through476570,483A80/483AB0 set232F68=1 for exit-required dismissal mode. Qualified4820A0 gates GUI-26 on that mode. No channel selector/fixed title or resource-ID meaning for19000 is established.",
+        "gameplay_frame": "Actual Application single mounted mutable cohort now lives in one GAME-owned standard C++20 suspended frame. Stable coroutine lambda and shared DB/account-hashing host outlive the frame. One pure Hold retains reference-captured locals; one existing GAME loop drains after actual NET join publication/main GAME-work release before tail resume/owner destruction. No copied dangling builder closures or per-channel nested loops.",
+        "frame_safety": "Private move-only handle; GAME-only access/destruction, one Hold, stored startup/tail exceptions, active-resume latch through local destruction, no done query on an executing coroutine; clear owner handle before destroy to refuse reentrant held-abort cleanup. Exceptional host abort remains separate and unproved; frame supplies no saves/native switch authority."
       },
-      "native_gap": "Application selection of the three-listener owner and three independent complete gameplay Contexts, actual three client slots, shared L-issued lineage/capacity, Web target selection, durable save/logout/scene release/target admission and current-client acceptance remain open. UI+232DE4 writer/name is the next bounded native trace.",
+      "native_gap": "Actual source/tick/retire exports and process listener/signal orchestration still need separation from one mounted cohort, then three fresh native Owners/complete gameplay Contexts, actual three client slots/configured endpoints/Main, shared L lineage/retained selected-list routing and guild audience invalidation, selected Web G destination, durable save/logout/target admission and current-client acceptance. Next native trace: qualify469294/465DC5/46B5BD/501FA6 containing functions and input messages.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_DISCONNECT_OBSERVATION_SOURCE_CASES_NOT_BUILT_OR_RUN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_MOUNTED_GAMEPLAY_FRAME_AND_FUTURE_LIFETIME_CASES_NOT_BUILT_OR_RUN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

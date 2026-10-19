@@ -5,6 +5,7 @@
 #include "db/GuildSuccessionSqliteMigrationsDraft.h"
 #include "db/GuildOfficerSqliteMigrations.h"
 #include "core/Application.h"
+#include "core/ApplicationGameFrame.h"
 #include "core/SharedWorldHostPlan.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
@@ -145,6 +146,7 @@
 #include <exception>
 #include <array>
 #include <optional>
+#include <atomic>
 namespace god2 {
 // CUSTOM-0129/0149: only this original one-shot publisher may mint zero coverage.
 // No public header factory or unrelated Written response can mint this token.
@@ -895,6 +897,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
     auto initialized=ready.get_future();
     network.start(config.worker_threads);
     std::exception_ptr failure;
+    std::atomic<bool> network_joined{false}; // Published only after the host's actual NET join.
     std::thread game_thread([&] {
         bool announced=false;
         try {
@@ -972,6 +975,14 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             const GuildRelations53FlagsDraft flags53{config.owned_guild_membership_enabled,config.owned_guild_announcements_enabled,config.owned_guild_officers_enabled,config.owned_guild_succession_enabled,config.owned_guild_relations53_enabled};
             const auto migrations=configured_guild_relations53(config.database,flags53);
             SqliteDatabase database(config.database,migrations,config.taiwan_skill_profile);database.initialize();database.migrate();
+            // One process host for storage and account hashing. Each gameplay
+            // cohort below owns its mutable Lua/services/maps independently.
+            RecoveredAccountLogin recovered_accounts(database.accounts(),config.local_account_registration);
+            asio::thread_pool authentication_workers(4); // Joins before destroying its account owner.
+            // The coroutine lambda itself stays alive on this GAME stack until
+            // its frame has finished/destroyed; never return reference-captured
+            // handlers from a temporary builder. This is the actual Main path.
+            auto channel_gameplay=[&]() -> ApplicationGameFrame {
             // CUSTOM-0150 actual GAME owner, after Database and before every
             // Context supplier. No policy load occurs without explicit selection.
             const auto ordinary_policy_reloads=world_plan?
@@ -1190,8 +1201,6 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 spdlog::get("world")->info("World initialized with mock map 1");
             }
             OpcodeDispatcher dispatcher; register_handlers(dispatcher);
-            asio::thread_pool authentication_workers(4);
-            RecoveredAccountLogin recovered_accounts(database.accounts(),config.local_account_registration);
             Session::RecoveredLoginHandler recovered_login;
             if(config.recovered_account_auth) recovered_login=[&](const RecoveredC2S0002::Parsed& request) {
                 return recovered_accounts.authenticate(request);
@@ -9985,10 +9994,20 @@ if(guild_officer_runtime && player_guild(session) &&
             spdlog::info("{} listening on {}:{} [protocol={}; mock_login={}]",config.name,config.host,server.port(),
                 config.protocol_mode==ProtocolMode::Fixture?"PLACEHOLDER":config.protocol_mode==ProtocolMode::God2LegacyCharacterListCandidate?"GOD2_LEGACY_CHARACTER_LIST_CANDIDATE_UNVERIFIED":config.protocol_mode==ProtocolMode::God2PostServerSelect?"GOD2_POST_SERVER_SELECT_LAB":config.protocol_mode==ProtocolMode::God2ServerList?"GOD2_SERVER_LIST_LAB":config.protocol_mode==ProtocolMode::God2LoginTerminal?"GOD2_LOGIN_TERMINAL_LAB":config.protocol_mode==ProtocolMode::God2C2S0002?"GOD2_C2S0002_LAB":config.protocol_mode==ProtocolMode::God2PostSeed?"GOD2_POST_SEED_LAB":"GOD2_RECOVERED_SEED_ONLY",config.mock_login);
             ready.set_value(); announced=true;
-            game.run();
+            // Keep every reference-captured gameplay local in this owned frame
+            // while the process host runs and drains the actual event loops.
+            co_await ApplicationGameFrame::Hold{};
             lua.call_event("server_stop");
             if(disconnect_cleanup_failed)
                 throw std::runtime_error("Session disconnect callbacks failed during drain");
+            co_return;
+            };
+            auto channel_runtime=channel_gameplay();
+            channel_runtime.require_held(); // Rethrows startup errors before running GAME.
+            game.run(); // One host loop; no nested event pumping per channel.
+            if(!network_joined.load(std::memory_order_acquire))
+                throw std::runtime_error("GAME loop ended before the host joined NET");
+            channel_runtime.finish_after_drain();
         } catch(...) {
             failure=std::current_exception();
             if(!announced) ready.set_exception(failure);
@@ -9999,6 +10018,7 @@ if(guild_officer_runtime && player_guild(session) &&
         network.stop(); network.join(); game_work.reset(); game_thread.join(); throw;
     }
     network.join();
+    network_joined.store(true,std::memory_order_release);
     game_work.reset();
     game_thread.join();
     if(failure) std::rethrow_exception(failure);

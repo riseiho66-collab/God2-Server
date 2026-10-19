@@ -1,0 +1,100 @@
+{
+  "round": 489,
+  "previous_goal_turn": "progress",
+  "previous_commit": "a7a0771bb0d27a61c90e9338ea40edafa685f1a0",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_OWNER_REQUIRED_THREE_CHANNELS_WITH_ACTUAL_GAMEPLAY_COHORT_OWNERSHIP",
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-application-round489/native-switch/widget-identity-findings-v1.json",
+    "receipt_sha256": "6422dc5d9f33b43fc2e615163538cbfd72e275fde7a6d2c05b8f8c4bb4c57499",
+    "members_verified": 23,
+    "original_sections_and_mappings_verified": true,
+    "all_targets_closed": true,
+    "evidence_id": "ev_8580d8e8d7d94e2e98283803dd00492022c7adaa7bbf0462789c83170fa90604",
+    "remaining_unknowns": [
+      "Actual callsite inputs and conditions causing483A80/483AB0 to open exit-required messages. Next bounded native seam: qualify containing roots for469294->483A80,465DC5/46B5BD/501FA6->483AB0; then recover exact input text/schema and caller state.",
+      "Numeric creation argument19000 and geometry/style data structures58F0E8/58F108 have not been given stronger semantic labels.",
+      "Raw original callers481D5B/481F45 to483BD0 and4833B3 to483B00 still need containing-procedure qualification.",
+      "Indirect side effects of4954C0 and generic GUI/render helper descendants were not traced; no global absence-of-network claim is made."
+    ]
+  },
+  "source_comparison": {
+    "parent_commit": "a7a0771bb0d27a61c90e9338ea40edafa685f1a0",
+    "retained_bytes": 836714,
+    "retained_sha256": "0f8f845735d85b0b8639d1740ca2bb0d9255517c68971b8c23b852fd31546851",
+    "only_moved_declarations": [
+      "authentication_workers",
+      "recovered_accounts"
+    ],
+    "body_byte_identical_after_exact_removal": true,
+    "single_game_event_loop": true,
+    "single_owned_hold": true,
+    "not_compilation_or_runtime_verification": true
+  },
+  "source_integration": [
+    "Actual Main/Application owns one suspended complete gameplay cohort with retained lexical callbacks",
+    "DB/account hashing lifetime moved to host; login facade variables remain per cohort",
+    "Existing single GAME loop and actual NET-join publication qualify normal tail resume",
+    "Active-resume/moved-from/thread/reentry/abort-destructor guards and registered future source tests"
+  ],
+  "open": [
+    "Export actual source/tick/retirement from current one frame and lift process listeners/signals",
+    "Build three independent complete native gameplay cohorts and native Owners",
+    "Actual three client slots/configuration/Main and one shared retained L-issued lineage/selected list routing",
+    "Shared guild mutation audience invalidation and selected Web G destination",
+    "Durable save/logout/target admission, six switches and current-client own-server acceptance",
+    "Native message-input callsite qualification; full-server routes/formulas/storage/gameplay closure"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/ApplicationGameFrame.h",
+      "sha256": "80ebbec20e96b822f34d9815a7d60f8784c50ad6bef2008226aab060be562720"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "627442112911b056a2cda1d96ba42e00b6532022226f3bec3ff5954d1228a0b6"
+    },
+    {
+      "path": "tests/test_application_game_frame.cpp",
+      "sha256": "5598f36deef741a127e1369e1393041d45140d712172d331456a79972830d02f"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "72d00097cf13ddd9a65bef96936a63055bca39e012f685b2c5cd3a9ea280e816"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "a46fbb78ea7d70a2f38ef2d3999b632f86a9ca48c1d5f5fa9790be2296946c43"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "17c859dfda9f2be816ea8f694d669ed60590caf6c3b88b118dd87458155211d2"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "809a6f03c0eca8936258acc476fa80b69158df947f297151275de1b8609e8b3c"
+    },
+    {
+      "path": "docs/research/tw-three-channel-application-frame-20261019.md",
+      "sha256": "5c3adb7c9cf250e3cd826a2ca517d38a036e79557b93ef0cbf19777cf6080bad"
+    }
+  ]
+}
