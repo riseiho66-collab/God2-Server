@@ -1,0 +1,85 @@
+{
+  "schema": "tw-deferred-selection-order/1",
+  "round": 479,
+  "baseline_commit": "68a19c360170cf15be748aea89c975189bd74c12",
+  "phase": "PHASE1_SOURCE_STATIC_ONLY",
+  "source_review_only": true,
+  "scope": "Taiwan-only C67 causal reply order",
+  "causal_output": "Created -> Deferred -> FinalReserved -> Bound; whole original callback Written remains required",
+  "changes": [
+    "defer later tagged side reply only behind an earlier exact final-reserved source",
+    "materialize at exact indexed raw prefix fence before response validation and movement finish",
+    "validate whole original raw fragments before narrowing private tag ranges",
+    "preserve ordinary side pushes and original send-call actor/self-view invalidation",
+    "stable equal-fence insertions, checked complete frame boundaries, byte/count bounds",
+    "rebase original movement offsets without splitting whole registered batches",
+    "preserve normal response component checks; reject incompatible immutable whole-response receipt",
+    "reject exception on actual callback-output capture before transport acceptance"
+  ],
+  "files": [
+    {
+      "path": "src/net/Session.cpp",
+      "bytes": 541399,
+      "sha256": "f82e9fa173b007fa625d0c4a8f3f14911752de88e4033374fbce79a596f8073e"
+    },
+    {
+      "path": "tests/test_session_state.cpp",
+      "bytes": 118020,
+      "sha256": "e5094f9036c02b49571e21acc12bb8d03d7697d0b28d695656a915dab5f2ccaa"
+    }
+  ],
+  "identities": [
+    {
+      "path": "C:/Users/risei/Desktop/God2/God2/God2.exe",
+      "bytes": 3237888,
+      "sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48"
+    },
+    {
+      "path": "C:/Users/risei/Desktop/God2/God2/Data2/Fight/Spg/cbspec2.bin",
+      "bytes": 112660,
+      "sha256": "3adcda70a477086da50411fe5d023eec33f915efafd17ec478d55542cae42ea7"
+    },
+    {
+      "path": "C:/Users/risei/Desktop/God2/God2-Server/src/protocol/ShunyingSanshazhanReply.h",
+      "bytes": 3718,
+      "sha256": "71ec820adbbe48e6461ca1de4f0689cecd5a99842e03fb02098fc179be737c8e"
+    },
+    {
+      "path": "C:/Users/risei/Desktop/God2/God2-Server/src/protocol/ThousandBullsReply.h",
+      "bytes": 3570,
+      "sha256": "5f0a9d91835b9d56940b41914f233c92256e17f4fa9c08b1c2cbae051fe3c8cd"
+    }
+  ],
+  "installed_skill_rows": 453,
+  "native_analysis_executions_this_round": 0,
+  "regression_sources": {
+    "file": "tests/test_session_state.cpp",
+    "executed": false,
+    "cases": [
+      "two distinct selected keys with original S1B receipt",
+      "three private occurrences at equal fence",
+      "deferred middle and final-buffered last",
+      "interior-frame fence fails",
+      "changed original source fragment fails"
+    ]
+  },
+  "verification": {
+    "build": false,
+    "tests": false,
+    "game_runtime": false,
+    "native_execution": false,
+    "game_sql": false,
+    "migration": false,
+    "activation": false,
+    "deployment": false
+  },
+  "new_complete_gameplay": 0,
+  "full_game_denominator": null,
+  "full_game_percent": null,
+  "remaining": [
+    "full Application wrapper-graph compilation and black-box coverage in later verification phase",
+    "movement and immutable exact whole-response overlap requires concentrated integration validation",
+    "not a general input-record-order scheduler for unrelated ordinary side pushes",
+    "legacy complete restoration/learning continuation, 2A/Entered/Main, D8/6B/C28 and native formulas remain open"
+  ]
+}

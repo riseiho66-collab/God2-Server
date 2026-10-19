@@ -377,7 +377,7 @@ struct Session::WorldCallbackOutput::Data {
     void complete() noexcept;
 };
 struct Session::WorldCallbackSelectionEmission::Data {
-    enum class Phase {Created,FinalReserved,Bound};
+    enum class Phase {Created,Deferred,FinalReserved,Bound};
     const std::weak_ptr<WorldCallbackOutput::Data> cohort;
     const std::size_t input_ordinal,minimum_component;
     const std::vector<std::uint8_t> wire,logical;
@@ -851,6 +851,9 @@ struct Session::Impl {
         std::size_t base=0;
         std::uint64_t next_nonce=0,nonce=0;
         std::vector<std::shared_ptr<const WorldCallbackOutput::Data::ReplyFragment>> fragments;
+        struct Deferred {WorldCallbackSelectionEmission emission;std::size_t offset;};
+        std::vector<Deferred> deferred;
+        std::size_t deferred_bytes=0;
         explicit CallbackReplyWindow(std::weak_ptr<Session> owner):session(std::move(owner)){}
     };
     std::shared_ptr<CallbackReplyWindow> callback_reply_window; // Actual callback GAME only.
@@ -887,6 +890,142 @@ struct Session::Impl {
         tag->location={component->receipt->ordinal,0,0,tag->logical.size()};
         tag->phase.store(WorldCallbackSelectionEmission::Data::Phase::Bound);
     }
+
+    // A later tagged guild prefix must not overtake an earlier selection that
+    // an outer appender already reserved in its final reply. Keep its original
+    // occurrence at the exact raw-prefix fence; ordinary pushes stay unchanged.
+    bool defer_selection_reply(const WorldCallbackSelectionEmission& emission,
+            std::span<const std::uint8_t> logical) {
+        const auto window=reply_window();const auto tag=emission.data_;
+        const auto capture=callback_output_capture;const auto data=capture?capture->receipt:nullptr;
+        if(!data || tag->cohort.lock()!=data ||
+           tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::Created ||
+           logical.size()!=tag->logical.size() ||
+           !std::equal(logical.begin(),logical.end(),tag->logical.begin()))
+            throw std::logic_error("Deferred selection is not its exact original source");
+        bool preceding=false;std::size_t preceding_end=0;
+        for(const auto& fragment:window->fragments)for(const auto& range:fragment->ranges) {
+            const auto previous=range.emission.data_;
+            if(previous->input_ordinal<tag->input_ordinal &&
+               previous->phase.load()==WorldCallbackSelectionEmission::Data::Phase::FinalReserved) {
+                if(fragment->base>max_buffer || range.offset>max_buffer-fragment->base ||
+                   previous->wire.size()>max_buffer-fragment->base-range.offset)
+                    throw std::logic_error("Buffered selection bounds overflow");
+                preceding=true;preceding_end=std::max(preceding_end,fragment->base+range.offset+previous->wire.size());
+            }
+        }
+        if(!preceding)return false; // No earlier final-buffered selection to overtake.
+        if(window->base<preceding_end || window->base>max_buffer ||
+           window->deferred.size()>=8192 || tag->wire.size()>max_buffer-window->deferred_bytes ||
+           (!window->deferred.empty() && (window->base<window->deferred.back().offset ||
+             emission.selection_ordinal()<=window->deferred.back().emission.selection_ordinal())))
+            throw std::logic_error("Deferred selection fence is not a bounded ordered prefix");
+        window->deferred.push_back({emission,window->base});
+        auto created=WorldCallbackSelectionEmission::Data::Phase::Created;
+        if(!tag->phase.compare_exchange_strong(created,WorldCallbackSelectionEmission::Data::Phase::Deferred))
+            throw std::logic_error("Selection already handed to another output");
+        window->deferred_bytes+=tag->wire.size();return true;
+    }
+
+    void materialize_deferred_selections(std::vector<std::uint8_t>& raw) {
+        const auto window=callback_reply_window;if(!window || window->deferred.empty())return;
+        const auto reject=[] {throw std::logic_error("Deferred selection source/fence changed");};
+        const auto capture=callback_output_capture;const auto data=capture?capture->receipt:nullptr;
+        if(!data || !window->active.load() || window->poisoned.load() ||
+           window->thread!=std::this_thread::get_id() || window->nonce || window->base ||
+           raw.size()>max_buffer || window->deferred_bytes>max_buffer-raw.size() ||
+           !valid_world_response(raw))reject();
+        const auto boundary=[&](std::size_t at) {
+            return at==raw.size() || reply_frame_boundary(raw,at);
+        };
+        const auto translated=[&](std::size_t at) {
+            std::size_t result=at;
+            for(const auto& added:window->deferred)
+                if(added.offset<=at)result+=added.emission.expected_wire().size();
+            return result;
+        };
+        const auto intact=[&](std::size_t at,std::size_t size) {
+            if(at>raw.size() || size>raw.size()-at)return false;
+            for(const auto& added:window->deferred)
+                if(at<added.offset && added.offset<at+size)return false;
+            return true;
+        };
+        auto originals=window->fragments;
+        std::sort(originals.begin(),originals.end(),[](const auto& a,const auto& b){return a->base<b->base;});
+        std::size_t previous_end=0;bool first=true;
+        using Fragment=WorldCallbackOutput::Data::ReplyFragment;
+        using Range=WorldCallbackOutput::Data::ReplyRange;
+        std::vector<std::shared_ptr<const Fragment>> next;
+        for(const auto& fragment:originals) {
+            const auto at=fragment->base;
+            if(at>raw.size() || fragment->wire.size()>raw.size()-at ||
+               (!first && at<previous_end) || !boundary(at) ||
+               !std::equal(fragment->wire.begin(),fragment->wire.end(),raw.begin()+at))reject();
+            first=false;previous_end=at+fragment->wire.size();
+            std::size_t range_end=0;
+            for(const auto& range:fragment->ranges) {
+                const auto tag=range.emission.data_;
+                if(tag->cohort.lock()!=data ||
+                   tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::FinalReserved ||
+                   range.offset<range_end || range.offset>fragment->wire.size() ||
+                   tag->wire.size()>fragment->wire.size()-range.offset ||
+                   !reply_frame_boundary(fragment->wire,range.offset) ||
+                   !std::equal(tag->wire.begin(),tag->wire.end(),fragment->wire.begin()+range.offset) ||
+                   !intact(at+range.offset,tag->wire.size()))reject();
+                range_end=range.offset+tag->wire.size();
+                // The whole original fragment was verified before narrowing to
+                // exact source frames. Never discover provenance by byte search.
+                next.push_back(std::make_shared<const Fragment>(translated(at+range.offset),
+                    tag->wire,std::vector<Range>{{range.emission,0}}));
+            }
+        }
+        std::vector<std::uint8_t> merged;merged.reserve(raw.size()+window->deferred_bytes);
+        std::size_t cursor=0;
+        for(const auto& added:window->deferred) {
+            const auto tag=added.emission.data_;
+            if(tag->cohort.lock()!=data ||
+               tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::Deferred ||
+               added.offset<cursor || !boundary(added.offset))reject();
+            merged.insert(merged.end(),raw.begin()+cursor,raw.begin()+added.offset);
+            next.push_back(std::make_shared<const Fragment>(merged.size(),tag->wire,
+                std::vector<Range>{{added.emission,0}}));
+            merged.insert(merged.end(),tag->wire.begin(),tag->wire.end());cursor=added.offset;
+        }
+        merged.insert(merged.end(),raw.begin()+cursor,raw.end());
+        std::sort(next.begin(),next.end(),[](const auto& a,const auto& b){return a->base<b->base;});
+        // Check physical order, including already posted tagged side outputs.
+        std::optional<std::size_t> last;
+        for(const auto& component:data->components)for(const auto& emission:component.data_->emissions) {
+            if(last && emission.selection_ordinal()<=*last)reject();last=emission.selection_ordinal();
+        }
+        previous_end=0;first=true;
+        for(const auto& fragment:next) {
+            const auto ordinal=fragment->ranges.front().emission.selection_ordinal();
+            if((!first && fragment->base<previous_end) || (last && ordinal<=*last))reject();
+            first=false;previous_end=fragment->base+fragment->wire.size();last=ordinal;
+        }
+        if(movement_collector) {
+            for(const auto& step:movement_collector->steps)
+                if(!step->offset || !intact(*step->offset,step->frame.size()))reject();
+            for(const auto& batch:movement_collector->normal_batches)
+                if(!batch->offset || !intact(*batch->offset,batch->wire.size()))reject();
+        }
+        // Whole-response custody is immutable. Never rewrite a preexisting
+        // exact receipt to bless different bytes. Current conflicting paths
+        // must reject rather than borrow it; normal component checks run later.
+        if(world_response_callback_capture && world_response_callback_capture->receipt->wire!=merged)reject();
+        for(const auto& added:window->deferred) {
+            auto deferred=WorldCallbackSelectionEmission::Data::Phase::Deferred;
+            if(!added.emission.data_->phase.compare_exchange_strong(deferred,
+                    WorldCallbackSelectionEmission::Data::Phase::FinalReserved))reject();
+        }
+        if(movement_collector) {
+            for(const auto& step:movement_collector->steps)step->offset=translated(*step->offset);
+            for(const auto& batch:movement_collector->normal_batches)batch->offset=translated(*batch->offset);
+        }
+        window->fragments.swap(next);window->deferred.clear();window->deferred_bytes=0;raw.swap(merged);
+    }
+
     void bind_final_emissions(const std::shared_ptr<WorldCallbackOutput::Data>& data,
             const std::shared_ptr<CallbackComponentAttempt>& component,std::span<const std::uint8_t> actual){
         const auto window=callback_reply_window;
@@ -4096,7 +4235,10 @@ struct Session::Impl {
                         Impl::SelectionScope input_scope(s,records);
                         auto result=s.character_handlers.world_records(*self,records);
                         accepted=result.has_value() && (!s.normal_callback_admission_capture || !observation_scope.response_poisoned);
-                        if(result) response=std::move(*result);
+                        if(result) {
+                            response=std::move(*result);
+                            s.materialize_deferred_selections(response);
+                        }
                     } else {
                         const auto movement_run=self->movement_response_input_run(records);
                         response=s.character_handlers.movement(*self,requests);
@@ -4124,13 +4266,13 @@ struct Session::Impl {
                 }
             } catch(const std::exception& error) {
                 if(s.callback_output_capture)s.callback_output_capture->receipt->fail();
-                if(s.character_handlers.native_movement_response_custody || s.character_handlers.owned_normal_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
+                if(s.callback_output_capture || s.character_handlers.native_movement_response_custody || s.character_handlers.owned_normal_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
                    s.normal_callback_admission_capture ||
                    (s.normal_response_callback_capture && s.normal_response_callback_capture->receipt->armed.load()))accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason={}",s.id,error.what());
             } catch(...) {
                 if(s.callback_output_capture)s.callback_output_capture->receipt->fail();
-                if(s.character_handlers.native_movement_response_custody || s.character_handlers.owned_normal_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
+                if(s.callback_output_capture || s.character_handlers.native_movement_response_custody || s.character_handlers.owned_normal_movement_response_custody || s.native_pk_terminal_callback_capture || s.world_response_callback_capture ||
                    s.normal_callback_admission_capture ||
                    (s.normal_response_callback_capture && s.normal_response_callback_capture->receipt->armed.load()))accepted=false;
                 logger("session")->warn("Recovered world callback exception session_id={} reason=unknown",s.id);
@@ -4985,6 +5127,15 @@ void Session::send_world_callback_reply_frame(LegacyWorldReplyFrame frame){
             impl_->poison_callback_reply();close();throw std::logic_error("Tagged reply frame outside actual source callback");
         }
     }
+    if(frame.emission_)try {
+        if(impl_->defer_selection_reply(*frame.emission_,frame.logical_)) {
+            // Preserve the original send call's GAME-side invalidation even
+            // though this occurrence joins the later actual final Write.
+            (void)retire_battle_self_view_logical_output(frame.logical_);
+            [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
+            invalidate_actor_status_writes();return;
+        }
+    }catch(...) {impl_->poison_callback_reply();throw;}
     send_world_records_impl(std::move(frame.logical_),{},std::move(frame.emission_));
 }
 std::vector<std::uint8_t> Session::take_world_callback_reply(LegacyWorldReply reply){

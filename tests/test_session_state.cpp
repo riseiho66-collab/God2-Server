@@ -525,6 +525,106 @@ void recovered_causal_deity_reply_transport() {
                 "Released private selection source revived from equal bytes");
         }
     }
+
+    // Real Session + private Registry/SQL producer, simulating the exact
+    // Application appender boundary. These regression sources are not run in
+    // PHASE1 and do not claim to execute the full Application wrapper graph.
+    {
+        for(const std::uint8_t key:{std::uint8_t{102},std::uint8_t{103}}) {
+            auto next_declaration=declaration;next_declaration[1]=key;
+            auto next_status=status;next_status[1]=key;
+            auto next_skill=skill;next_skill[1]=key;
+            companions.store_deity(RecoveredSessionPeer::account,character,
+                {*RecoveredDeityState::Declaration::parse(next_declaration),
+                 *RecoveredDeityState::Status::parse(next_status),
+                 {*RecoveredDeityState::Skill::parse(next_skill)}},{},
+                {SqliteCompanionRepository::source_sha256,"CUSTOM_TEST_NOT_NATIVE","causal-buffer-order-fixture"});
+        }
+        for(unsigned mode=0;mode<5;++mode) {
+            const unsigned count=mode==1 || mode==2?3:2;
+            const bool bad_fence=mode==3,changed_fragment=mode==4;
+            LegacyTaiwanOwnedDeitySelectionRegistry registry(1,helper);
+            std::optional<Session::WorldCallbackOutput> output;
+            std::optional<Session::NormalWorldResponseAttempt> options_receipt;
+            std::vector<std::vector<std::uint8_t>> produced;
+            const auto option=RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{0x1b,0x34,0x12});
+            std::vector<std::uint8_t> expected;bool pending=false;
+            RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
+                require(records.size()==count,"Buffered causal original input count changed");
+                const auto init=*session.normal_world_initialization();
+                output=session.capture_world_callback_output(init);require(output.has_value(),"Buffered capture absent");
+                session.hold_world_input_until_callback_output_written(*output);
+                auto callback=registry.begin(session,init,*output);
+                struct End {
+                    LegacyTaiwanOwnedDeitySelectionRegistry& registry;
+                    LegacyTaiwanOwnedDeitySelectionRegistry::Callback callback;
+                    ~End(){registry.abandon(callback);}
+                } end{registry,callback};
+                auto first=registry.select(session,{101});
+                require(first&&first->has_emissions(),"Buffered first private producer missing");
+                produced.push_back(first->wire());
+                auto raw=session.take_world_callback_reply(std::move(*first));
+                options_receipt=session.capture_normal_world_response(init);
+                require(options_receipt.has_value(),"Buffered normal S1B receipt missing");
+                session.expect_normal_world_response(*options_receipt,option);
+                raw.insert(raw.end(),option.begin(),option.end());
+                for(unsigned i=1;i<count;++i) {
+                    const auto offset=session.callback_reply_output_offset(raw.size()-(bad_fence?1:0));
+                    auto next=registry.select(session,{static_cast<std::uint8_t>(101+i)});
+                    require(next&&next->has_emissions(),"Buffered subsequent private producer missing");
+                    produced.push_back(next->wire());
+                    if(mode==2 && i==2) {
+                        auto last=session.take_world_callback_reply(std::move(*next));
+                        raw.insert(raw.end(),last.begin(),last.end());
+                    }else {
+                        auto frames=std::move(*next).split_frames();
+                        require(frames&&frames->size()==1,"Buffered private frame split failed");
+                        session.send_world_callback_reply_frame(std::move(frames->front()));
+                    }
+                }
+                pending=output->status()==Status::Pending && !output->sealed() &&
+                    output->components().empty() && !registry.observe(session);
+                expected=produced[0];expected.insert(expected.end(),option.begin(),option.end());
+                for(unsigned i=1;i<count;++i)expected.insert(expected.end(),produced[i].begin(),produced[i].end());
+                if(changed_fragment)raw.front()^=1;
+                registry.finish(session,callback,true);return raw;
+            },character,47900+mode);
+            peer.select(false);peer.send(RecoveredSessionPeer::tail(static_cast<std::uint16_t>(character)));peer.silent();
+            std::vector<std::uint8_t> input;
+            for(unsigned i=0;i<count;++i){input.push_back(0x67);input.push_back(static_cast<std::uint8_t>(101+i));}
+            peer.send(RecoveredWorldFrame::encode(input));
+            if(bad_fence || changed_fragment) {
+                for(unsigned i=0;i<12;++i)peer.pump();
+                require(output&&output->status()==Status::Failed&&peer.session->closing()&&!registry.observe(*peer.session),
+                    "Invalid deferred fence/fragment created usable selection custody");
+                continue;
+            }
+            // expected is populated by the actual callback during IO pumping.
+            for(unsigned i=0;i<20 && produced.size()!=count;++i)peer.pump();
+            require(produced.size()==count&&!expected.empty(),"Buffered callback did not produce expected source frames");
+            peer.expect(expected);peer.silent();
+            require(pending&&produced.size()==count&&output&&output->status()==Status::Written&&
+                output->callback_accepted()&&!peer.session->closing()&&options_receipt&&
+                options_receipt->status()==Session::NormalWorldResponseStatus::Queued,
+                "Buffered selections or original normal option receipt failed real transport");
+            const auto parts=output->components();
+            require(parts.size()==1&&parts.front().kind()==Session::WorldCallbackOutput::Kind::FinalResponse&&
+                parts.front().emissions().size()==count,"Deferred selection leaked an early side Write");
+            const auto written=registry.observe(*peer.session);
+            require(written&&written->publications().size()==count&&
+                written->publications().back().committed().after().key==100+count,
+                "Correct final selected deity did not survive canonical physical output");
+            const auto emissions=parts.front().emissions();
+            for(unsigned i=0;i<count;++i) {
+                const auto location=peer.session->callback_output_emission_location(*output,emissions[i]);
+                const auto wanted=i?produced[0].size()+option.size()+(i-1)*frame.size():0;
+                require(emissions[i].selection_ordinal()==i&&emissions[i].expected_wire()==produced[i]&&location&&
+                    location->component_ordinal==0&&location->frame_wire_offset==wanted,
+                    "Deferred occurrence was guessed, duplicated or bound at the wrong actual frame");
+            }
+        }
+    }
+
     // A committed tag cannot be recovered from equal plain bytes, an incorrect
     // trusted append offset, or a changed registered fragment. No SQL replay.
     for(unsigned failure=0;failure<3;++failure) {
