@@ -200,3 +200,13 @@ scene cleanup failures remain sticky after slots/pending erase. This is source
 only, not durable recovery/save/target admission or completed switching. Missing
 terminal installation conservatively retains custody. See
 research/tw-three-channel-quarantine-20261019.md. No build/tests/activation.
+
+Round500 traces current-client seed installation/flags/derived16 reply through
+four closed REA batches (18 functions). Actual qualified async Session output
+now requires existing zero-profile checksum and exact original logical content,
+with full GAME fences before provider and NET handoff; wrong same-length/cipher
+bytes cannot receive the original metadata. Inline original-run capture stays
+unchanged. Arbitrary negotiated profiles/exporter remain OPEN. Native07/2A
+producer inputs and current/149c lineage are still missing; reuse current485/480
+receiver evidence and continue Main rawlist/token/route consumers, not another
+unused wrapper. See research/tw-native-seed-profile-20261019.md. No execution.

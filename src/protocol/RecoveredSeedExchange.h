@@ -5,7 +5,10 @@
 #include <span>
 
 namespace god2 {
-// Lab-only zero-seed exchange verified with the original client. No login codec.
+// Existing fixed-zero-seed connection profile; not general peer-key negotiation.
+// Current Taiwan trace:411d30 ->410e20 installs the received16, then410ed0
+// frames derived16 at this+2520. This array remains the existing exact proof.
+// See docs/research/tw-native-seed-profile-20261019.md; wire bytes unchanged.
 struct RecoveredSeedExchange {
     static constexpr std::array<std::uint8_t,19> hello() {
         std::array<std::uint8_t,19> frame{};

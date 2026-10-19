@@ -8296,6 +8296,13 @@ void Session::send_qualified_world_records_with_acceptance(const NormalWorldInit
         {std::lock_guard lock(budget->mutex);if(charge<=max_buffer-budget->bytes&&budget->count<max_writes){budget->bytes+=charge;++budget->count;reservation->charged=true;reserved=true;}}
         if(!reserved){pending->settle(false);return;}
         if(source_live&&!source_live->load()){pending->settle(false);return;}
+        // The explicit provider receives a view of mutable owned input. Keep
+        // its original value private so a provider cannot relabel its output
+        // by modifying that input before the current-profile validation.
+        const auto original_logical=logical;
+        if(pending->invalid.load()||pending->settled.load()||(source_live&&!source_live->load())||
+           !normal_world_initialization_current_on_game(init)||!normal_world_output_current_on_game(*recipient)||
+           !native_channel_binding_current()||!tuple_current()){pending->settle(false);return;}
         std::optional<std::vector<std::uint8_t>> framed;
         {
             struct ProfileScope {Session* previous;explicit ProfileScope(Session& owner):previous(qualified_world_push_profile){qualified_world_push_profile=&owner;}~ProfileScope(){qualified_world_push_profile=previous;}} scope(*this);
@@ -8306,7 +8313,17 @@ void Session::send_qualified_world_records_with_acceptance(const NormalWorldInit
            !normal_world_output_current_on_game(*recipient)||!native_channel_binding_current()||!tuple_current()){
             pending->settle(false);return;
         }
+        // Actual accepted connections currently use the fixed zero-seed
+        // handshake. Header/length alone does not qualify this peer's cipher
+        // or logical message. Keep the provider's original wire unchanged.
+        const auto decoded=RecoveredWorldFrame::decode(*framed);
+        if(!decoded||*decoded!=original_logical||logical!=original_logical){pending->settle(false);return;}
         const auto wire=std::make_shared<const std::vector<std::uint8_t>>(std::move(*framed));
+        // Snapshot/decode/immutable-wire allocations may invoke allocation
+        // failure handlers. Requalify the complete GAME source at handoff.
+        if(pending->invalid.load()||pending->settled.load()||(source_live&&!source_live->load())||
+           !normal_world_initialization_current_on_game(init)||!normal_world_output_current_on_game(*recipient)||
+           !native_channel_binding_current()||!tuple_current()){pending->settle(false);return;}
         const auto target=recipient->data_;
         // No profile, logical renderer or GAME-owned supplier crosses this
         // handoff. The private pending owner fails a dropped/unrun post once.

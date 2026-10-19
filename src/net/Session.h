@@ -859,8 +859,11 @@ public:
     struct WorldDeliveryIdentity {std::uint64_t account{},character{},world_generation{},battle_generation{};};
     // Actual same GAME owner + current private INIT; outside an original-run
     // capture this also requires the original entry Written transport witness.
-    // The side-effect-free profile runs only on GAME. Acceptance means FIFO insertion,
-    // never Written/client ACK. The optional pure flag only cancels transport;
+    // The side-effect-free profile runs only on GAME.
+    // Async output must decode under the current fixed zero-seed profile to
+    // the unchanged original logical bytes. Arbitrary negotiated profiles remain open.
+    // Acceptance means FIFO insertion, never Written/client ACK.
+    // The optional pure flag only cancels transport;
     // it grants no input/game authority. Ordinary sends keep their profile.
     void send_qualified_world_records_with_acceptance(const NormalWorldInitialization&,
         std::vector<std::uint8_t> logical,WorldReplyPushWire,WorldDeliveryIdentity expected,std::function<void(bool)> acceptance,

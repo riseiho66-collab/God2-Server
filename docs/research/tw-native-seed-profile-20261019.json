@@ -1,0 +1,263 @@
+{
+  "round": 500,
+  "previous_goal_turn": "progress",
+  "previous_commit": "f60bd1f399c3645fb44c75b92c934041c5b02bcb",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_ASYNC_ORIGINAL_MESSAGE_CUSTODY_AND_CURRENT_NATIVE_SEED_TRACE",
+  "source_integration": [
+    "Qualified standalone async profile exact original logical/checksum/current implemented codec before immutable original wire receipt",
+    "Full GAME source fences around provider and new allocations; once acceptance/producer RAII and active original-run branch preserved",
+    "Current Taiwan connect/read/install/flags/derived16 proof traced; no general key negotiation claimed"
+  ],
+  "source_review": {
+    "independent": true,
+    "eol": [
+      {
+        "path": "src/net/Session.h",
+        "baseline_cr": 105,
+        "current_cr": 105,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 5
+      },
+      {
+        "path": "src/net/Session.cpp",
+        "baseline_cr": 737,
+        "current_cr": 737,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 17
+      },
+      {
+        "path": "tests/test_world_reply_push_capture.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 61
+      },
+      {
+        "path": "src/protocol/RecoveredSeedExchange.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 4
+      },
+      {
+        "path": "src/protocol/RecoveredZeroSeedKey.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/protocol/RecoveredWorldFrame.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/game/TaiwanWorldIdentityWriteFence.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/game/TaiwanBattleSelfViewWriteFence.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/core/Application.cpp",
+        "baseline_cr": 8183,
+        "current_cr": 8183,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/core/TaiwanThreeChannelPlan.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+        "baseline_cr": 1106,
+        "current_cr": 1106,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/game/SharedTaiwanNativeCharacterOfferSource.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/game/SharedTaiwanNativeWorldEntryOfferSource.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "src/main.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 0
+      },
+      {
+        "path": "docs/custom-designs.json",
+        "baseline_cr": 6467,
+        "current_cr": 6467,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 5
+      },
+      {
+        "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 10
+      },
+      {
+        "path": "docs/research/tw-native-seed-profile-20261019.md",
+        "new_file": true
+      }
+    ],
+    "custom_registry_other_design_bytes_unchanged": true,
+    "registry_prefix_sha256": "5e4aafbd7b19ea39433d0b9e692f91796957a2b88165d86eadd290bf2b02e8a8",
+    "registry_suffix_sha256": "2812f892d65822f3bd1cd6a240c30d764a3ef9a1aa2740d234d984b4b0cca15c",
+    "tests_not_executed": true,
+    "negative_case_count": 5,
+    "includes_repeated_refusal_then_valid_recovery": true,
+    "arbitrary_negotiated_profile_connected": false,
+    "original_wire_transcoded": false,
+    "accepted_profile_exporter_added": false
+  },
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/native-seed-round500/findings-v1.json",
+    "sha256": "eaa527139581bb64ec967c44834c7940b0e2cf532c8b43ff240257fc62b640f4",
+    "opened_targets": 4,
+    "closed_targets": 4,
+    "selected_functions": 18,
+    "members_verified": 45,
+    "original_sections_verified": 13,
+    "whole_pe_headers_equal": false,
+    "synthetic_entries_not_original": true
+  },
+  "producer_audit": {
+    "scope": "src definitions/callers and complete native HostPlan assembly, readonly",
+    "native_offer_real_producer_found": false,
+    "additional_wrapper_would_close_gap": false,
+    "current_versus149c_lineage_proved": false,
+    "next_trace": [
+      "40B490 Main rawlist/L-G flags",
+      "40BA00/414C50 token",
+      "41235E containing route consumer",
+      "408310..40852E renderer and07/2A length-table slots"
+    ],
+    "existing_current_evidence_reused": [
+      "entry-direction-round485/assembly-0x4147d0-v6.json",
+      "entry-downstream-round480/assembly-0x468160-v4.json"
+    ]
+  },
+  "stop_request": {
+    "request_received_during_round": 500,
+    "stop_after_round": 501,
+    "action": "Complete next round then pause goal and stop; no round502 without resume"
+  },
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/net/Session.h",
+      "sha256": "31819b590b5b00d3303e986897ca4351f0215a136061c65cd553ef4a49b7fae7"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "1fda770672e8eb2bb3aa4b1afa08f2f7b5de8b252f6faca46a558aa20540be24"
+    },
+    {
+      "path": "tests/test_world_reply_push_capture.cpp",
+      "sha256": "3a64f0ce5697be3d15c5797f681ce53687385bccf962c75ea7603b0aa36880b5"
+    },
+    {
+      "path": "src/protocol/RecoveredSeedExchange.h",
+      "sha256": "0c4567e8b9fe9f77300ef83470267c43c69cf24b25fda923b670d85e820987fa"
+    },
+    {
+      "path": "src/protocol/RecoveredZeroSeedKey.h",
+      "sha256": "e4976b682145504b1419805959eda7e83a106359bdd8d081d913157ca1726a25"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldFrame.h",
+      "sha256": "b602ba7a6c86d4cff700e4a65123e8dbdec64b1a2b60b28ae21dd3bf76523d1f"
+    },
+    {
+      "path": "src/game/TaiwanWorldIdentityWriteFence.h",
+      "sha256": "eacdbd72432ca0fbcb6067fd5e3e16749f23d1a86c8371c5f171b40c71ba1f5f"
+    },
+    {
+      "path": "src/game/TaiwanBattleSelfViewWriteFence.h",
+      "sha256": "be3d820bd9e946169bb16f0b9c6cd50b7a33b22afeaed169c5fffc91ad586a8c"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "d2c19d073933d4be266f717c11b0ea1144c2ba2371097b1b7821718852914cc8"
+    },
+    {
+      "path": "src/core/TaiwanThreeChannelPlan.h",
+      "sha256": "c6667812d9cd5555db653a5df8f81ea6da9ec123d0baecb8ff4bde80fb3b3420"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "sha256": "de4b5f2adb14390fa1c23b58b06995bc2995633568885fbe17903e1382b66856"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeCharacterOfferSource.cpp",
+      "sha256": "8b2df509f4d4af76f5e615925ee0264423e3a8168d60e06456e4d5c356e26266"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeWorldEntryOfferSource.cpp",
+      "sha256": "4314ff717e89c3883a0135d5aeaa00b18357bb91593248758c6e427acbbdc7f6"
+    },
+    {
+      "path": "src/main.cpp",
+      "sha256": "a91a7f2d51a3cb62ed8c007e60f9891001d9df01539ac1a96185b5a229a80a0e"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "f534485471351a68e35afbff99a936ed8d8b1285ad3369e46ec2b1e10f265f68"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "c878f8caaad99c8fca3b02a26befc2fc983c699239970784f13bdbdccd3ee87d"
+    },
+    {
+      "path": "docs/research/tw-native-seed-profile-20261019.md",
+      "sha256": "8488c9393e94e5fde7c83af8aa289a1d6beb1c81a47bf3249c62a5f8c253b5ac"
+    }
+  ]
+}

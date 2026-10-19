@@ -329,6 +329,66 @@ void qualified_capture_retains_source_cancellation(){
     }
 }
 
+void qualified_async_requires_current_profile_and_original_logical(){
+    enum class Failure {Body,Opcode,Checksum,ForeignCipher,MutatedInput};
+    for(const auto failure:{Failure::Body,Failure::Opcode,Failure::Checksum,Failure::ForeignCipher,Failure::MutatedInput}){
+        unsigned profiles=0,yes=0,no=0;bool in_call=false,early_success=false;
+        Peer peer([](Session&,auto)->std::optional<Bytes>{return Bytes{};});peer.ready();
+        const auto init=peer.session->normal_world_initialization_on_game();
+        require(init&&init->entry_written(),"Async fixture requires this real Session's Written entry and accepted tail");
+        const auto original=row(51);
+        const auto notify=[&](bool accepted){
+            if(accepted){++yes;early_success|=in_call;}else{++no;if(no==1)throw std::runtime_error("Expected refused async acknowledgement exception");}
+        };
+        const Session::WorldReplyPushWire bad=[&](Session& actual,std::span<const std::uint8_t> logical)->std::optional<Bytes>{
+            require(&actual==peer.session.get()&&actual.account_id==Peer::account&&actual.character_id==Peer::character,
+                "Async framer lost exact full64 Session source");
+            ++profiles;
+            if(failure==Failure::MutatedInput){
+                // The underlying method-owned vector is mutable. Its private
+                // original snapshot must survive this hostile provider change.
+                const_cast<std::uint8_t*>(logical.data())[1]^=1;return framed(logical);
+            }
+            if(failure==Failure::Body||failure==Failure::Opcode){
+                Bytes changed(logical.begin(),logical.end());changed[failure==Failure::Body?1:0]^=1;
+                return framed(changed); // Same length and valid checksum, wrong actual message.
+            }
+            auto wire=framed(logical);
+            if(failure==Failure::Checksum){wire.back()^=1;return wire;}
+            // Synthetic alternate-key ciphertext only, not a claim that this
+            // fixture negotiated any native nonzero seed or cipher profile.
+            auto checksum=static_cast<std::uint8_t>(wire[0]+wire[1]+2*0x3c);
+            for(const auto byte:logical)checksum=static_cast<std::uint8_t>(checksum+byte+0x3c);
+            std::uint8_t previous=0;
+            for(std::size_t i=2;i<wire.size();++i){
+                const auto plain=i+1==wire.size()?checksum:logical[i-2];
+                wire[i]=static_cast<std::uint8_t>((plain^(recovered_zero_seed_key[(i-2)&255]^0x80))+previous-3);previous=plain;
+            }
+            return wire;
+        };
+        // Repeated synchronous refusal exceeds the producer count limit. A
+        // retained failed reservation would prevent the later valid source.
+        const auto attempts=failure==Failure::Body?Session::common_world_publication_capacity()+1:1;
+        for(std::size_t i=0;i<attempts;++i){
+            in_call=true;
+            peer.session->send_qualified_world_records_with_acceptance(*init,original,bad,
+                {Peer::account,Peer::character,Peer::world_generation,peer.session->battle_generation()},notify);
+            in_call=false;
+            require(!yes&&no==i+1&&profiles==i+1,"Invalid async profile was queued, leaked its reservation or settled more than once");
+        }
+        peer.silent();require(peer.world_calls==0,"Async profile validation fabricated an input callback");
+        in_call=true;
+        peer.session->send_qualified_world_records_with_acceptance(*init,original,
+            [&](Session& actual,auto logical)->std::optional<Bytes>{require(&actual==peer.session.get(),"Valid async source changed Session");++profiles;return framed(logical);},
+            {Peer::account,Peer::character,Peer::world_generation,peer.session->battle_generation()},notify);
+        in_call=false;
+        require(!yes,"Valid async source claimed FIFO acceptance before NET insertion");
+        peer.expect(framed(original));peer.silent();peer.pump();
+        require(yes==1&&no==attempts&&profiles==attempts+1&&!early_success&&peer.world_calls==0,
+            "Current zero-profile async recovery changed original bytes, producer budget or once-only acceptance");
+    }
+}
+
 void outside_callback_is_not_authority(){
     unsigned encodings=0;
     Peer peer([](Session&,auto)->std::optional<Bytes>{return Bytes{};});peer.ready();
@@ -344,7 +404,7 @@ void test_world_reply_push_capture(){
     static_assert(!std::is_move_constructible_v<Session::WorldReplyPushCapture>);
     static_assert(!std::is_copy_assignable_v<Session::WorldReplyPushCapture>);
     static_assert(!std::is_move_assignable_v<Session::WorldReplyPushCapture>);
-    final_fifo_and_original_callback_order();empty_scope_and_relative_base();finished_old_scope_cannot_poison_successor();qualified_capture_retains_source_cancellation();outside_callback_is_not_authority();
+    final_fifo_and_original_callback_order();empty_scope_and_relative_base();finished_old_scope_cannot_poison_successor();qualified_capture_retains_source_cancellation();qualified_async_requires_current_profile_and_original_logical();outside_callback_is_not_authority();
     for(const auto failure:{Failure::Drop,Failure::Invalidate,Failure::Nested,Failure::ProfileThrow,Failure::ProfileReentry,
         Failure::ProfileNull,Failure::ProfileLength,Failure::WrongOffset,Failure::OverflowOffset,Failure::AlteredFinal,
         Failure::Account,Failure::Character,Failure::ExpectedAccount,Failure::ExpectedCharacter,Failure::Delivery,
