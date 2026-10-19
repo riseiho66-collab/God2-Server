@@ -155,3 +155,13 @@ Round493 evidence: research/tw-three-channel-chat-20261019.md. Native guild
 action ingress must also be audited: a mounted Common coordinator is not proof
 that the native mixed source invokes all local legacy guild mutators. Actual
 provider/Main, native sender projection/profile and later acceptance remain open.
+
+Round494 extracts the actual Common53 adapter into one opaque full-original
+capture and strict one-use original-index executor. Dynamic dialogue recognition
+is frozen before any prefix/capture revocation; old capability cleanup and
+admission issuer ABA are explicit. Legacy entry points use the same executor.
+Native mutations remain unmounted: Common/bootstrap/admission sender side sends
+would overtake buffered earlier native replies. Existing queue acceptance is
+not Written, and private C67 deferral cannot carry generic guild ACKs. Connect
+real indexed sender custody/final FIFO acceptance before native action activation;
+see research/tw-three-channel-guild-ingress-20261019.md. No runtime acceptance.

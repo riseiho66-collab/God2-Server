@@ -6580,7 +6580,8 @@
         "src/game/SharedTaiwanNativeRecordHandlerSource.cpp",
         "src/game/OwnedTaiwanGuildChatDispatch.h",
         "src/game/OwnedTaiwanGuildChatDispatch.cpp",
-        "tests/test_owned_taiwan_guild_chat_dispatch.cpp"
+        "tests/test_owned_taiwan_guild_chat_dispatch.cpp",
+        "src/relations53/SharedGuildApplication53Draft.h"
       ],
       "document": "docs/research/tw-three-channel-chat-20261019.md",
       "rules": {
@@ -6612,13 +6613,15 @@
         "actual_native_guild_chat": "Context carries weak late actual guild binding; native host merges before actual mixed source creation, rejects duplicate owner and propagates installed capability. Exact guild-only runs retain original whole-batch Current, causal native movement/reply ordering, budgets and cleanup. Application checks actual constructed capability before Hold, installs real callback then seals world directory. Legacy handler alone is not native routing.",
         "guild_chat_custody": "Private move-only one-use batch retains full original all-world Session pointer/identity/phase/battle/ready/membership observations, not frame renderer/spans/callback holders. Requalify complete guild audience and exact endpoint before/after publication. Caught reentry/retirement/native mixed invalidation synchronously poisons active directory operation; stop later peers, expose partial submissions, no atomic broadcast/write/client acceptance claim.",
         "guild_chat_native_framing": "Schema53 triple requires explicit same-authenticated-Session NativeGuildSenderWire before DB initialization; copied on GAME and invoked synchronously for sender logical records. No default lab codec. Complete sender envelopes return to original mixed accumulator; incomplete chat discards unsubmitted sender buffer and explicit CUSTOM no-reply preserves earlier native output. Peer logical enqueue remains the existing Session native transport path.",
-        "native_chat_trace": "Current5C dispatch46AE96 JMP714200->70FF5B ST extension then ordinary46AE9E. Sender+5 DWORD reads70FFA1/46AFF2.3FFF is conditional CUSTOM0054 ST behavior, returns ordinary on failure; category3 to475E00 text/category bypasses0/6 bubble4FB690. No common64/native mapping or widening inferred; existing actor qualification stays explicit."
+        "native_chat_trace": "Current5C dispatch46AE96 JMP714200->70FF5B ST extension then ordinary46AE9E. Sender+5 DWORD reads70FFA1/46AFF2.3FFF is conditional CUSTOM0054 ST behavior, returns ordinary on failure; category3 to475E00 text/category bypasses0/6 bubble4FB690. No common64/native mapping or widening inferred; existing actor qualification stays explicit.",
+        "guild_action_batch_capture": "Round494 Common53 adapter owns full original records and frozen selected indices/old grants/plans. Exact private adapter and admission issuer identities, strict selected original-index one-use execution and retirement; no recapture after prefixes. Existing legacy handles delegate. This is not an actual native mutation capability or Session lease.",
+        "guild_action_sender_gap": "Native guild mutation mount deliberately remains OPEN until actual sender bytes and pending acceptance callbacks join original native run/final response custody. Existing Session acceptance(true) means FIFO append, not Written. Bootstrap/menu/prompt asynchronous grants remain real; no fake ACK or repurposed C67 tags. Actual native legacy overwrite is documented."
       },
-      "native_gap": "Actual native mixed guild-chat capability is connected in source with trusted qualified providers; default native sources/Main and sender profile still required. Audit actual native guild mutation ingress separately: mounted Common caches/local legacy mutators do not prove native action routing. Common64/native projection, older guild bridges, selected Web G, native world transfer, durable logout/save/admission, six switches and current-client acceptance remain open.",
+      "native_gap": "Native guild chat source from493 remains unchanged. Round494 prepares Common53 action capture only; actual native mutation ingress and indexed sender/FIFO-acceptance custody remain unimplemented. Default native providers/Main, sender profile, common64/native projection, older guild bridges, selected Web G, native transfer, durable save/logout/admission/recovery and six switches/client acceptance remain open.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_NATIVE_MIXED_GUILD_CHAT_AND_CURRENT_EXE_TWO_CLOSED_REA_TARGETS_FUTURE_CASES_NOT_BUILT_OR_RUN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_COMMON53_BATCH_CAPTURE_NATIVE_MUTATION_CUSTODY_OPEN_NO_BUILD_TEST_RUNTIME"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

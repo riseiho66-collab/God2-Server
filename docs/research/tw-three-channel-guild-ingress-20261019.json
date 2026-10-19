@@ -1,0 +1,153 @@
+{
+  "round": 494,
+  "previous_goal_turn": "progress",
+  "previous_commit": "e354e448f9abdb42458ff6efd0754289bef284b6",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_COMMON53_ORIGINAL_BATCH_CAPTURE_NATIVE_ACTIONS_STILL_OPEN",
+  "source_integration": [
+    "Opaque copied full-original action plans and frozen pre-capture selected indices",
+    "Strict original-index once-only execution, private adapter/admission tokens and exact captured cleanup",
+    "Legacy actual incoming prefix spans retained, copied plans never fed to native prefix children",
+    "Typed UI-attempt versus mutation results, callback failure retirement and post-context fence"
+  ],
+  "deliberate_policy_changes": [
+    "Freeze pre-capture admission choice classification rather than re-evaluate after possible dialogue revocation/prefix",
+    "Reject skipped/replayed/same-Prepared reentrant execution before action callback",
+    "Once-only exact cleanup attempts both old neighbor and pending even when a callback throws; no SQL rollback claim",
+    "Admission issuer replacement is tokenized, including same-pointer out-and-back"
+  ],
+  "source_boundary": {
+    "adapter_split_only": true,
+    "actual_native_action_capability_added": false,
+    "native_host_context_dispatch_unchanged": true,
+    "legacy_actual_prefix_identity_retained": true,
+    "deep_common_admission_continuation_cancel": false,
+    "adapter_wide_fresh_capture_reentry_fence": false,
+    "actual_session_world_lease_in_capture": false,
+    "header_original_lf": true,
+    "header_final_lf": true,
+    "header_bytes": 16037,
+    "header_sha256": "fc64ad71e07b8e1bf976cf11a357fc5205287a1b364ac2dd0360b3f6705209d8",
+    "unchanged_sources_verified": [
+      "src/core/Application.cpp",
+      "src/net/Session.h",
+      "src/net/Session.cpp",
+      "src/game/LegacyWorldReply.h",
+      "src/game/SharedTaiwanWorldRecordSource.h",
+      "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "src/relations53/SharedGuildCoordinator53Draft.h",
+      "src/relations53/GuildAdmission53Application.h",
+      "src/relations53/GuildRelationCacheBootstrap53.h"
+    ]
+  },
+  "sender_chain": {
+    "application": "src/core/Application.cpp:2559",
+    "session": "src/net/Session.cpp:7893",
+    "queue_insert": "src/net/Session.cpp:7934",
+    "queue_accepted": "src/net/Session.cpp:7935",
+    "written": "src/net/Session.cpp:4819",
+    "legacy_overwritten": "src/core/Application.cpp:8251",
+    "c28_original_request_identity": "src/net/Session.cpp:5964",
+    "acceptance_is": "NET_FIFO_APPEND_NOT_SOCKET_WRITTEN_OR_CLIENT_ACK",
+    "bootstrap": "src/relations53/GuildRelationCacheBootstrap53.h:56",
+    "original_pending_ack_preserved": true,
+    "c67_tags_generic": false,
+    "current_callback_is_pure_required": true,
+    "generic_sender_custody_implemented": false
+  },
+  "native_reuse": {
+    "new_rea_targets": 0,
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-chat-round493/native-chat/findings-v2.json",
+    "sha256": "6e57249fb1d83c1198da26276f0ba4bf7eb651104b5ba9a05132b6e86ff1fee5",
+    "members_verified": 19,
+    "previous_source_receipt": "C:/Users/risei/Desktop/God2/God2-Server/docs/research/tw-three-channel-chat-20261019.json",
+    "previous_source_receipt_sha256": "04a2ff29776994d8a3e7a425863571999b36f90d80ca3a0c7d06dafd40d8f293",
+    "claim": "Unchanged native selection/switch/chat contracts only; this round is ordinary repository source analysis"
+  },
+  "verification": {
+    "independent_source_review": true,
+    "executable_fixture_added": false,
+    "reason": "Actual adapter requires genuine strict53 storage/publication fixture; no fabricated null-reference or implementation-mirroring test"
+  },
+  "open": [
+    "Indexed sender wire and real FIFO-acceptance callback custody before native guild action activation",
+    "Deep Common/admission continuation fences including nested fresh captures",
+    "Actual native providers/default Main and qualified sender profile",
+    "Common64/native projection, older guild bridges and selected Web G",
+    "Native transfer/durable save/logout/target admission/recovery; six switches and current-client acceptance",
+    "Full-server gameplay, formulas and actual MySQL obligations"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/relations53/SharedGuildApplication53Draft.h",
+      "sha256": "fc64ad71e07b8e1bf976cf11a357fc5205287a1b364ac2dd0360b3f6705209d8"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "01380f4a7812203daf88867a25a1bcbf3e5e515f5b9060b9923f94321cee7749"
+    },
+    {
+      "path": "src/net/Session.h",
+      "sha256": "a7cf5589376d146a023d46ade3936df267cb2292feb16a6d969ac10cdc7e5aa7"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "b49fef3cee33b097688deab4c48005ba5ca3520d7b0099945248f4421c99d55c"
+    },
+    {
+      "path": "src/game/LegacyWorldReply.h",
+      "sha256": "27217243080c3233828b9443836d6ecefabe5d6c1049f8963fcaba3d1a79febb"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.h",
+      "sha256": "6c88b0d4894c0b07b66b9e75ce5af3f6167b5607015b4aacd613ebd464287685"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "sha256": "5c2da14513823aa7c6c345011f5ebd5d76fe436ff6a7a33db1573343c37f1c3e"
+    },
+    {
+      "path": "src/relations53/SharedGuildCoordinator53Draft.h",
+      "sha256": "cc5fed5e1068d515dad314d3a634dd169380cb91e3952f291e1be4adf88aa28f"
+    },
+    {
+      "path": "src/relations53/GuildAdmission53Application.h",
+      "sha256": "b2afc16a158b137c8d293a716f639756e13102331764f600e58b165c405d67e8"
+    },
+    {
+      "path": "src/relations53/GuildRelationCacheBootstrap53.h",
+      "sha256": "37d96f0567478ba9a28f4c1bb8e7d91e016265ff64d1907b753dadbdc33151ce"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "ce5f09a616ecca30727c1352d1be8845251a17e3890981ad9fb711c37cd00852"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "eee704fd174d5a0902fc05755dbe1a17890af3a39d6ee3ef2cd79377d963a36c"
+    },
+    {
+      "path": "docs/research/tw-three-channel-guild-ingress-20261019.md",
+      "sha256": "6989fed3ed2302a77ab55e589bc8e4873d2ef2b5b03cbd80b04f94a2e2121a1b"
+    }
+  ]
+}
