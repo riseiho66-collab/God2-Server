@@ -1228,7 +1228,6 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 std::optional<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource> selection;
                 std::optional<OwnedSkillBookLearningService::LearningPublication> latest_learning;
                 std::shared_ptr<const LearnedPkSources> paired;
-                std::shared_ptr<const CanonicalCompanionSource> previous;
             };
             struct PendingCompanionSelection {
                 std::shared_ptr<const CanonicalCompanionSource> previous;
@@ -2817,7 +2816,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 const auto offset=holder->initial_player_wire_offset;
                 const auto learning=skill_book_learning_service;const auto selection=owned_deity_skill_source;
                 const auto peer=session.weak_from_this().lock();
-                if(!peer||!initial||!holder->material||!world)return;
+                // Normal learning also uses the actual legacy CharacterSelected
+                // entry. Common presence belongs only to the separate PK pair.
+                if(!peer||!initial||!holder->material)return;
                 const auto before_material=previous?previous->material:holder->material;
                 const auto local=[&]{
                     const auto now=owned_companion_restoration_sources.find(session.id());
@@ -2833,8 +2834,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         owned_deity_skill_source==selection && holder->normal_initialization &&
                         holder->normal_initialization->same_initialization(*initial) && !session.closing() &&
                         session.id()==holder->session.lock()->id() && session.account_id==holder->account &&
-                        session.character_id==holder->character && session.state()==SessionState::InWorld &&
-                        holder->phase_at_restore==SessionState::InWorld && session.recovered_world_ready() &&
+                        session.character_id==holder->character && session.state()==holder->phase_at_restore &&
+                        (session.state()==SessionState::CharacterSelected || session.state()==SessionState::InWorld) &&
+                        session.recovered_world_ready() &&
                         holder->all_submission_calls_returned &&
                         session.battle_generation()==holder->battle_generation_at_restore && initial->entry_written() &&
                         session.normal_world_initialization_current_on_game(*initial);
@@ -2869,7 +2871,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 auto before_player=pending?pending->player:(previous&&previous->paired?std::optional{previous->paired->player}:holder->pk_player);
                 auto before_companion=pending?pending->companion:(previous&&previous->paired?std::optional{previous->paired->companion}:holder->pk_publication);
                 std::shared_ptr<const LearnedPkSources> paired;
-                if(config.owned_initial_player_enabled && before_player && before_companion && attempt){
+                if(config.owned_initial_player_enabled && world && before_player && before_companion && attempt){
                     const auto presence=world->presence();const auto lease=before_player->combat().appearance().material().lease;
                     if(lease!=attempt->lease || !local())return;
                     auto player=written_selection?
@@ -2884,7 +2886,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 }
                 auto next=std::make_shared<const CanonicalCompanionSource>(CanonicalCompanionSource{
                     material,written_learning?written_learning->original_restoration():material,
-                    written_learning,written_selection,latest_learning,paired,previous});
+                    written_learning,written_selection,latest_learning,paired});
                 if(!local() || !owned_companions.restoration_current(*material) || !local() ||
                    (written_learning&&!written_learning->current(session)) ||
                    (written_selection&&!written_selection->current(session)) || !local())return;

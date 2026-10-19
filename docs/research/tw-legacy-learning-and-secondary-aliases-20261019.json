@@ -1,0 +1,92 @@
+{
+  "schema": "tw-legacy-learning-and-secondary-aliases/1",
+  "round": 475,
+  "baseline_commit": "236b247b14bded46a4ee0e7d8eab0634c30b015a",
+  "phase": "PHASE1_SOURCE_STATIC_ONLY",
+  "scope": "Taiwan-only",
+  "source_image_sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48",
+  "installed_skill_bin_sha256": "3adcda70a477086da50411fe5d023eec33f915efafd17ec478d55542cae42ea7",
+  "installed_skill_rows": 453,
+  "evidence": [
+    {
+      "path": "identity/secondary-header-source-conclusion-v1.json",
+      "bytes": 12714,
+      "sha256": "6950e86657475477db2ddd57d66950c258f0921860d02924d9b2648fa375f475"
+    },
+    {
+      "path": "formulas/scope-bulk-magnitude-conclusion-v1.json",
+      "bytes": 13026,
+      "sha256": "9500d446b6193ae230a8a6974cad1747f79a9362ebcfe85bf240f6acc2b2ea79"
+    },
+    {
+      "path": "scope/legacy-selection-sender-audit-v1.json",
+      "bytes": 5812,
+      "sha256": "8ea3a25833dbcca4bba489c8638e4fc1ec3a9099425be03d7992304408b5812e"
+    },
+    {
+      "path": "scope/learning-selection-fixture-implementation-v2.json",
+      "bytes": 3568,
+      "sha256": "ab1611b6053767614f6eff537fbcfcb14f22ab6792f13dec367ce100398dde52"
+    },
+    {
+      "path": "root-source-implementation-v1.json",
+      "bytes": 850,
+      "sha256": "46c6bf04c7f357681dd97c2df152617c8ccc783f6d73609e666eca9ed15b2907"
+    }
+  ],
+  "source_changes": [
+    "normal Written learning successors accept actual legacy CharacterSelected or InWorld phase with exact retained phase equality",
+    "CommonWorld remains required for PK pair only",
+    "remove unused root canonical strong backward chain; retain pending occurrence, latest true learning and private PK predecessors"
+  ],
+  "new_rea_sessions": 2,
+  "new_rea_functions": 6,
+  "rea_handles_closed": true,
+  "native_scopes": {
+    "secondary_cfg_scopes": 15,
+    "secondary_original_rows": 1728,
+    "secondary_parent_argument_rows": 20,
+    "magnitude_cfg_scopes": 3,
+    "magnitude_original_rows": 268,
+    "counts_are_separate_scopes_not_unique_union": true
+  },
+  "native_findings": [
+    "secondary reset tails clear bit15; header2D12/13 still unresolved",
+    "selected dynamic allocation chain does not prove whole-object zero",
+    "523FF0 selected definition+45 playback target expansion differs from C35 input grammar",
+    "520300 clears actorDF8..EC3 and EC4; no direct28A magnitude write in this selected body"
+  ],
+  "regression_source": {
+    "full_inventory_equipment_roster_activation_selection_fixture": true,
+    "independent_after_state_faults": 5,
+    "executed": false,
+    "true_learning_commit_selection_learning": false,
+    "full_PK_graph": false,
+    "Application_Session_transport": false,
+    "synthetic_material_is_not_native_entitlement": true
+  },
+  "legacy_selection_transport_joined": false,
+  "secondary_opaque_header_restored": false,
+  "original_damage_healing_formula_restored": false,
+  "new_status_tick_owner": false,
+  "generic_skill_world_owner_hosted": false,
+  "next_sources": [
+    "actual ordered legacy self-output custody and C67 private commit registry",
+    "547985 allocation/provider and concrete header or whole-object alias writer",
+    "authoritative original magnitude sender or concrete same-owner stat/coefficient-to-amount writer",
+    "sameWorld initializer/actual actors/issued87/grant rule source"
+  ],
+  "new_original_formulas": 0,
+  "new_complete_gameplay": 0,
+  "whole_game_completion_percent": null,
+  "builds": false,
+  "tests": false,
+  "target_execution": false,
+  "vm": false,
+  "codec": false,
+  "game_db_sql": false,
+  "schema_install": false,
+  "activation": false,
+  "deployment": false,
+  "goal_status": "active"
+}

@@ -60,6 +60,9 @@ kind2／3的目標與累計上下文、完整DWORD回合通知及牛轉仙界踏
 實際 CommonWorld 選神後的完整來源、學習 chronology 與 PK 成對延續，
 以及初始化 secondary header／controls 的 REA 補查界線，見
 [round474記錄](tw-written-selection-successors-20261019.md)及其同名JSON。
+舊世界流程的 CharacterSelected 學習延續、完整保存狀態回歸來源與
+secondary／播放目標欄位的新增 REA 界線，見
+[round475記錄](tw-legacy-learning-and-secondary-aliases-20261019.md)及其同名JSON。
 2026-09-20技能書研究中的448筆、149c... EXE及舊SKB381配對屬歷史來源，
 不能直接當成現用453筆／aaf0... EXE／ef297... gamedata的技能書或公式證明。
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。

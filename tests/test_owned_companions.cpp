@@ -2,9 +2,13 @@
 #include "db/SqliteMigrationManager.h"
 #include "db/SqliteRecoveredCharacterRepository.h"
 #include "db/SqliteSupport.h"
+#include <algorithm>
+#include <array>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string>
+#include <vector>
 namespace {
 using namespace god2;
 void require(bool value,const char* message) {if(!value) throw std::runtime_error(message);}
@@ -71,6 +75,164 @@ NativeSkillRecord prefix_definition(std::uint8_t id=1) {
     value.source_record_index=id-1;value.source_offset=8+(id-1)*110;value.record_sha256=std::string(64,'a');
     value.raw_record.assign(110,0);value.raw_record[0]=id;value.definition_id=id;
     return value;
+}
+// Synthetic saved material for the selection-only repository contract. These
+// bytes are not imported client definitions or a native learning entitlement.
+// The private Restoration and selection commits still come from real issuers.
+struct LearningSelectionFixture:Fixture {
+    SqliteAccountRepository accounts{db.get()};
+    SqliteRecoveredCharacterRepository characters{db.get()};
+    SqliteCompanionRepository companions{db.get()};
+    SqliteOwnedInventoryRepository inventory{db.get(),accounts,characters};
+    SqliteNativeEquipmentSnapshotRepository equipment{db.get(),accounts,characters};
+    NativeSkillBookCatalog books{db.get()};
+    NativeSkillCatalog skills{db.get()};
+    SqliteSkillBookLearningRepository learning{inventory,equipment,companions,books,skills};
+    RecoveredOwnedCompanions helper{companions};
+    LearningSelectionFixture() {
+        sqlite_detail::execute(db.get(),SqliteOwnedInventoryRepository::schema());
+        sqlite_detail::execute(db.get(),SqliteNativeEquipmentSnapshotRepository::schema());
+        sqlite_detail::execute(db.get(),SqliteSkillBookLearningRepository::schema());
+        for(unsigned key=1;key<=16;++key) {
+            sqlite_detail::Statement metadata(db.get(),"INSERT INTO native_companion_metadata VALUES('GOD',?,?,1,X'41',?,zeroblob(396))");
+            metadata.bind(1,2800+key);metadata.bind(2,std::string(SqliteCompanionRepository::source_sha256));
+            metadata.bind(3,std::string(64,'a'));metadata.done();
+            companions.store_deity(1,character,deity(static_cast<std::uint8_t>(key)),{},provenance());
+        }
+        const auto root=characters.list_for_account(1).front();
+        const auto position=characters.commit_position(1,character,{},1,1,18,14);
+        std::vector<std::uint8_t> alias_bytes(20,0x5a);alias_bytes[0]=0x65;alias_bytes[1]=0x19;
+        OwnedItemNativeAlias alias{NativeEquipmentSnapshot::client_pin,"tw149c-item20",std::string(64,'b'),
+            "fixture-book-alias",6501,0,1,alias_bytes};
+        OwnedInventoryInstance item{9001,6501,2,1,true,std::string(64,'c'),"fixture-acquisition",{alias}};
+        OwnedInventorySnapshot bag{root,1,std::string(64,'d'),"fixture-full-inventory",
+            {{"bag",0,item},{"bag",1,std::nullopt},{"storage",7,std::nullopt}}};
+        require(inventory.replace_from_issuer({},bag,[&](const auto&,const auto&,auto){return std::optional{bag};}).has_value(),
+            "Full inventory fixture issuer failed");
+        NativeEquipmentSnapshot worn{root,position,NativeEquipmentSnapshot::client_pin,NativeEquipmentSnapshot::kind,
+            std::string(64,'e'),"fixture-full-equipment",std::vector<std::uint8_t>(NativeEquipmentSnapshot::record_bytes),1,41};
+        worn.record[0]=2;worn.record[1]=0xa5;worn.record[2]=0x5a;worn.record[3]=0xc3;
+        std::copy(alias_bytes.begin(),alias_bytes.end(),worn.record.begin()+4);
+        worn.record[24+1]=0xf1; // Retain opaque bytes even in an empty native bank row.
+        worn.record[1200]=0xda;worn.record[1201]=41;worn.record[1205]=0xb7;worn.record[1214]=0x82;
+        require(equipment.replace_from_issuer({},worn,[&](const auto&,const auto&,auto){return std::optional{worn};}).has_value(),
+            "Full equipment fixture issuer failed");
+        // CUSTOM_TEST_NOT_NATIVE raw activation seed, not a learning commit.
+        // A digest-consistent synthetic book supports the existing activation
+        // reader. This does not qualify observe/plan/commit or native skill rules.
+        sql("INSERT INTO native_data_sources VALUES('current-skill-catalog-v1','fixture-only/skill.bin','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763','fixture-only','0x1','0x2',448)");
+        sql("INSERT INTO native_data_sources VALUES('current-skill-books-v1','Data2/Patch/Comm/gamedata.csvZ','70a4e7dd1a1f66d7a70f5c5e97c77ef4063904cc473292758c5abd2da7bd8731','75c3c37947a64b0917fbf8e546884d9bf893fe6a606d3e2b8f3b1857966b1815','149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763','SKB','0x59420','0xA8E10',381)");
+        std::array<std::uint8_t,110> definition{};definition[0]=1;
+        {
+            sqlite_detail::Statement row(db.get(),"INSERT INTO native_skill_catalog VALUES('current-skill-catalog-v1',0,8,?, ?,0,1)");
+            row.bind(1,std::string(64,'a'));row.bind_blob(2,definition);row.done();
+        }
+        sql("INSERT INTO native_skill_books VALUES('current-skill-books-v1',0,1,0,6501,'559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',X'41','58553b15fb3888e443e29fff5663675b8f70e37f0ea6c54076489d6ff04c1032',zeroblob(396))");
+        sql("INSERT INTO native_skill_book_bindings VALUES('current-skill-books-v1','current-skill-catalog-v1',0,1,6501)");
+        const auto saved=companions.load_deities(1,character).front();
+        std::vector<std::uint8_t> row_bytes;
+        const auto append=[&](const auto& bytes){row_bytes.insert(row_bytes.end(),bytes.begin(),bytes.end());};
+        append(saved.snapshot.declaration.encode());append(saved.snapshot.status.encode());
+        for(const auto& skill:saved.snapshot.skills)append(skill.encode());
+        {
+            sqlite_detail::Statement header(db.get(),"INSERT INTO deity_skill_activation_headers VALUES(?,1,?,?,?, ?,?,'CUSTOM-0148')");
+            header.bind_id(1,character);header.bind_id(2,saved.revision);header.bind_blob(3,row_bytes);
+            header.bind(4,saved.provenance.source_sha256);header.bind(5,saved.provenance.authority);
+            header.bind(6,saved.provenance.evidence_id);header.done();
+        }
+        {
+            sqlite_detail::Statement event(db.get(),"INSERT INTO skill_book_learning_events VALUES('CUSTOM_TEST_NOT_NATIVE:fixture-activation',1,?,1,0,1,6501,9001,1,1,?,'559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd','58553b15fb3888e443e29fff5663675b8f70e37f0ea6c54076489d6ff04c1032',X'41',zeroblob(396),'CUSTOM-0148')");
+            event.bind_id(1,character);event.bind(2,std::string(SqliteCompanionRepository::source_sha256));event.done();
+            sqlite_detail::Statement link(db.get(),"INSERT INTO deity_skill_activation_links VALUES(?,1,0,'CUSTOM_TEST_NOT_NATIVE:fixture-activation')");
+            link.bind_id(1,character);link.done();
+        }
+    }
+    std::vector<std::string> activation_storage() {
+        // Hidden header/event fields must remain byte-for-byte stable as well
+        // as the public activation list. Ordered text/hex projection is test-only.
+        sqlite_detail::Statement rows(db.get(),"SELECT printf('%lld|%lld|%s|%s|%s|%s|%s',row_key,deity_revision,hex(raw_row),source_sha256,authority,evidence_id,design) FROM deity_skill_activation_headers ORDER BY row_key");
+        std::vector<std::string> result;while(rows.row())result.push_back(rows.text(0));
+        sqlite_detail::Statement events(db.get(),"SELECT printf('%s|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%s|%s|%s|%s|%s|%s',event_id,account_id,character_id,row_key,kind,skill_id,book_item,book_instance,book_revision,deity_before_revision,book_source,record_sha256,parsed_sha256,hex(raw_book),hex(parsed_book),design) FROM skill_book_learning_events ORDER BY event_id");
+        while(events.row())result.push_back(events.text(0));
+        sqlite_detail::Statement links(db.get(),"SELECT printf('%lld|%lld|%lld|%s',character_id,row_key,ordinal,event_id) FROM deity_skill_activation_links ORDER BY character_id,row_key,ordinal");
+        while(links.row())result.push_back(links.text(0));return result;
+    }
+};
+void learning_selection_source_regression() {
+    // Each after-state fault owns an isolated source; none is repaired in order
+    // to revive a stale token. No test-only constructor mints private receipts.
+    for(unsigned fault=0;fault<=5;++fault) {
+        LearningSelectionFixture f;
+        const auto before=f.helper.restore_with_source(1,f.character,f.learning);
+        require(before.learning_source()&&before.deity_roster().rows().size()==16&&
+            before.learning_source()->activations().size()==1,"Full learning restoration fixture missing active lineage");
+        require(f.helper.restoration_current(before),"Initial full learning fixture is stale");
+        auto foreign_companions=f.repo();
+        SqliteSkillBookLearningRepository foreign_roster(f.inventory,f.equipment,foreign_companions,f.books,f.skills);
+        const auto foreign_before=foreign_roster.restore(1,f.character);
+        const auto original_storage=f.activation_storage();
+        auto first=f.helper.select_deity_with_source(1,f.character,{2});
+        auto second=f.helper.select_deity_with_source(1,f.character,{16});
+        require(first&&second,"Private selection chain missing from learning fixture");
+        const std::array publications{first->publication(),second->publication()};
+        const std::array<const SqliteCompanionRepository::CommittedDeitySelection*,2> commits{&first->committed(),&second->committed()};
+        require(!f.learning.restoration_current(*before.learning_source()),"Consumed full before State remained Current");
+        const std::array<const SqliteCompanionRepository::CommittedDeitySelection*,2> reversed{commits[1],commits[0]},duplicated{commits[0],commits[0]},missing{commits[0],nullptr};
+        require(!f.learning.selection_successor(*before.learning_source(),reversed)&&
+            !f.learning.selection_successor(*before.learning_source(),duplicated)&&
+            !f.learning.selection_successor(*before.learning_source(),missing)&&
+            !f.learning.selection_successor(*before.learning_source(),{}),"Invalid selection chain adopted full learning State");
+        SqliteSkillBookLearningRepository foreign(f.inventory,f.equipment,f.companions,f.books,f.skills);
+        require(!foreign.selection_successor(*before.learning_source(),commits),"Same connection borrowed another learning issuer");
+        require(!foreign_roster.selection_successor(foreign_before,commits),"Other roster issuer borrowed private selection commits");
+        const auto after=f.learning.selection_successor(*before.learning_source(),commits);
+        const auto restored=f.helper.selection_successor_from_committed(before,publications);
+        require(after&&restored&&restored->learning_source()&&f.learning.restoration_current(*after)&&
+            f.helper.restoration_current(*restored),"Selection failed to retain full learning source");
+        require(after->inventory()==before.learning_source()->inventory()&&
+            after->equipment()==before.learning_source()->equipment()&&
+            after->activations()==before.learning_source()->activations()&&f.activation_storage()==original_storage,
+            "Selection modified inventory/equipment or activation header/event/link material");
+        require(after->roster().selection()==std::optional{second->committed().after()}&&
+            after->roster().rows().size()==16&&after->roster().template_keys()==before.deity_roster().template_keys(),
+            "Selection lost complete roster ownership");
+        for(std::size_t i=0;i<16;++i) {
+            const auto& old=before.deity_roster().rows()[i];const auto& next=after->roster().rows()[i];
+            require(old.revision==next.revision&&old.provenance==next.provenance&&
+                old.snapshot.declaration.encode()==next.snapshot.declaration.encode()&&
+                old.snapshot.status.encode()==next.snapshot.status.encode()&&old.snapshot.skills.size()==next.snapshot.skills.size(),
+                "Selection changed a full saved deity row");
+            for(std::size_t j=0;j<old.snapshot.skills.size();++j)require(old.snapshot.skills[j].encode()==next.snapshot.skills[j].encode(),
+                "Selection changed saved learned skill bytes");
+        }
+        require(restored->batches().size()==before.batches().size()+2,"Selection replayed complete restoration");
+        for(std::size_t i=0;i<before.batches().size();++i)require(restored->batches()[i]==before.batches()[i],
+            "Selection changed original S30/S34/S35 restoration history");
+        for(std::size_t i=0;i<2;++i) {
+            const auto logical=RecoveredWorldFrame::decode(publications[i].wire());
+            require(logical&&restored->batches()[before.batches().size()+i]==*logical,
+                "Selection history did not append actual private S31 in order");
+        }
+        require(!f.learning.restoration_current(*before.learning_source()),"Successor revived consumed before State");
+        // Every negative starts from its own proven-current positive successor.
+        switch(fault) {
+        case 1:f.sql("UPDATE owned_inventory_headers SET source_record='changed-inventory-source'");break;
+        case 2:f.sql("UPDATE character_native_equipment_snapshots SET source_record='changed-equipment-source'");break;
+        case 3:f.sql("UPDATE deity_skill_activation_headers SET evidence_id='changed-header-evidence'");break;
+        case 4:f.sql("UPDATE skill_book_learning_events SET book_revision=2");break;
+        case 5:{auto row=deity(3);auto status=row.status.encode();status[8]=77;row.status=*RecoveredDeityState::Status::parse(status);
+            f.companions.store_deity(1,f.character,row,1,provenance());break;}
+        default:break;
+        }
+        if(fault) {
+            require(!f.learning.restoration_current(*after)&&!f.helper.restoration_current(*restored)&&
+                !f.learning.selection_successor(*before.learning_source(),commits)&&
+                !f.helper.selection_successor_from_committed(before,publications),
+                "Changed complete after State escaped selection-only qualification");
+            require(f.companions.load_deity_selection(1,f.character)==std::optional{second->committed().after()},
+                "Failed source qualification changed durable selection");
+        }
+    }
 }
 void selection_source_regression() {
     Fixture f;auto repo=f.repo();RecoveredOwnedCompanions helper(repo);
@@ -159,6 +321,7 @@ void selection_source_regression() {
 int main() {
     try {
         selection_source_regression();
+        learning_selection_source_regression();
         Fixture f;auto repo=f.repo();RecoveredOwnedCompanions service(repo);const auto c=f.character;
         require(service.restore(1,c).empty(),"Absent ownership emitted packets");
         require(!repo.selected_deity_has_skill(1,c,0,126),"Absent ownership granted custom skill");
