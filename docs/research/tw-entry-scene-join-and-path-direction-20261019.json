@@ -1,0 +1,102 @@
+{
+  "round": 484,
+  "custom_boundary": "Existing CUSTOM-0158 actual supplier; no new custom gameplay rule",
+  "native": [
+    {
+      "version": 1,
+      "evidence_id": "ev_f3e6e462c420d085fd80ba926942fddf252dc3bb1e8c53f89743b0cc2d910939",
+      "analysis_sha256": "c57bb7ed4b8bfc6a530a5280ca78e80057fe6910dd8f18b268546a5fc9756707",
+      "original_sections_byte_identical": true,
+      "procedures": [
+        "0x43c170",
+        "0x52f550",
+        "0x468160"
+      ],
+      "closed": true,
+      "synthetic_callers_not_original": true
+    },
+    {
+      "version": 2,
+      "evidence_id": "ev_340a9d935c5db760e52d3f551541916c63a36de75146502eeb8f4e8160816ed9",
+      "analysis_sha256": "fdb75aa7afe3a0acfb3621a7a691973cfbaedce684b0cd186559b08566078feb",
+      "original_sections_byte_identical": true,
+      "procedures": [
+        "0x502700",
+        "0x502f20"
+      ],
+      "closed": true,
+      "synthetic_callers_not_original": true
+    },
+    {
+      "version": 3,
+      "evidence_id": "ev_edc74ffdb896338bc385f58706e98194bbc472e1b67976da441e1e74b6eb5186",
+      "analysis_sha256": "e360364297d93d014a0cda9ab43f2f3928ec0459f7706a4bc4304b3a29f68335",
+      "original_sections_byte_identical": true,
+      "procedures": [
+        "0x468120",
+        "0x502210"
+      ],
+      "closed": true,
+      "synthetic_callers_not_original": true
+    }
+  ],
+  "source_join": {
+    "actual_initialization": true,
+    "full_wire_and_logical": true,
+    "qualified_scene_identity": true,
+    "actor_and_original_entry_geometry": true,
+    "current_saved_pose_separate": true,
+    "current_does_not_parse_or_allocate": true
+  },
+  "regression_source": {
+    "executed": false,
+    "negative": [
+      "x",
+      "y",
+      "area",
+      "scene",
+      "actor"
+    ],
+    "positive": "Actual common position CAS keeps original entry and lease while saved-after pose is supplied"
+  },
+  "observed": [
+    "43C170 selected manager CString+8 copy",
+    "52F550 working-directory cache and exact leading-backslash format branches",
+    "468160 B4low3 mapping into R+24 and B7->R+FC",
+    "502700 world+2C direction with stationary previous state, distinct actor base",
+    "502210 render selector use and 502F20 offsets/cell check",
+    "468120 receiving reset; no proved direction bridge"
+  ],
+  "unknown": [
+    "Original server initial direction selection",
+    "R+24 to world+2C initialization bridge",
+    "Complete pose lifecycle and Main scene supplier",
+    "Relative manager root initialization and CAN tag dispatcher",
+    "Actual full original2A producer and full runtime acceptance"
+  ],
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "migration": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/game/TaiwanNativeHmdBundleSource.cpp",
+      "sha256": "c7de5bfac9d6cfef3236127e47f4d03d9a00dafa5e08c580ddb586650ff4e81b"
+    },
+    {
+      "path": "tests/test_taiwan_native_hmd_bundle_source.cpp",
+      "sha256": "5fc70f4d69dc0dc5731ebdc049413948b79155720b09a8634f6a272e5bd2b856"
+    },
+    {
+      "path": "docs/research/tw-entry-scene-join-and-path-direction-20261019.md",
+      "sha256": "b8a6e25a68593147eb8ae42f6e7e0849d396693c48090a7efb5a8ef70e2eb32b"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 #include "game/TaiwanNativeHmdBundleSource.h"
+#include "protocol/RecoveredWorldEntryView.h"
 #include <algorithm>
 #include <charconv>
 #include <limits>
@@ -14,6 +15,15 @@ using Source=TaiwanNativeHmdBundleSource;
 using Selection=TaiwanNativeResourceSelection;
 using Scene=SharedTaiwanNativeMovementScene;
 bool digest_text(std::string_view s){return s.size()==64&&s.find_first_not_of("0123456789abcdef")==s.npos;}
+bool entry_matches(const Session::NormalWorldInitialization& initial,const RecoveredWorldEntryView& frame,const Scene::Lease& lease){
+    // The original issued entry identifies this reservation. Its coordinates
+    // do not become the saved position again after a committed ordinary walk.
+    return initial.qualified_scene_identity()&&initial.entry_written()&&initial.entry_frame()==frame.wire&&
+        initial.entry_logical().size()==frame.logical.size()&&
+        std::equal(initial.entry_logical().begin(),initial.entry_logical().end(),frame.logical.begin())&&
+        frame.actor_handle==lease.actor_handle&&frame.area==lease.position.area&&
+        frame.scene==lease.position.scene&&frame.x==lease.position.x&&frame.y==lease.position.y;
+}
 Bytes ascii_path(const std::filesystem::path& path){
     Bytes out;for(const auto c:path.wstring()){
         if(c<0x20||c>=0x7f)throw std::invalid_argument("HMD root needs qualified ASCII byte paths");
@@ -120,6 +130,7 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
         const std::weak_ptr<Session> session;
         const Scene::Lease lease;
         const Session::NormalWorldInitialization initialization;
+        const RecoveredWorldEntryView entry_view;
         const std::uint64_t battle;
         const std::shared_ptr<Version> version;
         const std::shared_ptr<const Bundle> bundle;
@@ -251,7 +262,7 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
             return peer&&ready(*peer,entry->lease)&&entry->token->current()&&entry->token->owned_by(*peer,entry->lease)&&
                 version==entry->version&&at!=entries.end()&&at->second.lock()==entry&&map!=entry->version->cache.end()&&map->second==entry->bundle&&
                 peer->battle_generation()==entry->battle&&peer->normal_world_initialization_current_on_game(entry->initialization)&&
-                entry->initialization.entry_written()&&scope.lease==entry->lease&&scope.position.area==entry->bundle->key.first&&
+                entry_matches(entry->initialization,entry->entry_view,entry->lease)&&scope.lease==entry->lease&&scope.position.area==entry->bundle->key.first&&
                 scope.position.scene==entry->bundle->key.second&&scope.direction<=7&&images.complete()&&images.composed_grid&&
                 images.actual_resource_generation==entry->prepared->resources().actual_resource_generation&&
                 images.actual_initial_scene_generation==entry->prepared->resources().actual_initial_scene_generation&&
@@ -276,7 +287,9 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
            scope.saved_position.scene!=scope.lease.position.scene||presence->saved_position(scope.lease)!=std::optional{scope.saved_position})return {};
         const auto found=entries.find(session.id());const auto previous=found==entries.end()?std::shared_ptr<Entry>{}:found->second.lock();affected=previous;
         if(!previous&&entries.size()>=capacity)return {};
-        const auto initial=session.normal_world_initialization();if(!initial||!initial->entry_written())return {};
+        const auto initial=session.normal_world_initialization();if(!initial)return {};
+        const auto entry_view=RecoveredWorldEntryView::read(initial->entry_frame());
+        if(!entry_view||!entry_matches(*initial,*entry_view,scope.lease))return {};
         const auto battle=session.battle_generation();
         auto pose=pose_source(session,scope);
         const auto local=[&]{return !closed&&!reentered&&version==v&&ready(session,scope.lease)&&token->current()&&
@@ -289,7 +302,7 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
         const auto scene_epoch=epoch();
         Scene::Resources images{{0,{}},{},{},bundle->epoch,scene_epoch,bundle->grid};
         auto prepared=TaiwanNativeHmdBundleSource::prepared(bundle->sources,bundle->binding,std::move(images),token,v->configuration.limits);
-        auto entry=std::make_shared<Entry>(Entry{peer,scope.lease,*initial,battle,v,bundle,std::move(*pose),token,prepared});affected=entry;
+        auto entry=std::make_shared<Entry>(Entry{peer,scope.lease,*initial,*entry_view,battle,v,bundle,std::move(*pose),token,prepared});affected=entry;
         Input input{bundle->sources,v->configuration.limits.hmd_plain,v->configuration.limits.rom_plain,bundle->epoch,scene_epoch,
             scope.saved_position,entry->pose.direction,{},{},{},token,prepared};
         const auto self=shared_from_this();input.current=[self,entry](auto check,const auto& supplied_scope,const auto& resources,const auto& sources){

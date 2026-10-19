@@ -9,6 +9,7 @@
 #include "protocol/RecoveredCharacterBootstrap.h"
 #include "protocol/RecoveredCharacterCreateResult.h"
 #include "protocol/RecoveredWorldStateCandidate.h"
+#include "protocol/RecoveredWorldEntryView.h"
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -337,7 +338,7 @@ struct CatalogFixture {
         record.bind(1,source.dataset_id);record.bind(2,digest(row));record.bind_blob(3,row);record.done();
     }
 };
-void hmd_bundle_lifecycle(std::uint16_t selected_scene){
+void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_fault=0){
     TemporaryFiles files;CatalogFixture catalog;
     const auto map=files.root/"Data2"/"map"/"fix";
     const auto selected=selected_scene==0?map/"indoor"/"one.hmd":map/"zero.hmd";
@@ -355,11 +356,21 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene){
     auto presence=std::make_shared<SharedWorldPresence>(*catalog.characters);
     const auto no_reply=[](Session&,auto)->std::optional<Bytes>{return Bytes{};};
     BundleSessionPeer first(false,no_reply,a,48301,41),second(false,no_reply,b,48302,42);
-    const auto la=presence->prepare(first.session->id(),BundleSessionPeer::account,a,41,pa);
+    // Fault5 leaves actual2A/prepared_actor/tail coherently41, but the genuine
+    // independent reservation issuer uses43. Neither private source is forged.
+    const auto reservation_actor=static_cast<std::uint16_t>(entry_geometry_fault==5?43:41);
+    const auto la=presence->prepare(first.session->id(),BundleSessionPeer::account,a,reservation_actor,pa);
     const auto lb=presence->prepare(second.session->id(),BundleSessionPeer::account,b,42,pb);
-    require(la&&lb&&presence->activate(*la,41)&&presence->activate(*lb,42),"Real prepared/ready scene leases unavailable");
+    require(la&&lb&&presence->activate(*la,reservation_actor)&&presence->activate(*lb,42),"Real prepared/ready scene leases unavailable");
     first.common_source_generation=la->generation;second.common_source_generation=lb->generation;
-    first.world_frame=RecoveredWorldEntry::wire(41,profile,pa.x,pa.y,pa.area,pa.scene);
+    // The actual Session writes these full bytes. Faults do NOT alter the
+    // original ready lease or its durable saved position to make a false match.
+    require(entry_geometry_fault<=5,"Unknown entry geometry fixture fault");
+    first.world_frame=RecoveredWorldEntry::wire(41,profile,
+        static_cast<std::uint16_t>(pa.x+(entry_geometry_fault==1)),
+        static_cast<std::uint16_t>(pa.y+(entry_geometry_fault==2)),
+        static_cast<std::uint16_t>(pa.area+(entry_geometry_fault==3)),
+        static_cast<std::uint16_t>(entry_geometry_fault==4?(pa.scene^1):pa.scene));
     second.world_frame=RecoveredWorldEntry::wire(42,profile,pb.x,pb.y,pb.area,pb.scene);
     first.select(false);first.send(BundleSessionPeer::tail(41));first.silent();
     second.select(false);second.send(BundleSessionPeer::tail(42));second.silent();
@@ -379,7 +390,21 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene){
     auto bundle=Bundle::create(*catalog.catalog,presence,2,config,pose);
     const auto supply=bundle->input_source();
     const Scene::FactoryScope sa{*la,pa},sb{*lb,pb};
+    const auto original_init=first.session->normal_world_initialization();
+    require(original_init&&original_init->qualified_scene_identity()&&original_init->entry_written()&&
+        first.session->normal_world_initialization_current_on_game(*original_init),"Actual original 2A INIT not Written/current");
+    const auto entry=RecoveredWorldEntryView::read(original_init->entry_frame());
+    require(entry&&entry->actor_handle==41,"Actual original 2A actor differs from its real Session prepared actor");
     auto ia=supply(*first.session,sa),ib=supply(*second.session,sb);
+    if(entry_geometry_fault) {
+        require((entry->actor_handle!=la->actor_handle||entry->area!=la->position.area||entry->scene!=la->position.scene||entry->x!=la->position.x||entry->y!=la->position.y)&&
+            !ia&&ib&&ib->prepared_bundle&&presence->retained_ready_current(*la)&&presence->saved_position(*la)==std::optional{pa}&&
+            first.session->normal_world_initialization_current_on_game(*original_init)&&!first.session->closing(),
+            "Mismatched actual 2A actor/geometry supplied resources, rewrote saved pose or closed a valid real Session");
+        bundle->stop();return;
+    }
+    require(entry->actor_handle==la->actor_handle&&entry->area==la->position.area&&entry->scene==la->position.scene&&entry->x==la->position.x&&entry->y==la->position.y,
+        "Positive bundle fixture does not match its original actual 2A/lease");
     require(ia&&ib&&ia->prepared_bundle&&ib->prepared_bundle&&ia->source_lifetime&&ib->source_lifetime,
         "Actual CAN selection did not issue complete prepared scene supplies");
     require(!ia->authority&&!ia->owned_ordinary&&ia->actual_direction==2&&ia->actual_position==pa,
@@ -462,11 +487,29 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene){
     require(bundle->publish(config)&&!current(*stable,*la)&&!current(*ib,*lb),"Successful whole-version publication retained old Current");
     auto latest=supply(*first.session,sa);require(latest&&current(*latest,*la),"Published complete version could not supply actual current scene");
     auto latest_other=supply(*second.session,sb);require(latest_other&&current(*latest_other,*lb),"New version could not supply second actual Session");
+    // Genuine same-map common position CAS: this tests source lineage, not a
+    // native movement permit or walkability rule. The original 2A and lease
+    // remain the actual entry pose; only saved position/revision advances.
+    const auto moved=presence->commit_owned_step(*la,pa,static_cast<std::uint16_t>(pa.x+1),pa.y);
+    require(moved&&moved->revision>pa.revision&&moved->x==pa.x+1&&presence->saved_position(*la)==moved,
+        "Actual common position CAS did not advance the durable saved prefix");
+    const Scene::FactoryScope moved_scope{*la,*moved};
+    auto moved_input=supply(*first.session,moved_scope);
+    const auto after_init=first.session->normal_world_initialization();
+    require(moved_input&&moved_input->actual_position==*moved&&moved_input->actual_direction==2&&
+        moved_input->actual_initial_scene_generation!=latest->actual_initial_scene_generation&&
+        after_init&&after_init->same_initialization(*original_init)&&
+        first.session->normal_world_initialization_current_on_game(*original_init)&&
+        !current(*latest,*la)&&current(*moved_input,*la)&&!supply(*first.session,sa)&&current(*moved_input,*la),
+        "Saved-after pose was compared to original 2A instead of its immutable lease entry pose");
+    const auto retained_entry=RecoveredWorldEntryView::read(after_init->entry_frame());
+    require(retained_entry&&retained_entry->x==la->position.x&&retained_entry->y==la->position.y&&retained_entry->x!=moved->x,
+        "Position advance rewrote or reminted the original entry evidence");
     // A bare phase toggle is NOT a genuine post-battle INIT issuer. Prove it
     // cannot bypass that prerequisite; successful real return refresh is outside
     // this fixture until the actual native return/INIT owner is supplied.
     first.session->set_state(SessionState::InBattle);first.session->set_state(SessionState::InWorld);
-    require(!current(*latest,*la)&&!supply(*first.session,sa)&&current(*latest_other,*lb),
+    require(!current(*moved_input,*la)&&!supply(*first.session,moved_scope)&&current(*latest_other,*lb),
         "Battle transition reused a pre-battle INIT/source or retired another Session");
     bundle->stop();
     bool stopped_current=false,stopped_read=false;
@@ -479,4 +522,5 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene){
 // Parent registers this named suite; no static initializer runs test code.
 void test_taiwan_native_hmd_bundle_source(){
     complete_can_bounds();hmd_bundle_lifecycle(0);hmd_bundle_lifecycle(1);
+    for(unsigned fault=1;fault<=5;++fault)hmd_bundle_lifecycle(0,fault);
 }
