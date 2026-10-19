@@ -7,6 +7,7 @@
 #include "handlers/RecoveredBattleService.h"
 #include "scripting/LuaEngine.h"
 #include "protocol/RecoveredSeedExchange.h"
+#include "protocol/RecoveredTaiwanInventoryItemRecord.h"
 #include "protocol/RecoveredPostSeed.h"
 #include "protocol/RecoveredCharacterBootstrap.h"
 #include "protocol/RecoveredCharacterCreateResult.h"
@@ -402,10 +403,11 @@ void recovered_callback_output_transport() {
 
 // True Registry -> helper private commit -> typed original sender custody.
 // These are source regressions only; matching baseline S31 bytes carry no tag.
-// Isolated regression material only: no learned book, activation grant or native
-// gameplay formula is invented. All private readsets/commits come from their
-// real repository issuers; the actual Session writes the original restoration.
-void recovered_legacy_selection_learning_reanchor() {
+// Isolated regression material: empty mode has no book entitlement; book mode
+// declares a synthetic acquisition and obtains actual learning events through
+// repository issuers. Neither mode proves a native grant or gameplay formula.
+// The actual Session writes the original restoration and learning responses.
+void recovered_legacy_selection_learning_reanchor(bool with_book=false) {
     using Source=LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource;
     using Restoration=RecoveredOwnedCompanions::Restoration;
     struct Close {void operator()(sqlite3* value)const {sqlite3_close_v2(value);}};
@@ -436,7 +438,7 @@ void recovered_legacy_selection_learning_reanchor() {
         metadata.bind(3,std::string(64,'a'));metadata.done();
         RecoveredDeityState::Declaration::Bytes declaration{0x30,key,'L'};
         RecoveredDeityState::Status::Bytes status{0x31,key,1};
-        const std::array<std::uint8_t,4> skill{0x34,key,0,1};
+        const std::array<std::uint8_t,4> skill{0x34,key,0,static_cast<std::uint8_t>(with_book?2:1)};
         companions.store_deity(RecoveredSessionPeer::account,character,
             {*RecoveredDeityState::Declaration::parse(declaration),*RecoveredDeityState::Status::parse(status),
                 {*RecoveredDeityState::Skill::parse(skill)}},{},
@@ -445,6 +447,26 @@ void recovered_legacy_selection_learning_reanchor() {
     const auto root=characters.list_for_account(RecoveredSessionPeer::account).front();
     // An explicitly empty full population is not an implicit free-cell grant.
     OwnedInventorySnapshot bag{root,1,std::string(64,'b'),"fixture-empty-full-population",{}};
+    // Optional chronology run: explicit CUSTOM_TEST_NOT_NATIVE acquisition and
+    // binding. Both aliases come from this ONE complete fixture S3B25 record.
+    // Neither the fixture nor its copied definition proves native entitlement.
+    RecoveredTaiwanInventoryItemRecord::Instance book_instance{};
+    book_instance[0]=0x65;book_instance[1]=0x19;book_instance[18]=0xa5;book_instance[19]=0x5a;
+    const RecoveredTaiwanInventoryItemRecord::Fields book_fields{2,0,0xb7a5,book_instance};
+    const auto book_record=RecoveredTaiwanInventoryItemRecord::encode(book_fields);
+    require(book_record.has_value(),"Fixture full skill-book material rejected");
+    if(with_book) {
+        const auto identity=std::vector<std::uint8_t>(book_instance.begin(),book_instance.end());
+        const auto material=std::vector<std::uint8_t>(book_record->begin(),book_record->end());
+        const auto pin=NativeEquipmentSnapshot::client_pin;
+        const std::string evidence="CUSTOM_TEST_NOT_NATIVE:round482-book-source";
+        OwnedItemNativeAlias item20{pin,"tw149c-item20",std::string(64,'d'),evidence,6501,0,1,identity};
+        OwnedItemNativeAlias item25{pin,"tw149c-item3b25-material",std::string(64,'d'),evidence,6501,0,1,material};
+        OwnedInventoryInstance item{9001,6501,2,1,true,std::string(64,'e'),
+            "CUSTOM_TEST_NOT_NATIVE:round482-authorized-acquisition",{item20,item25}};
+        bag.cells={{"bag",0,item},{"bag",1,std::nullopt}};
+        bag.source_record="CUSTOM_TEST_NOT_NATIVE:round482-whole-book-population";
+    }
     require(inventory.replace_from_issuer({},bag,[&](const auto&,const auto&,auto){return std::optional{bag};}).has_value(),
         "Legacy learning full inventory fixture missing");
     NativeEquipmentSnapshot worn{root,position,NativeEquipmentSnapshot::client_pin,NativeEquipmentSnapshot::kind,
@@ -452,21 +474,72 @@ void recovered_legacy_selection_learning_reanchor() {
     worn.record[1]=0xa5;worn.record[2]=0x5a; // Opaque empty-cell bytes must survive.
     worn.record[1200]=0xda;worn.record[1201]=static_cast<std::uint8_t>(actor);
     worn.record[1202]=static_cast<std::uint8_t>(actor>>8);worn.record[1214]=0x82;
+    if(with_book) {
+        worn.record[0]=2;
+        std::copy(book_instance.begin(),book_instance.end(),worn.record.begin()+4);
+        worn.source_record="CUSTOM_TEST_NOT_NATIVE:round482-complete-book-bank";
+    }
     require(equipment.replace_from_issuer({},worn,[&](const auto&,const auto&,auto){return std::optional{worn};}).has_value(),
         "Legacy learning full equipment fixture missing");
+    if(with_book) {
+        // Copy the exact retained historical Taiwan0/1 definition, NOT an
+        // invented native row. The SKB raw/parsed bytes and acquisition below
+        // are digest-consistent synthetic TEST material for CUSTOM-0148 only.
+        sqlite_detail::execute(raw,"INSERT INTO native_data_sources VALUES('current-skill-catalog-v1','fixture-only/retained-tw0-1.bin','7676acd93f164d071f7681a3fe74de94d65892759dbf2e69e3c0f748423d2f51','7676acd93f164d071f7681a3fe74de94d65892759dbf2e69e3c0f748423d2f51','149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763','fixture-retained-source','0x1','0x2',448)");
+        sqlite_detail::execute(raw,"INSERT INTO native_data_sources VALUES('current-skill-books-v1','Data2/Patch/Comm/gamedata.csvZ','70a4e7dd1a1f66d7a70f5c5e97c77ef4063904cc473292758c5abd2da7bd8731','75c3c37947a64b0917fbf8e546884d9bf893fe6a606d3e2b8f3b1857966b1815','149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763','SKB','0x59420','0xA8E10',381)");
+        const std::array<std::uint8_t,110> definition{
+            0x01,0x00,0xbc,0x43,0xb3,0x4e,0x4c,0x76,0x31,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0xbc,0x43,0xa4,0x40,0x20,0x20,0xbb,0x61,0xaa,0xc6,0xb3,0x5a,0x20,0x20,0xbc,0x43,
+            0xae,0xf0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x01,0x00,0x05,0x00,0x03,0x01,0x3c,0x01,0x01,0x00,0x11,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+            0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x01,0x01,0x00
+        };
+        sqlite_detail::Statement row(raw,"INSERT INTO native_skill_catalog VALUES('current-skill-catalog-v1',0,8,'a9ae52a190a314de68c86fea4fbc8a59d4e70ede8287e349f38638335596c5ab',?,0,1)");
+        row.bind_blob(1,definition);row.done();
+        // SHA256('A') and SHA256(396 zero bytes), independently fixed fixture
+        // bytes; no claim these are a recovered original SKB resource record.
+        sqlite_detail::execute(raw,"INSERT INTO native_skill_books VALUES('current-skill-books-v1',0,1,0,6501,'559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',X'41','58553b15fb3888e443e29fff5663675b8f70e37f0ea6c54076489d6ff04c1032',zeroblob(396))");
+        sqlite_detail::execute(raw,"INSERT INTO native_skill_book_bindings VALUES('current-skill-books-v1','current-skill-catalog-v1',0,1,6501)");
+        const auto bound=books.lookup_item(6501);const auto native=skills.lookup_shared_definition_main(0,1);
+        require(bound&&native&&native->definition.chosen_profile,"Fixture book or exact pinned source was not admitted by real readers");
+    }
     auto canonical=std::make_shared<const Restoration>(helper.restore_with_source(RecoveredSessionPeer::account,character,repository));
     require(canonical->learning_source()&&canonical->learning_source()->activations().empty(),
         "Legacy learning fixture manufactured an activation");
     const auto original=canonical;
-    LuaEngine lua;OwnedSkillBookLearningService learning(repository,lua,1);
+    LuaEngine lua(std::filesystem::path(GOD2_SOURCE_DIR)/"scripts");
+    if(with_book)require(lua.initialize(),"CUSTOM-0148 real Lua policy initialization failed");
+    OwnedSkillBookLearningService learning(repository,lua,1);
     LegacyTaiwanOwnedDeitySelectionRegistry registry(1,helper);
     std::vector<Session::WorldRecordsWrite> restoration_writes;
     std::optional<Session::NormalWorldInitialization> initialization;
     std::optional<Session::WorldCallbackOutput> output;
     std::optional<Source> applied;
     unsigned idle_stage=0,selection_callbacks=0,pending_refusals=0;
+    unsigned learning_callbacks=0;
+    bool learning_pending_refused=false;
+    std::optional<Session::WorldResponseWrite> bootstrap_response,learning_response;
+    std::optional<OwnedSkillBookLearningService::LearningPublication> latest_learning;
+    std::optional<OwnedSkillBookLearningService::WrittenLearningSource> last_learning_source;
     bool pending_registry_refused=false,bootstrapped=false;
     RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
+        if(with_book&&records.size()==1)if(const auto* request=std::get_if<RecoveredInventoryItemRequest::Request>(&records.front())) {
+            require(bootstrapped&&applied&&applied->current(session),"Book use lost the actual prior Written legacy selection");
+            auto result=learning.use_with_source(session,*request);
+            require(result&&result->publication(),"Actual CUSTOM-0148 learning did not issue its private committed publication");
+            const auto publication=*result->publication();
+            auto response=std::move(*result).take_wire();
+            require(!response.empty(),"Real learning debit returned no original output");
+            learning_response=session.observe_world_response(response);
+            session.hold_world_input_until_response_written(*learning_response);
+            learning.bind_learning_response(session,publication,*learning_response);
+            latest_learning=publication;++learning_callbacks;
+            learning_pending_refused=learning_response->status()==Session::WorldResponseWriteStatus::Pending&&
+                !learning.written_learning_source(session,publication)&&!learning.learning_publication_current(session,publication);
+            return response;
+        }
         const bool idle=std::all_of(records.begin(),records.end(),[](const auto& record){
             return std::holds_alternative<RecoveredWorldRecords::Tick>(record);
         });
@@ -485,7 +558,16 @@ void recovered_legacy_selection_learning_reanchor() {
                     return original;
                 };
                 const auto bootstrap=learning.bootstrap(session,{},supplied);
-                require(bootstrap&&bootstrap->empty(),"Empty real learning bootstrap fabricated an output receipt");
+                require(bootstrap.has_value(),"Real learning bootstrap source was rejected");
+                if(with_book) {
+                    require(!bootstrap->empty(),"Owned book bootstrap omitted actual material");
+                    bootstrap_response=session.observe_world_response(*bootstrap);
+                    session.hold_world_input_until_response_written(*bootstrap_response);
+                    learning.bind_bootstrap_response(session,*bootstrap_response);
+                    bootstrapped=true;
+                    return *bootstrap;
+                }
+                require(bootstrap->empty(),"Empty real learning bootstrap fabricated an output receipt");
                 bootstrapped=true;
             }
             return std::vector<std::uint8_t>{};
@@ -518,7 +600,16 @@ void recovered_legacy_selection_learning_reanchor() {
     const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
     peer.send(tick);
     for(const auto& batch:original->batches())peer.expect(RecoveredWorldFrame::encode(batch));
-    peer.silent();peer.send(tick);peer.silent();
+    peer.silent();peer.send(tick);
+    if(with_book) {
+        std::vector<std::uint8_t> logical(book_record->begin(),book_record->end());
+        const auto absolute=RecoveredInventory::encode_slot_update({6501,0,2});require(absolute.has_value(),"Fixture absolute book count invalid");
+        logical.insert(logical.end(),absolute->begin(),absolute->end());
+        peer.expect(RecoveredWorldFrame::encode(logical));
+    }
+    peer.silent();
+    if(with_book)require(bootstrap_response&&bootstrap_response->status()==Session::WorldResponseWriteStatus::Written,
+        "Actual original book bootstrap output did not become Written");
     require(bootstrapped&&initialization&&peer.session->normal_world_initialization_current_on_game(*initialization),
         "Legacy learning bootstrap did not retain its real INIT");
     const auto send_selection=[&](std::initializer_list<std::uint8_t> keys) {
@@ -567,6 +658,46 @@ void recovered_legacy_selection_learning_reanchor() {
     require(!learning.reanchor_selection(*peer.session,canonical,next,first)&&
             !learning.reanchor_selection(*peer.session,next,next,first),"Same private legacy source reanchored twice");
     canonical=next;applied=first;
+    // This is the actual Session/Service/repository chronology, not execution
+    // of Application's outer wrapper graph. No private source is test-minted.
+    const auto learn_book=[&](std::uint8_t subject,std::uint8_t remaining) {
+        const auto previous=latest_learning;
+        const auto predecessor=canonical;
+        const auto prior_source=last_learning_source;
+        const auto request=RecoveredInventoryItemRequest::encode({6501,0,0xa5});
+        const std::array<std::uint8_t,13> delta{0x34,subject,0,1,0x35,subject,0,1,0x41,
+            static_cast<std::uint8_t>(remaining?0x65:0),static_cast<std::uint8_t>(remaining?0x19:0),0,remaining};
+        peer.send(RecoveredWorldFrame::encode(request));peer.expect(RecoveredWorldFrame::encode(delta));peer.silent();
+        require(learning_pending_refused&&latest_learning&&learning_response&&
+                learning_response->status()==Session::WorldResponseWriteStatus::Written,
+            "Learning adopted before its true original response was Written");
+        const auto written=learning.written_learning_source(*peer.session,*latest_learning);
+        require(written&&written->current(*peer.session)&&written->follows(previous)&&
+                written->original_restoration()==predecessor&&written->logical_delta()==delta,
+            "Learning lost its full predecessor, real13-byte delta or private chronology");
+        if(previous)require(!written->follows({}),"A later real learning event forgot its selection-separated predecessor");
+        if(prior_source)require(!prior_source->current(*peer.session),"New learning revived the older consumed learning source");
+        auto history=predecessor->batches();history.emplace_back(delta.begin(),delta.end());
+        const auto successor=helper.learning_successor_from_committed(*predecessor,written->committed(),std::move(history));
+        require(successor&&successor->learning_source()&&helper.restoration_current(*successor),
+            "Real learning commit did not advance the complete restoration");
+        const auto& state=*successor->learning_source();
+        require(state.activations().size()==learning_callbacks&&state.activations().back().subject==subject&&
+                state.activations().back().event_id.starts_with("CUSTOM-0148:"),
+            "Actual learning issuer failed to preserve activation header/event lineage");
+        const auto slot=std::find_if(state.inventory().cells.begin(),state.inventory().cells.end(),[](const auto& cell){
+            return cell.location_kind=="bag"&&cell.location_index==0;
+        });
+        require(slot!=state.inventory().cells.end()&&
+                (remaining?(slot->instance&&slot->instance->quantity==remaining):!slot->instance)&&
+                state.equipment().record[0]==remaining&&state.equipment().record[1]==0xa5&&state.equipment().record[2]==0x5a,
+            "Actual book debit corrupted canonical count, full native bank or opaque bytes");
+        require(inventory.load(RecoveredSessionPeer::account,character)==std::optional{state.inventory()}&&
+                equipment.load(RecoveredSessionPeer::account,character,NativeEquipmentSnapshot::client_pin,NativeEquipmentSnapshot::kind)==std::optional{state.equipment()},
+            "Written learning did not retain its actual committed complete material");
+        canonical=std::make_shared<const Restoration>(*successor);last_learning_source=written;
+    };
+    if(with_book)learn_book(1,1);
     for(const std::uint8_t key:{std::uint8_t{1},std::uint8_t{2}}) {
         const auto written=send_selection({key});
         const auto successor=helper.selection_successor_from_committed(*canonical,written.publications());
@@ -576,6 +707,14 @@ void recovered_legacy_selection_learning_reanchor() {
                 !learning.reanchor_selection(*peer.session,canonical,after,written),
             "Repeated selected key or next C67 failed exactly-once reanchor");
         canonical=std::move(after);applied=written;
+        if(with_book&&last_learning_source)require(!last_learning_source->current(*peer.session),
+            "Written next C67 failed to retire the old learning Current");
+    }
+    if(with_book) {
+        // A second genuine learning event on the newly selected deity proves
+        // prior chronology survives BOTH repeated-key and changed-key C67.
+        learn_book(2,0);
+        require(learning_callbacks==2,"Chronology fixture did not perform both actual book debits");
     }
     // Complete equipment provenance changes are not cured by matching S31 bytes.
     const auto last=send_selection({3});
@@ -1799,6 +1938,7 @@ void test_session_state() {
     recovered_callback_output_transport();
     recovered_causal_deity_reply_transport();
     recovered_legacy_selection_learning_reanchor();
+    recovered_legacy_selection_learning_reanchor(true);
     recovered_written_deity_selection_transport();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {

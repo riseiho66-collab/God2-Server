@@ -1,0 +1,543 @@
+{
+  "round": 482,
+  "phase": "PHASE1 SOURCE/STATIC ONLY",
+  "archive": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482",
+  "pins": [
+    {
+      "kind": "client",
+      "path": "C:/Users/risei/Desktop/God2/God2/God2.exe",
+      "bytes": 3237888,
+      "sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48"
+    },
+    {
+      "kind": "skill_bin",
+      "path": "C:/Users/risei/Desktop/God2/God2/Data2/Fight/Spg/cbspec2.bin",
+      "bytes": 112660,
+      "sha256": "3adcda70a477086da50411fe5d023eec33f915efafd17ec478d55542cae42ea7"
+    },
+    {
+      "kind": "frozen_126",
+      "path": "C:/Users/risei/Desktop/God2/God2-Server/src/protocol/ShunyingSanshazhanReply.h",
+      "bytes": 3718,
+      "sha256": "71ec820adbbe48e6461ca1de4f0689cecd5a99842e03fb02098fc179be737c8e"
+    },
+    {
+      "kind": "frozen_150",
+      "path": "C:/Users/risei/Desktop/God2/God2-Server/src/protocol/ThousandBullsReply.h",
+      "bytes": 3570,
+      "sha256": "5f0a9d91835b9d56940b41914f233c92256e17f4fa9c08b1c2cbae051fe3c8cd"
+    }
+  ],
+  "sources": [
+    {
+      "path": "tests/test_session_state.cpp",
+      "sha256": "e9cef575114280e9953b3d24372afc426ad61398acae3ad7770e64e210e5f4a8",
+      "changed": true
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "f82e9fa173b007fa625d0c4a8f3f14911752de88e4033374fbce79a596f8073e",
+      "changed": false
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "4bd153ebcc317c0b4506b02f38b3d37de9380ad18b50cdbba2bf045dd69d4be6",
+      "changed": false
+    },
+    {
+      "path": "src/game/LegacyTaiwanOwnedDeitySelectionRegistry.cpp",
+      "sha256": "ba2b0dc42d2e5690bce709ac3a9c1de6a14bd5118b71f8d268d88631b13665dc",
+      "changed": false
+    },
+    {
+      "path": "src/handlers/OwnedSkillBookLearningService.cpp",
+      "sha256": "a72b192ee511d0dc118d9455e91fb4225f3e3ab3be3b5ec2a0ba27c49bf66c9d",
+      "changed": false
+    },
+    {
+      "path": "src/handlers/RecoveredWorldService.cpp",
+      "sha256": "0078bdc17393406a54403d7c2b17f01fac833566cf75275c7083e24d7dd2fdb9",
+      "changed": false
+    },
+    {
+      "path": "src/game/TaiwanNativeActorResourceSource.h",
+      "sha256": "c09ed1221844fbe1446d8a998b2e465b46fcd2e1ccf9e40d2d79332743fe6256",
+      "changed": false
+    },
+    {
+      "path": "src/game/TaiwanNativeMapAsset.h",
+      "sha256": "7022c6a3c99f435e218a8996790c4da049c2287dea3044d937f72d80a4590783",
+      "changed": false
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneResourceOwner.h",
+      "sha256": "20db9ddd537ee00642f5a164d0882bd391f0dbacece8ce00e35eeabca3b3193b",
+      "changed": false
+    },
+    {
+      "path": "src/db/NativeMapCatalog.h",
+      "sha256": "85c3c9927ec61e490ac43bc68d52d871d74952b8720c5dd3dc1dfe565c8314d9",
+      "changed": false
+    }
+  ],
+  "native": [
+    {
+      "version": 5,
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-decompile-v5.json",
+      "sha256": "647d368a9d28e5957ddb13d259f6c0e9eb1ad3aa2b5b46b72b8f031b51e00f2e",
+      "evidence_id": "ev_6ac4c57770ebd67947481a6e578cce8e2275b21b31cff737b79ed0e819051e65",
+      "addresses": [
+        "0x41bdc0"
+      ],
+      "close_is_error": false
+    },
+    {
+      "version": 6,
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-decompile-v6.json",
+      "sha256": "deaad1690a956ab3030a079db4bfa038fe6d3a24d3bd6b12233ec4874177a63e",
+      "evidence_id": "ev_ed11f6a1164669ed5e8b39cd38160840b0a88471f7a80dd4bceecf6b9292c36d",
+      "addresses": [
+        "0x425ba0"
+      ],
+      "close_is_error": false
+    },
+    {
+      "version": 7,
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-decompile-v7.json",
+      "sha256": "fb9c80ea05964c5aa186555fab018c3743bfb2ef88b760857c13dc5945b5dac5",
+      "evidence_id": "ev_00d31fbf4e7dc035a28fd01b3489d5f8dabfbaa6c4ad7a713f12a43c431ed241",
+      "addresses": [
+        "0x4362f0",
+        "0x437900",
+        "0x44d750"
+      ],
+      "close_is_error": false
+    },
+    {
+      "version": 8,
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-decompile-v8.json",
+      "sha256": "adbac8735fad31ac220c4be4b617515884fabd1362cf30c43885099697342445",
+      "evidence_id": "ev_1523ed2e493b6c90a0ca516a836954121906c50b1b1d9ea71b6e19dfa2cafa23",
+      "addresses": [
+        "0x4370b0",
+        "0x44be40"
+      ],
+      "close_is_error": false
+    },
+    {
+      "version": 9,
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-decompile-v9.json",
+      "sha256": "44c49621826c1c923cb52778596f27d4c5c58c0ecc8497b0e827d9c927d29db7",
+      "evidence_id": "ev_209c8b79a0e78715939baed3e3574a48995e45687289d925787565ba8728e345",
+      "addresses": [
+        "0x55ae6e",
+        "0x55ada3"
+      ],
+      "close_is_error": false
+    },
+    {
+      "version": 10,
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-decompile-v10.json",
+      "sha256": "14007e06ead911f91cdeaafbca8421e8fce61fa0fc622ff82d8d523e56ac546e",
+      "evidence_id": "ev_e0e10a4d2c309c54dc9d979e2f46eb42e0e98fdfd7e153b9fe16194f7715e3b8",
+      "addresses": [
+        "0x55ae41",
+        "0x55aba2",
+        "0x54a8c0",
+        "0x55aebe"
+      ],
+      "close_is_error": false
+    },
+    {
+      "version": 11,
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-decompile-v11.json",
+      "sha256": "5c855f732b0ff04b26dbdbe8e7a98261bcf2439447db3cbb679465b5836ee5d6",
+      "evidence_id": "ev_8029d552f5c18c82ea878285c171304f8d7b4d9d4c1761e322be404937a6c0e0",
+      "addresses": [
+        "0x448300",
+        "0x46bc00",
+        "0x46bb60"
+      ],
+      "close_is_error": false
+    }
+  ],
+  "images": [
+    {
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-seeded-v5.analysis-pe.bin",
+      "sha256": "01e40baf6d0c124f6cf2950ac37890f5e4f1c46c1cef3f30b36aa2ed8076e81f",
+      "original_sections": 13,
+      "original_mapping_and_bytes_identical": true,
+      "sections": [
+        {
+          "name": ".text",
+          "raw_offset": 1536,
+          "raw_bytes": 1503232,
+          "sha256": "76489e472b59c324c729c5528a4b7233a4a3375c2d31eaf88132a6336a5c1ae1"
+        },
+        {
+          "name": ".rdata",
+          "raw_offset": 1504768,
+          "raw_bytes": 73728,
+          "sha256": "17ea1c0ba8f8db4021db3b6e93823bb94b221b32f813f15b59186240e713c71d"
+        },
+        {
+          "name": ".data",
+          "raw_offset": 1578496,
+          "raw_bytes": 1536000,
+          "sha256": "e224184aa8d399488c773f082bbbb913e8c5a0c77c65bac192da1710554634ab"
+        },
+        {
+          "name": ".rsrc",
+          "raw_offset": 3114496,
+          "raw_bytes": 36864,
+          "sha256": "dd097d40dcf010f2edb4e6b7fbf2940fd3a6a289ccdf3f5795b6f181b671b641"
+        },
+        {
+          "name": ".aspack",
+          "raw_offset": 3151360,
+          "raw_bytes": 16384,
+          "sha256": "c7166ee3f40d225e73a8ea6f55c185f123bea4c90c00e475bb316db0323f5dbd"
+        },
+        {
+          "name": ".adata",
+          "raw_offset": 3167744,
+          "raw_bytes": 4096,
+          "sha256": "ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7"
+        },
+        {
+          "name": ".imprec",
+          "raw_offset": 3171840,
+          "raw_bytes": 11776,
+          "sha256": "4e6e04954b1b34c13539ef2309fcef56a0eca611e03bd035f8a8ebb40986cb92"
+        },
+        {
+          "name": ".imefix",
+          "raw_offset": 3183616,
+          "raw_bytes": 16384,
+          "sha256": "269041aca569745a328d1c08a8d566c573aaba5c92bd62d5de4d660f69f5bbaf"
+        },
+        {
+          "name": ".langrs",
+          "raw_offset": 3200000,
+          "raw_bytes": 2560,
+          "sha256": "884c3e47a02ae861e8ac025e0e21375d45b76e8cb320b3b0c131cd65c362157b"
+        },
+        {
+          "name": ".stream",
+          "raw_offset": 3202560,
+          "raw_bytes": 21504,
+          "sha256": "f1844e0b58e3c170a2ba8c9044ce3bbf24b8db9edaf14c12783d50e5d26d7102"
+        },
+        {
+          "name": ".fontcfg",
+          "raw_offset": 3224064,
+          "raw_bytes": 12800,
+          "sha256": "80a58f6d7e1feca7f2477063ec767774c6b8f30d268acf0bb360574c5ccf2567"
+        },
+        {
+          "name": ".syclone",
+          "raw_offset": 3236864,
+          "raw_bytes": 512,
+          "sha256": "39dece7efed5712c2383030c6f6fe6e37d8f500715040717ab09dceab74c1ecc"
+        },
+        {
+          "name": ".cardfix",
+          "raw_offset": 3237376,
+          "raw_bytes": 512,
+          "sha256": "7bb765a5694dde6241e6194b0ad5e2a3fd40241c52599d2b426f91450aab2832"
+        }
+      ],
+      "synthetic_callers_are_not_original": true,
+      "image_executed": false
+    },
+    {
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-seeded-v7.analysis-pe.bin",
+      "sha256": "9ea0333e3525c2b0d33aaa9082dd59d17cb86f7464f900ad07d76fa2560cb507",
+      "original_sections": 13,
+      "original_mapping_and_bytes_identical": true,
+      "sections": [
+        {
+          "name": ".text",
+          "raw_offset": 1536,
+          "raw_bytes": 1503232,
+          "sha256": "76489e472b59c324c729c5528a4b7233a4a3375c2d31eaf88132a6336a5c1ae1"
+        },
+        {
+          "name": ".rdata",
+          "raw_offset": 1504768,
+          "raw_bytes": 73728,
+          "sha256": "17ea1c0ba8f8db4021db3b6e93823bb94b221b32f813f15b59186240e713c71d"
+        },
+        {
+          "name": ".data",
+          "raw_offset": 1578496,
+          "raw_bytes": 1536000,
+          "sha256": "e224184aa8d399488c773f082bbbb913e8c5a0c77c65bac192da1710554634ab"
+        },
+        {
+          "name": ".rsrc",
+          "raw_offset": 3114496,
+          "raw_bytes": 36864,
+          "sha256": "dd097d40dcf010f2edb4e6b7fbf2940fd3a6a289ccdf3f5795b6f181b671b641"
+        },
+        {
+          "name": ".aspack",
+          "raw_offset": 3151360,
+          "raw_bytes": 16384,
+          "sha256": "c7166ee3f40d225e73a8ea6f55c185f123bea4c90c00e475bb316db0323f5dbd"
+        },
+        {
+          "name": ".adata",
+          "raw_offset": 3167744,
+          "raw_bytes": 4096,
+          "sha256": "ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7"
+        },
+        {
+          "name": ".imprec",
+          "raw_offset": 3171840,
+          "raw_bytes": 11776,
+          "sha256": "4e6e04954b1b34c13539ef2309fcef56a0eca611e03bd035f8a8ebb40986cb92"
+        },
+        {
+          "name": ".imefix",
+          "raw_offset": 3183616,
+          "raw_bytes": 16384,
+          "sha256": "269041aca569745a328d1c08a8d566c573aaba5c92bd62d5de4d660f69f5bbaf"
+        },
+        {
+          "name": ".langrs",
+          "raw_offset": 3200000,
+          "raw_bytes": 2560,
+          "sha256": "884c3e47a02ae861e8ac025e0e21375d45b76e8cb320b3b0c131cd65c362157b"
+        },
+        {
+          "name": ".stream",
+          "raw_offset": 3202560,
+          "raw_bytes": 21504,
+          "sha256": "f1844e0b58e3c170a2ba8c9044ce3bbf24b8db9edaf14c12783d50e5d26d7102"
+        },
+        {
+          "name": ".fontcfg",
+          "raw_offset": 3224064,
+          "raw_bytes": 12800,
+          "sha256": "80a58f6d7e1feca7f2477063ec767774c6b8f30d268acf0bb360574c5ccf2567"
+        },
+        {
+          "name": ".syclone",
+          "raw_offset": 3236864,
+          "raw_bytes": 512,
+          "sha256": "39dece7efed5712c2383030c6f6fe6e37d8f500715040717ab09dceab74c1ecc"
+        },
+        {
+          "name": ".cardfix",
+          "raw_offset": 3237376,
+          "raw_bytes": 512,
+          "sha256": "7bb765a5694dde6241e6194b0ad5e2a3fd40241c52599d2b426f91450aab2832"
+        }
+      ],
+      "synthetic_callers_are_not_original": true,
+      "image_executed": false
+    },
+    {
+      "path": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/selection-learning-chronology-round482/entry-downstream-seeded-v11.analysis-pe.bin",
+      "sha256": "e9e5133a6045c0fe6dacf6260bf30f53c47650c122b12b1153fd9ae2d97a1080",
+      "original_sections": 13,
+      "original_mapping_and_bytes_identical": true,
+      "sections": [
+        {
+          "name": ".text",
+          "raw_offset": 1536,
+          "raw_bytes": 1503232,
+          "sha256": "76489e472b59c324c729c5528a4b7233a4a3375c2d31eaf88132a6336a5c1ae1"
+        },
+        {
+          "name": ".rdata",
+          "raw_offset": 1504768,
+          "raw_bytes": 73728,
+          "sha256": "17ea1c0ba8f8db4021db3b6e93823bb94b221b32f813f15b59186240e713c71d"
+        },
+        {
+          "name": ".data",
+          "raw_offset": 1578496,
+          "raw_bytes": 1536000,
+          "sha256": "e224184aa8d399488c773f082bbbb913e8c5a0c77c65bac192da1710554634ab"
+        },
+        {
+          "name": ".rsrc",
+          "raw_offset": 3114496,
+          "raw_bytes": 36864,
+          "sha256": "dd097d40dcf010f2edb4e6b7fbf2940fd3a6a289ccdf3f5795b6f181b671b641"
+        },
+        {
+          "name": ".aspack",
+          "raw_offset": 3151360,
+          "raw_bytes": 16384,
+          "sha256": "c7166ee3f40d225e73a8ea6f55c185f123bea4c90c00e475bb316db0323f5dbd"
+        },
+        {
+          "name": ".adata",
+          "raw_offset": 3167744,
+          "raw_bytes": 4096,
+          "sha256": "ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7"
+        },
+        {
+          "name": ".imprec",
+          "raw_offset": 3171840,
+          "raw_bytes": 11776,
+          "sha256": "4e6e04954b1b34c13539ef2309fcef56a0eca611e03bd035f8a8ebb40986cb92"
+        },
+        {
+          "name": ".imefix",
+          "raw_offset": 3183616,
+          "raw_bytes": 16384,
+          "sha256": "269041aca569745a328d1c08a8d566c573aaba5c92bd62d5de4d660f69f5bbaf"
+        },
+        {
+          "name": ".langrs",
+          "raw_offset": 3200000,
+          "raw_bytes": 2560,
+          "sha256": "884c3e47a02ae861e8ac025e0e21375d45b76e8cb320b3b0c131cd65c362157b"
+        },
+        {
+          "name": ".stream",
+          "raw_offset": 3202560,
+          "raw_bytes": 21504,
+          "sha256": "f1844e0b58e3c170a2ba8c9044ce3bbf24b8db9edaf14c12783d50e5d26d7102"
+        },
+        {
+          "name": ".fontcfg",
+          "raw_offset": 3224064,
+          "raw_bytes": 12800,
+          "sha256": "80a58f6d7e1feca7f2477063ec767774c6b8f30d268acf0bb360574c5ccf2567"
+        },
+        {
+          "name": ".syclone",
+          "raw_offset": 3236864,
+          "raw_bytes": 512,
+          "sha256": "39dece7efed5712c2383030c6f6fe6e37d8f500715040717ab09dceab74c1ecc"
+        },
+        {
+          "name": ".cardfix",
+          "raw_offset": 3237376,
+          "raw_bytes": 512,
+          "sha256": "7bb765a5694dde6241e6194b0ad5e2a3fd40241c52599d2b426f91450aab2832"
+        }
+      ],
+      "synthetic_callers_are_not_original": true,
+      "image_executed": false
+    }
+  ],
+  "current_map_inputs": {
+    "source_static_only": true,
+    "files": [
+      {
+        "kind": "CAN",
+        "path": "C:/Users/risei/Desktop/God2/God2/Data2/map/island01/Island01.can",
+        "bytes": 2580,
+        "sha256": "73156f4c2060f92e1be59fa9c2df30841b3df204121491a765c1ca21e68796ad",
+        "scene15": {
+          "file_count": 36,
+          "scene_count": 130,
+          "scene_slot_offset": 2350,
+          "file_index": 12,
+          "record_offset": 780,
+          "raw_tag": 1,
+          "path_ascii": "indoor\\groceryl.hmd",
+          "raw_record_hex": "01696e646f6f725c67726f636572796c2e686d640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      {
+        "kind": "HMD",
+        "path": "C:/Users/risei/Desktop/God2/God2/Data2/map/island01/indoor/groceryL.hmdZ",
+        "bytes": 329,
+        "sha256": "42d769c0ff328db3e1e295e17208d0db7a0ff12608976f952dae800ff79c3c00"
+      },
+      {
+        "kind": "ROM",
+        "path": "C:/Users/risei/Desktop/God2/God2/Data2/map/island01/indoor/groL.romZ",
+        "bytes": 222205,
+        "sha256": "20e5a8be548993e9d17cca9b2d9292b150f73b7907ed720256132ef4659bce6c"
+      }
+    ],
+    "native_runtime_selection_claimed": false,
+    "server_install_claimed": false
+  },
+  "native_functions_decompiled": 16,
+  "gameplay_completion_percent": null,
+  "classification_delta_claimed": 0,
+  "observations": [
+    "CHouse map+0x98 is the same model manager constructed by44BE40 and passed to44D750",
+    "directory from logical HMD request received by437900 retains last byte0x5C, or becomes empty; map+78 and model+1C(map+B4) receive equal values in distinct objects",
+    "by-value prefix copy at437ADC uses already-truncated stack+B4, not full pathname",
+    "relative request can first expand selected manager base in448300; current .hmdZ filename is not prefix authority",
+    "41BDC0 bounds lowWORD to4096 and writes16 rectangle bytes;425BA0 bounds lowWORD to5000 and owns a copy for nonnull input, null clears pointer"
+  ],
+  "inferences": [
+    "Rectangle fields are display-related; their complete clipping/render effects are not proved here",
+    "54A8C0 is an overlap-safe byte transfer routine; its data paths preserve the copied bytes"
+  ],
+  "audits": [
+    {
+      "topic": "separate C67/book frames in one TCP read",
+      "outcome": "Session preserves each native frame except actual skill continuation; no confirmed merger defect"
+    },
+    {
+      "topic": "same-frame C67/claimed book",
+      "outcome": "learning preflight refuses; Session closes on null result, no live stale baseline proven"
+    },
+    {
+      "topic": "missing C67 key",
+      "outcome": "helper->registry->service propagates null; Session closes, not accepted NoOutput"
+    }
+  ],
+  "regression": {
+    "function": "recovered_legacy_selection_learning_reanchor(bool with_book)",
+    "source_only": true,
+    "executed": false,
+    "covers": [
+      "empty mode retained",
+      "fixture-owned qty2 book bootstrap actual WWR",
+      "C67 Written -> reanchor -> actual Lua/repository book debit",
+      "Pending learning source refused -> actual original WWR Written",
+      "same-key and changed-key C67 -> next reanchor",
+      "second real debit on deity2 follows prior learning",
+      "full inventory/equipment and activation event lineage",
+      "old learning Current retired"
+    ],
+    "fixture": "synthetic acquisition/SKB binding explicitly CUSTOM_TEST_NOT_NATIVE, exact retained historical110 skill definition; no original native entitlement claim",
+    "not_covered": [
+      "complete Application wrapper execution",
+      "same-frame mixed selection/learning support",
+      "compilation",
+      "current-client acceptance"
+    ]
+  },
+  "next_implementation": {
+    "component": "actual immutable CAN/HMD/ROM bundle owner connected to Sources.movement_resources",
+    "required": [
+      "typed bounded C++ CAN issuer using actual current file, not project Python runtime",
+      "explicit root/cwd/selected manager-base authority;43C170 and52F550 are next native context traces",
+      "logical request byte prefix derived by verified437900 rule",
+      "whole selected HMD/ROM sources and placements/sort/Grid",
+      "fresh owner-issued epochs with exact weak Session/full Lease/private entry; Current/install/replace/cleanup",
+      "full2A producer, saved facing and genuine initial actor/NPC scene remain separate requirements"
+    ],
+    "not_allowed": [
+      "reuse actor-resource epoch as a map epoch",
+      "pretend geometry-only outdoor MDL is a fullHMD bundle",
+      "guess NPC72 instances from map placements",
+      "promote retired6bf appearance or historical2A body to current full authority",
+      "claim CAN tag1 dispatch solely from46BB60/46BC00"
+    ]
+  },
+  "execution": {
+    "build": false,
+    "tests": false,
+    "game_sql": false,
+    "migration": false,
+    "native_target": false,
+    "activation": false,
+    "deployment": false
+  },
+  "goal_status": "active"
+}
