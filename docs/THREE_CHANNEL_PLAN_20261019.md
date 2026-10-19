@@ -1,9 +1,11 @@
 # Three-channel native Taiwan delivery plan
 
 Owner requirement: after server selection, offer three channels and switching.
-This extends the active Taiwan-only goal. Current production still creates one
-character listener and one world context; three-channel gameplay and switching
-are not implemented or accepted yet.
+This extends the active Taiwan-only goal. Default Main still selects one
+character listener/world; round491 adds an explicit Application three-frame
+recipe branch with actual three G endpoints and retained selected L routing.
+Complete native providers/default Main selection, shared gameplay bridges and
+durable switching remain open; no three-channel activation or acceptance yet.
 
 1. Bind native selection and switching to actual client group configuration
    with three ordered subgroup slots and full04/05/06 advertisement. Existing
@@ -110,3 +112,34 @@ are not implemented or accepted yet.
 Use C++/Lua, English DB identifiers and Chinese per-table TXT if persistent
 channel tables are required. Preserve Taiwan-only scope, saves/features and
 the project storage limit.
+
+## Round491 actual host branch
+
+The explicit TaiwanThreeChannelPlan overload now constructs one DB/account
+host, one shared three-world custody collection and one real L-issued handoff.
+A GAME factory returns three fresh complete native world plans. Actual existing
+mutable gameplay code is instantiated in three owned frames with copied plan/
+world/output parameters; each has its own Lua, services, maps, tick and native
+Owners. DB schema/catalog qualification occurs once in the host. The legacy
+single-world overload remains unchanged in selection and default Main still
+does not manufacture missing native sources.
+
+Only after all three frames hold and publish their complete exports does the
+host bind all three real G endpoints and publish their observed ports. L list/
+Current/completion/select callbacks retain the actual original selected issuer,
+exact Session/full identity and private Written delivery; later A6/copied bytes
+cannot choose another issuer. Disconnect attempts cleanup through all three
+actual source callbacks. A6/07 keys are routing input, never native authority.
+One L and three G stop observations precede the original NET/GAME join/drain;
+all three frame tails are attempted even if one throws. Retirement/revocation
+precede listener destruction. Exceptional abort drain is still unproved.
+
+Triple mode explicitly refuses configured or effective lab guild mutations
+until one cross-channel audience/invalidation bridge exists, and refuses
+ambiguous Web TwWorld routing until selected-channel forwarding exists. These
+are open feature gaps, not completion. Existing world-transfer/native bridge
+restrictions also remain. Fresh factory callbacks and supplied Live/Authority
+remain trusted sources; metadata cannot certify opaque callback identity.
+Next connect real source providers/default Main, guild mutation invalidation,
+selected Web G forwarding and durable logout/save/admission, then verify all
+six switches and current-client world isolation in the later test phase.

@@ -7,6 +7,8 @@
 #include "core/Application.h"
 #include "core/ApplicationGameFrame.h"
 #include "core/ApplicationGameSources.h"
+#include "core/TaiwanThreeChannelPlan.h"
+#include "game/TaiwanChannelCharacterLists.h"
 #include "core/SharedWorldHostPlan.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
@@ -839,8 +841,7 @@ struct WorldLifecycleVaultGuard {
     ~WorldLifecycleVaultGuard() {if(vault)vault->revoke();}
 };
 }
-static int run_server_impl(const Config& config,const WebServerPlan* web_plan,unsigned run_for_seconds,
-                           const SharedWorldHostPlan* world_plan=nullptr) {
+static void validate_application_world_plan(const Config& config,const SharedWorldHostPlan* world_plan) {
     // CUSTOM-0155: these supplied factories replace the current entry/move
     // dispatcher. Static world policy cannot mint their actual TransferOwner,
     // native resource generations or full opaque entry material.
@@ -889,6 +890,35 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
         config.diagnostic_player_visibility || config.diagnostic_town_player_visibility ||
         config.diagnostic_visibility_battle))
         throw std::invalid_argument("Full native TW entry requires independent actual appearance/visibility sources; candidate projection modes are incompatible");
+}
+static int run_server_impl(const Config& config,const WebServerPlan* web_plan,unsigned run_for_seconds,
+                           const SharedWorldHostPlan* world_plan=nullptr,const TaiwanThreeChannelPlan* channels=nullptr) {
+    if(channels&&world_plan)throw std::invalid_argument("Select a single world plan or a three-channel recipe");
+    if(channels) {
+        channels->validate();config.validate_owned_whole_bag_moves();
+        // Every triple recipe requires these complete native paths. Refuse
+        // independent Config errors before DB/schema/source factory access.
+        if(!config.recovered_account_auth||config.mock_login||
+           config.protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate||!config.recovered_character_creation||
+           !config.recovered_dual_connection||!config.recovered_world_entry||!config.recovered_movement)
+            throw std::invalid_argument("Three channels require complete native TW login/world configuration");
+        if(config.owned_whole_bag_moves_enabled||config.world_transfers_enabled)
+            throw std::invalid_argument("Three-channel native bag/world-transfer bridges remain unimplemented");
+        if(config.owned_player_appearance_enabled||config.diagnostic_owned_weapon_appearance||
+           config.diagnostic_shunying_manual||config.diagnostic_remote_actor||config.diagnostic_player_visibility||
+           config.diagnostic_town_player_visibility||config.diagnostic_visibility_battle)
+            throw std::invalid_argument("Three native channels cannot borrow candidate appearance/visibility modes");
+        if((config.owned_initial_player_enabled&&!config.owned_skillbook_learning_enabled)||
+           (config.owned_pk_invitation_enabled&&(!config.owned_initial_player_enabled||!config.owned_skillbook_learning_enabled)))
+            throw std::invalid_argument("Three-channel initial player/PK requires complete actual player/deity sources");
+        // Until a shared mutation audience bridge is mounted, reject rather
+        // than leave another channel's cached guild rights/panels stale.
+        if(config.owned_guild_membership_enabled||config.owned_guild_announcements_enabled||
+           config.owned_guild_officers_enabled||config.owned_guild_succession_enabled||config.owned_guild_relations53_enabled)
+            throw std::invalid_argument("Three-channel guild mutation audience bridge remains unimplemented");
+        if(web_plan)for(const auto& route:web_plan->routes)if(route.role==WebServerPlan::Role::TwWorld)
+            throw std::invalid_argument("Three-channel Web G selection requires an explicit selected-channel bridge");
+    }else validate_application_world_plan(config,world_plan);
     asio::io_context game;
     // The network context can retain queued session/acceptor callbacks containing
     // game executors even after its workers join. Destroy it before the game context.
@@ -953,6 +983,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 throw std::runtime_error("Formal guild membership cannot borrow native lab privileges");
             const bool guild_membership_enabled=config.owned_guild_membership_enabled || guild_membership_lab;
             const bool guild_entry_enabled=config.owned_guild_membership_enabled || guild_entry_lab;
+            if(channels&&(guild_membership_enabled||guild_entry_enabled))
+                throw std::invalid_argument("Three-channel guild mutation audience bridge cannot borrow lab privileges");
             // CUSTOM-0078: Tick may bootstrap diagnostic combat without an actor
             // request. Exclude those experiments from this modal-input lab so
             // an opening cannot survive an unobserved battle/return cycle.
@@ -978,13 +1010,83 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             SqliteDatabase database(config.database,migrations,config.taiwan_skill_profile);database.initialize();database.migrate();
             // One process host for storage and account hashing. Each gameplay
             // cohort below owns its mutable Lua/services/maps independently.
+            if(config.owned_beast_panel_enabled)database.install_beast_snapshot_schema();
+            // Keep persisted player-created identity available when writes are
+            // disabled, so a kill switch cannot borrow legacy0077 authority.
+            auto* guild_membership_repository=migrations.back().version==53?&database.guild53(flags53).original():migrations.back().version==52?&database.guild_membership52():migrations.back().version==51?&database.guild_membership51():&database.candidate_guild_membership();
+            spdlog::info("OWNED_GUILD_RUNTIME enabled={} ordinary_entry={} lab={} schema={} CUSTOM-0078",
+                guild_membership_enabled,guild_entry_enabled,guild_membership_lab,migrations.back().version);
+            spdlog::info("OWNED_GUILD_ANNOUNCEMENT_RUNTIME enabled={} CUSTOM-0078",config.owned_guild_announcements_enabled);
+            spdlog::get("database")->info("SQLite initialized; migrations applied: {}",config.database.string());
+            if(config.fruit_village_quests_enabled)database.fruit_sources().require_qualified();
+            const auto npc_sources=database.native_npc_display_catalog().count();
+            spdlog::info("NATIVE_NPC_DISPLAY_READY records={} authority=LIVE_MEMORY_VERIFIED_SOURCE_DISPLAY_ONLY no_spawn_or_stat_claim",npc_sources);
+            const auto enemy_sources=database.native_enemy_display_catalog().counts();
+            spdlog::info("NATIVE_ENEMY_DISPLAY_READY records={} visible={} groups={} authority=LIVE_MEMORY_VERIFIED_SOURCE_DISPLAY_ONLY no_spawn_or_stat_claim",enemy_sources.records,enemy_sources.lookup_visible,enemy_sources.groups);
+            const auto quest_sources=database.native_quest_catalog().counts();
+            if(config.owned_daily_quest_views_enabled && database.native_quest_catalog().daily_displays().size()!=85)
+                throw DatabaseError("Owned daily views require complete pinned native316 catalog");
+            if(config.owned_supply_enabled && !database.native_supply_catalog().is_imported())
+                throw DatabaseError("Owned supply requires complete pinned MED02 declarations");
+            if(database.native_armor_catalog().populated())
+                spdlog::info("NATIVE_ARMOR_DEFINITIONS equ=692 teq=662 authority=NATIVE_PARSED_DEFINITION_ONLY no_instances no_combat_formula");
+            if(database.native_weapon_catalog().populated())
+                spdlog::info("NATIVE_WEAPON_DEFINITIONS wpn=630 twp=629 authority=NATIVE_PARSED_DEFINITION_ONLY no_instances no_combat_formula");
+            if(config.owned_weapon_transfers_enabled && !database.native_weapon_catalog().populated())
+                throw DatabaseError("Owned weapon transfers require complete pinned native definitions");
+            if(config.owned_map_views_enabled) {
+                if(!database.native_map_item_catalog().contains(5569) || !database.native_map_item_catalog().contains(5576))
+                    throw DatabaseError("Owned map views require pinned SPI sources");
+                for(const auto item:{5569,5576}) {
+                    const auto map=database.native_map_catalog().lookup(NativeMapCatalog::current_dataset_id,item==5576?4:2,item==5576?3:4);
+                    if(!map || !RecoveredOwnedMapView::qualified_map(*map,static_cast<std::uint16_t>(item)))
+                        throw DatabaseError("Owned map views require pinned regional map source");
+                }
+                spdlog::info("OWNED_MAP_VIEW_READY source_items=5569,5576 no_grants no_consumption CUSTOM-0044");
+            }
+            if(database.native_multi_message_catalog().populated()) {
+                const auto count=database.native_multi_message_catalog().knowledge_menu_count();
+                spdlog::get("database")->info("NATIVE_MULTI_MESSAGE_SOURCE keys={} text_rows=11794 validated_menu=1434 authority=SOURCE_DISPLAY_ONLY no_npc_or_quest_authority",count);
+            }
+            spdlog::get("database")->info("NATIVE_QUEST_SOURCE_CATALOG definitions={} descriptions={} requirement_display={} daily_source={} authority=source_display_only gameplay_rules=unrecovered",
+                quest_sources.definitions,quest_sources.descriptions,quest_sources.requirements,quest_sources.daily);
+            const bool fixture_mode=config.protocol_mode==ProtocolMode::Fixture;
+            if(!fixture_mode)database.trades().install_schema();
+            if(!fixture_mode){database.banks().install_schema();database.bank_access().install_schema();}
+            if(!fixture_mode)database.bank_items().install_schema();
+            if(!fixture_mode && config.owned_beast_panel_enabled && config.owned_mixed_bank_enabled)database.install_beast_bank_schema();
             RecoveredAccountLogin recovered_accounts(database.accounts(),config.local_account_registration);
             asio::thread_pool authentication_workers(4); // Joins before destroying its account owner.
             // The coroutine lambda itself stays alive on this GAME stack until
             // its frame has finished/destroyed; never return reference-captured
             // handlers from a temporary builder. This is the actual Main path.
-            ApplicationGameSources* channel_sources=nullptr; // Borrowed only while its actual frame is held.
-            auto channel_gameplay=[&]() -> ApplicationGameFrame {
+            std::unique_ptr<SharedTaiwanChannelWorlds> channel_worlds;
+            std::shared_ptr<SharedTaiwanCharacterListHandoff> channel_handoff;
+            std::optional<TaiwanThreeChannelPlan::WorldPlans> channel_plans;
+            if(channels) {
+                channel_worlds=std::make_unique<SharedTaiwanChannelWorlds>(database.recovered_characters());
+                channel_handoff=SharedTaiwanCharacterListHandoff::create(database.accounts(),database.recovered_characters(),
+                    database.native_character_summaries(),channels->client_sha256,channels->handoff_capacity,
+                    channels->configuration,channels->live,channels->authority);
+                const TaiwanThreeChannelPlan::Context context{database,game.get_executor(),*channel_worlds,channel_handoff};
+                channel_plans.emplace(channels->make_world_plans(context));
+                for(const auto& selected:*channel_plans) {
+                    validate_application_world_plan(config,&selected);
+                    if(!selected.make_taiwan_native_characters||!selected.make_taiwan_world_entry||
+                       !selected.make_taiwan_entered_async||!selected.make_taiwan_movement||!selected.make_taiwan_world_records)
+                        throw std::invalid_argument("Every channel requires its complete fresh native source plan");
+                }
+            }
+            std::array<ApplicationGameSources*,3> channel_sources{};
+            // Parameters are copied into each coroutine frame, never borrowed
+            // from loop-local aliases or a temporary worlds.world(k) result.
+            auto channel_gameplay=[&](const SharedWorldHostPlan* world_plan,std::shared_ptr<SharedWorldHost> supplied_world,
+                                     ApplicationGameSources** output) -> ApplicationGameFrame {
+            const bool hosted_pk=world_plan&&config.owned_pk_invitation_enabled;
+            const bool deity_selection_publication=world_plan&&world_plan->owned_deity_selection_publication;
+            const auto taiwan_entry_identity=world_plan?world_plan->taiwan_entry_identity:TaiwanWorldEntryIdentity::SelectedCharacter;
+            if(supplied_world&&(!world_plan||!supplied_world->owns_repository(database.recovered_characters())))
+                throw std::invalid_argument("Channel frame requires its exact same-repository native world");
             // CUSTOM-0150 actual GAME owner, after Database and before every
             // Context supplier. No policy load occurs without explicit selection.
             const auto ordinary_policy_reloads=world_plan?
@@ -1014,7 +1116,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 if(config.owned_initial_player_enabled && (!config.owned_skillbook_learning_enabled ||
                    !world_plan->supports_app_owned_initial_player))
                     throw std::invalid_argument("Initial player requires the actual exclusive player and deity publisher");
-                common_world=std::make_shared<SharedWorldHost>(database.recovered_characters());
+                common_world=supplied_world?std::move(supplied_world):std::make_shared<SharedWorldHost>(database.recovered_characters());
                 if(deity_selection_publication)
                     owned_deity_skill_source=SharedTaiwanOwnedDeitySkillSource::create(
                         common_world->presence(),database.companions(),database.native_skill_catalog(),
@@ -1124,51 +1226,6 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     !taiwan_native_characters.invalidate_selection))
                     throw std::invalid_argument("Independent TW scene identity lacks complete actual constructed native owners");
             }
-            if(config.owned_beast_panel_enabled)database.install_beast_snapshot_schema();
-            // Keep persisted player-created identity available when writes are
-            // disabled, so a kill switch cannot borrow legacy0077 authority.
-            auto* guild_membership_repository=migrations.back().version==53?&database.guild53(flags53).original():migrations.back().version==52?&database.guild_membership52():migrations.back().version==51?&database.guild_membership51():&database.candidate_guild_membership();
-            spdlog::info("OWNED_GUILD_RUNTIME enabled={} ordinary_entry={} lab={} schema={} CUSTOM-0078",
-                guild_membership_enabled,guild_entry_enabled,guild_membership_lab,migrations.back().version);
-            spdlog::info("OWNED_GUILD_ANNOUNCEMENT_RUNTIME enabled={} CUSTOM-0078",config.owned_guild_announcements_enabled);
-            spdlog::get("database")->info("SQLite initialized; migrations applied: {}",config.database.string());
-            if(config.fruit_village_quests_enabled)database.fruit_sources().require_qualified();
-            const auto npc_sources=database.native_npc_display_catalog().count();
-            spdlog::info("NATIVE_NPC_DISPLAY_READY records={} authority=LIVE_MEMORY_VERIFIED_SOURCE_DISPLAY_ONLY no_spawn_or_stat_claim",npc_sources);
-            const auto enemy_sources=database.native_enemy_display_catalog().counts();
-            spdlog::info("NATIVE_ENEMY_DISPLAY_READY records={} visible={} groups={} authority=LIVE_MEMORY_VERIFIED_SOURCE_DISPLAY_ONLY no_spawn_or_stat_claim",enemy_sources.records,enemy_sources.lookup_visible,enemy_sources.groups);
-            const auto quest_sources=database.native_quest_catalog().counts();
-            if(config.owned_daily_quest_views_enabled && database.native_quest_catalog().daily_displays().size()!=85)
-                throw DatabaseError("Owned daily views require complete pinned native316 catalog");
-            if(config.owned_supply_enabled && !database.native_supply_catalog().is_imported())
-                throw DatabaseError("Owned supply requires complete pinned MED02 declarations");
-            if(database.native_armor_catalog().populated())
-                spdlog::info("NATIVE_ARMOR_DEFINITIONS equ=692 teq=662 authority=NATIVE_PARSED_DEFINITION_ONLY no_instances no_combat_formula");
-            if(database.native_weapon_catalog().populated())
-                spdlog::info("NATIVE_WEAPON_DEFINITIONS wpn=630 twp=629 authority=NATIVE_PARSED_DEFINITION_ONLY no_instances no_combat_formula");
-            if(config.owned_weapon_transfers_enabled && !database.native_weapon_catalog().populated())
-                throw DatabaseError("Owned weapon transfers require complete pinned native definitions");
-            if(config.owned_map_views_enabled) {
-                if(!database.native_map_item_catalog().contains(5569) || !database.native_map_item_catalog().contains(5576))
-                    throw DatabaseError("Owned map views require pinned SPI sources");
-                for(const auto item:{5569,5576}) {
-                    const auto map=database.native_map_catalog().lookup(NativeMapCatalog::current_dataset_id,item==5576?4:2,item==5576?3:4);
-                    if(!map || !RecoveredOwnedMapView::qualified_map(*map,static_cast<std::uint16_t>(item)))
-                        throw DatabaseError("Owned map views require pinned regional map source");
-                }
-                spdlog::info("OWNED_MAP_VIEW_READY source_items=5569,5576 no_grants no_consumption CUSTOM-0044");
-            }
-            if(database.native_multi_message_catalog().populated()) {
-                const auto count=database.native_multi_message_catalog().knowledge_menu_count();
-                spdlog::get("database")->info("NATIVE_MULTI_MESSAGE_SOURCE keys={} text_rows=11794 validated_menu=1434 authority=SOURCE_DISPLAY_ONLY no_npc_or_quest_authority",count);
-            }
-            spdlog::get("database")->info("NATIVE_QUEST_SOURCE_CATALOG definitions={} descriptions={} requirement_display={} daily_source={} authority=source_display_only gameplay_rules=unrecovered",
-                quest_sources.definitions,quest_sources.descriptions,quest_sources.requirements,quest_sources.daily);
-            const bool fixture_mode=config.protocol_mode==ProtocolMode::Fixture;
-            if(!fixture_mode)database.trades().install_schema();
-            if(!fixture_mode){database.banks().install_schema();database.bank_access().install_schema();}
-            if(!fixture_mode)database.bank_items().install_schema();
-            if(!fixture_mode && config.owned_beast_panel_enabled && config.owned_mixed_bank_enabled)database.install_beast_bank_schema();
             std::optional<ChineseText> fixture_text;
             std::optional<ChineseText> native_chat_text;
             LuaEngine lua(config.script_root,fixture_mode,
@@ -1814,7 +1871,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     const auto name=std::span<const std::uint8_t>(request.name.begin(),name_end);
                     for(const auto& character:database.recovered_characters().list_for_account(session.account_id)) {
                         if(character.slot!=request.token) continue;
-                        if(world.character_online(character.id) ||
+                        if((channel_worlds&&channel_worlds->character_reserved(character.id)) || world.character_online(character.id) ||
                            (recovered_movement && recovered_movement->character_active(session.account_id,character.id))) return false;
                         const auto stored_end=std::find(character.profile.begin(),character.profile.begin()+15,0);
                         if(!std::equal(name.begin(),name.end(),character.profile.begin(),stored_end)) return false;
@@ -9928,37 +9985,70 @@ if(guild_officer_runtime && player_guild(session) &&
             struct UnpublishSources {
                 ApplicationGameSources*& published;
                 ~UnpublishSources(){published=nullptr;}
-            } unpublish_sources{channel_sources};
-            channel_sources=&exports; // Last construction before the pure Hold.
+            } unpublish_sources{*output};
+            *output=&exports; // Last construction before the pure Hold.
             // Keep every reference-captured gameplay local in this owned frame
             // while the process host runs and drains the actual event loops.
             co_await ApplicationGameFrame::Hold{};
-            channel_sources=nullptr;
+            *output=nullptr;
             lua.call_event("server_stop");
             co_return;
             };
-            auto channel_runtime=channel_gameplay();
-            channel_runtime.require_held(); // Rethrows startup errors before running GAME.
-            if(!channel_sources)throw std::logic_error("Held gameplay frame did not publish its actual sources");
+            const std::size_t channel_count=channels?3:1;
+            std::array<std::optional<ApplicationGameFrame>,3> channel_runtimes;
+            for(std::uint8_t k=0;k<channel_count;++k) {
+                const auto* selected=channels?&(*channel_plans)[k]:world_plan;
+                channel_runtimes[k].emplace(channel_gameplay(selected,channels?channel_worlds->world(k):nullptr,&channel_sources[k]));
+                channel_runtimes[k]->require_held();
+                if(!channel_sources[k])throw std::logic_error("Held gameplay frame did not publish its actual sources");
+            }
             bool disconnect_cleanup_failed=false;
             { // All host copies/listeners die before the actual gameplay frame resumes.
-            auto& sources=*channel_sources;
+            auto& sources=*channel_sources[0];
+            std::shared_ptr<TaiwanChannelCharacterLists> channel_lists;
+            std::unique_ptr<TaiwanChannelServers> channel_servers;
             std::unique_ptr<TcpServer> character_server;
             std::unique_ptr<TcpServer> account_server;
             std::unique_ptr<WebClientGateway> web_gateway;
             struct HostGameplayRetirement {
-                ApplicationGameSources& sources;
+                const std::array<ApplicationGameSources*,3>& sources;
+                const std::size_t count;
                 ~HostGameplayRetirement() {
-                    try{sources.retire();}catch(...){
+                    for(std::size_t k=0;k<count;++k)try{sources[k]->retire();}catch(...){
                         try{spdlog::error("Gameplay retirement failed during host unwind");}catch(...){}
                     }
                     // Existing GAME revocations are noexcept. The source
                     // holders must be emptied before any listener destructor.
-                    sources.revoke_transport();
+                    for(std::size_t k=0;k<count;++k)sources[k]->revoke_transport();
                 }
-            } host_gameplay_retirement{sources};
+            } host_gameplay_retirement{channel_sources,channel_count};
             std::vector<std::uint8_t> character_routes;
-            if(sources.character) {
+            auto account_handlers=std::move(sources.account);
+            auto account_disconnect=sources.disconnected;
+            if(channels) {
+                std::array<TaiwanChannelCharacterLists::Source,3> issuers;
+                for(std::uint8_t k=0;k<3;++k) {
+                    auto& actual=*channel_sources[k];
+                    if(!actual.character)throw std::logic_error("Native channel frame lacks actual G sources");
+                    const auto& account=k==0?account_handlers:actual.account;
+                    issuers[k]={account.native_list,account.native_list_current,account.native_list_complete,
+                        actual.disconnected,account.native_select};
+                }
+                channel_lists=TaiwanChannelCharacterLists::create(std::move(issuers),channels->group,config.max_sessions);
+                const auto routed=channel_lists->binding();
+                account_handlers.native_list=routed.list;account_handlers.native_list_current=routed.current;
+                account_handlers.native_list_complete=routed.complete;account_handlers.native_select=routed.select;
+                account_handlers.actor_status_write_fence.reset(); // L has no channel0 scene owner.
+                account_disconnect=routed.disconnected;
+                channel_servers=std::make_unique<TaiwanChannelServers>(network.context(),game.get_executor(),*channel_worlds,
+                    channels->configuration,channels->group,channels->group_byte_1,channels->endpoints,
+                    config.max_sessions,config.packet_dump,[&](std::uint8_t k,const std::shared_ptr<SharedWorldHost>& world) {
+                        if(k>=3||world!=channel_worlds->world(k))throw std::logic_error("G factory lost its actual channel world");
+                        auto& actual=*channel_sources[k];
+                        return TaiwanChannelServers::Sources{actual.packet,actual.disconnected,actual.authenticate,std::move(*actual.character)};
+                    });
+                character_routes=channel_servers->advertisement();
+            }else if(sources.character) {
                 character_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),
                     config.host,config.character_port,config.max_sessions,config.packet_dump,
                     sources.packet,sources.disconnected,ProtocolMode::God2CharacterConnection,sources.authenticate,std::move(*sources.character));
@@ -9966,7 +10056,7 @@ if(guild_officer_runtime && player_guild(session) &&
                 character_routes.assign(routes.begin(),routes.end());
             }
             account_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),config.host,config.port,config.max_sessions,config.packet_dump,
-                sources.packet,sources.disconnected,config.protocol_mode,sources.authenticate,std::move(sources.account),std::move(character_routes));
+                sources.packet,std::move(account_disconnect),config.protocol_mode,sources.authenticate,std::move(account_handlers),std::move(character_routes));
             auto& server=*account_server;
             if(web_plan) {
                 std::vector<WebNativeRoute> routes;
@@ -9994,7 +10084,7 @@ if(guild_officer_runtime && player_guild(session) &&
             asio::signal_set signals(game,SIGINT,SIGTERM);
             asio::steady_timer deadline(game);
             asio::steady_timer disconnect_drain_timer(game);
-            std::array<std::optional<TcpServer::StopObservation>,2> disconnect_drains{};
+            std::array<std::optional<TcpServer::StopObservation>,4> disconnect_drains{};
             std::function<void()> await_disconnect_drain;
             await_disconnect_drain=[&] {
                 bool complete=true;
@@ -10020,12 +10110,17 @@ if(guild_officer_runtime && player_guild(session) &&
             auto stop=[&] {
                 if(stopping) return;
                 stopping=true; // Fence reentry before retiring any actual gameplay source.
-                sources.retire();
+                std::exception_ptr retirement_failure;
+                for(std::size_t k=0;k<channel_count;++k)try{channel_sources[k]->retire();}catch(...){if(!retirement_failure)retirement_failure=std::current_exception();}
+                if(retirement_failure)std::rethrow_exception(retirement_failure);
                 spdlog::info("Stopping server and draining sessions");
                 signals.cancel();deadline.cancel();
                 if(web_gateway)web_gateway->stop();
                 disconnect_drains[0]=server.stop_observed();
-                if(character_server)disconnect_drains[1]=character_server->stop_observed();
+                if(channel_servers) {
+                    const auto observations=channel_servers->stop_observed();
+                    for(std::size_t k=0;k<3;++k)disconnect_drains[k+1]=observations[k];
+                }else if(character_server)disconnect_drains[1]=character_server->stop_observed();
                 await_disconnect_drain();
             };
             signals.async_wait([&](const asio::error_code& ec,int) { if(!ec) stop(); });
@@ -10033,13 +10128,14 @@ if(guild_officer_runtime && player_guild(session) &&
                 deadline.expires_after(std::chrono::seconds(run_for_seconds));
                 deadline.async_wait([&](const asio::error_code& ec) { if(!ec) stop(); });
             }
+            if(channel_servers)channel_servers->start();
             if(character_server) {
                 character_server->start();
                 spdlog::info("Character connection listening on {}:{}; independent authentication; 1F candidate unverified",config.host,character_server->port());
             }
             server.start();
             if(web_gateway)web_gateway->start();
-            sources.start();
+            for(std::size_t k=0;k<channel_count;++k)channel_sources[k]->start();
             spdlog::info("{} listening on {}:{} [protocol={}; mock_login={}]",config.name,config.host,server.port(),
                 config.protocol_mode==ProtocolMode::Fixture?"PLACEHOLDER":config.protocol_mode==ProtocolMode::God2LegacyCharacterListCandidate?"GOD2_LEGACY_CHARACTER_LIST_CANDIDATE_UNVERIFIED":config.protocol_mode==ProtocolMode::God2PostServerSelect?"GOD2_POST_SERVER_SELECT_LAB":config.protocol_mode==ProtocolMode::God2ServerList?"GOD2_SERVER_LIST_LAB":config.protocol_mode==ProtocolMode::God2LoginTerminal?"GOD2_LOGIN_TERMINAL_LAB":config.protocol_mode==ProtocolMode::God2C2S0002?"GOD2_C2S0002_LAB":config.protocol_mode==ProtocolMode::God2PostSeed?"GOD2_POST_SEED_LAB":"GOD2_RECOVERED_SEED_ONLY",config.mock_login);
             ready.set_value(); announced=true;
@@ -10047,7 +10143,9 @@ if(guild_officer_runtime && player_guild(session) &&
             if(!network_joined.load(std::memory_order_acquire))
                 throw std::runtime_error("GAME loop ended before the host joined NET");
             } // Normal full NET/GAME drain precedes destruction of host-side copies.
-            channel_runtime.finish_after_drain();
+            std::exception_ptr tail_failure;
+            for(std::size_t k=0;k<channel_count;++k)try{channel_runtimes[k]->finish_after_drain();}catch(...){if(!tail_failure)tail_failure=std::current_exception();}
+            if(tail_failure)std::rethrow_exception(tail_failure);
             if(disconnect_cleanup_failed)
                 throw std::runtime_error("Session disconnect callbacks failed during drain");
         } catch(...) {
@@ -10066,6 +10164,12 @@ if(guild_officer_runtime && player_guild(session) &&
     if(failure) std::rethrow_exception(failure);
     spdlog::info("Server stopped cleanly");
     return 0;
+}
+int run_server(const Config& config,const TaiwanThreeChannelPlan& channels,unsigned run_for_seconds) {
+    return run_server_impl(config,nullptr,run_for_seconds,nullptr,&channels);
+}
+int run_server(const Config& config,const WebServerPlan& web,const TaiwanThreeChannelPlan& channels,unsigned run_for_seconds) {
+    return run_server_impl(config,&web,run_for_seconds,nullptr,&channels);
 }
 int run_server(const Config& config,unsigned run_for_seconds) {
     return run_server_impl(config,nullptr,run_for_seconds);

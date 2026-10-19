@@ -1,0 +1,123 @@
+{
+  "round": 491,
+  "previous_goal_turn": "progress",
+  "previous_commit": "4545e791527d9bb896bb6d6412a70beaea0ffd8f",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_EXPLICIT_ACTUAL_THREE_FRAME_APPLICATION_HOST_AND_RETAINED_L_ISSUER",
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-source-export-round490/native-switch/inbound-exit-message-findings-v1.json",
+    "receipt_sha256": "c090ee7fd6a6eb55f84f6e553877ca4f1a51be33c9f5ae5ce42a599622db6064",
+    "members_verified": 15,
+    "original_sections_and_mappings_verified": true,
+    "all_previous_targets_closed": true,
+    "new_rea_targets": 0,
+    "current_source_audit": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-host-round491/native-message/s2c20-source-audit-v1.json",
+    "current_source_audit_sha256": "474f4277086e0e7d379e2eafa1fc74cca78419890a7f11368dafe7d8516b9dac",
+    "audit_source_snapshot": "4545e791527d9bb896bb6d6412a70beaea0ffd8f",
+    "remaining_unknowns": [
+      "Meaning and producers of bytes1..12 in inbound20h buffer; exact message contents and intended server event. No full opcode20 packet validation contract recovered.",
+      "Human-readable value and provenance of resource recordEDh; this round does not read game DBs or execute resource codecs.",
+      "Containing native roots and trigger/input conditions of465DC5 and501FA6 remain next bounded paths.",
+      "413420 return-value production and lower transport error semantics are not expanded this round.",
+      "Full468AE0 routine boundaries remain limited: provider metadata splits at46AE9A, while original control flow reaches46B539. Decompiled stack/argument recovery has warnings; raw instruction widths, branch sites and selected table entries are used for the claims above."
+    ]
+  },
+  "source_comparison": {
+    "parent_commit": "4545e791527d9bb896bb6d6412a70beaea0ffd8f",
+    "retained_gameplay_bytes": 822082,
+    "retained_gameplay_sha256": "d13e4802cd1ec850f97a700a42486718a714ac52b2923b92cb59b4560ea568c2",
+    "exact_gameplay_comparison_after_declared_host_world_custody_changes": true,
+    "host_qualification_normalized_moved_lines_bytes": 4690,
+    "host_qualification_content_unchanged": true,
+    "original_single_world_validation_bytes_preserved": true,
+    "tick_byte_identical": true,
+    "tick_bytes": 2375,
+    "tick_sha256": "a2bd1f1847e14b4d2797af49c36be617588c5e41c09c4cde865a0fde4395059e",
+    "single_host_game_loop": true,
+    "single_owned_hold_definition": true,
+    "three_frame_array_and_loop": true,
+    "four_listener_observations": true
+  },
+  "source_integration": [
+    "Explicit actual one DB/auth/handoff/shared custody host and three complete native gameplay frames",
+    "Three actual bound G endpoints and one L advertisement/retained issuer list-current-complete-select route",
+    "Full exact-Session custody deletion guard and all-three disconnect/retire/revoke/tail attempts",
+    "One L and three G stop observations before actual NET join/GAME drain",
+    "Plan-independent native Config refusal before DB, effective guild lab refusal and explicit unsupported Web bridge"
+  ],
+  "open": [
+    "Default Main/CLI real native source provider assembly and selected client configuration",
+    "Shared guild mutation audience invalidation and selected Web G forwarding",
+    "Native world transfer bridge, durable save/logout/target admission and failure recovery",
+    "Six directed switches, world isolation and current-client own-server acceptance",
+    "Exceptional abort drain and all remaining full-server gameplay/formulas/storage/native paths"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/TaiwanThreeChannelPlan.h",
+      "sha256": "423daef1e1ca3e1ca2c9cf91762f72a72141e2d6c37162e549856cf8b084674d"
+    },
+    {
+      "path": "src/core/Application.h",
+      "sha256": "05e07045e1353df09c362b437add9d3eccffc7b152ed1558a096e762203bf015"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "a5c621dabb7d45c66c2cd78a91cee25f4dcda49c09d006b73e8c1471e2981049"
+    },
+    {
+      "path": "src/game/TaiwanChannelCharacterLists.h",
+      "sha256": "44f20c239209d737652a8bccb841aae3b0500d22c3ee6f5525b474d44c473a68"
+    },
+    {
+      "path": "src/game/TaiwanChannelCharacterLists.cpp",
+      "sha256": "37cd859b5bab9688d471bbd22ccd7cef8ddf141082880822461907b385d7f583"
+    },
+    {
+      "path": "tests/test_taiwan_channel_character_lists.cpp",
+      "sha256": "1fa0d046889c28ffb5584a5ba497926df779fa8616db9bd37903399e9fa2df66"
+    },
+    {
+      "path": "tests/test_taiwan_three_channel_plan.cpp",
+      "sha256": "b3cd2822f240e56021f55e382775c8618e875537af60fac71a6c525b3eb14a77"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "f31248025edacbdc586862547a6beea00746281b8cd25a2e2aad9cae0e19c4ea"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "503f98e9a727bbb1dafa66a4ea62231722ffc6da2a807efdac6093bf262b85b2"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "29041d0fa5d5d5d8a4cc77cac6365cb4f53c328a52eaccbc21d64d46b6222d8b"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "4cb244339dc92cdbf1fecc1511924efb5fec2d35b67d6d016639b90e7be2bc8e"
+    },
+    {
+      "path": "docs/research/tw-three-channel-host-20261019.md",
+      "sha256": "80ac9e731fba16bbe0f8ac78d4a4e4b908628b711a649dcc97cf285b5343b2f8"
+    }
+  ]
+}
