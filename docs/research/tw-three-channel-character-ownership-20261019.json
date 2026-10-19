@@ -1,0 +1,228 @@
+{
+  "round": 486,
+  "previous_goal_turn": "progress",
+  "previous_commit": "62834fab72f9ed1c8d60eda28ca4428bd630db71",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_OWNER_REQUIRED_THREE_CHANNELS_NOT_NATIVE_SERVER_RULE_RESTORATION",
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-ownership-round486/native-switch/native-switch-findings-v2.json",
+    "receipt_sha256": "f68d86475ed712dba7665e6a34d4a7c26c3f70c443e44a9b4c1b474a59429aba",
+    "all_targets_closed": true,
+    "original_sections_and_mappings_match": true,
+    "batches": [
+      {
+        "version": 1,
+        "evidence_id": "ev_dc6473dd34fb63eb2b9e5748dc759922de9aec9939f9e7eabffcece9588c3c03",
+        "analysis_sha256": "a1c5421e1eef0b06cc33924cc4cee05a1617b92fbca7afb318df56e19d7ff49d",
+        "original_section_count": 13,
+        "original_sections_byte_identical": true,
+        "procedures": [
+          {
+            "address": "0x4f5e50",
+            "status": "ok"
+          },
+          {
+            "address": "0x4f6080",
+            "status": "ok"
+          },
+          {
+            "address": "0x415730",
+            "status": "ok"
+          },
+          {
+            "address": "0x4655e0",
+            "status": "ok"
+          },
+          {
+            "address": "0x40de80",
+            "status": "ok"
+          }
+        ],
+        "synthetic_callers_not_original": true
+      },
+      {
+        "version": 2,
+        "evidence_id": "ev_10b57a2cc7f51933bdcac18e9448377294278eecb514dc7d0229fddce71dcb55",
+        "analysis_sha256": "ce0f10228cf215db24277cca1a3b43feb57116d0928bce709b0dc6e12b45ab1a",
+        "original_section_count": 13,
+        "original_sections_byte_identical": true,
+        "procedures": [
+          {
+            "address": "0x4f6140",
+            "status": "ok"
+          },
+          {
+            "address": "0x4f6200",
+            "status": "ok"
+          },
+          {
+            "address": "0x415180",
+            "status": "ok"
+          },
+          {
+            "address": "0x4b1900",
+            "status": "ok"
+          }
+        ],
+        "synthetic_callers_not_original": true
+      },
+      {
+        "version": 4,
+        "evidence_id": "ev_22d70b0526c59091dde6813fdfebde0a17c404cebda746d653e3f6ad086536cc",
+        "analysis_sha256": "1eae341b30ea94fd995c184f45dfeb1421db40b152f783847cc90e310d2c0ffb",
+        "original_section_count": 13,
+        "original_sections_byte_identical": true,
+        "procedures": [
+          {
+            "address": "0x467860",
+            "status": "ok"
+          }
+        ],
+        "synthetic_callers_not_original": true
+      }
+    ],
+    "dossiers": [
+      {
+        "procedure": "0x4820a0",
+        "evidence_id": "ev_18b721725868071af9a97874a78422f10b6cc2521b6ccda1d30ff0ed31688ab9",
+        "file": "dossier-0x4820a0-v4.json",
+        "body": {
+          "available": true,
+          "provenance": "ghidra-function-body-address-set",
+          "ranges": [
+            {
+              "start": "0x4820a0",
+              "end": "0x48314e"
+            }
+          ],
+          "total_bytes": 4271,
+          "span_bytes": 4271,
+          "non_contiguous": false,
+          "contains_entry": true
+        }
+      },
+      {
+        "procedure": "0x466b00",
+        "evidence_id": "ev_bb7c8b95739c30c02d04564cb9edd49b70030e47c2c7fc2b0a4cf779fc7468c8",
+        "file": "dossier-0x466b00-v4.json",
+        "body": {
+          "available": true,
+          "provenance": "ghidra-function-body-address-set",
+          "ranges": [
+            {
+              "start": "0x466b00",
+              "end": "0x467693"
+            }
+          ],
+          "total_bytes": 2964,
+          "span_bytes": 2964,
+          "non_contiguous": false,
+          "contains_entry": true
+        }
+      }
+    ],
+    "next_trace": [
+      "483B00 actualUI+232DE4 handler meaning/callers",
+      "465A14[2]->46597E returnmapping ifpursuingGUI-26",
+      "Serverdurablelogoutsave+exactSession/channelreservationreleasebeforegrantingnewchanneljoin"
+    ],
+    "limitations": [
+      "4655E0 Ghidra bodystopsatindirectjumptable46563D;pseudocodestatusokisNOTwholeworldlooprecovery",
+      "v3 resolve_containing_procedure returnednot_in_procedurefor482972/466BEF/4659A0,retained;v4 true467860 rootmade4820A0/466B00 providercontainmentavailable",
+      "CurrentPECapstoneboundedsourcecutsarelabelledordinarystaticanalysis,notREA Evidence andnotwholefunctionclaims",
+      "No native target-channel field or direct in-world channel-specificswitch opcode recovered",
+      "Rolelogout/reloginselection path isclientbehavior,notserverpermission,durablesave,sharedreservationreleaseortransfercustody",
+      "ExistingSession G02reason0..2 =>03/0000 queue+close providesformatpath;ACK/cleanup durabilitymustbequalifiedseparately",
+      "Original3channel configurationandhost/worldownershiparenot establishedbytheseUIfunctions"
+    ]
+  },
+  "source_integration": [
+    "Actual SharedWorldPresence prepare/current/activate/release and population guards use private shared claims",
+    "Three independent SharedWorldHost containers share repository/game owner and exclusive character custody",
+    "Existing exact Session-pointer lifecycle and transport/visibility/Presence cleanup order unchanged",
+    "Actual registered regression source with in-memory virtual observers; no runtime claim"
+  ],
+  "open": [
+    "Application three listeners and per-channel full gameplay isolation",
+    "Actual three client configuration slots and shared issued-list lineage",
+    "Durable save/logout retirement and target admission joining",
+    "UI+232DE4/483B00 semantics",
+    "All other full-server/native/formula/storage/gameplay and current-client acceptance requirements remain active"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/game/SharedChannelCharacterOwnership.h",
+      "sha256": "17212da1f50125ed2e7e8fc3ac34b2da8021f9375645adddfe656ff19f405f7f"
+    },
+    {
+      "path": "src/game/SharedChannelCharacterOwnership.cpp",
+      "sha256": "a4ded3c1600b2814564c28cbace3cbc44bf170945fefb73ace4d0bcc7f5585dd"
+    },
+    {
+      "path": "src/game/SharedTaiwanChannelWorlds.h",
+      "sha256": "4776978131f2542fff2fc01aa0b1358f3d04ab56a03714bb177127a6d43f7706"
+    },
+    {
+      "path": "src/game/SharedTaiwanChannelWorlds.cpp",
+      "sha256": "50d126acd36b5c117b6f624cdc90da14225b4c3ecb12325d1f2cc30b5383e26c"
+    },
+    {
+      "path": "src/game/SharedWorldHost.h",
+      "sha256": "b7ca5acc99aeb20f50e606455cb7a7f6a4b14794fa805a9231a95374e1ed723c"
+    },
+    {
+      "path": "src/game/SharedWorldHost.cpp",
+      "sha256": "4211c21084a9e17ef3a0fe233095b39a6946fa2edaef8507674f1dbdd69f1e54"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.h",
+      "sha256": "a9e40bc23e1a92cad4bc1cbba0b0a588e21187a7addbbb9d0567513d67f2a055"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.cpp",
+      "sha256": "f2f85b1d23eb081913cd2c29b15a2c7deaf3f548039383ffa9a11e0c46923cea"
+    },
+    {
+      "path": "tests/test_taiwan_channel_worlds.cpp",
+      "sha256": "fa6132772ccf8224e59a84dce5b5815f84b00941fb2255198feb97f3039fb746"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "ce803254b64d4dee1dc8061ff264f61cb34cee741b141971e5e7a63ccd96d492"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "2485381c6e3313e8a1394d1839aa7a5cfe6afe8b85063567343e5efa669bf635"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "bb74a716c1f6769d3ca0023196107b0a262eaf2c7652786bd51e95fb913432fd"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "733cf3e315c71ce34a456c0aaba77c0a34b77d30c3c0e573d44779bdabe54ef4"
+    },
+    {
+      "path": "docs/research/tw-three-channel-character-ownership-20261019.md",
+      "sha256": "c5733d6d6d324ddeace10fbbbc099825a5b986852a8706b5647642a22074da0e"
+    }
+  ]
+}

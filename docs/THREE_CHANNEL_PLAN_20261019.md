@@ -26,8 +26,12 @@ are not implemented or accepted yet.
    shared maps before hosting three worlds. TcpServer already uses the one
    process-global next_connection_identity allocator with exhaustion refusal;
    preserve it rather than adding per-channel counters. SharedWorldPresence
-   currently excludes a character only inside its own registry, so three hosts
-   require a shared exact character/Session/channel reservation owner as well.
+   now accepts the shared private SharedChannelCharacterOwnership owner.
+   SharedTaiwanChannelWorlds constructs exactly three independent common-world
+   containers with that one owner and the same repository/game thread. Pending
+   and active characters/Session IDs cannot occupy two of those worlds; actor
+   handles remain local. Default standalone hosts still have private owners,
+   so Application must explicitly select the one shared three-world collection.
    Share the actual L-issued character-list handoff lineage across all G
    endpoints; retain the full snapshot route key and accepted-local-endpoint
    qualification. Independent empty handoff owners cannot authorize G joins.
@@ -37,6 +41,12 @@ are not implemented or accepted yet.
    and scene. Define failure/reconnect recovery. Preserve exclusive character
    ownership, no copied old callback/lease/ACK and no double publication. Do not
    infer costs, eligibility or battle cancellation rules from labels/ports.
+   Round486 current-client REA proves the settings character-logout flow:
+   world result2 -> login mode1 -> C2S02/reason1 -> wait S2C03 -> reauthenticate
+   and select group/subgroup again. This is a supported native route toward
+   switching, not an in-place transfer opcode. Existing immediate03 queue and
+   close are not durable-save/cleanup completion receipts. The actual handoff
+   owner must keep source custody until those required operations complete.
 5. After source closure, verify original UI selection for all three channels,
    all six directed cross-channel switches, same-channel action, invalid/full/
    unavailable targets, duplicate ownership attempts, disconnect/retry, save

@@ -1,5 +1,6 @@
 #pragma once
 #include "db/RecoveredCharacterRepository.h"
+#include "game/SharedChannelCharacterOwnership.h"
 #include <map>
 #include <memory>
 #include <optional>
@@ -29,9 +30,13 @@ public:
         RecoveredCharacter character; // Entire actual common root; IDs stay64-bit.
         RecoveredPosition position; // Actual saved prefix, not lease entry pose.
     };
-    explicit SharedWorldPresence(RecoveredCharacterRepository& characters):characters_(characters){}
+    explicit SharedWorldPresence(RecoveredCharacterRepository&);
+    SharedWorldPresence(RecoveredCharacterRepository&,
+        std::shared_ptr<SharedChannelCharacterOwnership>,std::uint8_t channel);
+    ~SharedWorldPresence();
     SharedWorldPresence(const SharedWorldPresence&)=delete;
     SharedWorldPresence& operator=(const SharedWorldPresence&)=delete;
+    std::uint8_t channel() const {owner();return world_identity_->channel;}
     bool owns_repository(const RecoveredCharacterRepository& characters) const {
         owner();return &characters_==&characters;
     }
@@ -131,12 +136,21 @@ private:
     // held install/publication cut. No caller-supplied desired-active flag.
     bool activate_initial_population(const InitialPopulation&,std::uint16_t,TaiwanWorldEntryIdentity);
     void retire_initial_population(const InitialPopulation&) noexcept;
-    struct Entry {Lease lease;bool active=false;bool operator==(const Entry&) const = default;};
+    struct Entry {
+        Lease lease;
+        bool active=false;
+        SharedChannelCharacterOwnership::Claim ownership;
+        bool operator==(const Entry&) const = default;
+    };
     struct PopulationIdentity {};
     void owner() const;
     bool stored(const Lease&) const;
     bool owned(const Lease&) const;
+    bool retained_current(const Lease&) const;
+    bool retained_claims_current(const std::map<std::uint64_t,Entry>&) const;
     RecoveredCharacterRepository& characters_;
+    const std::shared_ptr<SharedChannelCharacterOwnership> ownership_;
+    const SharedChannelCharacterOwnership::World world_identity_;
     std::thread::id thread_=std::this_thread::get_id();
     std::map<std::uint64_t,Entry> sessions_;
     std::uint64_t generation_=0;
@@ -145,5 +159,6 @@ private:
     const std::shared_ptr<const PopulationIdentity> population_identity_=
         std::make_shared<const PopulationIdentity>();
     mutable bool snapshot_busy_=false,snapshot_reentered_=false;
+    bool preparing_=false,preparation_reentered_=false;
 };
 }

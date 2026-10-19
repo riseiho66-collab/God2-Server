@@ -6531,22 +6531,36 @@
       "implementation": [
         "src/protocol/RecoveredServerRoutes.h",
         "src/net/Session.cpp",
-        "tests/test_protocol_replay.cpp"
+        "tests/test_protocol_replay.cpp",
+        "src/game/SharedChannelCharacterOwnership.h",
+        "src/game/SharedChannelCharacterOwnership.cpp",
+        "src/game/SharedTaiwanChannelWorlds.h",
+        "src/game/SharedTaiwanChannelWorlds.cpp",
+        "src/game/SharedWorldHost.h",
+        "src/game/SharedWorldHost.cpp",
+        "src/game/SharedWorldPresence.h",
+        "src/game/SharedWorldPresence.cpp",
+        "tests/test_taiwan_channel_worlds.cpp",
+        "tests/test_main.cpp",
+        "tests/CMakeLists.txt"
       ],
-      "document": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "document": "docs/research/tw-three-channel-character-ownership-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
         "replay": "One native current-group endpoint counter advances across all05 rows; the three subgroups select physical endpoint ordinals0,1,2, with route ordinal0",
-        "ownership": "Required final topology shares saved characters and issued-list lineage, isolates world owners and preserves exclusive character/Session/channel custody; advertisement alone supplies none of those owners",
+        "ownership": "One shared private issuer across exactly three explicit common-world containers; reserve full64 character and physical Session IDs before repository qualification, retain through pending/active scene cleanup and retire exact claim without SQL; actual Session pointer authentication remains existing lifecycle authority",
         "compatibility": "Existing one-channel API and bytes unchanged; Session advertisement telemetry uses actual route-vector width",
-        "availability": "Current-native4074CF..407602 tests WORD bit k; the available wrapper emits0007, opening rows0..2. It refuses group ordinals beyond the actual first10 UI rows. Generic full-record producer retains supplied masks unchanged."
+        "availability": "Current-native4074CF..407602 tests WORD bit k; the available wrapper emits0007, opening rows0..2. It refuses group ordinals beyond the actual first10 UI rows. Generic full-record producer retains supplied masks unchanged.",
+        "worlds": "Independent presence/actor-visibility/native-transport owners, local actor handles and local population epochs, same repository/game thread. Standalone default hosts retain private ownership; Application must explicitly select the shared collection and isolate remaining gameplay controllers",
+        "lifecycle": "Immutable staged shared indices and detached local map node before final publication; pure retained claim fences after observers, allocation and before existing position CAS; exact private world retirement invalidates copied population tokens without evicting a successor",
+        "native_reselection": "Current EXE settings role logout -> world result2 -> login mode1 -> C2S02/reason1 -> S2C03 -> reauthentication and group/subgroup selection. This is not a direct in-place switch opcode or durable-save/ownership-release proof"
       },
-      "native_gap": "Actual three listeners and independent game worlds, global character reservation, complete switch save/retirement/handoff recovery and original-current-client acceptance remain unimplemented. UI investigation is documented separately; no mask or client snapshot route key is invented.",
+      "native_gap": "Application three real listeners and isolated full gameplay controllers, actual three configuration slots, shared issued-list lineage, durable logout/save/retirement/target admission and current-client switching acceptance remain open. UI+232DE4/483B00 meaning remains native research, not a chosen channel opcode.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_STATIC_REVIEW_ONLY_REGRESSION_SOURCE_REGISTERED_NOT_BUILT_OR_RUN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_MEMORY_REPOSITORY_REGRESSION_SOURCE_REGISTERED_NOT_BUILT_OR_RUN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

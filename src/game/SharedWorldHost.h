@@ -1,10 +1,12 @@
 #pragma once
+#include <cstdint>
 #include <memory>
 #include <thread>
 
 namespace god2 {
 class RecoveredCharacterRepository;
 class SharedWorldPresence;
+class SharedChannelCharacterOwnership;
 class SharedNativeWorldTransports;
 class SharedNativeSpectatorPublication;
 class SharedNativeSpectatorTargets;
@@ -18,6 +20,10 @@ namespace shared {class SharedActorVisibility;}
 class SharedWorldHost final {
 public:
     explicit SharedWorldHost(RecoveredCharacterRepository&);
+    // CUSTOM-0159: one distinct presence/visibility/transport registry for
+    // this ordinal, sharing only exclusive character custody and repository.
+    SharedWorldHost(RecoveredCharacterRepository&,
+        std::shared_ptr<SharedChannelCharacterOwnership>,std::uint8_t channel);
     ~SharedWorldHost();
     SharedWorldHost(const SharedWorldHost&)=delete;
     SharedWorldHost& operator=(const SharedWorldHost&)=delete;
@@ -33,6 +39,7 @@ public:
     std::shared_ptr<SharedNativeSpectatorTargets> native_spectator_targets() const;
     void install_native_spectator_targets(std::shared_ptr<SharedNativeSpectatorTargets>);
     bool owns_repository(const RecoveredCharacterRepository&) const;
+    std::uint8_t channel() const;
 private:
     void owner() const;
     RecoveredCharacterRepository& characters_;

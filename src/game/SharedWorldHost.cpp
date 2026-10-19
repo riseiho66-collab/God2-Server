@@ -10,7 +10,10 @@
 
 namespace god2 {
 SharedWorldHost::SharedWorldHost(RecoveredCharacterRepository& characters)
-    :characters_(characters),presence_(std::make_shared<SharedWorldPresence>(characters)),
+    :SharedWorldHost(characters,std::make_shared<SharedChannelCharacterOwnership>(characters),0) {}
+SharedWorldHost::SharedWorldHost(RecoveredCharacterRepository& characters,
+        std::shared_ptr<SharedChannelCharacterOwnership> ownership,std::uint8_t channel)
+    :characters_(characters),presence_(std::make_shared<SharedWorldPresence>(characters,std::move(ownership),channel)),
      visibility_(std::make_shared<shared::SharedActorVisibility>(presence_)),
      transports_(SharedNativeWorldTransports::create(presence_)) {}
 SharedWorldHost::~SharedWorldHost() {
@@ -52,5 +55,8 @@ bool SharedWorldHost::owns_repository(const RecoveredCharacterRepository& charac
         visibility_->owns_presence(presence_) && transports_->owns_presence(presence_) &&
         (!spectator_publication_ || spectator_publication_->owns_source(presence_,transports_)) &&
         (!spectator_targets_ || spectator_targets_->owns_source(presence_,transports_,spectator_publication_));
+}
+std::uint8_t SharedWorldHost::channel() const {
+    owner();return presence_->channel();
 }
 }
