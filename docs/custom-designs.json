@@ -6581,9 +6581,10 @@
         "src/game/OwnedTaiwanGuildChatDispatch.h",
         "src/game/OwnedTaiwanGuildChatDispatch.cpp",
         "tests/test_owned_taiwan_guild_chat_dispatch.cpp",
-        "src/relations53/SharedGuildApplication53Draft.h"
+        "src/relations53/SharedGuildApplication53Draft.h",
+        "tests/test_world_reply_push_capture.cpp"
       ],
-      "document": "docs/research/tw-three-channel-chat-20261019.md",
+      "document": "docs/research/tw-three-channel-sender-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6615,13 +6616,15 @@
         "guild_chat_native_framing": "Schema53 triple requires explicit same-authenticated-Session NativeGuildSenderWire before DB initialization; copied on GAME and invoked synchronously for sender logical records. No default lab codec. Complete sender envelopes return to original mixed accumulator; incomplete chat discards unsubmitted sender buffer and explicit CUSTOM no-reply preserves earlier native output. Peer logical enqueue remains the existing Session native transport path.",
         "native_chat_trace": "Current5C dispatch46AE96 JMP714200->70FF5B ST extension then ordinary46AE9E. Sender+5 DWORD reads70FFA1/46AFF2.3FFF is conditional CUSTOM0054 ST behavior, returns ordinary on failure; category3 to475E00 text/category bypasses0/6 bubble4FB690. No common64/native mapping or widening inferred; existing actor qualification stays explicit.",
         "guild_action_batch_capture": "Round494 Common53 adapter owns full original records and frozen selected indices/old grants/plans. Exact private adapter and admission issuer identities, strict selected original-index one-use execution and retirement; no recapture after prefixes. Existing legacy handles delegate. This is not an actual native mutation capability or Session lease.",
-        "guild_action_sender_gap": "Native guild mutation mount deliberately remains OPEN until actual sender bytes and pending acceptance callbacks join original native run/final response custody. Existing Session acceptance(true) means FIFO append, not Written. Bootstrap/menu/prompt asynchronous grants remain real; no fake ACK or repurposed C67 tags. Actual native legacy overwrite is documented."
+        "guild_action_sender_gap": "Native guild mutation mount deliberately remains OPEN until actual sender bytes and pending acceptance callbacks join original native run/final response custody. Existing Session acceptance(true) means FIFO append, not Written. Bootstrap/menu/prompt asynchronous grants remain real; no fake ACK or repurposed C67 tags. Actual native legacy overwrite is documented.",
+        "guild_sender_transport_custody": "Round495 actual Session TLS-only WorldReplyPushCapture captures same-Session plain/Accepted logical sends through explicit GAME-only same-peer framer. Private exact final ranges, full delivery tuple, one-use callbacks and producer reservations join actual final FIFO Write in all3 branches. Queue acceptance only after metadata attachment; failure/drop once. No fake C67 component, encoder default, input hold or native action authority.",
+        "guild_sender_lifecycle": "Qualified one-envelope logical.size()+3 wire bounds, aggregate original source order, equal tuple rebind supported, reserves before moving ACK closure, frame/count limits retained until actual Write removal. GAME profile excluded from NET receipts. Stale/finished handles affect only old window; explicit rejection/invalidations/throwing posts settle failure once. Existing deferred C67 translates generic ranges or rejects overlap/immutable conflict."
       },
-      "native_gap": "Native guild chat source from493 remains unchanged. Round494 prepares Common53 action capture only; actual native mutation ingress and indexed sender/FIFO-acceptance custody remain unimplemented. Default native providers/Main, sender profile, common64/native projection, older guild bridges, selected Web G, native transfer, durable save/logout/admission/recovery and six switches/client acceptance remain open.",
+      "native_gap": "Round495 actual Session sender transport custody is connected in source, with unexecuted real-socket cases. Common53 native action Kind/batch/dispatch/Current/continuation/lifetime bridge still OPEN; no activation inferred from transport API. Default native sources/Main, actual peer profile, common64/native projection, older guild bridges, selected Web G, native transfer, durable save/logout/admission/recovery and six switches/client acceptance remain open.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_COMMON53_BATCH_CAPTURE_NATIVE_MUTATION_CUSTODY_OPEN_NO_BUILD_TEST_RUNTIME"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_SESSION_SENDER_FIFO_CUSTODY_FUTURE_SOCKET_CASES_NOT_EXECUTED_NATIVE_ACTION_BRIDGE_OPEN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

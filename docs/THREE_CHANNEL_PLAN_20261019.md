@@ -165,3 +165,12 @@ would overtake buffered earlier native replies. Existing queue acceptance is
 not Written, and private C67 deferral cannot carry generic guild ACKs. Connect
 real indexed sender custody/final FIFO acceptance before native action activation;
 see research/tw-three-channel-guild-ingress-20261019.md. No runtime acceptance.
+
+Round495 adds actual Session original-run sender custody: explicit same-Session
+GAME-only framer, exact final slices, real FIFO acceptance callbacks and retained
+per-emission reservations on all three final enqueue branches. C67 provenance
+remains separate; stale scopes cannot poison successors. Future real-socket
+cases are source-registered, not executed. The native Common53 action bridge
+still needs full-original batch/current/index/continuation/lifetime integration;
+see research/tw-three-channel-sender-20261019.md. No native action activation,
+three-channel default Main, switching or client acceptance is claimed.

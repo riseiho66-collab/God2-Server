@@ -578,6 +578,8 @@ add_test(NAME shared_guild_channel_directory53 COMMAND god2-tests shared_guild_c
 set_tests_properties(shared_guild_channel_directory53 PROPERTIES TIMEOUT 15 LABELS "guild;channels;source-custody;not-live-acceptance")
 add_test(NAME owned_taiwan_guild_chat_dispatch COMMAND god2-tests owned_taiwan_guild_chat_dispatch)
 set_tests_properties(owned_taiwan_guild_chat_dispatch PROPERTIES TIMEOUT 15 LABELS "guild;channels;source-custody;not-live-acceptance")
+add_test(NAME world_reply_push_capture COMMAND god2-tests world_reply_push_capture)
+set_tests_properties(world_reply_push_capture PROPERTIES TIMEOUT 120 LABELS "guild;channels;network;source-custody;not-live-acceptance")
 foreach(suite packet decoder dispatcher lua session_state protocol_replay database network config post_server_select legacy_character_list_candidate character_create password_hash recovered_account_login recovered_character_repository recovered_character_list post_create_select recovered_movement_service recovered_position_repository)
   add_test(NAME ${suite} COMMAND god2-tests ${suite})
   set_tests_properties(${suite} PROPERTIES TIMEOUT 30)

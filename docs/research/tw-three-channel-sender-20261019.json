@@ -1,0 +1,174 @@
+{
+  "round": 495,
+  "previous_goal_turn": "progress",
+  "previous_commit": "45ffba9a3e3499a70c49054bd9e156fd801d549d",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_SESSION_ORIGINAL_RUN_SENDER_FIFO_CUSTODY",
+  "source_integration": [
+    "Actual TLS WorldReplyPushCapture with explicit GAME-only same-Session framer",
+    "Same-Session plain/Accepted pushes become exact original-position final fragments",
+    "Three final enqueue branches retain producer reservations and settle real ACKs at FIFO acceptance",
+    "Failure/drop/reentry/stale handles and immutable/C67 ranges retain distinct private provenance",
+    "Future DB-free actual socket/TLS source cases registered but not run"
+  ],
+  "source_review": {
+    "independent": true,
+    "actual_final_enqueue_branches": 3,
+    "ack_stage": "FIFO_ENQUEUED_AFTER_METADATA_BEFORE_WRITE_NOT_WRITTEN_OR_FINAL_ADMISSION_OR_CLIENT_ACK",
+    "profile_excluded_from_net": true,
+    "tuples_compared_by_full_values": true,
+    "callback_move_after_capacity_reserve": true,
+    "stale_window_cannot_poison_successor": true,
+    "actual_native_action_capability_added": false,
+    "default_main_selected": false,
+    "executable_fixture_added": true,
+    "fixture": "tests/test_world_reply_push_capture.cpp",
+    "fixture_profile": "EXPLICIT_TEST_ONLY_NOT_NATIVE_QUALIFICATION",
+    "fixture_coverage_limits": "Not every normal-response/admission/C67 coexistence/drop/abort path is exercised by future source cases",
+    "declared_session_patch_sha256": "7cf45f24c833a03a4b65e69d38e718f59e67db76951d81e29140580f765ea257",
+    "eol": [
+      {
+        "path": "src/net/Session.h",
+        "baseline_cr": 105,
+        "current_cr": 105,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 19
+      },
+      {
+        "path": "src/net/Session.cpp",
+        "baseline_cr": 737,
+        "current_cr": 737,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 226
+      },
+      {
+        "path": "tests/test_main.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 3
+      },
+      {
+        "path": "tests/CMakeLists.txt",
+        "baseline_cr": 993,
+        "current_cr": 993,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 2
+      },
+      {
+        "path": "docs/custom-designs.json",
+        "baseline_cr": 6467,
+        "current_cr": 6467,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 8
+      },
+      {
+        "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 9
+      }
+    ],
+    "unrelated_sources_unchanged": [
+      "src/relations53/SharedGuildApplication53Draft.h",
+      "src/core/Application.cpp",
+      "src/game/SharedTaiwanWorldRecordSource.h",
+      "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "src/game/LegacyWorldReply.h",
+      "tests/test_session_state.cpp"
+    ]
+  },
+  "native_reuse": {
+    "new_targets": 0,
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-chat-round493/native-chat/findings-v2.json",
+    "sha256": "6e57249fb1d83c1198da26276f0ba4bf7eb651104b5ba9a05132b6e86ff1fee5",
+    "members_verified": 19,
+    "claim": "Unchanged current-client selection/switch/chat evidence only; ordinary source analysis adds no binary claims"
+  },
+  "open": [
+    "Actual native Common53 original batch/Kind/dispatch/current/index/budget/lifetime bridge",
+    "Deep Common/admission continuation cancellation including nested fresh captures",
+    "Actual native provider/default Main and same-peer framing profile",
+    "Common64/native projection, older guild bridges, selected Web G",
+    "Native transfer/durable save/logout/admission/recovery, six switches and current-client acceptance",
+    "All full-server gameplay/formula/actual MySQL obligations"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/net/Session.h",
+      "sha256": "057fd068a83c2bb895c867de60ad7227c34acc4551baf4714a785bc9e3258f87"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "e3b731fa3e129df8f1e90968fa5fd64ac894919beb0a9b7a7b6f3fd89a195b99"
+    },
+    {
+      "path": "tests/test_world_reply_push_capture.cpp",
+      "sha256": "cd218a2a830f5ddddfca1d3419840cd8ac8df355d8a451682bdb51ae9625d597"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "3ddf337d5c3e6627684cd6317516dbc7433ea4ecd63c35e69351828a4ec45676"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "2cee9d822815aa442bcf58b989b074fc9eb5215a054f4cc84239517aa0034ab5"
+    },
+    {
+      "path": "src/relations53/SharedGuildApplication53Draft.h",
+      "sha256": "fc64ad71e07b8e1bf976cf11a357fc5205287a1b364ac2dd0360b3f6705209d8"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "01380f4a7812203daf88867a25a1bcbf3e5e515f5b9060b9923f94321cee7749"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.h",
+      "sha256": "6c88b0d4894c0b07b66b9e75ce5af3f6167b5607015b4aacd613ebd464287685"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "sha256": "5c2da14513823aa7c6c345011f5ebd5d76fe436ff6a7a33db1573343c37f1c3e"
+    },
+    {
+      "path": "src/game/LegacyWorldReply.h",
+      "sha256": "27217243080c3233828b9443836d6ecefabe5d6c1049f8963fcaba3d1a79febb"
+    },
+    {
+      "path": "tests/test_session_state.cpp",
+      "sha256": "e9cef575114280e9953b3d24372afc426ad61398acae3ad7770e64e210e5f4a8"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "513e8b2e16b5bb71c77b92a2666ba389844069a43251fc3aa815360b76799d8a"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "1f3f0d62df47ba5a62c21ba2cbdca4ec56355e5584aa93dd55e27bb2fe6e9775"
+    },
+    {
+      "path": "docs/research/tw-three-channel-sender-20261019.md",
+      "sha256": "522355429038873a2cc5c99da19d4980dc6ef334d906c29ecba4ae9ad4ff51bc"
+    }
+  ]
+}

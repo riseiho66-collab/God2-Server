@@ -348,6 +348,25 @@ public:
         std::uint64_t nonce_=0,parent_=0;
     };
     CallbackReplyOutputOffset callback_reply_output_offset(std::size_t relative_prefix);
+    using WorldReplyPushWire=std::function<std::optional<std::vector<std::uint8_t>>(Session&,std::span<const std::uint8_t>)>;
+    // Actual synchronous original-run sender custody. The supplied GAME-only
+    // profile frames each captured push; no default codec or input hold exists.
+    class WorldReplyPushCapture final {
+    public:
+        ~WorldReplyPushCapture() noexcept;
+        WorldReplyPushCapture(const WorldReplyPushCapture&)=delete;
+        WorldReplyPushCapture& operator=(const WorldReplyPushCapture&)=delete;
+        WorldReplyPushCapture(WorldReplyPushCapture&&)=delete;
+        WorldReplyPushCapture& operator=(WorldReplyPushCapture&&)=delete;
+        std::vector<std::uint8_t> finish(std::size_t relative_output_offset);
+        void invalidate() noexcept;
+    private:
+        friend class Session;friend struct Impl;
+        struct Data;
+        WorldReplyPushCapture(Session&,WorldReplyPushWire);
+        std::shared_ptr<Data> data_;
+    };
+    WorldReplyPushCapture capture_world_reply_pushes(WorldReplyPushWire);
     void send_world_callback_reply_frame(LegacyWorldReplyFrame);
     std::vector<std::uint8_t> take_world_callback_reply(LegacyWorldReply);
     bool callback_output_emission_written(const WorldCallbackOutput&,const WorldCallbackSelectionEmission&) const;
