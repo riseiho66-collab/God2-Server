@@ -20,3 +20,9 @@ Origin allowlist、輸入限額及正式WSS/TLS仍屬服務端責任。
 入口原始碼存在不代表Main已完整掛載、已可玩或已部署。完整台服入場、
 場景、所有玩法路徑及集中原生驗收仍待完成。第一階段不啟動或測試服務。
 舊介面與交接歷史保留Git及外部證據，現用契約以上述兩條路徑為準。
+
+2026-10-19 C++/WASM 重寫後已重新核對，現用交接見
+[WEB_CLIENT_WASM_SERVER_HANDOFF_20261019.md](WEB_CLIENT_WASM_SERVER_HANDOFF_20261019.md)。
+客戶端改寫不改兩條TW二進位入口與服務端權威；完整WorldPort／Main、
+非ASCII帳密與三分流Web G可信目的地仍待接通。手寫JS依C++完整功能與驗收逐批退役，
+編譯器必要橋接只保留於忽略的build，不能以刪除未移植功能冒充完成。

@@ -1,0 +1,130 @@
+{
+  "round": 498,
+  "previous_goal_turn": "progress",
+  "previous_commit": "42e5259b40dca0c8bda38b6ecbf7bfc73f9c0aba",
+  "goal_status": "active",
+  "scope": "Owner-requested read-only C++ WASM client reassessment and staged JS retirement",
+  "client_observation": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/wasm-server-review-round498/client-source-observation-v2.json",
+    "sha256": "08ea69d601741cf97e1f4db922e74419bd1ebdcd8b77612ba4410b9edfb5aed2",
+    "observed": "2026-10-19T08:14:58.085Z",
+    "head": "6598bc12fc52202d46ab2a4e6b407df8d135c90a",
+    "branch": "development/webclient-main",
+    "snapshot_not_frozen_worktree": true,
+    "migration": {
+      "language": "C++20",
+      "runtime": "WebAssembly",
+      "total": 209,
+      "partial": 21,
+      "queued": 188,
+      "accepted": 0,
+      "retired": 0,
+      "frozen_scripts": 417,
+      "uploads_allowed": true,
+      "percent": null
+    },
+    "existing_tests": {
+      "native": {
+        "passed": 6,
+        "failed": 0,
+        "existing_run_only": true,
+        "rerun": false
+      },
+      "web": {
+        "passed": 3,
+        "failed": 0,
+        "existing_run_only": true,
+        "rerun": false
+      }
+    },
+    "tests_not_rerun": true
+  },
+  "findings": [
+    "C++20 core+browser adapters compile to WASM; generated bridge only, staged handwritten JS retirement",
+    "21 partial/188 queued/0 accepted/0 retired of209 at observation; no whole-game percentage",
+    "Actual browser Main unconnected and complete WorldPort/session/native flows absent",
+    "ASCII-only client credentials cannot send supported raw non-ASCII server account/password bytes",
+    "Binary relay/subprotocol shapes match source contract, not live interoperability proof",
+    "Normal server Main omits WebServerPlan; public WSS and trusted selected3-channel G bridge open"
+  ],
+  "source_review": {
+    "client_sources_modified": false,
+    "protocol_fields_changed": false,
+    "credential_identity_normalized": false,
+    "arbitrary_proxy_added": false,
+    "old_integration_prefix_byte_exact": true
+  },
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "docs/WEB_CLIENT_WASM_SERVER_HANDOFF_20261019.md",
+      "sha256": "b443b9168b94590935051db4decee45cbcec2aeb2452daf35bc69d8b6b954843"
+    },
+    {
+      "path": "docs/WEB_CLIENT_SERVER_INTEGRATION_20261007.md",
+      "sha256": "4017b250bce5a77f5cfbedaec4690be1995df36191b3751709fffe4b848f781d"
+    },
+    {
+      "path": "src/net/WebServerPlan.h",
+      "sha256": "1f06087df836183064880ae71c1db47e0e730bf359042b0b5132b9d549d2db54"
+    },
+    {
+      "path": "src/net/WebClientGateway.h",
+      "sha256": "cb06b6feb45e1dc6348945d5d6cc9b173b30cfb6dd39c7e6dced25578bd6c25c"
+    },
+    {
+      "path": "src/net/WebClientGateway.cpp",
+      "sha256": "3c7da9e42d16574afee60e67578c37558127e76a5126d0215651e5b61a534080"
+    },
+    {
+      "path": "src/net/WebSocketHandshake.inc",
+      "sha256": "ee4a4f7568b8c2912916b59c4f140a0d0bfb790978016c5f44e6a8dae98f3144"
+    },
+    {
+      "path": "src/core/Application.h",
+      "sha256": "05e07045e1353df09c362b437add9d3eccffc7b152ed1558a096e762203bf015"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "e37159414c3852a2bf0ba0233e92b7ed459b1d42751c68920c03e2785fea00ca"
+    },
+    {
+      "path": "src/main.cpp",
+      "sha256": "a91a7f2d51a3cb62ed8c007e60f9891001d9df01539ac1a96185b5a229a80a0e"
+    },
+    {
+      "path": "src/auth/RecoveredAccountLogin.cpp",
+      "sha256": "53af9e78d6a3896c5accd3f733b52aebb56fcce4ec93b21421fa2d87ce94689e"
+    },
+    {
+      "path": "src/protocol/RecoveredC2S0002.h",
+      "sha256": "cc5c010b1837783d392f9aa7e77ad2ae9933e098a985abe23fb50e1e16288564"
+    },
+    {
+      "path": "src/protocol/RecoveredWorldFrame.h",
+      "sha256": "b602ba7a6c86d4cff700e4a65123e8dbdec64b1a2b60b28ae21dd3bf76523d1f"
+    },
+    {
+      "path": "src/protocol/RecoveredSeedExchange.h",
+      "sha256": "157f28c36b92f5e2c56e482845f216b428858974a297ac4d2b83df36a90c6dd0"
+    }
+  ]
+}
