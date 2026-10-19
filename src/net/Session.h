@@ -36,6 +36,7 @@ class LegacyTaiwanOwnedDeitySelectionRegistry;
 class TaiwanActorStatusWriteFence;
 class SharedTaiwanMovement;
 class RecoveredMovementService;
+class NativeTaiwanChannelBinding;
 
 enum class SessionState {
     Connected, Handshaked, Authenticated, CharacterSelected,
@@ -754,7 +755,8 @@ public:
             std::uint64_t id, bool packet_dump, PacketHandler on_packet,
             DisconnectHandler on_disconnect, ProtocolMode mode=ProtocolMode::Fixture,
             RecoveredLoginHandler recovered_login={},RecoveredCharacterHandlers characters={},
-            std::vector<std::uint8_t> character_routes={});
+            std::vector<std::uint8_t> character_routes={},
+            std::shared_ptr<const NativeTaiwanChannelBinding> native_channel={});
     ~Session();
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -999,6 +1001,13 @@ public:
     std::shared_ptr<const NativeCharacterSelectionInput> recovered_native_selection_input() const noexcept;
     std::shared_ptr<const NativeAuthenticatedInput> recovered_native_authenticated_input() const noexcept;
     std::shared_ptr<const NativeLocalEndpoint> recovered_native_local_endpoint() const noexcept;
+    // CUSTOM-0159: immutable actual accepted-listener binding. Unbound legacy
+    // Sessions retain their old policy; a bound Session cannot change worlds.
+    bool native_channel_bound() const noexcept;
+    std::optional<std::uint8_t> native_channel_ordinal() const noexcept; // Metadata, not permission.
+    bool native_channel_binding_current() const; // Unbound preserves prior policy; not authentication.
+    bool native_channel_allows_presence(const std::shared_ptr<SharedWorldPresence>&) const;
+    bool native_channel_allows_destination(std::uint8_t group,std::uint8_t subgroup) const;
 
     // Only the serial game callback that owns the ORIGINAL parsed batch may
     // call these. A copied Request is rejected; a copied receipt cannot claim
@@ -1109,6 +1118,13 @@ private:
     // Declared BEFORE Impl: retains destructor cleanup custody after Impl dies.
     std::optional<TaiwanActorStatusWriteFence::Writer> destruction_status_writer_;
     std::unique_ptr<Impl> impl_;
+    struct NativeChannelAcceptance {
+        const Session* session;
+        std::uint64_t id;
+        asio::ip::tcp::endpoint local;
+    };
+    const std::shared_ptr<const NativeTaiwanChannelBinding> native_channel_;
+    const std::optional<NativeChannelAcceptance> native_channel_acceptance_;
     std::atomic<SessionState> state_{SessionState::Connected};
     std::atomic<std::uint64_t> battle_generation_{0};
     std::atomic<bool> recovered_world_ready_{false};

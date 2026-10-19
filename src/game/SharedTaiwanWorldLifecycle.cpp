@@ -32,20 +32,23 @@ void SharedTaiwanWorldLifecycle::Binding::owner() const {
 }
 bool SharedTaiwanWorldLifecycle::Binding::current(Session& session) const {
     owner();
+    if(!session.native_channel_allows_presence(presence))return false;
     if(status_incarnations&&(!status_incarnation||!status_incarnations->current(*status_incarnation)))return false;
     if(identity==TaiwanWorldEntryIdentity::QualifiedSceneHandle) {
         if(!lease || stage==Stage::Fresh || stage==Stage::Released)return false;
         const auto pinned=connection.lock();const auto registry=presence;const auto expected=*lease;const auto phase=stage;
         const auto matches=[&] {
             return stage==phase && lease && *lease==expected && pinned.get()==&session && !session.closing() &&
-                session.id()==expected.session && session.account_id==expected.account && session.character_id==expected.character;
+                session.id()==expected.session && session.account_id==expected.account && session.character_id==expected.character&&
+                session.native_channel_allows_presence(registry);
         };
         if(!matches() || !registry->preparation_current(expected) || !matches())return false;
         return phase==Stage::Prepared?registry->retained_preparation_current(expected):registry->retained_ready_current(expected);
     }
     return lease && connection.lock().get()==&session && !session.closing() &&
         session.id()==lease->session && session.account_id==lease->account &&
-        session.character_id==lease->character && presence->preparation_current(*lease);
+        session.character_id==lease->character && presence->preparation_current(*lease)&&
+        session.native_channel_allows_presence(presence);
 }
 void SharedTaiwanWorldLifecycle::Binding::release() {
     owner();retire_status_incarnation();if(stage==Stage::Released)return;stage=Stage::Released;
@@ -61,7 +64,8 @@ void SharedTaiwanWorldLifecycle::Binding::release() {
     if(failure)std::rethrow_exception(failure);
 }
 bool SharedTaiwanWorldLifecycle::Binding::prepare(Session& session,const RecoveredWorldEntry::Frame& wire) {
-    owner();if(stage!=Stage::Fresh || session.closing() || !session.account_id || !session.character_id)return false;
+    owner();if(stage!=Stage::Fresh || session.closing() || !session.account_id || !session.character_id||
+        !session.native_channel_allows_presence(presence))return false;
     const auto full=RecoveredWorldEntryView::read(wire);
     if(!full || !valid_taiwan_world_entry_identity(identity) ||
        (identity==TaiwanWorldEntryIdentity::SelectedCharacter && session.character_id!=full->actor_handle) ||
@@ -74,9 +78,9 @@ bool SharedTaiwanWorldLifecycle::Binding::prepare(Session& session,const Recover
             full->actor_handle,full->area,full->scene,full->x,full->y);
         if(!prepared)return false;
         // Opt-in only: caught reentrant release must never revive a binding.
-        if(status_incarnations&&(stage!=Stage::Fresh||session.closing()||
+        if((status_incarnations||session.native_channel_bound())&&(stage!=Stage::Fresh||session.closing()||
            session.account_id!=account||session.character_id!=character||
-           !registry->retained_preparation_current(*prepared))) {
+           !registry->retained_preparation_current(*prepared)||!session.native_channel_allows_presence(registry))) {
             registry->release(*prepared);return false;
         }
         lease=*prepared;entry=*full;connection=session.shared_from_this();stage=Stage::Prepared;
@@ -95,7 +99,7 @@ bool SharedTaiwanWorldLifecycle::Binding::prepare(Session& session,const Recover
         full->actor_handle,full->area,full->scene,full->x,full->y);
     if(!prepared)return false;
     if(stage!=Stage::Fresh || session.closing() || session.account_id!=account || session.character_id!=character ||
-       !registry->retained_preparation_current(*prepared)) {
+       !registry->retained_preparation_current(*prepared)||!session.native_channel_allows_presence(registry)) {
         registry->release(*prepared);return false;
     }
     lease=*prepared;entry=*full;connection=pinned;stage=Stage::Prepared;
@@ -116,7 +120,7 @@ std::optional<std::uint16_t> SharedTaiwanWorldLifecycle::Binding::prepared_actor
             session.id()==expected.session && session.account_id==expected.account && session.character_id==expected.character &&
             expected.actor_handle==retained.actor_handle && qualified_taiwan_scene_handle(expected.actor_handle) &&
             expected.position.area==retained.area && expected.position.scene==retained.scene &&
-            expected.position.x==retained.x && expected.position.y==retained.y;
+            expected.position.x==retained.x && expected.position.y==retained.y&&session.native_channel_allows_presence(registry);
     };
     if(!matches() || !registry->preparation_current(expected) || !matches() ||
        !registry->retained_preparation_current(expected))return std::nullopt;

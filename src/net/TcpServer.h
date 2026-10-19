@@ -8,6 +8,8 @@
 #include <string>
 
 namespace god2 {
+class TaiwanChannelServers;
+class SharedWorldPresence;
 class TcpServer {
 public:
     TcpServer(asio::io_context& network, asio::any_io_executor game_executor,
@@ -24,7 +26,13 @@ public:
     // Keep both executors running until pending callbacks and closes drain.
     void stop();
     std::uint16_t port() const noexcept;
+    asio::ip::tcp::endpoint bound_endpoint() const noexcept;
 private:
+    friend class TaiwanChannelServers;
+    // Constructor-only integration before start; never exposed as a Session
+    // rebinding API. Failed three-listener construction closes unstarted binds.
+    void bind_native_channel(std::shared_ptr<SharedWorldPresence>,std::uint8_t group,std::uint8_t channel);
+    void discard_unstarted();
     struct Impl;
     std::shared_ptr<Impl> impl_;
 };

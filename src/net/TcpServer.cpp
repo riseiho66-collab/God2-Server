@@ -1,6 +1,7 @@
 #include "net/TcpServer.h"
 #include "net/SessionManager.h"
 #include "net/ConnectionIdentity.h"
+#include "net/NativeTaiwanChannelBinding.h"
 #include <spdlog/spdlog.h>
 #include <chrono>
 #include <stdexcept>
@@ -19,9 +20,11 @@ struct TcpServer::Impl : std::enable_shared_from_this<TcpServer::Impl> {
     Session::RecoveredLoginHandler recovered_login;
     Session::RecoveredCharacterHandlers character_handlers;
     std::vector<std::uint8_t> character_routes;
+    std::shared_ptr<const NativeTaiwanChannelBinding> channel_binding;
     const bool packet_dump;
     const ProtocolMode mode;
     std::uint16_t bound_port = 0;
+    asio::ip::tcp::endpoint bound_endpoint;
     bool started = false;
     bool stopped = false;
 
@@ -47,7 +50,7 @@ struct TcpServer::Impl : std::enable_shared_from_this<TcpServer::Impl> {
             if (!ec) acceptor.set_option(asio::socket_base::reuse_address(true), ec);
             if (!ec) acceptor.bind(resolved.endpoint(), ec);
             if (!ec) acceptor.listen(asio::socket_base::max_listen_connections, ec);
-            if (!ec) { bound_port = acceptor.local_endpoint().port(); return; }
+            if (!ec) { bound_endpoint=acceptor.local_endpoint();bound_port = bound_endpoint.port(); return; }
             last_error = ec;
             acceptor.close(ec);
         }
@@ -87,7 +90,7 @@ struct TcpServer::Impl : std::enable_shared_from_this<TcpServer::Impl> {
                                 });
                             }
                             if (disconnect) disconnect(std::move(session));
-                        },self->mode,self->recovered_login,self->character_handlers,self->character_routes);
+                        },self->mode,self->recovered_login,self->character_handlers,self->character_routes,self->channel_binding);
                     if (self->sessions.add(session)) session->start();
                     // A rejected session has never entered the application and
                     // is destroyed here without a disconnect notification.
@@ -122,7 +125,20 @@ void TcpServer::start() {
     asio::post(impl_->strand, [impl = impl_] { impl->start(); });
 }
 void TcpServer::stop() {
+    if(impl_->channel_binding)impl_->channel_binding->retire();
     asio::post(impl_->strand, [impl = impl_] { impl->stop(); });
 }
 std::uint16_t TcpServer::port() const noexcept { return impl_->bound_port; }
+asio::ip::tcp::endpoint TcpServer::bound_endpoint() const noexcept {return impl_->bound_endpoint;}
+void TcpServer::bind_native_channel(std::shared_ptr<SharedWorldPresence> presence,std::uint8_t group,std::uint8_t channel) {
+    if(impl_->started||impl_->stopped||impl_->channel_binding||impl_->mode!=ProtocolMode::God2CharacterConnection)
+        throw std::logic_error("Native channel must bind once before listener start");
+    impl_->channel_binding=std::shared_ptr<const NativeTaiwanChannelBinding>(
+        new NativeTaiwanChannelBinding(std::move(presence),group,channel,impl_->bound_endpoint));
+}
+void TcpServer::discard_unstarted() {
+    if(impl_->started)throw std::logic_error("Cannot discard a started listener synchronously");
+    if(impl_->channel_binding)impl_->channel_binding->retire();
+    impl_->stop();
+}
 } // namespace god2

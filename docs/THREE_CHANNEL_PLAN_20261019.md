@@ -20,6 +20,14 @@ are not implemented or accepted yet.
    It is a loopback routing component, not a complete public
    deployment or native list issuer. Keep the one-channel API unchanged. Never
    advertise unhosted ports or alias three labels to one endpoint/world.
+   Round487 TaiwanChannelServers now constructs three actual unstarted G
+   listeners from complete per-world source facades and exactly three actual
+   configuration slots. It publishes only observed bound endpoints (including
+   requested port0), installs private accepted-Session/world bindings and
+   synchronously closes partial construction on failure. Main/Application has
+   not selected this component yet; shared ticket lineage and complete game
+   owner/drain lifetimes remain mandatory supplied sources. Existing two Web
+   paths also still need selection of the corresponding hosted G endpoint.
 3. Carry explicit authoritative channel identity through connection/handoff/
    world ownership. Share account/character storage; isolate presence, actors,
    monsters, encounters, proximity and local broadcasts. Audit per-listener
@@ -47,6 +55,10 @@ are not implemented or accepted yet.
    switching, not an in-place transfer opcode. Existing immediate03 queue and
    close are not durable-save/cleanup completion receipts. The actual handoff
    owner must keep source custody until those required operations complete.
+   Round487 traced483B00/483BB0/507BB0 as a bounded local widget-dismiss path,
+   not a recovered target-channel action. Only482305 tests the result for-26;
+   4829CF ignores it. Continue at state2 block46597E and the widget's actual
+   creation/opening source rather than assigning it a guessed switch opcode.
 5. After source closure, verify original UI selection for all three channels,
    all six directed cross-channel switches, same-channel action, invalid/full/
    unavailable targets, duplicate ownership attempts, disconnect/retry, save

@@ -564,6 +564,8 @@ add_test(NAME taiwan_native_hmd_bundle_source COMMAND god2-tests taiwan_native_h
 set_tests_properties(taiwan_native_hmd_bundle_source PROPERTIES TIMEOUT 30)
 add_test(NAME taiwan_channel_worlds COMMAND god2-tests taiwan_channel_worlds)
 set_tests_properties(taiwan_channel_worlds PROPERTIES TIMEOUT 30 LABELS "world;channels;source-custody;not-live-acceptance")
+add_test(NAME taiwan_channel_servers COMMAND god2-tests taiwan_channel_servers)
+set_tests_properties(taiwan_channel_servers PROPERTIES TIMEOUT 30 LABELS "network;channels;source-custody;not-live-acceptance")
 foreach(suite packet decoder dispatcher lua session_state protocol_replay database network config post_server_select legacy_character_list_candidate character_create password_hash recovered_account_login recovered_character_repository recovered_character_list post_create_select recovered_movement_service recovered_position_repository)
   add_test(NAME ${suite} COMMAND god2-tests ${suite})
   set_tests_properties(${suite} PROPERTIES TIMEOUT 30)

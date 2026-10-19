@@ -1,0 +1,146 @@
+{
+  "round": 487,
+  "previous_goal_turn": "progress",
+  "previous_commit": "a19fa9739809f80ee7372503325121a29e8a7f48",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_OWNER_REQUIRED_THREE_CHANNELS_WITH_NATIVE_ENDPOINT_AND_EXISTING_AUTHORITY_FENCES",
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-endpoints-round487/native-switch/ui-dismiss-findings-v1.json",
+    "receipt_sha256": "90ba17e94c1276c25cee3680e9668b4ecf9fbe29955b03e1279f6530c8491231",
+    "members_verified": 31,
+    "original_sections_and_mappings_match": true,
+    "all_targets_closed": true,
+    "decompilations": [
+      {
+        "version": 1,
+        "evidence_id": "ev_89f61d18ebd2bb589405b19ba499072a4989800347abebe95f36eb28e60a72ed",
+        "procedures": [
+          "0x483b00"
+        ],
+        "analysis_sha256": "7851f3ca3f8fa5ec6d0142e09c29b22228d8b4a95da76316bdf0bb2ffaae83bf",
+        "closed": true
+      },
+      {
+        "version": 2,
+        "evidence_id": "ev_34e8ced13c4f7f700d380602fe803402253a9e6bad747928b9910b682e07774a",
+        "procedures": [
+          "0x483bb0"
+        ],
+        "analysis_sha256": "79bede3a15e3cfbef8387d6e8382361ac2c450e2e756b80ef34f9db5b187ec88",
+        "closed": true
+      },
+      {
+        "version": 3,
+        "evidence_id": "ev_a88513ac0568dd88f7386a99e3890b7a086ca95c7cd19ad5a52b8e1f1655a268",
+        "procedures": [
+          "0x507bb0"
+        ],
+        "analysis_sha256": "25b485684c5a772923e1538531a1b39cd6f59c542c6ee5af176eb911cb6d0d30",
+        "closed": true
+      }
+    ],
+    "remaining_unknowns": [
+      "Actual name/purpose and opening/initialization path of UI+232DE4 widget. No native target-channel action established.",
+      "State-machine case2 block46597E, downstream of466B00 result2 via467860/state3, remains the next concrete endpoint trace.",
+      "4833B3 must be qualified to a containing procedure before treating it as an original semantic caller.",
+      "Full descendants of the three GUI/render helper calls were not traced; direct-call absence does not establish absence of all indirect network effects."
+    ]
+  },
+  "source_integration": [
+    "Actual three TcpServer endpoint construction and private accept-to-world binding",
+    "Session this/id/local receipt, lifecycle exact-world guards and handoff native destination constraint",
+    "Actual bound advertisements and synchronous partial-bind rollback",
+    "GAME weak-facade pre/post selection/readiness/records/lifecycle guards; caller retains complete owner/drain contract"
+  ],
+  "open": [
+    "Application three independent full Context/gameplay-source selection",
+    "Actual three client configuration slots and one shared L-issued handoff lineage/capacity",
+    "Existing two Web paths choose matching actual G endpoint",
+    "Durable logout/save/scene cleanup and cross-channel target admission",
+    "All full-server/native/formula/storage/gameplay requirements and concentrated current-client acceptance remain active"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/net/NativeTaiwanChannelBinding.h",
+      "sha256": "7a8f5deed02306dde68c4c732e242977387861eaa455434727344a2a5c5bee4f"
+    },
+    {
+      "path": "src/net/NativeTaiwanChannelBinding.cpp",
+      "sha256": "ecefa7cfb04ce4f1df3c442d661297e07bb1b88ec7d64bad7798b035794e5489"
+    },
+    {
+      "path": "src/net/TaiwanChannelServers.h",
+      "sha256": "5ead6f06f2f976b31d73f9218a894d45b56e4cc989a9726f5b64f9ace81c659e"
+    },
+    {
+      "path": "src/net/TaiwanChannelServers.cpp",
+      "sha256": "497149dd0c76f75ce8d9358f8f851f467c4f161df7b83d2e4579535f3adfb2cb"
+    },
+    {
+      "path": "src/net/TcpServer.h",
+      "sha256": "87632c3056d20f11c99da0a47555d9494fda56156bf613557c0a169af5837384"
+    },
+    {
+      "path": "src/net/TcpServer.cpp",
+      "sha256": "331566c3c739d0b18dbe47dd54b48a431dd1360b71132904c9198a8619204b41"
+    },
+    {
+      "path": "src/net/Session.h",
+      "sha256": "4d6aae1ff62d33ce035e39587d42c34de411a9668c7a3e2b83ccc0cee52b3c58"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "6879277a3115d7b99f3f09bef37d45f2606183a22d6a5eddd39489d05b18f323"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.cpp",
+      "sha256": "80d127ca1bb7f53985a93b21517dd0f0d397ef997912866ba2ded66c93774ea1"
+    },
+    {
+      "path": "src/game/SharedTaiwanCharacterListHandoff.cpp",
+      "sha256": "396a4161447b175c25900d8d8f784b7d6a9163bd13a08bcd0d4595d6319aab87"
+    },
+    {
+      "path": "tests/test_taiwan_channel_servers.cpp",
+      "sha256": "94a37868ab064d3ef83845d5e7840419b3391dd5bec94b4fdc73bae50c9546c3"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "bebcde22eecd8c1970f6a9d33f2d758cbc17b84508cf562c021c5a649e9f235d"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "c409ba3aa3def0b4ddf267f5ceb26662dc8f49a13d4174ae108794168fdd4fc9"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "5f48ae2c3c026ed06261911c2ab1c16bb2e3ad58307d39135fd1411ef48553c1"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "cb9371d3b6e4a3e4f252ee6fbf33eedc71f2a02c4a127cf81793d2cfdb8700ea"
+    },
+    {
+      "path": "docs/research/tw-three-channel-endpoint-binding-20261019.md",
+      "sha256": "2c9ca5f9316c61015b99c339d2797bd28ebedb792f06fa68c4b30b6015fd4356"
+    }
+  ]
+}

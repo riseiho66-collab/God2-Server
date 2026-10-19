@@ -1,4 +1,5 @@
 #include "net/Session.h"
+#include "net/NativeTaiwanChannelBinding.h"
 #include "net/Buffer.h"
 #include "protocol/God2ProtocolSpec.h"
 #include "protocol/Opcode.h"
@@ -4968,9 +4969,17 @@ struct Session::Impl {
 Session::Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,
                  std::uint64_t id, bool packet_dump, PacketHandler on_packet,
                  DisconnectHandler on_disconnect,ProtocolMode mode,RecoveredLoginHandler recovered_login,RecoveredCharacterHandlers characters,
-                 std::vector<std::uint8_t> character_routes)
+                 std::vector<std::uint8_t> character_routes,std::shared_ptr<const NativeTaiwanChannelBinding> native_channel)
     : impl_(std::make_unique<Impl>(*this, std::move(socket), std::move(game_executor), id,
-                                  packet_dump, std::move(on_packet), std::move(on_disconnect),mode,std::move(recovered_login),std::move(characters),std::move(character_routes))) {
+                                  packet_dump, std::move(on_packet), std::move(on_disconnect),mode,std::move(recovered_login),std::move(characters),std::move(character_routes))),
+      native_channel_(std::move(native_channel)),native_channel_acceptance_([&]()->std::optional<NativeChannelAcceptance>{
+          if(!native_channel_)return {};
+          if(mode!=ProtocolMode::God2CharacterConnection||!id||!impl_->character_handlers.native_select)
+              throw std::invalid_argument("Native channel requires an actual authenticated G source");
+          const auto local=impl_->socket.local_endpoint();
+          if(!native_channel_->accepts(local))throw std::invalid_argument("Accepted socket does not match its native channel listener");
+          return NativeChannelAcceptance{this,id,local};
+      }()) {
     // Constructor body: all Session atomics now exist. This passive observation
     // never changes legacy/authentication/socket acceptance on lookup failure.
     if(impl_->character_handlers.native_select && mode==ProtocolMode::God2CharacterConnection) {
@@ -4980,8 +4989,31 @@ Session::Session(asio::ip::tcp::socket socket, asio::any_io_executor game_execut
             if(!ec && local.address().is_v4() && local.port())
                 recovered_native_local_endpoint_.store(std::make_shared<const NativeLocalEndpoint>(
                     NativeLocalEndpoint{id,mode,local.address().to_v4().to_bytes(),local.port()}));
-        } catch(...) {}
+        } catch(...) {if(native_channel_)throw;}
+        if(native_channel_&&!recovered_native_local_endpoint_.load())
+            throw std::invalid_argument("Channel socket has no exact native local-endpoint observation");
+        if(native_channel_&&(!native_channel_acceptance_||!native_channel_->accepts(native_channel_acceptance_->local)))
+            throw std::invalid_argument("Channel listener retired during accepted-socket construction");
     }
+}
+bool Session::native_channel_bound() const noexcept {return bool(native_channel_);}
+std::optional<std::uint8_t> Session::native_channel_ordinal() const noexcept {
+    return native_channel_?std::optional{native_channel_->channel_}:std::nullopt;
+}
+bool Session::native_channel_binding_current() const {
+    return !native_channel_||native_channel_allows_destination(native_channel_->group_,native_channel_->channel_);
+}
+bool Session::native_channel_allows_presence(const std::shared_ptr<SharedWorldPresence>& presence) const {
+    if(!native_channel_)return true;
+    return native_channel_->matches_presence(presence)&&native_channel_acceptance_&&
+        native_channel_acceptance_->session==this&&native_channel_acceptance_->id==id()&&
+        native_channel_->accepts(native_channel_acceptance_->local);
+}
+bool Session::native_channel_allows_destination(std::uint8_t group,std::uint8_t subgroup) const {
+    if(!native_channel_)return true;
+    return native_channel_->matches_destination(group,subgroup)&&native_channel_acceptance_&&
+        native_channel_acceptance_->session==this&&native_channel_acceptance_->id==id()&&
+        native_channel_->accepts(native_channel_acceptance_->local);
 }
 Session::~Session() {
     retire_actor_status_incarnation();

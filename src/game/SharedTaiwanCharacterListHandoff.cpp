@@ -97,6 +97,7 @@ struct SharedTaiwanCharacterListHandoff::State {
     }
     bool peer_current(Session& session,const Source::Scope& scope,const AuthPtr& auth,const InputPtr& input) {
         check();
+        if(!session.native_channel_binding_current())return false;
         const auto local=session.recovered_native_local_endpoint();
         return auth_valid(auth,ProtocolMode::God2CharacterConnection,0) && input && scope.input &&
             local && local->session==session.id() && local->mode==ProtocolMode::God2CharacterConnection && local->port &&
@@ -120,7 +121,8 @@ struct SharedTaiwanCharacterListHandoff::State {
         if(!issuer.selection || !issuer.advertised_rows || !scope.token || !local ||
            !configured || !*configured || table.configured_subgroups!=*configured || table.subgroup>=*configured ||
            issuer.selection->request.selector_bytes()!=std::array<std::uint8_t,2>{table.group,table.subgroup} ||
-           local->session!=session.id() || local->mode!=ProtocolMode::God2CharacterConnection)return std::nullopt;
+           local->session!=session.id() || local->mode!=ProtocolMode::God2CharacterConnection||
+           !session.native_channel_allows_destination(table.group,table.subgroup))return std::nullopt;
         const auto actual=issuer.advertised_rows->primary_destination(table,*scope.token,record.ticket->snapshot().record);
         if(!actual || actual->address()!=local->address || actual->port()!=local->port || !local->port)return std::nullopt;
         return actual;

@@ -6542,9 +6542,19 @@
         "src/game/SharedWorldPresence.cpp",
         "tests/test_taiwan_channel_worlds.cpp",
         "tests/test_main.cpp",
-        "tests/CMakeLists.txt"
+        "tests/CMakeLists.txt",
+        "src/net/NativeTaiwanChannelBinding.h",
+        "src/net/NativeTaiwanChannelBinding.cpp",
+        "src/net/TaiwanChannelServers.h",
+        "src/net/TaiwanChannelServers.cpp",
+        "src/net/TcpServer.h",
+        "src/net/TcpServer.cpp",
+        "src/net/Session.h",
+        "src/game/SharedTaiwanWorldLifecycle.cpp",
+        "src/game/SharedTaiwanCharacterListHandoff.cpp",
+        "tests/test_taiwan_channel_servers.cpp"
       ],
-      "document": "docs/research/tw-three-channel-character-ownership-20261019.md",
+      "document": "docs/research/tw-three-channel-endpoint-binding-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6554,13 +6564,16 @@
         "availability": "Current-native4074CF..407602 tests WORD bit k; the available wrapper emits0007, opening rows0..2. It refuses group ordinals beyond the actual first10 UI rows. Generic full-record producer retains supplied masks unchanged.",
         "worlds": "Independent presence/actor-visibility/native-transport owners, local actor handles and local population epochs, same repository/game thread. Standalone default hosts retain private ownership; Application must explicitly select the shared collection and isolate remaining gameplay controllers",
         "lifecycle": "Immutable staged shared indices and detached local map node before final publication; pure retained claim fences after observers, allocation and before existing position CAS; exact private world retirement invalidates copied population tokens without evicting a successor",
-        "native_reselection": "Current EXE settings role logout -> world result2 -> login mode1 -> C2S02/reason1 -> S2C03 -> reauthentication and group/subgroup selection. This is not a direct in-place switch opcode or durable-save/ownership-release proof"
+        "native_reselection": "Current EXE settings role logout -> world result2 -> login mode1 -> C2S02/reason1 -> S2C03 -> reauthentication and group/subgroup selection. This is not a direct in-place switch opcode or durable-save/ownership-release proof",
+        "endpoints": "Three actual unstarted G TcpServers from explicit complete per-world source facades and actual configuration count3; full bound endpoints including kernel-assigned port0 feed original04/05/06. Partial construction closes successful binds synchronously before accepting.",
+        "channel_binding": "Private actual-listener endpoint/world descriptor, weak affine ownership, per-Session this/full64-ID/local-endpoint constructor correlation; GAME pre/post checks on selection/readiness/records/lifecycle and exact handoff native destination constrain bound Sessions; no public rebind, authentication/issuer authority unchanged",
+        "retirement": "Descriptor retirement precedes posted socket stop; exact lifecycle cleanup still runs after revocation. Actual source facade owners/worlds/repositories must outlive NET plus GAME disconnect drain; stop is not a save/drain completion receipt"
       },
-      "native_gap": "Application three real listeners and isolated full gameplay controllers, actual three configuration slots, shared issued-list lineage, durable logout/save/retirement/target admission and current-client switching acceptance remain open. UI+232DE4/483B00 meaning remains native research, not a chosen channel opcode.",
+      "native_gap": "Application selection of the new three-listener owner and three complete independent gameplay Contexts, actual three client slots, shared L-issued lineage/capacity, Web target selection, durable save/logout/retirement/target admission and current-client acceptance remain open.483B00/483BB0/507BB0 is bounded widget dismissal, not recovered channel-switch authority.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_MEMORY_REPOSITORY_REGRESSION_SOURCE_REGISTERED_NOT_BUILT_OR_RUN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_REAL_LISTENER_TOPOLOGY_FIXTURE_SOURCE_REGISTERED_NOT_BUILT_OR_RUN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
