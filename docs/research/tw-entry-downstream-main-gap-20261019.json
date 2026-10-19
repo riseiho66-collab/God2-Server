@@ -1,0 +1,347 @@
+{
+  "schema": "tw-entry-downstream-main-gap/1",
+  "round": 480,
+  "baseline_commit": "62614a15ab5e5e2718821cd84260d0a0a2bec41c",
+  "phase": "PHASE1_SOURCE_STATIC_ONLY",
+  "current_client_sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48",
+  "images": [
+    {
+      "path": "entry-downstream-seeded-v2.analysis-pe.bin",
+      "bytes": 3238912,
+      "sha256": "526d47c252e027036326200af31c277fdac6188627e8556677a9d16ffd40c111",
+      "all_original_section_mappings_and_bytes_equal": true,
+      "original_section_count": 13,
+      "synthetic_callers_not_original": true,
+      "image_never_executed": true
+    },
+    {
+      "path": "entry-downstream-seeded-v3.analysis-pe.bin",
+      "bytes": 3238912,
+      "sha256": "a1d819a27afe9d45387034b34c4ae3a23f922c192ccd2947ed99a1752de972f7",
+      "all_original_section_mappings_and_bytes_equal": true,
+      "original_section_count": 13,
+      "synthetic_callers_not_original": true,
+      "image_never_executed": true
+    },
+    {
+      "path": "entry-downstream-seeded-v4.analysis-pe.bin",
+      "bytes": 3238912,
+      "sha256": "a2628958527189e9369c89638f9e6fbf6e912afcf1b5b0d30520433376a77eef",
+      "all_original_section_mappings_and_bytes_equal": true,
+      "original_section_count": 13,
+      "synthetic_callers_not_original": true,
+      "image_never_executed": true
+    },
+    {
+      "path": "entry-downstream-seeded-v5.analysis-pe.bin",
+      "bytes": 3238912,
+      "sha256": "633340e947763fca1e63bf0438fb1d3b9e9b67a91dd481458dd1f3faf5013123",
+      "all_original_section_mappings_and_bytes_equal": true,
+      "original_section_count": 13,
+      "synthetic_callers_not_original": true,
+      "image_never_executed": true
+    }
+  ],
+  "evidence": [
+    {
+      "path": "entry-downstream-decompile-v2.json",
+      "bytes": 15617,
+      "sha256": "030f93cc38e08911fc66f1c8531459355c3fb55b183c8e4e00efeff57d93697d",
+      "evidence_id": "ev_8d5e5a8c20f6eeb99ee0818389bd4114296a2375341be2567f5e2dc4f9226b1d"
+    },
+    {
+      "path": "entry-downstream-decompile-v3.json",
+      "bytes": 44775,
+      "sha256": "2b5fc9050ea08ef817181c27d5df6b4f1c20e5d18bfd2bbf67a62e72d26a3519",
+      "evidence_id": "ev_18cd9a24b58109cdb20982265fababfb48244da86edfe9adddb0e7bfd51b7009"
+    },
+    {
+      "path": "entry-downstream-decompile-v4.json",
+      "bytes": 14381,
+      "sha256": "805d5834aa4a87c615c916800ccd2983cefb495524d340c6f73c43e30571eb6d",
+      "evidence_id": "ev_27d516140251f5d982f196d3caed98afa8a54c912345cac1b42a76801666c84e"
+    },
+    {
+      "path": "assembly-0x461ad0-v2.json",
+      "bytes": 20548,
+      "sha256": "023f73061a752e88c00035d489355ee6b18084552b3a09a24ca71670ff376c37"
+    },
+    {
+      "path": "assembly-0x4607d0-v2.json",
+      "bytes": 9472,
+      "sha256": "7ce1e195b0dfb0e7799f9e8625659774e9604a86065d64f5fe26228418d11e67"
+    },
+    {
+      "path": "assembly-0x4619d0-v3.json",
+      "bytes": 17430,
+      "sha256": "2b05eef955475df13e23a1d556455b88ada3fae4ae2f16bae87c2253768582ad"
+    },
+    {
+      "path": "assembly-0x4616a0-v3.json",
+      "bytes": 18934,
+      "sha256": "327a6a64339961a87385b9fce27bd31098425e63f3bd129077c262b8672d74bf"
+    },
+    {
+      "path": "assembly-0x468160-v4.json",
+      "bytes": 81238,
+      "sha256": "d479aa316405c95d010c686e1ac9bd4902e41c4e21e0f93bdead836947bccc23"
+    },
+    {
+      "path": "assembly-0x460c60-v4.json",
+      "bytes": 25156,
+      "sha256": "f5f8f36184229b80a204be6bd63fffc13da90bc1209a45bb5d11a0a2716c8091"
+    },
+    {
+      "path": "assembly-0x45aa70-v4.json",
+      "bytes": 13876,
+      "sha256": "4f2377b4a37b4a2e3739e40a03324f206a7b49a2d5e43ec4b00dde7ae3c171cc"
+    },
+    {
+      "path": "assembly-0x45a000-v4.json",
+      "bytes": 12308,
+      "sha256": "539f21c68eae6a05b1bcf6b86b49788276a40fc02654b577b0d00d7eb7fa44a7"
+    },
+    {
+      "path": "close-v1.json",
+      "bytes": 251,
+      "sha256": "fb3beac94c0871148d4cdb98bf38d13aafaa4e281a422cb0995a943c16648a51"
+    },
+    {
+      "path": "close-v2.json",
+      "bytes": 251,
+      "sha256": "fb3beac94c0871148d4cdb98bf38d13aafaa4e281a422cb0995a943c16648a51"
+    },
+    {
+      "path": "close-v3.json",
+      "bytes": 251,
+      "sha256": "fb3beac94c0871148d4cdb98bf38d13aafaa4e281a422cb0995a943c16648a51"
+    },
+    {
+      "path": "close-v4.json",
+      "bytes": 251,
+      "sha256": "fb3beac94c0871148d4cdb98bf38d13aafaa4e281a422cb0995a943c16648a51"
+    },
+    {
+      "path": "entry-downstream-decompile-v5.json",
+      "bytes": 21249,
+      "sha256": "c87c4e735ffe972e61af3e0d4a05b092c25333e52ed93fd62291ec7f818d8008",
+      "evidence_id": "ev_dae376d6aac9aabfdb8d5adbde147d2878cbe77d756ba78122306a7db576232b"
+    },
+    {
+      "path": "assembly-0x4606d0-v5.json",
+      "bytes": 17814,
+      "sha256": "fe22269a82e205cf0ba22c7c434769caa33a37419c7911d8f02e2e12d7bf924e"
+    },
+    {
+      "path": "assembly-0x45eec0-v5.json",
+      "bytes": 18666,
+      "sha256": "87806a915d67a16867998f7da3c06a2c48f9cf5e370e0258dd62abab0b3a4308"
+    },
+    {
+      "path": "assembly-0x45f0e0-v5.json",
+      "bytes": 11706,
+      "sha256": "7e92b9ca4a8239c40dfc7743500dcded41e80efef649a40769ebca1d5cd1c589"
+    },
+    {
+      "path": "close-v5.json",
+      "bytes": 251,
+      "sha256": "fb3beac94c0871148d4cdb98bf38d13aafaa4e281a422cb0995a943c16648a51"
+    }
+  ],
+  "successful_procedures": [
+    "0x461ad0",
+    "0x4607d0",
+    "0x4619d0",
+    "0x4616a0",
+    "0x460c60",
+    "0x468160",
+    "0x45aa70",
+    "0x45a000",
+    "0x4606d0",
+    "0x45eec0",
+    "0x45f0e0"
+  ],
+  "failed_initial_unseeded_batch_preserved": "entry-downstream-decompile-v1.json",
+  "first_failure_does_not_prove_procedure_absence": true,
+  "fixed_preload_selector": {
+    "address": "0x58a58c",
+    "file_offset": 1612684,
+    "bytes": [
+      9,
+      1
+    ],
+    "proven_meaning": "fixed preload selector bytes; not NPC instance or permission"
+  },
+  "sources": [
+    {
+      "path": "src/main.cpp",
+      "bytes": 6163,
+      "sha256": "a91a7f2d51a3cb62ed8c007e60f9891001d9df01539ac1a96185b5a229a80a0e"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "bytes": 890199,
+      "sha256": "47ea6c9c994b46758e8c2674442497cd9abc5c07c3d5e1cd38aa87d2b71734ee"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "bytes": 97508,
+      "sha256": "b86c0ad44e1be555ada6bc72d3cfddcc4d3650405e366864756e1444d6a4e2b5"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.h",
+      "bytes": 28199,
+      "sha256": "adce6212fa40cd1ed4676e18dc5463364fc58505449b260c0a2121e1478ab5ea"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeWorldEntryOfferSource.h",
+      "bytes": 8356,
+      "sha256": "9c468a8f668a86a2c6d3ad19e3f40b455413719590c9fc6906f092093209d813"
+    },
+    {
+      "path": "src/game/SharedTaiwanStoredWorldEntrySource.h",
+      "bytes": 1473,
+      "sha256": "37cc8c132fdaeda453820434945b28089a46e8ba82b4c34fc20623e1ef9bc333"
+    },
+    {
+      "path": "src/game/OwnedTaiwanInitialActorSceneSource.cpp",
+      "bytes": 35327,
+      "sha256": "e49a3ece568e57275fb9e6931e682ed55988c8adf6d8b8c79fee3b58bb26f52d"
+    },
+    {
+      "path": "src/game/OwnedTaiwanInitialNpcDisplaySource.cpp",
+      "bytes": 15257,
+      "sha256": "dbbd8e5265599e3e06dbe170dad9ff97355cbe09bc8fda4ed57d92db8d05cc38"
+    },
+    {
+      "path": "src/game/TaiwanNativeSceneResourceOwner.h",
+      "bytes": 4072,
+      "sha256": "20db9ddd537ee00642f5a164d0882bd391f0dbacece8ce00e35eeabca3b3193b"
+    },
+    {
+      "path": "src/game/TaiwanNativeNpcSceneGroups.cpp",
+      "bytes": 8469,
+      "sha256": "3e0b86e5409623f4735c97a75374cdeb05b3f12278d30c055adcae06094ed945"
+    }
+  ],
+  "observed": {
+    "load_args": [
+      "area",
+      "scene",
+      "NPC group",
+      "enemy descriptor",
+      "world EBX context"
+    ],
+    "load_argument_count": 5,
+    "load_ret_stack_bytes": 20,
+    "cache_slots": 2,
+    "cache_slot_stride_hex": "0xAD610",
+    "load_returns_one_after_normal_children_return": true,
+    "npc_query": {
+      "area": "low BYTE",
+      "scene": "WORD compared to stored BYTE, no high-value alias",
+      "group_stride": 142
+    },
+    "enemy_query": {
+      "area": "low BYTE",
+      "scene": "low WORD compared to full descriptor key",
+      "descriptor_stride": 12,
+      "row_stride": 26
+    },
+    "npc_load_branches": {
+      "kinds_0_to_4": "45F0E0(kind,ordinal-1)",
+      "kind_6": "45EEC0(ordinal-1)",
+      "kind_7": "45EEC0(ordinal+99)",
+      "kind_5_and_other": "skip these preload branches"
+    },
+    "count_word": {
+      "store": "world+0xA7F2F64",
+      "source": "signed x86 integer divide sequence on shifted total source resource count",
+      "nonnegative_no_shift_overflow_interpretation": "floor(8*N/7), low WORD stored",
+      "not_B26_high_WORD": true,
+      "EDX_unchanged_by_4607D0": true
+    },
+    "fixed_npc_preload": {
+      "kind": 9,
+      "zero_based_ordinal": 0,
+      "source_bytes": [
+        9,
+        1
+      ],
+      "not_NPC_spawn": true
+    },
+    "resource_loader": {
+      "procedure": "45EEC0",
+      "row_stride": 76,
+      "cache_marker_type": "signed WORD",
+      "untried": -1,
+      "failed": -2,
+      "other_cache_marker": "returns marker != -2 without opening",
+      "load": "nonempty filename and429820 nonnegative result",
+      "failure_record": "0xFFFE, subsequent failure does not retry automatically",
+      "slot_allocation": "signed WORD current slot retained and incremented on successful attempt"
+    },
+    "resource_group_dispatch": {
+      "procedure": "45F0E0",
+      "kind": "signed nonnegative and < group count",
+      "index": "signed nonnegative and < signed WORD count",
+      "row": "signed WORD group base + index"
+    },
+    "world_preload_progress": {
+      "procedure": "4606D0",
+      "word": "signed WORD at+A7F2F64",
+      "fallback_if_less_than_one": 105,
+      "counter": "+A7F2F68 increments only below total",
+      "clock": "timeGetTime, backwards-clock adjustment, unsigned delta >500 branch",
+      "executed": false,
+      "helper_calls": [
+        "41BDC0",
+        "41C060",
+        "426AB0 conditional",
+        "533FC0",
+        "432A20"
+      ],
+      "helper_semantics": "not established here; UI/progress purpose is inference, event pumping unproven"
+    }
+  },
+  "inferences": [
+    "These functions preload resources and maintain cache, not NPC placement/spawn/gameplay authority",
+    "Decompiled arity must defer to raw pushes, RET and argument uses",
+    "world count is consistent with load-progress accounting;105 is not an NPC cap or server default"
+  ],
+  "unknowns": [
+    "meaning/producer of full original authoritative2A",
+    "all2A opaque aliases/globalB26 uses",
+    "real first-scene ordered audience/install supplier",
+    "movement resource/pose lifecycle owner",
+    "world-plan native transfer bridge",
+    "UI children are a bounded reading boundary, not executed or fully analyzed",
+    "successful per-row loader call does not attest rendering or global resource lifecycle",
+    "whether the timed helpers pump events or their complete reentrancy semantics"
+  ],
+  "reused_analysis": [
+    "tw-native-appearance-selector-and-profile-resource-20261012.md",
+    "tw-actor-drv-fifth-source-20261015.md"
+  ],
+  "source_changes": {
+    "Cplusplus": 0,
+    "Lua": 0,
+    "Main_opt_in": false,
+    "gameplay_rule_change": false
+  },
+  "execution": {
+    "build": false,
+    "tests": false,
+    "target_execution": false,
+    "native_functions": false,
+    "codec": false,
+    "game_sql": false,
+    "migration": false,
+    "deployment": false
+  },
+  "new_complete_gameplay": 0,
+  "full_game_denominator": null,
+  "full_game_percent": null,
+  "recovery_revision": 3,
+  "correction": "v3 narrows unproven UI/event-helper roles from the v2 narrative; source observations unchanged"
+}
