@@ -134,12 +134,16 @@ One L and three G stop observations precede the original NET/GAME join/drain;
 all three frame tails are attempted even if one throws. Retirement/revocation
 precede listener destruction. Exceptional abort drain is still unproved.
 
-Triple mode explicitly refuses configured or effective lab guild mutations
-until one cross-channel audience/invalidation bridge exists, and refuses
-ambiguous Web TwWorld routing until selected-channel forwarding exists. These
-are open feature gaps, not completion. Existing world-transfer/native bridge
-restrictions also remain. Fresh factory callbacks and supplied Live/Authority
-remain trusted sources; metadata cannot certify opaque callback identity.
-Next connect real source providers/default Main, guild mutation invalidation,
-selected Web G forwarding and durable logout/save/admission, then verify all
-six switches and current-client world isolation in the later test phase.
+Round492 now mounts one shared Common53 coordinator and sealed three-world
+directory for actual schema53. Global affected-audience proof and publication
+invalidation preserve exact local Session/Owner/send/bootstrap sources. Name
+projection and roster online state route to their original frames. Formal53
+flags pass; older schema47/51/52 mutation bridges and actual lab overrides
+remain refused. Cross-channel guild chat remains open. Ambiguous Web TwWorld
+routing still refuses until selected-channel forwarding exists. Existing
+world-transfer/native bridge restrictions remain. Fresh native factories and
+Live/Authority are trusted sources; metadata does not certify callback identity.
+Next connect real source providers/default Main, older guild/chat bridges,
+selected Web G and durable logout/save/admission, then six switches and current
+client world isolation in the later acceptance phase. See
+research/tw-three-channel-guild-20261019.md for actual492 scope and proof limits.

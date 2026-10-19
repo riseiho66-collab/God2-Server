@@ -350,6 +350,20 @@ std::optional<std::uint16_t> RecoveredMovementService::scene(
         return std::nullopt;
     return it->second.scene;
 }
+std::optional<RecoveredPosition> RecoveredMovementService::current_world_location(
+    std::uint64_t session,std::uint64_t account,std::uint64_t character) const {
+    if(owned_movement_thread_!=std::this_thread::get_id())
+        throw std::logic_error("Guild world snapshot requires its GAME owner");
+    if(!session||!account||!character||owned_movement_busy_||owned_movement_invalid_)return {};
+    const auto at=active_.find(session);
+    if(at==active_.end()||!at->second.ready||at->second.transfer_pending||
+       at->second.account!=account||at->second.character!=character)return {};
+    const auto& value=at->second;
+    if(value.saved&&(!value.saved->revision||value.saved->area!=value.area||value.saved->scene!=value.scene||
+       value.saved->x!=value.x||value.saved->y!=value.y))return {};
+    return RecoveredPosition{value.area,value.scene,static_cast<std::uint16_t>(value.x),
+        static_cast<std::uint16_t>(value.y),value.saved?value.saved->revision:0};
+}
 std::optional<RecoveredPosition> RecoveredMovementService::current_location(
     std::uint64_t session,std::uint64_t account,std::uint64_t character) const {
     if(owned_movement_busy_) {

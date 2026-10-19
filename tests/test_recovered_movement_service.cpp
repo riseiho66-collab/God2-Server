@@ -117,13 +117,20 @@ void test_recovered_movement_service() {
     service.resume_after_battle(3,owner,character);
     require(db.recovered_characters().load_position(owner,character)==battle_return_before,"Battle return changed saved location");
     const auto prior=db.recovered_characters().load_position(owner,character);
+    require(service.current_world_location(3,owner,character)==prior,
+        "Pure world snapshot differs from settled saved baseline");
     db.recovered_characters().commit_position(owner,character,prior,2,15,17,13);
     require(!service.current_location(3,owner,character),
         "Externally changed position retained bound authority");
+    require(service.current_world_location(3,owner,character)==prior&&
+        !service.current_world_location(3,other,character),
+        "Pure world snapshot must remain local evidence, not adopt external SQL or another owner");
     rejects([&]{service.resume_after_battle(3,owner,character);});
     rejects([&]{service.move_committed(3,owner,character,first);});
     service.remove(3);
+    require(!service.current_world_location(3,owner,character),"Removed pure world owner remained visible");
     service.prepare(4,owner,character);
+    require(!service.current_world_location(4,owner,character),"Unbound pure world preparation became ready");
     db.recovered_characters().commit_position(owner,character,
         db.recovered_characters().load_position(owner,character),2,15,18,12);
     rejects([&]{service.bind(4,owner,character);});

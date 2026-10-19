@@ -1,0 +1,138 @@
+{
+  "round": 492,
+  "previous_goal_turn": "progress",
+  "previous_commit": "5313bfe6865117beb2d241a44ca97fad49e72374",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_ONE_COMMON53_THREE_WORLD_AUDIENCE_ROUTING_AND_PURE_WORLD_PROOF",
+  "native": {
+    "matching_receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-source-export-round490/native-switch/inbound-exit-message-findings-v1.json",
+    "receipt_sha256": "c090ee7fd6a6eb55f84f6e553877ca4f1a51be33c9f5ae5ce42a599622db6064",
+    "members_verified": 15,
+    "original_sections_and_mappings_verified": true,
+    "previous_targets_closed": true,
+    "new_rea_targets": 0,
+    "new_shipped_native_rule_claim": false
+  },
+  "source_comparison": {
+    "parent_commit": "5313bfe6865117beb2d241a44ca97fad49e72374",
+    "exact_declared_source_edits": [
+      {
+        "path": "src/core/Application.cpp",
+        "bytes": 919653,
+        "sha256": "b909cc935c020bea34f64459cf3ecbc7a81619df737e42712306e563e990dc63"
+      },
+      {
+        "path": "src/relations53/SharedGuildCoordinator53Draft.h",
+        "bytes": 48525,
+        "sha256": "cc5fed5e1068d515dad314d3a634dd169380cb91e3952f291e1be4adf88aa28f"
+      },
+      {
+        "path": "src/handlers/RecoveredMovementService.h",
+        "bytes": 16583,
+        "sha256": "91519114ce887c148603643688164df1f98bbf49cee48d85d038107796ab652f"
+      },
+      {
+        "path": "src/handlers/RecoveredMovementService.cpp",
+        "bytes": 58654,
+        "sha256": "982465e9d500af33e96f1d58566e466a71eecdea9ff9a4720dcdf07e5dce657f"
+      },
+      {
+        "path": "tests/test_recovered_movement_service.cpp",
+        "bytes": 31293,
+        "sha256": "428153cac1c8577e8431bbd75a22f5d72b78b5dbd4a02aca78ee381e96f65b37"
+      }
+    ],
+    "single_host_game_loop": true,
+    "original_tick_byte_identical": true,
+    "existing_sql_location_reader_byte_identical": true,
+    "tick_bytes": 2375,
+    "tick_sha256": "a2bd1f1847e14b4d2797af49c36be617588c5e41c09c4cde865a0fde4395059e",
+    "pure_world_reader_sql_callback_and_guard_mutation_free": true
+  },
+  "source_integration": [
+    "One actual shared Common53 in explicit triple Application with three complete sealed frame sources",
+    "Global affected audience before SQL and pure world proof after SQL, shared cache invalidation/reconciliation",
+    "Exact per-frame Session/send/bootstrap/name/native32 online routing and explicit all-three closed evidence",
+    "GAME-only cached movement pose separated from SQL-qualified preflight; original reader/single path preserved",
+    "Per-frame and host partial-construction retirement before borrowed resources die, weak facades and ACK fences"
+  ],
+  "open": [
+    "Real native provider/default Main selection and selected Web G routing",
+    "Cross-channel guild chat and older-schema guild mutation bridges",
+    "Native world transfers and durable source-save/logout/target-admission/recovery",
+    "Six switches/world isolation/current original-client acceptance",
+    "Exceptional abort drain plus full-server native/gameplay/formula/DB requirements"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "b909cc935c020bea34f64459cf3ecbc7a81619df737e42712306e563e990dc63"
+    },
+    {
+      "path": "src/relations53/SharedGuildCoordinator53Draft.h",
+      "sha256": "cc5fed5e1068d515dad314d3a634dd169380cb91e3952f291e1be4adf88aa28f"
+    },
+    {
+      "path": "src/relations53/SharedGuildChannelDirectory53.h",
+      "sha256": "ef6680bd31032334faccac68e04dbf7f9339b93ad54df0b2b9588117a4caa507"
+    },
+    {
+      "path": "src/relations53/SharedGuildChannelDirectory53.cpp",
+      "sha256": "3416e26fd2eda01f38b3ef62b81eea91f9220468e7471c013ea1fbf882a80cd5"
+    },
+    {
+      "path": "src/handlers/RecoveredMovementService.h",
+      "sha256": "91519114ce887c148603643688164df1f98bbf49cee48d85d038107796ab652f"
+    },
+    {
+      "path": "src/handlers/RecoveredMovementService.cpp",
+      "sha256": "982465e9d500af33e96f1d58566e466a71eecdea9ff9a4720dcdf07e5dce657f"
+    },
+    {
+      "path": "tests/test_recovered_movement_service.cpp",
+      "sha256": "428153cac1c8577e8431bbd75a22f5d72b78b5dbd4a02aca78ee381e96f65b37"
+    },
+    {
+      "path": "tests/test_shared_guild_channel_directory53.cpp",
+      "sha256": "38ea774f098d5fb2f452a61938bb9508be4b4fa13f3ce13a18d997568a62d764"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "2518d585c060d1c50228172165e94335748a518d519536fab5fdc6e504e2e7b9"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "5a31a4e030efbf4970620a6f66410e2e3d32b4c7a899b2e009a0ddf8f2af6b27"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "3c655b96aa65c200d07410055f7059533e8b03112700ab76374b4ca0ce3fd362"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "1d1daf6e1c9d9ac2053fb4468cea44da567ea95a9d6b6bc4975cf42282748428"
+    },
+    {
+      "path": "docs/research/tw-three-channel-guild-20261019.md",
+      "sha256": "f8f36542d2419db98a3fd60e2e8c08326b39b1e69f040c42b7f52b9c96bd9664"
+    }
+  ]
+}

@@ -70,6 +70,11 @@ public:
     // the first move. Rejects stale SQLite baselines and pending transfers.
     std::optional<RecoveredPosition> current_location(std::uint64_t session,
         std::uint64_t account,std::uint64_t character) const;
+    // CUSTOM-0159 pure GAME snapshot for paired guild world proof. Refuses
+    // in-progress owned movement; does not certify the current DB saved row.
+    // Outside SQL, separately compare current_location to this same snapshot.
+    std::optional<RecoveredPosition> current_world_location(std::uint64_t session,
+        std::uint64_t account,std::uint64_t character) const;
     void resume_after_battle(std::uint64_t session,std::uint64_t account,std::uint64_t character);
     // Source-pinned destination check for a proposed town/indoor transfer.
     [[nodiscard]] bool qualifies_transfer_destination(std::uint16_t scene,

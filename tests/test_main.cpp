@@ -23,6 +23,7 @@ void test_application_game_frame();
 void test_application_game_sources();
 void test_taiwan_channel_character_lists();
 void test_taiwan_three_channel_plan();
+void test_shared_guild_channel_directory53();
 int main(int argc,char** argv) {
     const std::pair<const char*,void(*)()> suites[]={
         {"packet",test_packet},{"decoder",test_decoder},{"dispatcher",test_dispatcher},{"lua",test_lua},
@@ -45,7 +46,8 @@ int main(int argc,char** argv) {
         {"application_game_frame",test_application_game_frame},
         {"application_game_sources",test_application_game_sources},
         {"taiwan_channel_character_lists",test_taiwan_channel_character_lists},
-        {"taiwan_three_channel_plan",test_taiwan_three_channel_plan}
+        {"taiwan_three_channel_plan",test_taiwan_three_channel_plan},
+        {"shared_guild_channel_directory53",test_shared_guild_channel_directory53}
     };
     try {
         bool found=false;

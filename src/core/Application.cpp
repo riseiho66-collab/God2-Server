@@ -22,6 +22,7 @@
 #include "relations53/GuildRelations53SelectorDraft.h"
 #include "relations53/SharedGuildApplication53Draft.h"
 #include "relations53/GuildRelationCacheBootstrap53.h"
+#include "relations53/SharedGuildChannelDirectory53.h"
 #include "protocol/StreamerPresentation.h"
 #include "handlers/RecoveredFruitQuests.h"
 #include "handlers/OwnedBlacklistService.h"
@@ -911,11 +912,6 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
         if((config.owned_initial_player_enabled&&!config.owned_skillbook_learning_enabled)||
            (config.owned_pk_invitation_enabled&&(!config.owned_initial_player_enabled||!config.owned_skillbook_learning_enabled)))
             throw std::invalid_argument("Three-channel initial player/PK requires complete actual player/deity sources");
-        // Until a shared mutation audience bridge is mounted, reject rather
-        // than leave another channel's cached guild rights/panels stale.
-        if(config.owned_guild_membership_enabled||config.owned_guild_announcements_enabled||
-           config.owned_guild_officers_enabled||config.owned_guild_succession_enabled||config.owned_guild_relations53_enabled)
-            throw std::invalid_argument("Three-channel guild mutation audience bridge remains unimplemented");
         if(web_plan)for(const auto& route:web_plan->routes)if(route.role==WebServerPlan::Role::TwWorld)
             throw std::invalid_argument("Three-channel Web G selection requires an explicit selected-channel bridge");
     }else validate_application_world_plan(config,world_plan);
@@ -983,7 +979,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 throw std::runtime_error("Formal guild membership cannot borrow native lab privileges");
             const bool guild_membership_enabled=config.owned_guild_membership_enabled || guild_membership_lab;
             const bool guild_entry_enabled=config.owned_guild_membership_enabled || guild_entry_lab;
-            if(channels&&(guild_membership_enabled||guild_entry_enabled))
+            if(channels&&(guild_membership_lab||guild_entry_lab))
                 throw std::invalid_argument("Three-channel guild mutation audience bridge cannot borrow lab privileges");
             // CUSTOM-0078: Tick may bootstrap diagnostic combat without an actor
             // request. Exclude those experiments from this modal-input lab so
@@ -1007,6 +1003,10 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             // Startup and --migrate-only retain installed exact50 storage even with gameplay disabled.
             const GuildRelations53FlagsDraft flags53{config.owned_guild_membership_enabled,config.owned_guild_announcements_enabled,config.owned_guild_officers_enabled,config.owned_guild_succession_enabled,config.owned_guild_relations53_enabled};
             const auto migrations=configured_guild_relations53(config.database,flags53);
+            if(channels&&migrations.back().version!=53&&
+               (config.owned_guild_membership_enabled||config.owned_guild_announcements_enabled||
+                config.owned_guild_officers_enabled||config.owned_guild_succession_enabled||config.owned_guild_relations53_enabled))
+                throw std::invalid_argument("Three-channel guild mutation requires the shared exact53 coordinator; older schema bridges remain open");
             SqliteDatabase database(config.database,migrations,config.taiwan_skill_profile);database.initialize();database.migrate();
             // One process host for storage and account hashing. Each gameplay
             // cohort below owns its mutable Lua/services/maps independently.
@@ -1063,6 +1063,27 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             std::unique_ptr<SharedTaiwanChannelWorlds> channel_worlds;
             std::shared_ptr<SharedTaiwanCharacterListHandoff> channel_handoff;
             std::optional<TaiwanThreeChannelPlan::WorldPlans> channel_plans;
+            std::shared_ptr<SharedGuildChannelDirectory53> shared_guild_directory53;
+            std::shared_ptr<SharedGuildCoordinator53Draft> shared_guild53;
+            if(channels&&migrations.back().version==53) {
+                using Common=SharedGuildCoordinator53Draft;
+                shared_guild_directory53=SharedGuildChannelDirectory53::create();
+                const auto binding=shared_guild_directory53->binding();
+                auto* factory=&database.guild53(flags53);
+                const auto context=[&,factory](auto account,auto character)->std::optional<std::uint64_t>{
+                    if(const auto member=database.guilds().load(account,character);member&&factory->original().player_created(member->guild_id))return member->guild_id;
+                    if(const auto pending=factory->original().pending(account,character);pending&&factory->original().player_created(pending->target.id))return pending->target.id;
+                    return {};
+                };
+                // One actual cache/audience coordinator for every channel. These
+                // weak directory facades refuse use until all three sources seal.
+                shared_guild53=std::make_shared<Common>(factory->relations(),factory->owner(),factory->notice_reader(),
+                    static_cast<SqliteRecoveredCharacterRepository&>(database.recovered_characters()),binding.owner,binding.enumerate,
+                    binding.peer_ready,binding.recipient_ready,binding.closed,context,binding.send,binding.baseline,
+                    flags53.relations,&factory->neighbors(),&factory->announcements(),
+                    []{return OwnedGuildMembershipConversation::Clock::now();},&factory->original(),
+                    [binding](std::uint64_t id){if(const auto owner=binding.owner(id))binding.sync_name(*owner);});
+            }
             if(channels) {
                 channel_worlds=std::make_unique<SharedTaiwanChannelWorlds>(database.recovered_characters());
                 channel_handoff=SharedTaiwanCharacterListHandoff::create(database.accounts(),database.recovered_characters(),
@@ -1081,7 +1102,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             // Parameters are copied into each coroutine frame, never borrowed
             // from loop-local aliases or a temporary worlds.world(k) result.
             auto channel_gameplay=[&](const SharedWorldHostPlan* world_plan,std::shared_ptr<SharedWorldHost> supplied_world,
-                                     ApplicationGameSources** output) -> ApplicationGameFrame {
+                                     ApplicationGameSources** output,std::uint8_t channel_index) -> ApplicationGameFrame {
             const bool hosted_pk=world_plan&&config.owned_pk_invitation_enabled;
             const bool deity_selection_publication=world_plan&&world_plan->owned_deity_selection_publication;
             const auto taiwan_entry_identity=world_plan?world_plan->taiwan_entry_identity:TaiwanWorldEntryIdentity::SelectedCharacter;
@@ -2332,14 +2353,15 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             };
             // CUSTOM-0076: complete persistent roster cache using native91/92.
             // Initial8E panel/economy authority remains open, not zero-filled.
-            OwnedGuildRosterService guild_roster(private_chat_peer,[&](auto account,auto character) {
-                return database.guild_roster().load(account,character);
-            },[&] {
+            const auto local_guild_online=[&] {
                 std::set<std::uint32_t> online;
                 for(const auto& [id,unused]:native_chat_sessions)
                     if(const auto peer=private_chat_peer(id);peer && peer->ready)online.insert(peer->character);
                 return online;
-            });
+            };
+            OwnedGuildRosterService guild_roster(private_chat_peer,[&](auto account,auto character) {
+                return database.guild_roster().load(account,character);
+            },[&] {return shared_guild_directory53?shared_guild_directory53->binding().online():local_guild_online();});
             std::set<std::uint64_t> guild_roster_unavailable;
             std::map<std::uint64_t,std::uint64_t> guild_world_generation;
             std::set<std::uint64_t> guild_lab_prompted;
@@ -2373,7 +2395,9 @@ std::unique_ptr<OwnedGuildOfficerRuntimeDraft> guild_officer_runtime;
                         const auto session=at->second.lock();if(!session || !session->recovered_world_ready() ||
                             session->state()==SessionState::InBattle || !owned_player_and_companions_projected.contains(id) ||
                             diagnostic_town_scene_pending.contains(id) || diagnostic_island_return_pending.contains(id) || !recovered_movement)return {};
-                        const auto position=recovered_movement->current_location(id,session->account_id,session->character_id);
+                        const auto position=shared_guild_directory53?
+                            recovered_movement->current_world_location(id,session->account_id,session->character_id):
+                            recovered_movement->current_location(id,session->account_id,session->character_id);
                         const auto generation=guild_world_generation.find(id);
                         if(!position || generation==guild_world_generation.end() || !generation->second)return {};
                         if((migrations.back().version==52 || migrations.back().version==53) && position->revision==UINT64_MAX)return {};
@@ -2382,6 +2406,12 @@ std::unique_ptr<OwnedGuildOfficerRuntimeDraft> guild_officer_runtime;
                             static_cast<std::uint16_t>(session->recovered_client_language()==1?936:950),
                             session->battle_generation(),(migrations.back().version==52||migrations.back().version==53)?position->revision+1:position->revision};
                     };
+            // Last among the directory's borrowed callback resources. Abort
+            // inside any frame revokes every endpoint before these locals die.
+            struct FrameGuildDirectoryGuard {
+                std::shared_ptr<SharedGuildChannelDirectory53> directory;
+                ~FrameGuildDirectoryGuard(){if(directory)directory->retire();}
+            } frame_guild_directory_guard{shared_guild_directory53};
             if(guild_membership_enabled && migrations.back().version!=53) {
                 guild_membership=std::make_unique<OwnedGuildMembershipService>(*guild_membership_repository,
                     guild_world_owner,[&](auto account,auto character){return database.trades().load_wallet(account,character);},
@@ -2533,7 +2563,32 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 };
                 // Build-matched ordered native reset supplies an EXPECTED cache
                 // baseline. Client execution/acceptance stays deferred to phase2.
-                guild53=std::make_shared<Common>(factory.relations(),factory.owner(),factory.notice_reader(),supply_repository,guild_world_owner,enumerate,
+                if(shared_guild_directory53) {
+                    SharedGuildChannelDirectory53::Source source{
+                        [&](std::uint64_t id){const auto at=native_chat_sessions.find(id);return at==native_chat_sessions.end()?std::shared_ptr<Session>{}:at->second.lock();},
+                        enumerate,guild_world_owner,
+                        [&](const Common::Owner& owner){
+                            // SQL qualification belongs only to preflight. Paired
+                            // after-write Current uses the pure cached world pose.
+                            const auto pose=recovered_movement?recovered_movement->current_world_location(owner.session,owner.account,owner.character):std::nullopt;
+                            if(!pose||recovered_movement->current_location(owner.session,owner.account,owner.character)!=pose)return false;
+                            const auto peer=private_chat_peer(owner.session);
+                            return peer&&peer->ready&&peer->account==owner.account&&peer->character==owner.character&&
+                                recovered_movement->current_location(owner.session,owner.account,owner.character)==pose&&
+                                recovered_movement->current_world_location(owner.session,owner.account,owner.character)==pose&&
+                                guild_world_owner(owner.session)==std::optional{owner};
+                        },
+                        recipient_ready53,[&](const Common::Owner& owner){return closed_guild_transports.contains(owner.session);},
+                        send,[&](const Common::Owner& owner)->std::optional<Common::Baseline>{return guild_bootstrap53?guild_bootstrap53->baseline(owner):std::nullopt;},
+                        local_guild_online,
+                        [&](const Common::Owner& owner){
+                            const auto at=native_chat_sessions.find(owner.session);
+                            const auto peer=at==native_chat_sessions.end()?std::shared_ptr<Session>{}:at->second.lock();
+                            if(peer&&guild_world_owner(owner.session)==std::optional{owner})sync_guild_name(*peer);
+                        }};
+                    shared_guild_directory53->install(channel_index,std::move(source));
+                    guild53=shared_guild53;
+                }else guild53=std::make_shared<Common>(factory.relations(),factory.owner(),factory.notice_reader(),supply_repository,guild_world_owner,enumerate,
                     [&](const Common::Owner& owner){const auto peer=private_chat_peer(owner.session);return peer&&peer->ready&&peer->account==owner.account&&peer->character==owner.character;},recipient_ready53,
                     [&](const Common::Owner& owner){return closed_guild_transports.contains(owner.session);},context,send,
                     [&](const Common::Owner& owner)->std::optional<Common::Baseline>{return guild_bootstrap53?guild_bootstrap53->baseline(owner):std::nullopt;},flags53.relations,&factory.neighbors(),&factory.announcements(),
@@ -9996,12 +10051,17 @@ if(guild_officer_runtime && player_guild(session) &&
             };
             const std::size_t channel_count=channels?3:1;
             std::array<std::optional<ApplicationGameFrame>,3> channel_runtimes;
+            struct HostGuildDirectoryGuard {
+                std::shared_ptr<SharedGuildChannelDirectory53> directory;
+                ~HostGuildDirectoryGuard(){if(directory)directory->retire();}
+            } host_guild_directory_guard{shared_guild_directory53};
             for(std::uint8_t k=0;k<channel_count;++k) {
                 const auto* selected=channels?&(*channel_plans)[k]:world_plan;
-                channel_runtimes[k].emplace(channel_gameplay(selected,channels?channel_worlds->world(k):nullptr,&channel_sources[k]));
+                channel_runtimes[k].emplace(channel_gameplay(selected,channels?channel_worlds->world(k):nullptr,&channel_sources[k],k));
                 channel_runtimes[k]->require_held();
                 if(!channel_sources[k])throw std::logic_error("Held gameplay frame did not publish its actual sources");
             }
+            if(shared_guild_directory53)shared_guild_directory53->seal();
             bool disconnect_cleanup_failed=false;
             { // All host copies/listeners die before the actual gameplay frame resumes.
             auto& sources=*channel_sources[0];
@@ -10013,7 +10073,9 @@ if(guild_officer_runtime && player_guild(session) &&
             struct HostGameplayRetirement {
                 const std::array<ApplicationGameSources*,3>& sources;
                 const std::size_t count;
+                const std::shared_ptr<SharedGuildChannelDirectory53>& directory;
                 ~HostGameplayRetirement() {
+                    if(directory)directory->retire(); // Revoke borrowed endpoints before frame tails/unwind.
                     for(std::size_t k=0;k<count;++k)try{sources[k]->retire();}catch(...){
                         try{spdlog::error("Gameplay retirement failed during host unwind");}catch(...){}
                     }
@@ -10021,7 +10083,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     // holders must be emptied before any listener destructor.
                     for(std::size_t k=0;k<count;++k)sources[k]->revoke_transport();
                 }
-            } host_gameplay_retirement{channel_sources,channel_count};
+            } host_gameplay_retirement{channel_sources,channel_count,shared_guild_directory53};
             std::vector<std::uint8_t> character_routes;
             auto account_handlers=std::move(sources.account);
             auto account_disconnect=sources.disconnected;

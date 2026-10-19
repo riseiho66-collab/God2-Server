@@ -18,6 +18,7 @@ public:
     using Neighboring=NeighboringGuild53AdmissionRepositoryDraft;
     using Storage=RelationsRepositoryDraft;using Panel=Panel53Draft;using Host=WorldHost53Draft;using Owner=Panel::Owner;using Audience=Panel::Audience;
     using Send=std::function<void(const Owner&,std::vector<std::uint8_t>,std::function<void(bool)>)>;
+    using SyncName=std::function<void(std::uint64_t)>; // Optional actual per-owner projection outside SQL.
     using Context=std::function<std::optional<std::uint64_t>(std::uint64_t,std::uint64_t)>;
     struct Baseline {
         Owner recipient;std::vector<native_relation_private::Row> rows;bool roster_empty_verified{};
@@ -35,8 +36,8 @@ public:
     struct Batch {bool valid{};std::optional<Published> original;std::optional<Action> action;};
     SharedGuildCoordinator53Draft(Storage& storage,Succession53ReaderDraft& reader,SqliteOwnedGuildAnnouncementRepository& notices,
         SqliteRecoveredCharacterRepository& profiles,Panel::Resolve resolve,Host::Enumerate enumerate,Host::PeerReady peer,
-        Panel::RecipientReady ready,Panel::ConnectionClosed closed,Context context,Send send,KnownBaseline baseline,bool enabled=false,Neighboring* neighboring=nullptr,Announcement* announcement=nullptr,Clock clock=[] {return OwnedGuildMembershipConversation::Clock::now();},Neighboring::Original* original=nullptr):
-        storage_(storage),notices_(notices),resolve_(resolve),closed_(closed),context_(std::move(context)),send_(std::move(send)),baseline_(std::move(baseline)),enabled_(enabled),neighboring_(neighboring),announcement_(announcement),clock_(std::move(clock)),original_(original),
+        Panel::RecipientReady ready,Panel::ConnectionClosed closed,Context context,Send send,KnownBaseline baseline,bool enabled=false,Neighboring* neighboring=nullptr,Announcement* announcement=nullptr,Clock clock=[] {return OwnedGuildMembershipConversation::Clock::now();},Neighboring::Original* original=nullptr,SyncName sync_name={}):
+        storage_(storage),notices_(notices),resolve_(resolve),closed_(closed),context_(std::move(context)),send_(std::move(send)),baseline_(std::move(baseline)),enabled_(enabled),neighboring_(neighboring),announcement_(announcement),clock_(std::move(clock)),original_(original),sync_name_(std::move(sync_name)),
         host_(profiles,std::move(enumerate),resolve,std::move(peer)),panel_(reader,profiles,resolve,[this](const auto& leader,const auto& apps){return host_.capture(leader,apps);},[this](const auto& a){return host_.current(a);},std::move(ready),std::move(closed)){}
     Panel& panel(){return panel_;}
     Host& host(){return host_;}
@@ -71,7 +72,8 @@ public:
     }
     void sync(std::uint64_t session,bool explicit_help=false){
         const auto hold=weak_from_this().lock();if(!hold)return;const auto lifecycle=advance(session);if(!lifecycle)return;
-        try{const auto owner=resolve_(session);if(!owner||!unchanged(session,lifecycle)||!send_||!context_)return;
+        try{if(sync_name_)sync_name_(session);if(!unchanged(session,lifecycle))return;
+            const auto owner=resolve_(session);if(!owner||!unchanged(session,lifecycle)||!send_||!context_)return;
             const auto guild=context_(owner->account,owner->character);if(!unchanged(session,lifecycle))return;
             if(!guild){if(pending_.contains(session))queued_.insert_or_assign(session,Request{*owner,0,false,{},lifecycle});else clear(*owner);return;}
             const auto observed=storage_.view(*guild,owner->name_codepage==936);if(!unchanged(session,lifecycle))return;
@@ -450,7 +452,7 @@ private:
         for(auto at=publications_.begin();at!=publications_.end();)if(guilds.contains(at->second.view.leader.guild.id))at=publications_.erase(at);else ++at;
         for(const auto& owner:audience.connected){revoke(owner.session);sync(owner.session,false);}
     }
-    Storage& storage_;SqliteOwnedGuildAnnouncementRepository& notices_;Panel::Resolve resolve_;Panel::ConnectionClosed closed_;Context context_;Send send_;KnownBaseline baseline_;bool enabled_{};Neighboring* neighboring_{};Announcement* announcement_{};Clock clock_;Neighboring::Original* original_{};std::map<std::uint64_t,NoticeAction> notice_leases_;std::map<std::uint64_t,PendingPermit> pending_permits_;std::map<std::uint64_t,std::uint64_t> pending_highest_;
+    Storage& storage_;SqliteOwnedGuildAnnouncementRepository& notices_;Panel::Resolve resolve_;Panel::ConnectionClosed closed_;Context context_;Send send_;KnownBaseline baseline_;bool enabled_{};Neighboring* neighboring_{};Announcement* announcement_{};Clock clock_;Neighboring::Original* original_{};SyncName sync_name_;std::map<std::uint64_t,NoticeAction> notice_leases_;std::map<std::uint64_t,PendingPermit> pending_permits_;std::map<std::uint64_t,std::uint64_t> pending_highest_;
     Host host_;Panel panel_;std::map<std::uint64_t,Certificate> certificates_;std::map<std::uint64_t,Published> publications_;std::map<std::uint64_t,std::uint64_t> active_;std::map<std::uint64_t,Delivery> pending_;std::map<std::uint64_t,Request> queued_;std::uint64_t serial_{},lifecycle_serial_{};std::map<std::uint64_t,std::uint64_t> lifecycle_;
 };
 }

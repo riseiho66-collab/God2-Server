@@ -6565,9 +6565,16 @@
         "src/game/TaiwanChannelCharacterLists.h",
         "src/game/TaiwanChannelCharacterLists.cpp",
         "tests/test_taiwan_channel_character_lists.cpp",
-        "tests/test_taiwan_three_channel_plan.cpp"
+        "tests/test_taiwan_three_channel_plan.cpp",
+        "src/relations53/SharedGuildCoordinator53Draft.h",
+        "src/relations53/SharedGuildChannelDirectory53.h",
+        "src/relations53/SharedGuildChannelDirectory53.cpp",
+        "src/handlers/RecoveredMovementService.h",
+        "src/handlers/RecoveredMovementService.cpp",
+        "tests/test_recovered_movement_service.cpp",
+        "tests/test_shared_guild_channel_directory53.cpp"
       ],
-      "document": "docs/research/tw-three-channel-host-20261019.md",
+      "document": "docs/research/tw-three-channel-guild-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6590,13 +6597,16 @@
         "actual_three_frame_host": "Explicit TaiwanThreeChannelPlan overload owns one DB/auth/handoff/shared three-world custody and constructs three fresh complete native plans/actual mutable gameplay frames. Copied coroutine params retain exact world/plan/output lifetime. All three held exports precede actual three G binding and one L full bound-port advertisement. Default Main still lacks supplied native providers; no default activation.",
         "selected_l_issuer": "Actual private L selection/written advertisement chooses one complete native issuer; retained exact Session/full64 identity/selection/delivery pins list-current-complete-select. Private Written/canonical receipts gate completion/select. Reentry closes active Session before native post-observer Current. Weak GAME facades check thread before lock. Exact disconnect attempts all three cleanup callbacks despite failure; no native authority from A6/key/metadata.",
         "three_frame_teardown": "One L plus three G stop observations, actual NET join and GAME drain precede all three tail attempts. Host guard retires/revokes every source before listener/router destruction. DB schema/catalog setup is once in shared host. Config native incompatibilities refuse before DB; effective guild lab overrides cannot bypass triple refusal. Exceptional abort and durable save remain unproved.",
-        "native_exit_source_audit": "Current bounded source audit reuses matching490 REA20h encoded packet+0Dh exit-required widget evidence. No explicit S2C20h ordinary-notice producer found; C2S20h role text replies23h. Generic raw APIs accept opaque data, not exhaustive runtime safety proof. No guessed producer or selector introduced."
+        "native_exit_source_audit": "Current bounded source audit reuses matching490 REA20h encoded packet+0Dh exit-required widget evidence. No explicit S2C20h ordinary-notice producer found; C2S20h role text replies23h. Generic raw APIs accept opaque data, not exhaustive runtime safety proof. No guessed producer or selector introduced.",
+        "shared_guild53": "Actual exact53 triple Application mounts ONE host-owned Common53 with three complete sealed frame-local directory sources. Global before/after affected audience, certificates/grants and reconciliation share one owner; local bootstrap/admission/Lua/sends remain actual sources. Name sync and native32 online projections route to original frames. Formal53 flags allowed; older schema bridges/lab and guild chat remain open.",
+        "guild_directory": "GAME-only weak facades, full64 and exact Session pointers, complete Live rows or whole-candidate refusal; unsealed/retired never means everyone offline. Explicit all-three exactly-one closed proof after live-map removal. Sync ACK deferred until post-supplier exact owner; async ACK weak/once/current topology. Every frame and outer partial-construction path revokes borrowed callbacks before locals die; no ownership cycle.",
+        "pure_guild_world_proof": "New GAME-only current_world_location reads settled cached pose only and refuses owned movement busy/invalid without mutation. Triple53 Owner uses it; preflight SQL checks same pose before/after peer projection and refences full Owner. Existing SQL-backed current_location and single-world behavior retained. Pure pose is not current saved-row/native authority."
       },
-      "native_gap": "Explicit actual three-frame/native endpoint host path now mounted when real provider recipe is supplied. Default Main/CLI real native provider assembly, shared guild mutation audience invalidation, selected Web G bridge, native world transfers, durable save/logout/target admission and six switches/current-client acceptance remain open. Triple branch refuses unsupported guild mutations/effective lab and ambiguous Web TwWorld; these refusals are gaps, not completion.",
+      "native_gap": "Actual explicit three-frame host and shared exact53 guild audience/cache/name/online route are connected in source. Still need real native provider/default Main selection, cross-channel guild chat and older-schema bridges, selected Web G, native world transfers, durable save/logout/target admission/recovery, six switches and current-client acceptance. Source-only, not production activation.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_EXPLICIT_THREE_FRAME_HOST_RETAINED_L_ROUTER_FUTURE_CASES_NOT_BUILT_OR_RUN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_SHARED_COMMON53_THREE_WORLD_ROUTING_PURE_WORLD_PROOF_FUTURE_TEST_CASES_NOT_BUILT_OR_RUN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
