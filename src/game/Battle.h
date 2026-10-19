@@ -105,8 +105,9 @@ public:
     bool active() const noexcept;
     const BattleSnapshot& inspect() const noexcept { return snapshot_; }
     // CUSTOM-0157 read-only current-snapshot observation. The pure/non-reentrant
-    // rule returns an exact share; no status permission, tick, rounding, damage
-    // or settlement is inferred. Revision and actor are rechecked after it.
+    // rule returns the exact ratio and owner-confirmed floored damage amount;
+    // no status permission, tick, HP mutation or settlement is inferred.
+    // Revision and the actual current maximum HP are rechecked after it.
     PoisonShareResult poison_share(std::uint64_t revision,std::uint8_t target,
                                    const PoisonRule& rule) const;
     std::vector<std::uint8_t> act(std::uint64_t controller, std::uint64_t revision,

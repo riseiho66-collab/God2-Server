@@ -5,14 +5,25 @@
 namespace god2 {
 RecoveredWorldService::RecoveredWorldService(Movement movement, Battle battle, Supply supply,
                                              Quest quest, SelectionItem selection_item, Teleport teleport,
-                                             InventoryMove inventory_move, DeitySelection deity_selection)
+                                             InventoryMove inventory_move, DeitySelection deity_selection,
+                                             CausalDeitySelection causal_deity_selection)
     : movement_(std::move(movement)), battle_(std::move(battle)), supply_(std::move(supply)),
       quest_(std::move(quest)), selection_item_(std::move(selection_item)),
       teleport_(std::move(teleport)), inventory_move_(std::move(inventory_move)),
-      deity_selection_(std::move(deity_selection)) {}
+      deity_selection_(std::move(deity_selection)),causal_deity_selection_(std::move(causal_deity_selection)) {}
 
 std::optional<std::vector<std::uint8_t>> RecoveredWorldService::handle(
         Session& session, std::span<const RecoveredWorldRecords::Record> records) const {
+    auto reply=handle_impl(session,records,false);
+    if(!reply)return {};
+    return std::move(*reply).take_plain_wire();
+}
+std::optional<LegacyWorldReply> RecoveredWorldService::handle_reply(
+        Session& session,std::span<const RecoveredWorldRecords::Record> records)const {
+    return handle_impl(session,records,true);
+}
+std::optional<LegacyWorldReply> RecoveredWorldService::handle_impl(
+        Session& session,std::span<const RecoveredWorldRecords::Record> records,bool causal_allowed)const {
     if (!session.account_id || !session.character_id || records.empty() || records.size() > 8192 ||
         (session.state() != SessionState::CharacterSelected &&
          session.state() != SessionState::InWorld && session.state() != SessionState::InBattle))
@@ -125,7 +136,15 @@ std::optional<std::vector<std::uint8_t>> RecoveredWorldService::handle(
             if(pet && pet_seen && std::holds_alternative<RecoveredWorldRecords::ClientControl1F>(record) && ++controls<=1) continue;
             return std::nullopt;
         }
-        if(deity) return deity_selection_?deity_selection_(session,*deity):std::nullopt;
+        if(deity) {
+            if(causal_deity_selection_) {
+                // Reject the raw gateway BEFORE the actual producer can commit
+                // SQL. A post-commit tag-loss refusal would be too late.
+                if(!causal_allowed)return std::nullopt;
+                return causal_deity_selection_(session,*deity);
+            }
+            return deity_selection_?deity_selection_(session,*deity):std::nullopt;
+        }
         return selection_item_?selection_item_(session,*pet):std::nullopt;
     }
     std::vector<RecoveredMovement::Request> moves;

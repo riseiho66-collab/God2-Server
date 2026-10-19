@@ -3,6 +3,8 @@
 #include "handlers/OwnedGuildPanelService.h"
 #include "protocol/RecoveredWorldRecords.h"
 #include "GuildAdmission53Application.h"
+#include "game/LegacyWorldReply.h"
+#include <type_traits>
 namespace god2 {
 // PRIVATE actual Application ingress. Captures entire old frame before any
 // prefix. No legacy52/50 mutator fallback and no alternative panel scheduler.
@@ -10,6 +12,7 @@ class SharedGuildApplication53Draft {
 public:
     using Common=SharedGuildCoordinator53Draft;using Records=RecoveredWorldRecords;
     using Prefix=std::function<std::optional<std::vector<std::uint8_t>>(std::span<const Records::Record>)>;
+    using CausalPrefix=std::function<std::optional<LegacyWorldReply>(std::span<const Records::Record>)>;
     using Audit=std::function<void(std::uint64_t,std::size_t,unsigned,bool)>;
     SharedGuildApplication53Draft(std::shared_ptr<Common> common,Common::Neighboring::Original& original,Audit audit={})
       :common_(std::move(common)),original_(original),audit_(std::move(audit)){}
@@ -26,6 +29,14 @@ public:
     }
     bool handles(std::uint64_t session,std::span<const Records::Record> records)const{return std::any_of(records.begin(),records.end(),[&](const auto& r){return opcode(r)||help(r)||(admission_&&admission_->recognizes(session,r));});}
     std::optional<std::vector<std::uint8_t>> handle(std::uint64_t session,std::span<const Records::Record> records,const Prefix& prefix){
+        return handle_impl<std::vector<std::uint8_t>>(session,records,prefix);
+    }
+    std::optional<LegacyWorldReply> handle_reply(std::uint64_t session,std::span<const Records::Record> records,const CausalPrefix& prefix){
+        return handle_impl<LegacyWorldReply>(session,records,prefix);
+    }
+private:
+    template<class Reply,class PrefixCallback>
+    std::optional<Reply> handle_impl(std::uint64_t session,std::span<const Records::Record> records,const PrefixCallback& prefix){
         const auto keep=common_;if(!keep||!prefix||records.empty())return {};
         const auto now=OwnedGuildMembershipConversation::Clock::now();
         const auto admission=admission_?std::optional{admission_->capture(session,records,now)}:std::nullopt;
@@ -63,8 +74,14 @@ public:
         // sequence policy is qualified; all capabilities above are still old.
         std::set<unsigned> domains;for(const auto& row:indexed)domains.insert(row.logical.front());
         const bool mixed=domains.size()>1;
-        std::vector<std::uint8_t> response;std::size_t begin=0;
-        const auto runprefix=[&](std::size_t end){if(end==begin)return true;const auto result=prefix(records.subspan(begin,end-begin));if(!result)return false;response.insert(response.end(),result->begin(),result->end());return true;};
+        Reply response{std::vector<std::uint8_t>{}};std::size_t begin=0;
+        const auto runprefix=[&](std::size_t end){
+            if(end==begin)return true;
+            auto result=prefix(records.subspan(begin,end-begin));if(!result)return false;
+            if constexpr(std::is_same_v<Reply,LegacyWorldReply>)response.append(std::move(*result));
+            else response.insert(response.end(),result->begin(),result->end());
+            return true;
+        };
         const bool help_safe=std::all_of(records.begin(),records.end(),[](const auto& r){return help(r)||std::holds_alternative<Records::Tick>(r)||std::holds_alternative<Records::TimerNotification>(r)||std::holds_alternative<Records::ContextNotification>(r)||std::holds_alternative<Records::ClientDiagnostic>(r)||std::holds_alternative<RecoveredGuildRoster::PanelReady>(r);});
         for(std::size_t i=0;i<records.size();++i){const auto op=opcode(records[i]);const bool choice=admission_&&admission_->recognizes(session,records[i]);if(!op&&!help(records[i])&&!choice)continue;
             if(!runprefix(i)){keep->reject_neighbor_batch(members);if(pending.original)keep->deny_pending_exact(*pending.original);return {};}
@@ -83,7 +100,7 @@ public:
             if(!committed){keep->reject_neighbor_batch(members);if(pending.original)keep->deny_pending_exact(*pending.original);if(op==0x79&&records.size()==1)keep->restore_announcement(session);}
             if(audit_)audit_(session,i,op,committed);
         }
-        if(!runprefix(records.size()))return {};return response;
+        if(!runprefix(records.size()))return {};return std::optional<Reply>{std::move(response)};
     }
 private:std::shared_ptr<Common> common_;Common::Neighboring::Original& original_;Audit audit_;
     std::shared_ptr<GuildAdmission53Application> admission_;

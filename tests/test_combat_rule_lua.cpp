@@ -1,4 +1,6 @@
 #include "scripting/LuaEngine.h"
+#include "game/Battle.h"
+#include <limits>
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -13,6 +15,36 @@ int main() {
     try {
         god2::LuaEngine lua(std::filesystem::path(GOD2_SOURCE_DIR)/"scripts", false);
         require(lua.initialize(), "Production Lua initialization failed");
+        // CUSTOM-0157 owner-confirmed rounding, synthetic current snapshots.
+        // These source cases exercise the actual Lua module and Battle observer;
+        // they do not fabricate a status, tick, native reply or HP mutation.
+        constexpr auto poison_limit=std::uint64_t{std::numeric_limits<std::int64_t>::max()};
+        for(const auto maximum:std::array<std::uint64_t,9>{0,1,9,10,123,129,130,9007199254741005ull,poison_limit}) {
+            const auto share=lua.poison_share({maximum});
+            require(share.whole_hp==maximum/10 && share.remainder_tenths==maximum%10 &&
+                share.damage_hp()==maximum/10,"Owner poison floor changed or used floating point");
+            if(!maximum)continue;
+            const std::array<god2::BattleActor,2> targets{{
+                {0,7,1,maximum,0,0,1,1,1,1},{14,0,1,1,0,0,1,1,1,1}}};
+            god2::Battle subject(477,targets,477,god2::BattleNumericProfile::ExtendedHealth64);
+            const auto before=subject.checkpoint();
+            const auto observed=subject.poison_share(subject.inspect().revision,0,
+                [&](const god2::PoisonShareInput& input){
+                    require(input.target_current_max_hp==maximum,"Poison used remaining HP instead of current maximum");
+                    return lua.poison_share(input);
+                });
+            require(observed==share && observed.damage_hp()==maximum/10 && subject.checkpoint()==before,
+                "Poison observation changed HP/revision/RNG or lost current maximum");
+            bool rejected=false;
+            try{(void)subject.poison_share(subject.inspect().revision,0,[&](const auto&){
+                return god2::PoisonShareResult{maximum/10+1,static_cast<std::uint8_t>(maximum%10)};
+            });}catch(const std::invalid_argument&){rejected=true;}
+            require(rejected && subject.checkpoint()==before,"Changed poison rounding altered battle state");
+        }
+        require(lua.poison_share({123}).damage_hp()==12,"Owner example123 must deduct12HP");
+        bool poison_overflow=false;
+        try{(void)lua.poison_share({poison_limit+1});}catch(const std::invalid_argument&){poison_overflow=true;}
+        require(poison_overflow,"Poison silently narrowed a shared64 input");
         // Explicit synthetic inputs: no defaults enter catalogs or saved actors.
         std::size_t count=0;
         for(auto attack : {0u,1u,31u,1000000u})

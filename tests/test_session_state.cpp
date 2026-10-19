@@ -17,6 +17,7 @@
 #include "db/SqliteSupport.h"
 #include "handlers/RecoveredOwnedCompanions.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
+#include "game/LegacyTaiwanOwnedDeitySelectionRegistry.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -394,6 +395,161 @@ void recovered_callback_output_transport() {
                 "Dropped-post fixture did not retain real unrun side/final posts");
         }
         require(dropped->status()==Status::Failed,"Destroyed actual post handlers left retained composite Pending");
+    }
+}
+
+// True Registry -> helper private commit -> typed original sender custody.
+// These are source regressions only; matching baseline S31 bytes carry no tag.
+void recovered_causal_deity_reply_transport() {
+    using Status=Session::WorldCallbackOutputStatus;
+    struct Close {void operator()(sqlite3* value)const {sqlite3_close_v2(value);}};
+    sqlite3* raw=nullptr;require(sqlite3_open(":memory:",&raw)==SQLITE_OK,"Causal fixture DB open failed");
+    std::unique_ptr<sqlite3,Close> db(raw);
+    sqlite_detail::execute(raw,"PRAGMA foreign_keys=ON");
+    SqliteMigrationManager(raw,default_sqlite_migrations()).migrate();
+    sqlite_detail::execute(raw,"INSERT INTO accounts(id,username,password_hash) VALUES(7,'causal-test','hash')");
+    SqliteRecoveredCharacterRepository characters(raw);
+    std::array<std::uint8_t,40> profile{};profile[0]='C';
+    const auto character=characters.create(RecoveredSessionPeer::account,profile).id;
+    SqliteCompanionRepository companions(raw);RecoveredOwnedCompanions helper(companions);
+    RecoveredDeityState::Declaration::Bytes declaration{0x30,101,'C'};
+    RecoveredDeityState::Status::Bytes status{0x31,101,1};
+    const std::array<std::uint8_t,4> skill{0x34,101,0,1};
+    companions.store_deity(RecoveredSessionPeer::account,character,
+        {*RecoveredDeityState::Declaration::parse(declaration),*RecoveredDeityState::Status::parse(status),
+            {*RecoveredDeityState::Skill::parse(skill)}},{},
+        {SqliteCompanionRepository::source_sha256,"CUSTOM_TEST_NOT_NATIVE","causal-real-session-fixture"});
+    const auto frame=RecoveredWorldFrame::encode(status);
+    require(frame.size()==32,"Causal fixture is not a complete S31 frame");
+    const auto copies=[&](unsigned count){
+        std::vector<std::uint8_t> wire;
+        for(unsigned i=0;i<count;++i)wire.insert(wire.end(),frame.begin(),frame.end());
+        return wire;
+    };
+    // Canonical and physically reordered output both preserve every original
+    // self Write. Only canonical input order is eligible for Registry adoption.
+    for(const bool reordered:{false,true}) {
+        LegacyTaiwanOwnedDeitySelectionRegistry registry(1,helper);
+        std::optional<Session::WorldCallbackOutput> output;
+        bool pending=false,resumed=false,raw_refused=false,uncaptured_refused=false;
+        unsigned producers=0;
+        RecoveredWorldService service({}, {}, {}, {}, {}, {}, {}, {},
+            [&](Session& session,const auto& request)->std::optional<LegacyWorldReply>{
+                ++producers;return registry.select(session,request);
+            });
+        RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
+            if(output) {
+                require(records.size()==1&&std::holds_alternative<RecoveredWorldRecords::Tick>(records.front()),
+                    "Causal raw-input suffix changed");
+                resumed=output->status()==Status::Written&&!session.closing();return std::vector<std::uint8_t>{};
+            }
+            require(records.size()==2,"Causal original C67 batch changed");
+            const auto before=companions.load_deity_selection(session.account_id,session.character_id);
+            raw_refused=!service.handle(session,records.first(1))&&producers==0&&
+                companions.load_deity_selection(session.account_id,session.character_id)==before;
+            try{(void)registry.select(session,{101});}catch(const std::runtime_error&){uncaptured_refused=true;}
+            require(uncaptured_refused&&companions.load_deity_selection(session.account_id,session.character_id)==before,
+                "Selection mutated SQL before actual callback capture");
+            const auto init=*session.normal_world_initialization();
+            output=session.capture_world_callback_output(init);require(output.has_value(),"Causal capture missing");
+            session.hold_world_input_until_callback_output_written(*output);
+            auto callback=registry.begin(session,init,*output);
+            auto first=service.handle_reply(session,records.first(1));
+            require(first&&first->has_emissions(),"First real private C67 leaf missing its emission");
+            std::vector<std::uint8_t> final;
+            if(reordered) {
+                auto second=service.handle_reply(session,records.subspan(1,1));
+                require(second&&second->has_emissions(),"Second real private C67 leaf missing");
+                auto frames=std::move(*second).split_frames();require(frames&&frames->size()==1,"Second leaf split failed");
+                session.send_world_callback_reply_frame(std::move(frames->front()));
+                final=session.take_world_callback_reply(std::move(*first));
+            }else {
+                // Equal-byte plain baseline is a DIFFERENT actual component.
+                LegacyWorldReply side(frame);side.append(std::move(*first));
+                auto frames=std::move(side).split_frames();require(frames&&frames->size()==2,"Typed prefix split lost original frame");
+                require(!side.has_emissions()&&side.empty(),"Successful consuming split retained reusable tags");
+                for(auto& part:*frames)session.send_world_callback_reply_frame(std::move(part));
+                auto second=service.handle_reply(session,records.subspan(1,1));
+                require(second&&second->has_emissions(),"Second idempotent true publication missing");
+                LegacyWorldReply child(frame);child.append(std::move(*second));
+                std::vector<std::uint8_t> inner;
+                {
+                    const auto outer_offset=session.callback_reply_output_offset(frame.size());
+                    {
+                        const auto inner_offset=session.callback_reply_output_offset(frame.size());
+                        inner=session.take_world_callback_reply(std::move(child));
+                    }
+                }
+                // Simulate nested outer append prefixes through the same API.
+                // This is not execution of the Application wrapper graph.
+                final=copies(2);final.insert(final.end(),inner.begin(),inner.end());
+            }
+            registry.finish(session,callback,true);registry.abandon(callback);
+            pending=output->status()==Status::Pending&&!output->sealed()&&output->components().empty()&&
+                !registry.observe(session);
+            return final;
+        },character,reordered?47702:47701);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail(static_cast<std::uint16_t>(character)));peer.silent();
+        auto input=RecoveredWorldFrame::encode(std::array<std::uint8_t,4>{0x67,101,0x67,101});
+        const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});input.insert(input.end(),tick.begin(),tick.end());
+        peer.send(input);peer.expect(copies(reordered?2:6));peer.silent();
+        require(output&&raw_refused&&uncaptured_refused&&pending&&resumed&&producers==2&&peer.world_calls==2&&
+            output->status()==Status::Written&&output->sealed()&&output->callback_accepted()&&!peer.session->closing(),
+            "Causal physical writes changed order, failed input barrier or completed before full acceptance");
+        const auto parts=output->components();require(parts.size()==(reordered?2u:3u),"Causal sender component count changed");
+        if(reordered) {
+            const auto a=parts[0].emissions(),b=parts[1].emissions();
+            require(a.size()==1&&b.size()==1&&a[0].selection_ordinal()==1&&b[0].selection_ordinal()==0&&
+                !a[0].same_occurrence(b[0])&&peer.session->callback_output_emission_written(*output,a[0])&&
+                peer.session->callback_output_emission_written(*output,b[0])&&!registry.observe(*peer.session),
+                "Physical out-of-input-order custody closed or falsely adopted canonical selection state");
+        }else {
+            require(parts[0].emissions().empty()&&parts[1].emissions().size()==1&&parts[2].emissions().size()==1,
+                "Equal baseline S31 borrowed a true producer tag");
+            const auto first=parts[1].emissions().front(),second=parts[2].emissions().front();
+            const auto a=peer.session->callback_output_emission_location(*output,first);
+            const auto b=peer.session->callback_output_emission_location(*output,second);
+            require(!first.same_occurrence(second)&&first.selection_ordinal()==0&&second.selection_ordinal()==1&&
+                first.expected_wire()==second.expected_wire()&&first.expected_wire()==frame&&a&&b&&
+                a->component_ordinal==1&&a->frame_wire_offset==0&&b->component_ordinal==2&&b->frame_wire_offset==96&&
+                a->logical_record_offset==0&&b->logical_record_offset==0&&a->logical_record_size==29&&b->logical_record_size==29,
+                "Distinct same-byte input occurrences or nested actual frame locations were lost");
+            const auto written=registry.observe(*peer.session);
+            require(written&&written->publications().size()==2&&!written->publications()[1].committed().changed()&&
+                written->publications()[1].committed().before()==std::optional{written->publications()[0].committed().after()}&&
+                written->current(*peer.session),"True idempotent private commit chain did not survive exact output binding");
+            const auto owner=peer.session->character_id;peer.session->character_id^=std::uint64_t{1}<<32;
+            require(!written->current(*peer.session)&&!peer.session->callback_output_emission_written(*output,first),
+                "Causal source narrowed full character identity");peer.session->character_id=owner;
+            registry.release(*peer.session);require(!written->current(*peer.session)&&!registry.observe(*peer.session),
+                "Released private selection source revived from equal bytes");
+        }
+    }
+    // A committed tag cannot be recovered from equal plain bytes, an incorrect
+    // trusted append offset, or a changed registered fragment. No SQL replay.
+    for(unsigned failure=0;failure<3;++failure) {
+        LegacyTaiwanOwnedDeitySelectionRegistry registry(1,helper);
+        std::optional<Session::WorldCallbackOutput> output;
+        RecoveredSessionPeer peer(false,[&](Session& session,auto)->std::optional<std::vector<std::uint8_t>> {
+            const auto init=*session.normal_world_initialization();output=session.capture_world_callback_output(init);
+            require(output.has_value(),"Failed causal fixture missing actual capture");
+            session.hold_world_input_until_callback_output_written(*output);
+            auto callback=registry.begin(session,init,*output);
+            auto leaf=registry.select(session,{101});require(leaf&&leaf->has_emissions(),"Failed causal fixture did not commit real C67");
+            std::vector<std::uint8_t> final;
+            if(failure==0)final=leaf->wire(); // Intentionally discard private carrier, despite exact same S31 bytes.
+            else {
+                if(failure==1){const auto offset=session.callback_reply_output_offset(frame.size());final=session.take_world_callback_reply(std::move(*leaf));}
+                else {final=session.take_world_callback_reply(std::move(*leaf));final.back()^=1;}
+            }
+            registry.finish(session,callback,true);registry.abandon(callback);return final;
+        },character,47710+failure);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail(static_cast<std::uint16_t>(character)));peer.silent();
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,101}));
+        for(unsigned i=0;i<12;++i)peer.pump();
+        require(output&&output->status()==Status::Failed&&peer.session->closing()&&!registry.observe(*peer.session),
+            "Lost causal tag/offset/fragment minted Written or left committed prefix replayable");
+        for(const auto& part:output->components())require(part.emissions().empty(),"Failed cohort exposed Written emission authority");
     }
 }
 
@@ -1345,6 +1501,7 @@ void test_session_state() {
     recovered_world_identity_sender_transport();
     recovered_battle_self_view_transport();
     recovered_callback_output_transport();
+    recovered_causal_deity_reply_transport();
     recovered_written_deity_selection_transport();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {

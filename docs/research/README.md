@@ -68,3 +68,5 @@ secondary／播放目標欄位的新增 REA 界線，見
 現用453筆BIN已保留來源，不代表權威技能玩法與執行profile已完成切換。
 舊流程整組實際輸出、原始輸入等待與配置清零界線，見
 [round476記錄](tw-legacy-callback-output-and-allocation-20261019.md)。
+選神真實回覆的因果標記、舊順序缺口與中毒捨去小數規則，見
+[round477記錄](tw-causal-selection-and-poison-floor-20261019.md)。

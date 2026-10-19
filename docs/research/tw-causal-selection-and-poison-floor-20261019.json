@@ -1,0 +1,133 @@
+{
+  "schema": "tw-causal-selection-and-poison-floor/1",
+  "round": 477,
+  "baseline_commit": "753125da2afa2c988715bd18ce522ecdd2d52278",
+  "phase": "PHASE1_SOURCE_STATIC_ONLY",
+  "scope": "Taiwan-only",
+  "source_image_sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48",
+  "installed_skill_bin_sha256": "3adcda70a477086da50411fe5d023eec33f915efafd17ec478d55542cae42ea7",
+  "installed_skill_rows": 453,
+  "evidence": [
+    {
+      "path": "identity/header-lifetime-and-issued-owner-conclusion-v1.json",
+      "bytes": 14418,
+      "sha256": "91d5387f32ad32ccf4cbf23a8b074a37be72de31129f88d23101eef0c960991c"
+    },
+    {
+      "path": "scope/legacy-order-edge-source-audit-v1.json",
+      "bytes": 6660,
+      "sha256": "243607028cd1bcc258db3b0cb9a5fb1793e2f750eca130236d115ba174c2f577"
+    },
+    {
+      "path": "scope/legacy-carrier-implementation-v2.json",
+      "bytes": 5514,
+      "sha256": "46c7a50fc9bd8c3443333b26d99f7a45f9ed9ca1c3b17d01af4b5125f06bacf4"
+    },
+    {
+      "path": "scope/session-causal-output-implementation-v1.json",
+      "bytes": 6791,
+      "sha256": "af333744d0de7cd8e460c3830d5bcab8106bdfb688632da40322fed785dfe901"
+    },
+    {
+      "path": "root-source-implementation-v1.json",
+      "bytes": 1733,
+      "sha256": "56d1ade143099b95c0fc693f0ffe332acb8f4905b5704d7c3c53803e6acdf6d1"
+    },
+    {
+      "path": "owner-poison-floor-implementation-v3.json",
+      "bytes": 1539,
+      "sha256": "1a274be7aaa843c8c0079b32bafd498fe22b8ef262095a11bafd467d5f34b9ca"
+    }
+  ],
+  "source_changes": [
+    "actual legacy private C67 helper commit and one-use original input mint private emission; external historical publication cannot be installed",
+    "move-only tagged reply retained through actual leaf, eight original prefix senders and guild53 append",
+    "three actual outer append offsets retained in independent checked LIFO callback windows; exact indexed fragment/frame checks without byte searching",
+    "actual Application outer begin/finish/release and subsequent Written observation retain bounded exact-Session source",
+    "physical Written and strict canonical selection source adoption remain distinct; no new close for existing physical output order",
+    "owner-confirmed floor(current maximum HP/10), explicit Lua damage and C++ validation, diagnostic remainder never carried"
+  ],
+  "owner_poison_rule": {
+    "design": "CUSTOM-0157",
+    "basis": "actual current owned maximum HP",
+    "rounding": "floor",
+    "example": {
+      "current_maximum_hp": 123,
+      "damage_hp": 12
+    },
+    "minimum_damage": 0,
+    "remainder_carry": false,
+    "exact_ratio_retained_for_validation": true,
+    "original_native_formula": false,
+    "status_tick_hosted": false,
+    "HP_mutation_added": false
+  },
+  "new_rea_sessions": 1,
+  "new_rea_functions": 2,
+  "rea_handles_closed": true,
+  "native_evidence_id": "ev_7b6f63c3463cf726002729f8911123e2943288318c9fa723f59ed1651b5aa45f",
+  "native_scopes": {
+    "cfg_scopes": 4,
+    "original_rows": 69,
+    "reused_control_scopes": 1,
+    "reused_control_rows": 180,
+    "reused_historical_spans": 11,
+    "reused_historical_bytes": 743,
+    "dispatch_block_rows": 4,
+    "counts_are_separate_not_unique_union": true
+  },
+  "native_findings": [
+    "actual C vtable points to51B830/51B850 UI destructor path, not header/wholeobject zero producer",
+    "51BDD0 later lifetime edge releases UIhandle; literal/bulksize negative inventory remains bounded",
+    "S87/38 dispatch to51C520 and S86/5 actor receiver are consumers, not original server issued87/grant formulas"
+  ],
+  "regression_source": {
+    "real_DB_Registry_Session_fixture": true,
+    "Session_cases": [
+      "Real in-memory DB fixture source using LegacyTaiwanOwnedDeitySelectionRegistry and RecoveredOwnedCompanions private commit, not a public tag factory.",
+      "Raw RecoveredWorldService handle refuses causal C67 before producer/SQL; uncaptured registry.select refuses before saved selection changes.",
+      "Two equal-key original C67 occurrences yield distinct real private tags and idempotent second commit; identical baseline S31 is a separate untagged actual component.",
+      "Typed append and consuming split preserve exact frame tag; two nested explicit offset scopes bind second tag to final component offset96 and logical record offset0/length29.",
+      "Pending observation unavailable before callback seal/acceptance and actual full writes; raw tick suffix resumes only after whole Written.",
+      "Physically reordered private emissions remain whole Written without close and retain actual ordinal locations, while Registry.observe refuses canonical source.",
+      "Full character high bits checked; release invalidates registry source despite equal bytes.",
+      "Lost private tag despite equal returned bytes, incorrect explicit offset, and altered registered fragment fail cohort and expose no Written emission authority."
+    ],
+    "owner_floor_actual_Lua_Battle_fixture": true,
+    "executed": false,
+    "Application_full_wrapper_graph_executed": false,
+    "full_restoration_learning_join_executed": false
+  },
+  "legacy_private_registry_hosted": true,
+  "legacy_exact_causal_emission_tagging_hosted": true,
+  "legacy_Written_source_observed_by_Application": true,
+  "legacy_full_restoration_learning_selection_joined": false,
+  "legacy_state_order_edge_repaired": false,
+  "physical_order_preserved": true,
+  "shared_PK_changed": false,
+  "secondary_opaque_header_restored": false,
+  "original_damage_healing_formula_restored": false,
+  "new_status_tick_owner": false,
+  "generic_skill_world_owner_hosted": false,
+  "next_sources": [
+    "repair legal Options/Party/Blacklist buffered-final versus later guild-prefix S31 state order without guessing canonical final selection",
+    "join ordered private legacy Written source to complete restoration and learning, retaining same-callback original baseline before-source custody",
+    "concrete original header/wholeobject writer or consumer; closed destructor/allocator paths do not recover unknown bytes",
+    "original server magnitude/issued87/actor producer and sameWorld initializer authority"
+  ],
+  "new_owner_directed_rounding_closures": 1,
+  "new_original_formulas": 0,
+  "new_complete_gameplay": 0,
+  "whole_game_completion_percent": null,
+  "builds": false,
+  "tests": false,
+  "target_execution": false,
+  "Lua_execution": false,
+  "vm": false,
+  "codec": false,
+  "game_db_sql": false,
+  "schema_install": false,
+  "activation": false,
+  "deployment": false,
+  "goal_status": "active"
+}

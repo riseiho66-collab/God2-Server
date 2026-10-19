@@ -8,6 +8,7 @@
 #include "core/SharedWorldHostPlan.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
+#include "game/LegacyTaiwanOwnedDeitySelectionRegistry.h"
 #include "db/NativeWorldEntrySnapshotRepository.h"
 #include "db/NativeCharacterSummarySnapshotRepository.h"
 #include "db/SqliteNativeCharacterSummarySnapshotRepository.h"
@@ -975,6 +976,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 std::make_shared<OwnedOrdinaryMovementPolicyReloads>(config.max_sessions):nullptr;
             // Actual helper outlives Context suppliers and game-owned drains.
             RecoveredOwnedCompanions owned_companions(database.companions());
+            const auto legacy_deity_selections=world_plan?std::shared_ptr<LegacyTaiwanOwnedDeitySelectionRegistry>{}:
+                std::make_shared<LegacyTaiwanOwnedDeitySelectionRegistry>(config.max_sessions,owned_companions);
             // One same-repository host on this game owner, retained through all
             // listener/controller drain. No native placement or data is created.
             std::shared_ptr<SharedWorldHost> common_world;
@@ -2514,7 +2517,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             }); // CUSTOM-0077: member view and authenticated self-leave only
             // Lifetime spans the running game executor. game_handlers below
             // is moved into TcpServer and must not be captured for recursion.
-            std::function<std::optional<std::vector<std::uint8_t>>(
+            std::function<std::optional<LegacyWorldReply>(
                 Session&,std::span<const RecoveredWorldRecords::Record>)> guild_ordered_world_records;
             const auto sync_guild_roster=[&](Session& session) {
                 if(!session.recovered_world_ready() || !owned_player_and_companions_projected.contains(session.id()))return;
@@ -3914,9 +3917,21 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             if(reply) spdlog::info("OWNED_DEITY_SELECTION_COMMITTED session_id={} character_id={} key={} CUSTOM-0039",
                                 session.id(),session.character_id,request.key);
                             return reply;
-                        });
+                        },
+                        legacy_deity_selections?RecoveredWorldService::CausalDeitySelection{
+                        [&](Session& session,const RecoveredDeitySelection::Request& request)
+                            ->std::optional<LegacyWorldReply> {
+                            if(!owned_player_and_companions_projected.contains(session.id()) ||
+                               diagnostic_town_scene_pending.contains(session.id()) ||
+                               !recovered_movement->current_location(session.id(),session.account_id,session.character_id))
+                                return std::nullopt;
+                            auto reply=legacy_deity_selections->select(session,request);
+                            if(reply)spdlog::info("OWNED_DEITY_SELECTION_COMMITTED session_id={} character_id={} key={} CUSTOM-0039",
+                                session.id(),session.character_id,request.key);
+                            return reply;
+                        }}:RecoveredWorldService::CausalDeitySelection{});
                         guild_ordered_world_records=[&](Session& session,std::span<const RecoveredWorldRecords::Record> records)
-                            ->std::optional<std::vector<std::uint8_t>> {
+                            ->std::optional<LegacyWorldReply> {
                             observe_companion_restoration_write(session);
                             if(recovered_movement && recovered_movement->world_catalog()) {
                                 const OwnedNpcTeleportOffer::Identity owner{session.id(),session.account_id,session.character_id};
@@ -4097,7 +4112,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             if(config.owned_beast_panel_enabled&&OwnedBeastPanelService::handles(records)&&
                                !OwnedBeastPanelService::request(records))
                                 return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});
-                            if(guild53_routes && guild53_routes->handles(session.id(),records))return guild53_routes->handle(session.id(),records,[&](auto prefix){return guild_ordered_world_records(session,prefix);});
+                            if(guild53_routes && guild53_routes->handles(session.id(),records))return guild53_routes->handle_reply(session.id(),records,[&](auto prefix){return guild_ordered_world_records(session,prefix);});
                             if(guild_succession) {
                                 // Retain existing modal/actor policy before capturing ANY owned write.
                                 // Frozen channel dispatch is untouched; it may retire CUSTOM authority.
@@ -4143,7 +4158,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                     announcement_write_publication_suppressed=true;
                                     struct SuppressReset{bool& value;bool previous;~SuppressReset(){value=previous;}} reset{announcement_write_publication_suppressed,previous_suppressed};
                                     std::size_t begin=0;
-                                    const auto prefix=[&](std::size_t end){if(end==begin)return true;const auto result=guild_ordered_world_records(session,records.subspan(begin,end-begin));if(!result)return false;const auto replies=OwnedGuildPanelService::prefix_replies(*result);if(!replies)return false;for(const auto& reply:*replies)session.send_world_records(reply);return true;};
+                                    const auto prefix=[&](std::size_t end){if(end==begin)return true;auto result=guild_ordered_world_records(session,records.subspan(begin,end-begin));if(!result)return false;auto replies=std::move(*result).split_frames();if(!replies)return false;for(auto& reply:*replies)session.send_world_callback_reply_frame(std::move(reply));return true;};
                                     std::set<std::uint64_t> affected;
                                     if(captured.original)for(const auto& row:captured.original->state.rows)affected.insert(row.character_id);
                                     for(const auto& conversation:conversations.actions)if(conversation.plan)for(const auto& [id,resource]:conversation.plan->audience.resources)affected.insert(id);
@@ -4218,10 +4233,10 @@ if(guild_officer_runtime && player_guild(session) &&
     std::size_t begin=0;
     const auto prefix=[&](std::size_t end) {
         if(end==begin)return true;
-        const auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
+        auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
         if(!reply)return false;
-        const auto logical=OwnedGuildPanelService::prefix_replies(*reply);if(!logical)return false;
-        for(const auto& frame:*logical)session.send_world_records(frame);return true;
+        auto logical=std::move(*reply).split_frames();if(!logical)return false;
+        for(auto& frame:*logical)session.send_world_callback_reply_frame(std::move(frame));return true;
     };
     // A later malformed/failed prefix cannot skip reconciliation of an earlier
     // committed mutation. Keep cache debt on unready peers; retry on Tick.
@@ -4341,10 +4356,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                 std::size_t begin=0;
                                 const auto prefix=[&](std::size_t end) {
                                     if(end==begin)return true;
-                                    const auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
+                                    auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
                                     if(!reply)return false;
-                                    const auto logical=OwnedGuildPanelService::prefix_replies(*reply);if(!logical)return false;
-                                    for(const auto& frame:*logical)session.send_world_records(frame);return true;
+                                    auto logical=std::move(*reply).split_frames();if(!logical)return false;
+                                    for(auto& frame:*logical)session.send_world_callback_reply_frame(std::move(frame));return true;
                                 };
                                 for(std::size_t index=0;index<records.size();++index) {
                                     const auto* action=std::get_if<RecoveredGuildDisband75::Request>(&records[index]);
@@ -4486,11 +4501,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                 std::size_t begin=0;
                                 const auto prefix=[&](std::size_t end) {
                                     if(end==begin)return true;
-                                    const auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
+                                    auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
                                     if(!reply)return false;
-                                    const auto logical=OwnedGuildPanelService::prefix_replies(*reply);
+                                    auto logical=std::move(*reply).split_frames();
                                     if(!logical)return false;
-                                    for(const auto& frame:*logical)session.send_world_records(frame);
+                                    for(auto& frame:*logical)session.send_world_callback_reply_frame(std::move(frame));
                                     return true;
                                 };
                                 for(std::size_t index=0;index<records.size();++index) {
@@ -4568,10 +4583,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                 std::size_t begin=0;
                                 const auto prefix=[&](std::size_t end) {
                                     if(end==begin)return true;
-                                    const auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
+                                    auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
                                     if(!reply)return false;
-                                    const auto logical=OwnedGuildPanelService::prefix_replies(*reply);if(!logical)return false;
-                                    for(const auto& frame:*logical)session.send_world_records(frame);return true;
+                                    auto logical=std::move(*reply).split_frames();if(!logical)return false;
+                                    for(auto& frame:*logical)session.send_world_callback_reply_frame(std::move(frame));return true;
                                 };
                                 for(std::size_t index=0;index<records.size();++index) {
                                     const auto* action=std::get_if<RecoveredQuestAction::Request>(&records[index]);
@@ -4637,10 +4652,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                 std::size_t begin=0;
                                 const auto prefix=[&](std::size_t end) {
                                     if(end==begin)return true;
-                                    const auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
+                                    auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
                                     if(!reply)return false;
-                                    const auto logical=OwnedGuildPanelService::prefix_replies(*reply);if(!logical)return false;
-                                    for(const auto& frame:*logical)session.send_world_records(frame);return true;
+                                    auto logical=std::move(*reply).split_frames();if(!logical)return false;
+                                    for(auto& frame:*logical)session.send_world_callback_reply_frame(std::move(frame));return true;
                                 };
                                 for(std::size_t index=0;index<records.size();++index) {
                                     if(!kick_kind[index])continue;
@@ -4708,10 +4723,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                 std::size_t begin=0;
                                 const auto prefix=[&](std::size_t end) {
                                     if(end==begin)return true;
-                                    const auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
+                                    auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
                                     if(!reply)return false;
-                                    const auto logical=OwnedGuildPanelService::prefix_replies(*reply);if(!logical)return false;
-                                    for(const auto& frame:*logical)session.send_world_records(frame);return true;
+                                    auto logical=std::move(*reply).split_frames();if(!logical)return false;
+                                    for(auto& frame:*logical)session.send_world_callback_reply_frame(std::move(frame));return true;
                                 };
                                 for(std::size_t index=0;index<records.size();++index) {
                                     const auto* request=std::get_if<RecoveredGuildMembership::Request>(&records[index]);
@@ -4779,11 +4794,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                     if(end==begin)return true;
                                     // No73 in this span, hence depth exactly1.
                                     // Existing routes handle it unchanged.
-                                    const auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
+                                    auto reply=guild_ordered_world_records(session,records.subspan(begin,end-begin));
                                     if(!reply)return false;
-                                    auto logical=OwnedGuildPanelService::prefix_replies(*reply);
+                                    auto logical=std::move(*reply).split_frames();
                                     if(!logical)return false;
-                                    for(auto& frame:*logical)session.send_world_records(std::move(frame));
+                                    for(auto& frame:*logical)session.send_world_callback_reply_frame(std::move(frame));
                                     return true;
                                 };
                                 for(std::size_t index=0;index<records.size();++index) {
@@ -6304,7 +6319,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                    std::holds_alternative<RecoveredDeitySelection::Request>(record)) return true;
                                 const auto* selection=std::get_if<RecoveredSelectionItemRequest::Request>(&record);
                                 return selection && selection->raw_slot>=42 && selection->raw_slot<=44;
-                            })) return recovered_world->handle(session,records);
+                            })) return recovered_world->handle_reply(session,records);
                             if(config.diagnostic_town_door_routes && diagnostic_town_scene_pending.contains(session.id())) {
                                 // Already queued old-scene steps can arrive in a separate
                                 // native frame before the destination context receipt. Drop
@@ -7953,7 +7968,12 @@ if(guild_officer_runtime && player_guild(session) &&
                         game_handlers.pk_invitations=config.owned_pk_invitation_enabled;
                         game_handlers.bf_requests=config.owned_daily_quest_views_enabled;
                         game_handlers.map_panel68=config.owned_map_views_enabled;
-                        game_handlers.world_records=guild_ordered_world_records;
+                        game_handlers.world_records=[&](Session& session,std::span<const RecoveredWorldRecords::Record> records)
+                            ->std::optional<std::vector<std::uint8_t>> {
+                            auto reply=guild_ordered_world_records(session,records);
+                            if(!reply)return std::nullopt;
+                            return session.take_world_callback_reply(std::move(*reply));
+                        };
                         spdlog::warn("Recovered {} movement enabled; area=2 scene={}; position persistence enabled, speed policy and live acceptance unverified",
                             config.diagnostic_town?"town diagnostic":"indoor",config.diagnostic_town?4:15);
                     }
@@ -8415,6 +8435,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             }
                             const auto reply=[&] {
                                 const auto sender_offset=session.movement_response_output_offset(wire.size());
+                                const auto causal_offset=session.callback_reply_output_offset(wire.size());
                                 return original(session,records.subspan(begin,i-begin));
                             }();
                             if(!reply || dispatch->reentered)return {};
@@ -8680,6 +8701,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 auto end=at+1;while(end<records.size() && !std::holds_alternative<TaiwanNativePartyMenu::Request>(records[end]))++end;
                                 const auto reply=[&] {
                                     const auto sender_offset=session.movement_response_output_offset(wire.size());
+                                    const auto causal_offset=session.callback_reply_output_offset(wire.size());
                                     return original(session,records.subspan(at,end-at));
                                 }();
                                 if(!reply || dispatch->reentered)return {};
@@ -9092,6 +9114,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             while(i<records.size() && !options(records[i]))++i;
                             const auto reply=[&] {
                                 const auto sender_offset=session.movement_response_output_offset(wire.size());
+                                const auto causal_offset=session.callback_reply_output_offset(wire.size());
                                 return original(session,records.subspan(begin,i-begin));
                             }();
                             if(!reply || dispatch->reentered)return {};
@@ -9644,13 +9667,16 @@ if(guild_officer_runtime && player_guild(session) &&
                             std::weak_ptr<Session> peer;
                             Session::NormalWorldInitialization initialization;
                             Session::WorldCallbackOutput output;
+                            std::optional<LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource> selection;
                         };
                         std::map<std::uint64_t,Attempt> attempts;
                     };
+                    if(!legacy_deity_selections)throw std::logic_error("Legacy C67 registry configuration missing");
+                    const auto registry=legacy_deity_selections;
                     const auto custody=std::make_shared<LegacySelectionOutputCustody>();
                     const auto capacity=config.max_sessions;
                     const auto original=game_handlers.world_records;
-                    game_handlers.world_records=[original,custody,capacity](Session& session,
+                    game_handlers.world_records=[original,custody,capacity,registry](Session& session,
                         std::span<const RecoveredWorldRecords::Record> records)
                         ->std::optional<std::vector<std::uint8_t>> {
                         const auto peer=session.weak_from_this().lock();
@@ -9662,6 +9688,10 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(status!=Session::WorldCallbackOutputStatus::Written &&
                                status!=Session::WorldCallbackOutputStatus::NoOutput)
                                 throw std::runtime_error("Legacy selection input crossed incomplete callback output");
+                            // Observe the actual private committed chain only after
+                            // all original output components are Written. Historical
+                            // phase/INIT retirement simply clears this live source.
+                            prior->second.selection=registry->observe(session);
                         }
                         const bool selection=std::any_of(records.begin(),records.end(),[](const auto& record) {
                             return std::holds_alternative<RecoveredDeitySelection::Request>(record);
@@ -9686,16 +9716,27 @@ if(guild_officer_runtime && player_guild(session) &&
                         session.hold_world_input_until_callback_output_written(*output);
                         custody->attempts.insert_or_assign(session.id(),
                             LegacySelectionOutputCustody::Attempt{peer,*initialization,*output});
-                        return original(session,records); // Once; original ordering and boundaries retained.
+                        const auto callback=registry->begin(session,*initialization,*output);
+                        struct End {
+                            std::shared_ptr<LegacyTaiwanOwnedDeitySelectionRegistry> registry;
+                            LegacyTaiwanOwnedDeitySelectionRegistry::Callback callback;
+                            ~End(){registry->abandon(callback);}
+                        } end{registry,callback};
+                        auto response=original(session,records); // Actual original once, including all outer appenders.
+                        registry->finish(session,callback,response.has_value());
+                        return response;
                     };
                     const auto previous=on_disconnect;
-                    on_disconnect=[custody,previous](std::shared_ptr<Session> session) {
+                    on_disconnect=[custody,previous,registry](std::shared_ptr<Session> session) {
                         if(session) {
                             const auto at=custody->attempts.find(session->id());
                             if(at!=custody->attempts.end() && at->second.peer.lock()==session)
                                 custody->attempts.erase(at); // Exact incarnation, before throwing observers.
                         }
-                        if(previous)previous(std::move(session));
+                        std::exception_ptr failure;
+                        try{if(session)registry->release(*session);}catch(...){failure=std::current_exception();}
+                        try{if(previous)previous(std::move(session));}catch(...){if(!failure)failure=std::current_exception();}
+                        if(failure)std::rethrow_exception(failure);
                     };
                 }
                 character_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),

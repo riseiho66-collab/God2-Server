@@ -30,6 +30,9 @@ namespace god2::shared {class SharedActorVisibility;}
 
 namespace god2 {
 
+class LegacyWorldReply;
+class LegacyWorldReplyFrame;
+class LegacyTaiwanOwnedDeitySelectionRegistry;
 class TaiwanActorStatusWriteFence;
 class SharedTaiwanMovement;
 class RecoveredMovementService;
@@ -234,6 +237,24 @@ public:
         explicit NormalWorldInitialization(std::shared_ptr<const Data> data):data_(std::move(data)) {}
         std::shared_ptr<const Data> data_;
     };
+    // Issued only by the trusted registry after its own true private selection.
+    // A read-only exact-frame identity; it is not a raw-byte/tag factory or ACK.
+    class WorldCallbackSelectionEmission {
+    public:
+        WorldCallbackSelectionEmission(const WorldCallbackSelectionEmission&)=default;
+        WorldCallbackSelectionEmission& operator=(const WorldCallbackSelectionEmission&)=default;
+        bool same_occurrence(const WorldCallbackSelectionEmission& other) const noexcept{return data_==other.data_;}
+        std::size_t selection_ordinal() const noexcept;
+        const std::vector<std::uint8_t>& expected_wire() const noexcept;
+    private:
+        friend class Session;friend struct Impl;
+        struct Data;
+        explicit WorldCallbackSelectionEmission(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    struct WorldCallbackEmissionLocation {
+        std::size_t component_ordinal,frame_wire_offset,logical_record_offset,logical_record_size;
+    };
     // One actual synchronous callback's self-output transcript. Components are
     // distinct original Writes, never a combined WorldResponseWrite or ACK.
     // NoOutput is accepted+sealed with zero actual Writes, never Written/ACK.
@@ -250,6 +271,8 @@ public:
             Component& operator=(const Component&)=default;
             WorldCallbackOutputStatus status() const noexcept;
             Kind kind() const noexcept;
+            // Immutable actual bindings, visible only after whole callback Written.
+            std::span<const WorldCallbackSelectionEmission> emissions() const noexcept;
             std::size_t ordinal() const noexcept;
             const std::vector<std::uint8_t>& logical() const noexcept;
             std::shared_ptr<const std::vector<std::uint8_t>> wire() const noexcept;
@@ -300,6 +323,28 @@ public:
         explicit WorldCallbackOutputCursor(std::shared_ptr<const Data> data):data_(std::move(data)){}
         std::shared_ptr<const Data> data_;
     };
+    // Independent from movement output offsets. Actual outer append sites
+    // preserve child reply provenance at a checked cumulative final-wire base.
+    class CallbackReplyOutputOffset final {
+    public:
+        ~CallbackReplyOutputOffset() noexcept;
+        CallbackReplyOutputOffset(const CallbackReplyOutputOffset&)=delete;
+        CallbackReplyOutputOffset& operator=(const CallbackReplyOutputOffset&)=delete;
+        CallbackReplyOutputOffset(CallbackReplyOutputOffset&&)=delete;
+        CallbackReplyOutputOffset& operator=(CallbackReplyOutputOffset&&)=delete;
+    private:
+        friend class Session;
+        CallbackReplyOutputOffset(Session&,std::size_t);
+        std::shared_ptr<void> capture_;
+        std::size_t old_base_=0;
+        std::uint64_t nonce_=0,parent_=0;
+    };
+    CallbackReplyOutputOffset callback_reply_output_offset(std::size_t relative_prefix);
+    void send_world_callback_reply_frame(LegacyWorldReplyFrame);
+    std::vector<std::uint8_t> take_world_callback_reply(LegacyWorldReply);
+    bool callback_output_emission_written(const WorldCallbackOutput&,const WorldCallbackSelectionEmission&) const;
+    std::optional<WorldCallbackEmissionLocation> callback_output_emission_location(
+        const WorldCallbackOutput&,const WorldCallbackSelectionEmission&) const;
     std::optional<WorldCallbackOutput> capture_world_callback_output(const NormalWorldInitialization&);
     bool world_callback_output_current_on_game(const WorldCallbackOutput&) const;
     // Explicit one-use input claim: actual original C67 order/full payload,
@@ -1037,7 +1082,11 @@ private:
         const NativePkReturnOutputPlan::Data&) noexcept;
     static void fail_native_pk_return_output(const std::shared_ptr<NativePkReturnOutputHold::Data>&) noexcept;
     static void fail_native_pk_return_reservation(const std::shared_ptr<NativePkReturnReservation::Data>&) noexcept;
-    void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>);
+    friend class LegacyTaiwanOwnedDeitySelectionRegistry;
+    std::optional<WorldCallbackSelectionEmission> mint_callback_selection_emission(
+        const WorldCallbackOutput&,const WorldCallbackSelectionInput&,std::span<const std::uint8_t> exact_framed_wire);
+    void send_world_records_impl(std::vector<std::uint8_t>,std::shared_ptr<WorldRecordsWrite::Data>,
+        std::optional<WorldCallbackSelectionEmission> emission={});
     void send_actor_status_output(std::vector<std::uint8_t>,std::uint64_t,std::uint64_t,std::uint64_t,
         std::function<bool()>,std::function<void(bool)>,ActorStatusOutputInput);
     friend class SharedTaiwanWorldLifecycle;

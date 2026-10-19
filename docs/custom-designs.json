@@ -6466,14 +6466,14 @@
     }
     ,{
       "id": "CUSTOM-0157",
-      "name": "Owner-directed exact poison share from current maximum HP",
-      "authority": "OWNER_DIRECTED_CURRENT_MAXIMUM_HP_ONE_TENTH_NOT_NATIVE_STATUS_TICK",
+      "name": "Owner-directed floored poison damage from current maximum HP",
+      "authority": "OWNER_DIRECTED_CURRENT_MAXIMUM_HP_ONE_TENTH_FLOOR_NOT_NATIVE_STATUS_TICK",
       "implementation": ["src/game/PoisonRule.h", "src/game/Battle.h", "src/game/Battle.cpp", "src/scripting/LuaEngine.h", "src/scripting/LuaEngine.cpp", "scripts/gameplay/poison.lua"],
-      "document": "docs/research/tw-poison-exact-share-and-tick-frontier-20261019.md",
+      "document": "docs/research/tw-causal-selection-and-poison-floor-20261019.md",
       "rules": {
         "source": "Read-only Battle observation uses the actual current owned target snapshot maximum HP and revision, not current remaining HP or cast-time maximum",
         "quantity": "Lua5.4 exact integer divmod10; preserve whole_hp plus remainder_tenths/10, reconstruct the entire shared64 maximum in C++ without floating point or new gameplay caps",
-        "rounding": "No floor/ceil/min1/cross-tick accumulation decision; nonintegral share does not expose an exact integer HP result. Owner clarification remains pending",
+        "rounding": "Owner clarified2026-10-19: discard fractional HP; maximum123 deducts12HP. damage_hp is whole_hp=floor(current maximumHP/10), zero below10, with no minimum1 or cross-tick remainder accumulation",
         "boundary": "Pure/non-reentrant callback contract with post-observation current checks; not a general reentry rollback mechanism, a skill grant or status/tick authority"
       },
       "native_gap": "Actual poison identity/acquisition, tick boundary, duration/expiry/clear/stack, atomic status save/outbox and qualified complete native reply remain unconnected. UI C9 countdown and CUSTOM paired PK rounds do not supply these authorities.",

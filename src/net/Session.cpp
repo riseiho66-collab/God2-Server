@@ -16,6 +16,7 @@
 #include "protocol/RecoveredCharacterBootstrap.h"
 #include "protocol/RecoveredWorldReady.h"
 #include "protocol/RecoveredWorldEntryView.h"
+#include "game/LegacyWorldReply.h"
 #include "game/TaiwanWorldEntryIdentity.h"
 #include "game/TaiwanWorldIdentityWriteFence.h"
 #include "game/TaiwanBattleSelfViewWriteFence.h"
@@ -353,6 +354,17 @@ struct Session::WorldCallbackOutput::Data {
     const std::vector<SelectionKey> keys;
     std::vector<Component> components; // GAME only until release-store seal.
     std::vector<std::uint8_t> final_wire; // GAME only until seal.
+    struct ReplyRange {WorldCallbackSelectionEmission emission;std::size_t offset;};
+    struct ReplyFragment {
+        const std::size_t base;
+        const std::vector<std::uint8_t> wire;
+        const std::vector<ReplyRange> ranges;
+        ReplyFragment(std::size_t offset,std::vector<std::uint8_t> bytes,std::vector<ReplyRange> tags)
+            :base(offset),wire(std::move(bytes)),ranges(std::move(tags)){}
+    };
+    std::vector<WorldCallbackSelectionEmission> emissions; // GAME until seal.
+    std::vector<bool> issued; // Original C67 ordinal, allocated before SQL.
+    std::vector<std::shared_ptr<const ReplyFragment>> final_fragments;
     std::size_t claimed=0; // Only the actual synchronous game callback.
     std::atomic<WorldCallbackOutputStatus> status{WorldCallbackOutputStatus::Pending};
     std::atomic<bool> sealed{false},accepted{false},armed{false},released{false};
@@ -360,19 +372,33 @@ struct Session::WorldCallbackOutput::Data {
          std::uint64_t generation,SessionState state,std::shared_ptr<const NormalWorldInitialization::Data> init,
          std::vector<SelectionKey> input)
         :session(std::move(owner)),session_id(id),account(a),character(c),battle(generation),phase(state),
-         initialization(std::move(init)),keys(std::move(input)){}
+         initialization(std::move(init)),keys(std::move(input)),issued(keys.size(),false){emissions.reserve(keys.size());}
     void fail() noexcept;
     void complete() noexcept;
 };
+struct Session::WorldCallbackSelectionEmission::Data {
+    enum class Phase {Created,FinalReserved,Bound};
+    const std::weak_ptr<WorldCallbackOutput::Data> cohort;
+    const std::size_t input_ordinal,minimum_component;
+    const std::vector<std::uint8_t> wire,logical;
+    std::atomic<Phase> phase{Phase::Created};
+    WorldCallbackEmissionLocation location{}; // GAME writes before Bound/whole seal.
+    Data(std::shared_ptr<WorldCallbackOutput::Data> source,std::size_t input,std::size_t first,
+         std::span<const std::uint8_t> bytes,std::vector<std::uint8_t> decoded)
+        :cohort(source),input_ordinal(input),minimum_component(first),wire(bytes.begin(),bytes.end()),logical(std::move(decoded)){}
+};
+std::size_t Session::WorldCallbackSelectionEmission::selection_ordinal() const noexcept{return data_->input_ordinal;}
+const std::vector<std::uint8_t>& Session::WorldCallbackSelectionEmission::expected_wire() const noexcept{return data_->wire;}
 struct Session::WorldCallbackOutput::Component::Data {
     const std::weak_ptr<WorldCallbackOutput::Data> cohort;
     const Kind kind;
     const std::size_t ordinal;
     const std::vector<std::uint8_t> logical;
+    std::vector<WorldCallbackSelectionEmission> emissions; // GAME only until whole seal.
     std::atomic<std::shared_ptr<const std::vector<std::uint8_t>>> wire;
     std::atomic<WorldCallbackOutputStatus> status{WorldCallbackOutputStatus::Pending};
     Data(std::shared_ptr<WorldCallbackOutput::Data> owner,Kind form,std::size_t index,
-         std::span<const std::uint8_t> input):cohort(owner),kind(form),ordinal(index),logical(input.begin(),input.end()){}
+         std::span<const std::uint8_t> input):cohort(owner),kind(form),ordinal(index),logical(input.begin(),input.end()){emissions.reserve(1);}
 };
 struct Session::WorldCallbackSelectionInput::Data {
     const std::shared_ptr<WorldCallbackOutput::Data> cohort;
@@ -398,6 +424,11 @@ std::span<const std::uint8_t> Session::WorldCallbackOutput::final_return_wire() 
 }
 Session::WorldCallbackOutputStatus Session::WorldCallbackOutput::Component::status() const noexcept{return data_->status.load();}
 Session::WorldCallbackOutput::Kind Session::WorldCallbackOutput::Component::kind() const noexcept{return data_->kind;}
+std::span<const Session::WorldCallbackSelectionEmission> Session::WorldCallbackOutput::Component::emissions() const noexcept{
+    const auto owner=data_->cohort.lock();
+    if(!owner||!owner->sealed.load(std::memory_order_acquire)||owner->status.load()!=WorldCallbackOutputStatus::Written)return {};
+    return data_->emissions;
+}
 std::size_t Session::WorldCallbackOutput::Component::ordinal() const noexcept{return data_->ordinal;}
 const std::vector<std::uint8_t>& Session::WorldCallbackOutput::Component::logical() const noexcept{return data_->logical;}
 std::shared_ptr<const std::vector<std::uint8_t>> Session::WorldCallbackOutput::Component::wire() const noexcept{return data_->wire.load();}
@@ -407,6 +438,16 @@ std::size_t Session::WorldCallbackSelectionInput::record_index() const noexcept{
 std::size_t Session::WorldCallbackOutputCursor::first_component_ordinal() const noexcept{return data_->first;}
 void Session::WorldCallbackOutput::Data::complete() noexcept {
     if(!sealed.load(std::memory_order_acquire)||!accepted.load()||status.load()!=WorldCallbackOutputStatus::Pending)return;
+    // Physical whole-Written custody preserves actual FIFO order. Whether
+    // that order can be adopted as canonical selection state is the registry
+    // policy, not a reason to close otherwise unchanged original writes.
+    for(const auto& emission:emissions){
+        const auto tag=emission.data_;const auto location=tag->location;
+        if(tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::Bound||
+           location.component_ordinal>=components.size()||location.component_ordinal<tag->minimum_component){
+            fail();return;
+        }
+    }
     if(components.empty()){
         auto pending=WorldCallbackOutputStatus::Pending;
         status.compare_exchange_strong(pending,WorldCallbackOutputStatus::NoOutput);
@@ -803,6 +844,83 @@ struct Session::Impl {
             if(const auto cohort=receipt->cohort.lock())cohort->fail();
         }
     };
+    struct CallbackReplyWindow {
+        const std::thread::id thread=std::this_thread::get_id();
+        const std::weak_ptr<Session> session;
+        std::atomic<bool> active{true},poisoned{false};
+        std::size_t base=0;
+        std::uint64_t next_nonce=0,nonce=0;
+        std::vector<std::shared_ptr<const WorldCallbackOutput::Data::ReplyFragment>> fragments;
+        explicit CallbackReplyWindow(std::weak_ptr<Session> owner):session(std::move(owner)){}
+    };
+    std::shared_ptr<CallbackReplyWindow> callback_reply_window; // Actual callback GAME only.
+    std::shared_ptr<CallbackReplyWindow> reply_window() {
+        if(observed_world_callback!=&owner||!callback_output_active)throw std::logic_error("Reply provenance requires actual callback");
+        if(!callback_reply_window)callback_reply_window=std::make_shared<CallbackReplyWindow>(owner.weak_from_this());
+        const auto window=callback_reply_window;
+        if(!window->active.load()||window->poisoned.load()||window->thread!=std::this_thread::get_id()||
+           window->session.lock().get()!=&owner)throw std::logic_error("Reply provenance callback retired");
+        return window;
+    }
+    void poison_callback_reply() noexcept {
+        if(callback_reply_window)callback_reply_window->poisoned.store(true);
+        if(callback_output_capture)callback_output_capture->receipt->fail();
+    }
+    static bool reply_frame_boundary(std::span<const std::uint8_t> wire,std::size_t wanted) noexcept {
+        for(std::size_t at=0;at<wire.size();){
+            if(wire.size()-at<2)return false;
+            const auto size=std::size_t(wire[at])+256u*wire[at+1];
+            if(size<4||size>wire.size()-at)return false;
+            if(at==wanted)return true;if(at>wanted)return false;at+=size;
+        }
+        return false;
+    }
+    void bind_side_emission(const std::shared_ptr<CallbackComponentAttempt>& component,
+            const WorldCallbackSelectionEmission& emission,std::span<const std::uint8_t> logical){
+        const auto data=component?component->cohort:nullptr;const auto tag=emission.data_;
+        if(!data||tag->cohort.lock()!=data||component->receipt->ordinal<tag->minimum_component||
+           tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::Created||
+           logical.size()!=tag->logical.size()||!std::equal(logical.begin(),logical.end(),tag->logical.begin())){
+            if(data)data->fail();throw std::logic_error("Causal side emission not its exact current logical frame");
+        }
+        component->receipt->emissions.push_back(emission);
+        tag->location={component->receipt->ordinal,0,0,tag->logical.size()};
+        tag->phase.store(WorldCallbackSelectionEmission::Data::Phase::Bound);
+    }
+    void bind_final_emissions(const std::shared_ptr<WorldCallbackOutput::Data>& data,
+            const std::shared_ptr<CallbackComponentAttempt>& component,std::span<const std::uint8_t> actual){
+        const auto window=callback_reply_window;
+        if(!window)return;
+        if(window->thread!=std::this_thread::get_id()||!window->active.load()||window->poisoned.load()||window->nonce||window->base){
+            data->fail();throw std::logic_error("Final reply offset scopes not balanced");
+        }
+        auto fragments=window->fragments;
+        std::sort(fragments.begin(),fragments.end(),[](const auto& a,const auto& z){return a->base<z->base;});
+        std::size_t previous_end=0;bool first=true;
+        for(const auto& fragment:fragments){
+            const auto at=fragment->base;
+            if(!component||at>actual.size()||fragment->wire.size()>actual.size()-at||
+               (!first&&at<previous_end)||!reply_frame_boundary(actual,at)||
+               !std::equal(fragment->wire.begin(),fragment->wire.end(),actual.begin()+at)){
+                data->fail();throw std::logic_error("Exact indexed child reply fragment changed or overlaps");
+            }
+            previous_end=at+fragment->wire.size();first=false;
+            for(const auto& range:fragment->ranges){
+                const auto tag=range.emission.data_;
+                if(tag->cohort.lock()!=data||tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::FinalReserved||
+                   component->receipt->ordinal<tag->minimum_component||range.offset>fragment->wire.size()||
+                   tag->wire.size()>fragment->wire.size()-range.offset||!reply_frame_boundary(fragment->wire,range.offset)||
+                   !reply_frame_boundary(actual,at+range.offset)||
+                   !std::equal(tag->wire.begin(),tag->wire.end(),actual.begin()+at+range.offset)){
+                    data->fail();throw std::logic_error("Causal final emission lost its exact indexed source frame");
+                }
+                component->receipt->emissions.push_back(range.emission);
+                tag->location={component->receipt->ordinal,at+range.offset,0,tag->logical.size()};
+                tag->phase.store(WorldCallbackSelectionEmission::Data::Phase::Bound);
+            }
+        }
+        data->final_fragments=std::move(fragments);window->active.store(false);
+    }
     bool callback_output_active=false; // Actual synchronous GAME callback only.
     std::size_t callback_output_activity=0;
     std::shared_ptr<CallbackOutputAttempt> callback_output_capture;
@@ -3933,6 +4051,8 @@ struct Session::Impl {
             }
             s.native_pk_terminal_callback_capture.reset(); // This exact serial input callback only.
             s.owned_input_callback_lease.reset(); // Retire an unhanded opt-in independently of the strong hold.
+            if(s.callback_reply_window)s.callback_reply_window->active.store(false);
+            s.callback_reply_window.reset();
             s.callback_output_capture.reset();s.callback_output_active=false;s.callback_output_activity=0;
             s.world_response_callback_capture.reset(); // Previous unhanded attempt retires Failed.
             s.normal_response_callback_capture.reset(); // Independent private original-response attempt.
@@ -3941,6 +4061,8 @@ struct Session::Impl {
                 Impl& state;
                 ~ResponseCaptureEnd(){
                     state.owned_input_callback_lease.reset();
+                    if(state.callback_reply_window)state.callback_reply_window->active.store(false);
+                    state.callback_reply_window.reset();
                     state.callback_output_active=false;state.callback_output_capture.reset();
                     state.world_response_callback_capture.reset();
                     state.normal_response_callback_capture.reset();
@@ -4064,6 +4186,7 @@ struct Session::Impl {
                 if(!accepted||!s.callback_output_transport_current(data))data->fail();
                 try{
                     if(accepted&&!response.empty())callback_final=s.add_callback_component(data,WorldCallbackOutput::Kind::FinalResponse,{});
+                    if(accepted)s.bind_final_emissions(data,callback_final,response);
                     data->final_wire=response;data->sealed.store(true,std::memory_order_release);
                 }catch(...){data->fail();}
             }
@@ -4774,6 +4897,7 @@ std::optional<Session::WorldCallbackOutput> Session::capture_world_callback_outp
     if(impl_->callback_output_capture||impl_->callback_output_activity){
         if(impl_->callback_output_capture)impl_->callback_output_capture->receipt->fail();return {};
     }
+    if(impl_->callback_reply_window&&impl_->callback_reply_window->poisoned.load())return {};
     if(!normal_world_initialization_current(init)||!account_id||!character_id||closing())return {};
     std::vector<WorldCallbackOutput::SelectionKey> keys;
     for(std::size_t index=0;index<observed_world_records.size();++index)
@@ -4815,6 +4939,98 @@ bool Session::callback_output_component_after_cursor(const WorldCallbackOutput& 
         const WorldCallbackOutputCursor& cursor,const WorldCallbackOutput::Component& component) const noexcept{
     return cursor.data_->cohort==output.data_&&component.data_->cohort.lock()==output.data_&&
         component.ordinal()>=cursor.data_->first;
+}
+Session::CallbackReplyOutputOffset::CallbackReplyOutputOffset(Session& session,std::size_t prefix){
+    try{
+        const auto window=session.impl_->reply_window();
+        if(prefix>std::numeric_limits<std::size_t>::max()-window->base||
+           window->next_nonce==std::numeric_limits<std::uint64_t>::max())throw std::overflow_error("Reply output offset overflow");
+        capture_=window;old_base_=window->base;parent_=window->nonce;
+        nonce_=++window->next_nonce;window->nonce=nonce_;window->base+=prefix;
+    }catch(...){session.impl_->poison_callback_reply();throw;}
+}
+Session::CallbackReplyOutputOffset::~CallbackReplyOutputOffset() noexcept{
+    if(!capture_)return;
+    const auto window=std::static_pointer_cast<Impl::CallbackReplyWindow>(capture_);
+    if(window->thread!=std::this_thread::get_id()||!window->active.load()||window->nonce!=nonce_){
+        window->poisoned.store(true);return;
+    }
+    window->base=old_base_;window->nonce=parent_;
+}
+Session::CallbackReplyOutputOffset Session::callback_reply_output_offset(std::size_t relative_prefix){
+    return CallbackReplyOutputOffset(*this,relative_prefix);
+}
+std::optional<Session::WorldCallbackSelectionEmission> Session::mint_callback_selection_emission(
+        const WorldCallbackOutput& output,const WorldCallbackSelectionInput& input,std::span<const std::uint8_t> wire){
+    const auto data=output.data_;
+    if(!callback_output_selection_current(output,input))return {};
+    const auto ordinal=input.selection_ordinal();
+    if(ordinal>=data->issued.size()||data->issued[ordinal]||
+       (!data->emissions.empty()&&data->emissions.back().selection_ordinal()>=ordinal)){
+        data->fail();return {};
+    }
+    try{
+        auto logical=RecoveredWorldFrame::decode(wire);
+        if(wire.size()!=32||!logical||logical->size()!=29||(*logical)[0]!=0x31||(*logical)[1]!=input.request().key){data->fail();return {};}
+        WorldCallbackSelectionEmission emission(std::make_shared<WorldCallbackSelectionEmission::Data>(
+            data,ordinal,data->components.size(),wire,std::move(*logical)));
+        data->emissions.push_back(emission);data->issued[ordinal]=true;return emission;
+    }catch(...){data->fail();return {};}
+}
+void Session::send_world_callback_reply_frame(LegacyWorldReplyFrame frame){
+    if(frame.emission_){
+        const auto source=impl_->callback_output_capture;
+        if(observed_world_callback!=this||!impl_->callback_output_active||!source||
+           !world_callback_output_current_on_game(WorldCallbackOutput(source->receipt))||frame.emission_->data_->cohort.lock()!=source->receipt){
+            impl_->poison_callback_reply();close();throw std::logic_error("Tagged reply frame outside actual source callback");
+        }
+    }
+    send_world_records_impl(std::move(frame.logical_),{},std::move(frame.emission_));
+}
+std::vector<std::uint8_t> Session::take_world_callback_reply(LegacyWorldReply reply){
+    if(reply.ranges_.empty())return std::move(reply.wire_);
+    const auto source=impl_->callback_output_capture;
+    if(observed_world_callback!=this||!impl_->callback_output_active||!source||
+       !world_callback_output_current_on_game(WorldCallbackOutput(source->receipt))){
+        impl_->poison_callback_reply();close();throw std::logic_error("Tagged reply outside its actual callback");
+    }
+    const auto data=source->receipt;
+    try{
+        const auto window=impl_->reply_window();
+        if(reply.wire_.size()>std::numeric_limits<std::size_t>::max()-window->base)throw std::overflow_error("Final fragment offset overflow");
+        std::vector<WorldCallbackOutput::Data::ReplyRange> ranges;ranges.reserve(reply.ranges_.size());
+        std::size_t previous_end=0;bool first=true;
+        for(const auto& range:reply.ranges_){
+            const auto tag=range.emission.data_;
+            if(tag->cohort.lock()!=data||tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::Created||
+               range.wire_offset>reply.wire_.size()||tag->wire.size()>reply.wire_.size()-range.wire_offset||
+               (!first&&range.wire_offset<previous_end)||!Impl::reply_frame_boundary(reply.wire_,range.wire_offset)||
+               !std::equal(tag->wire.begin(),tag->wire.end(),reply.wire_.begin()+range.wire_offset))
+                throw std::logic_error("Tagged child reply range is not its exact complete source frame");
+            previous_end=range.wire_offset+tag->wire.size();first=false;
+            ranges.push_back({range.emission,range.wire_offset});
+        }
+        const auto fragment=std::make_shared<const WorldCallbackOutput::Data::ReplyFragment>(window->base,reply.wire_,std::move(ranges));
+        window->fragments.push_back(fragment);
+        for(const auto& range:fragment->ranges){
+            auto created=WorldCallbackSelectionEmission::Data::Phase::Created;
+            if(!range.emission.data_->phase.compare_exchange_strong(created,WorldCallbackSelectionEmission::Data::Phase::FinalReserved))
+                throw std::logic_error("Causal selection emission already reserved");
+        }
+        return std::move(reply.wire_);
+    }catch(...){data->fail();impl_->poison_callback_reply();throw;}
+}
+std::optional<Session::WorldCallbackEmissionLocation> Session::callback_output_emission_location(
+        const WorldCallbackOutput& output,const WorldCallbackSelectionEmission& emission) const{
+    const auto data=output.data_;const auto tag=emission.data_;
+    if(output.status()!=WorldCallbackOutputStatus::Written||!output.sealed()||!output.callback_accepted()||
+       !world_callback_output_current_on_game(output)||tag->cohort.lock()!=data||
+       tag->phase.load()!=WorldCallbackSelectionEmission::Data::Phase::Bound)return {};
+    const auto found=std::count_if(data->emissions.begin(),data->emissions.end(),[&](const auto& value){return value.same_occurrence(emission);});
+    return found==1?std::optional{tag->location}:std::nullopt;
+}
+bool Session::callback_output_emission_written(const WorldCallbackOutput& output,const WorldCallbackSelectionEmission& emission) const{
+    return callback_output_emission_location(output,emission).has_value();
 }
 void Session::hold_world_input_until_callback_output_written(const WorldCallbackOutput& output){
     const auto data=output.data_;
@@ -5472,8 +5688,9 @@ bool Session::normal_world_response_callback_current(const NormalWorldResponseAt
     return capture && capture->receipt==attempt.data_ && normal_world_response_current_on_game(attempt);
 }
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
-        std::shared_ptr<WorldRecordsWrite::Data> observed) {
+        std::shared_ptr<WorldRecordsWrite::Data> observed,std::optional<WorldCallbackSelectionEmission> emission) {
     const auto component=impl_->observe_callback_push(WorldCallbackOutput::Kind::WorldRecords,logical);
+    if(emission)impl_->bind_side_emission(component,*emission,logical);
     (void)retire_battle_self_view_logical_output(logical);
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();

@@ -957,7 +957,8 @@ bool LuaEngine::pk_invitation_allowed(bool challenger_ready,bool recipient_ready
 }
 
 PoisonShareResult LuaEngine::poison_share(const PoisonShareInput& input) {
-    // CUSTOM-0157: preserve all shared64 input bits and the fractional share.
+    // CUSTOM-0157: owner-confirmed floor, retaining remainder only to validate
+    // the exact shared64 input. Fractional tenths never become later damage.
     // This is a pure rule observation; it neither applies HP nor creates ticks.
     constexpr auto limit=static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
     if(input.target_current_max_hp>limit)
@@ -982,6 +983,9 @@ PoisonShareResult LuaEngine::poison_share(const PoisonShareInput& input) {
     // uint64. Reconstruction rejects changed divisors and malformed results.
     if(whole*PoisonShareResult::denominator+remainder!=input.target_current_max_hp)
         throw std::runtime_error("Poison share does not preserve the owner-directed exact ratio");
+    const auto damage=exact_calculation_integer(output.raw_get<sol::object>("damage_hp"),
+        0,input.target_current_max_hp/PoisonShareResult::denominator,"poison floored HP damage");
+    if(damage!=whole)throw std::runtime_error("Poison damage must discard fractional HP");
     return {whole,static_cast<std::uint8_t>(remainder)};
 }
 
