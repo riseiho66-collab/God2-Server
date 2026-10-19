@@ -44,6 +44,8 @@ public:
     // repository ownership here: removal's BeforeCommit already staged the
     // root absent. A stale/unreleased entry still blocks mutation until its
     // exact generation's existing release(), rather than becoming invisible.
+    // Terminal custody stays reserved after that local release until its
+    // separately qualified clean completion, or permanently on quarantine.
     bool character_reserved(std::uint64_t character) const;
     // No fallback placement: the real placement owner must persist/qualify an
     // initial position before reserving. Native resource/scene-mode data stays
@@ -130,6 +132,24 @@ public:
         const RecoveredPosition& expected,std::uint16_t x,std::uint16_t y);
     // Generation-qualified cleanup: a stale transport cannot evict a successor.
     bool release(const Lease&);
+    // Exact process-local terminal custody, not durable-save or recovery proof.
+    // Ordinary release detaches the local entry but cannot free this claim.
+    // Last-handle destruction quarantines a pending claim without callbacks.
+    class TerminalRetirement final {
+    public:
+        TerminalRetirement(const TerminalRetirement&)=default;
+        TerminalRetirement& operator=(const TerminalRetirement&)=default;
+    private:
+        friend class SharedWorldPresence;
+        struct Data;
+        explicit TerminalRetirement(std::shared_ptr<const Data> data):data_(std::move(data)) {}
+        std::shared_ptr<const Data> data_;
+    };
+    std::optional<TerminalRetirement> begin_terminal_retirement(const Lease&);
+    // True only for one clean, detached, exact pending claim in its still
+    // registered original world. Any failed exact completion quarantines it.
+    // No arbitrary clear/retry/recovery or repository observation is supplied.
+    bool finish_terminal_retirement(const TerminalRetirement&,bool clean);
 private:
     friend class SharedTaiwanWorldEntered;
     // Only the real Entered owner can consume/revoke the token, at its actual

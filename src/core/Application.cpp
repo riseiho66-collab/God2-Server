@@ -303,6 +303,12 @@ class WorldLifecycleVault final : public std::enable_shared_from_this<WorldLifec
             typed_cleanup_=typed_cleanup_||ready_outstanding_||ready_callback_depth_;
             struct EndTyped {bool& flag;bool prior;~EndTyped(){flag=prior;}} typed{typed_cleanup_,previous_typed};
             auto slot=std::move(found->second);slots_.erase(found);
+            // Preserve early cancellation failures even after the slot is gone.
+            const auto cleanup_peer=slot.session->shared_from_this();
+            struct CleanupFailureLatch {
+                std::shared_ptr<Session> peer;std::exception_ptr& failure;
+                ~CleanupFailureLatch(){if(failure)peer->mark_common_world_cleanup_failed();}
+            } latch{cleanup_peer,failure};
             ready=std::move(slot.ready_publications);
             if(ready.size()>ready_outstanding_)std::terminate();ready_outstanding_-=ready.size();
             for(const auto& [nonce,state]:ready)state->revoked=true;

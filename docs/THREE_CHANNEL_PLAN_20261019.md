@@ -191,3 +191,12 @@ move after delivery failure. This is cleanup ordering, not durable save/handoff:
 terminal claim quarantine, PK recovery and target admission remain OPEN. Current
 REA codec/seed profiling and remaining Main/offer/geometry sources are recorded
 in research/tw-three-channel-logout-20261019.md. No build/tests or activation.
+
+Round499 connects exact process-local terminal character custody through actual
+Session paired begin/finish, sync/async lifecycle and early cancel. Ordinary
+local release detaches without dropping the process claim; clean exact finish
+releases once, failure/lost token/world teardown quarantine. Early Vault/native
+scene cleanup failures remain sticky after slots/pending erase. This is source
+only, not durable recovery/save/target admission or completed switching. Missing
+terminal installation conservatively retains custody. See
+research/tw-three-channel-quarantine-20261019.md. No build/tests/activation.

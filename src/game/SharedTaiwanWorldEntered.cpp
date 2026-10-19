@@ -2,6 +2,7 @@
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include <algorithm>
+#include <exception>
 #include <map>
 #include <stdexcept>
 #include <thread>
@@ -13,6 +14,17 @@ namespace {
 using Entered=SharedTaiwanWorldEntered;
 using Visibility=shared::SharedActorVisibility;
 static_assert(std::is_nothrow_move_constructible_v<Entered::Native>);
+// Allocated/registered before native callbacks. Failed cancellation history is
+// immutable in identity and survives Pending removal; it owns no scene payload.
+struct CancellationRecord {
+    const Entered::Lease lease;
+    const std::weak_ptr<Session> connection;
+    const std::exception_ptr reentry=std::make_exception_ptr(std::logic_error("TW scene cancellation reentered"));
+    std::exception_ptr failure;
+    bool supplying=false,cancelling=false,cancelled=false,notifying_done=false;
+    CancellationRecord(Session& session,const Entered::Lease& original)
+        :lease(original),connection(session.weak_from_this()){}
+};
 struct Pending {
     Entered::Scope scope;
     std::weak_ptr<Session> connection;
@@ -21,6 +33,7 @@ struct Pending {
     SharedTaiwanWorldLifecycle::ReadyCompletion done;
     bool cancelled=false,published=false,completed=false;
     bool outward_started=false,outward_poisoned=false;
+    std::shared_ptr<CancellationRecord> cancellation; // Exact private terminal history.
 };
 struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     std::shared_ptr<SharedWorldPresence> presence;
@@ -34,6 +47,8 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
     std::function<void(const SharedWorldPresence::InitialPopulation&)> retire_population;
     const std::thread::id thread=std::this_thread::get_id();
     std::map<std::uint64_t,std::shared_ptr<Pending>> pending;
+    using CancellationKey=std::pair<std::uint64_t,std::uint64_t>;
+    std::map<CancellationKey,std::shared_ptr<CancellationRecord>> cancellations;
     bool supplying=false,reentered=false;
     bool materializing=false,materialization_reentered=false;
     void owner() const {
@@ -87,30 +102,71 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
         } // A copied callback's destructor may cancel before the final fence.
         return observed && bound(state,active) && state->native==material;
     }
+    static CancellationKey cancellation_key(const Entered::Lease& lease) {return {lease.session,lease.generation};}
+    static void remember(const std::shared_ptr<CancellationRecord>& record,std::exception_ptr error) noexcept {
+        if(!record)return;
+        if(!record->failure)record->failure=error?std::move(error):record->reentry;
+        if(const auto session=record->connection.lock())session->mark_common_world_cleanup_failed();
+    }
+    void prune_clean(const std::shared_ptr<CancellationRecord>& record) noexcept {
+        if(!record||!record->cancelled||record->supplying||record->cancelling||record->failure)return;
+        const auto found=cancellations.find(cancellation_key(record->lease));
+        if(found!=cancellations.end()&&found->second==record)cancellations.erase(found);
+    }
+    struct CancellationGuard {
+        SceneOwner& owner;std::shared_ptr<CancellationRecord> record;bool prior;
+        CancellationGuard(SceneOwner& source,std::shared_ptr<CancellationRecord> value)
+            :owner(source),record(std::move(value)),prior(record->cancelling){record->cancelling=true;}
+        ~CancellationGuard(){record->cancelling=prior;owner.prune_clean(record);}
+    };
     void cancel(std::shared_ptr<Pending> state,Entered::Native* unpublished=nullptr) noexcept {
         if(std::this_thread::get_id()!=thread)std::terminate();
-        // Erase/revoke before actual callbacks: late IO and nested completion
-        // cannot retain affine payload or touch a successor generation.
+        // The record already exists, so every failure path records its first
+        // exception without allocating after actual native cleanup has begun.
         if(!state)return;
+        const auto record=state->cancellation;
+        if(!record)std::terminate();
+        CancellationGuard guard{*this,record};
+        if(guard.prior)remember(record,record->reentry);
         if(state->cancelled) {
-            if(unpublished)try {unpublished->cleanup(state->scope);}catch(...) {}
+            if(unpublished)try {unpublished->cleanup(state->scope);}catch(...) {remember(record,std::current_exception());}
             return;
         }
-        state->cancelled=true;
+        state->cancelled=true;record->cancelled=true;
         state->outward_poisoned=true;
-        if(state->scope.population)retire_population(*state->scope.population);
+        if(state->scope.population)try {retire_population(*state->scope.population);}catch(...) {remember(record,std::current_exception());}
         // Keep the exact revoked Scope stable through an in-flight supplier
         // and its eventual returned-material cleanup; it grants no successor.
         const auto found=pending.find(state->scope.lease.session);
         if(found!=pending.end() && found->second==state)pending.erase(found);
         auto done=std::move(state->done);auto material=std::move(state->native);state->native.reset();
         state->incoming.reset();
-        // Also cancels pending outward fanout. Its legacy transport callbacks
-        // receive only our already-revoked weak Current, never native payload.
-        try {visibility->release(state->scope.lease);}catch(...) {}
-        if(material)try {material->cleanup(state->scope);}catch(...) {}
-        if(unpublished && unpublished!=material.get())try {unpublished->cleanup(state->scope);}catch(...) {}
-        if(done)try {done(false);}catch(...) {}
+        // All stages run even after one failed. Callback copies die before the
+        // guard can retire a clean history entry; failures remain permanently.
+        try {visibility->release(state->scope.lease);}catch(...) {remember(record,std::current_exception());}
+        if(material)try {material->cleanup(state->scope);}catch(...) {remember(record,std::current_exception());}
+        if(unpublished && unpublished!=material.get())try {unpublished->cleanup(state->scope);}catch(...) {remember(record,std::current_exception());}
+        if(done) {
+            // done(false) may synchronously reenter the same lifecycle cancel.
+            // This idempotent notification is distinct from native cleanup reentry.
+            record->notifying_done=true;
+            try {done(false);}catch(...) {remember(record,std::current_exception());}
+            record->notifying_done=false;
+        }
+    }
+    void cancel_explicit(Session& session,const Entered::Lease& lease) {
+        owner();const auto found=cancellations.find(cancellation_key(lease));
+        if(found==cancellations.end()||found->second->lease!=lease||found->second->connection.lock().get()!=&session)return;
+        const auto record=found->second;
+        if(record->cancelling){
+            if(record->notifying_done&&!record->failure)return;
+            remember(record,record->reentry);std::rethrow_exception(record->failure);
+        }
+        if(record->supplying)remember(record,record->reentry);
+        const auto active=pending.find(lease.session);
+        if(active!=pending.end()&&active->second->cancellation==record&&active->second->scope.lease==lease&&
+           active->second->connection.lock().get()==&session)cancel(active->second);
+        if(record->failure)std::rethrow_exception(record->failure);
     }
     void fail(const std::shared_ptr<Pending>& state,Entered::Native* unpublished=nullptr) {
         owner();cancel(state,unpublished);
@@ -230,12 +286,32 @@ struct SceneOwner:std::enable_shared_from_this<SceneOwner> {
            session.character_id!=lease.character || entry.actor_handle!=lease.actor_handle ||
            entry.area!=lease.position.area || entry.scene!=lease.position.scene || entry.x!=lease.position.x ||
            entry.y!=lease.position.y || !presence->preparation_current(lease) || presence->ready(lease)) {done(false);return;}
+        const auto key=cancellation_key(lease);
+        if(const auto old=cancellations.find(key);old!=cancellations.end()) {
+            const auto record=old->second;
+            if(record->lease==lease&&record->connection.lock().get()==&session&&record->cancelling)remember(record,record->reentry);
+            done(false);return; // A failed exact capture cannot be recreated clean.
+        }
+        auto record=std::make_shared<CancellationRecord>(session,lease);
         auto state=std::make_shared<Pending>(Pending{Entered::Scope{lease,entry,session.recovered_client_language()},
             session.weak_from_this(),{}, {},std::move(done)});
-        pending.emplace(lease.session,state);
+        state->cancellation=record;
+        const auto registered=cancellations.emplace(key,record).second;
+        if(!registered){auto rejected=std::move(state->done);if(rejected)rejected(false);return;}
+        const auto rollback=[&]() noexcept {
+            const auto found=cancellations.find(key);
+            if(found!=cancellations.end()&&found->second==record)cancellations.erase(found);
+        };
+        bool inserted=false;
+        try {inserted=pending.emplace(lease.session,state).second;}
+        catch(...) {rollback();throw;} // No native callback has run.
+        if(!inserted){rollback();auto rejected=std::move(state->done);if(rejected)rejected(false);return;}
         try {
-            supplying=true;reentered=false;
-            struct EndSupply {SceneOwner& owner;~EndSupply(){owner.supplying=false;}} guard{*this};
+            supplying=true;reentered=false;record->supplying=true;
+            struct EndSupply {
+                SceneOwner& owner;std::shared_ptr<CancellationRecord> record;
+                ~EndSupply(){owner.supplying=false;record->supplying=false;owner.prune_clean(record);}
+            } guard{*this,record};
             // The pending identity and reentry guard precede allocation and
             // actual repository observers. A cancelled capture never reaches
             // the real supplier or gains a later activation opportunity.
@@ -422,9 +498,7 @@ SharedTaiwanWorldLifecycle::AsyncOwner SharedTaiwanWorldEntered::create(
         [state](Session& session,const Lease& lease,const RecoveredWorldEntryView& entry,
                 SharedTaiwanWorldLifecycle::ReadyCompletion done) {state->enter(session,lease,entry,std::move(done));},
         [state](Session& session,const Lease& lease) {
-            state->owner();const auto found=state->pending.find(lease.session);
-            if(found!=state->pending.end() && found->second->scope.lease==lease &&
-               found->second->connection.lock().get()==&session)state->cancel(found->second);
+            state->cancel_explicit(session,lease);
         }
     };
 }

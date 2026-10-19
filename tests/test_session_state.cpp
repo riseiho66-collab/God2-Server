@@ -242,12 +242,15 @@ struct NativeLogoutPeer {
     bool release=false;
     std::vector<char> events;
     const unsigned failure;
+    const bool terminal_hooks;
     const RecoveredWorldEntry::Frame entry=RecoveredWorldEntry::wire(actor);
     std::atomic<unsigned> ready{0},app{0},common{0},abandon{0},completed{0},world_calls{0},cleanup_owners{0},self_yes{0},self_no{0};
+    std::atomic<unsigned> begun{0},settled{0};
+    std::atomic<bool> settlement_input{false};
     std::atomic<bool> entered{false},wrong_executor{false},wrong_identity{false},early_complete{false},clean{false},game_failed{false},gate_timeout{false},terminal_invalid{false};
     Bytes received;
     bool peer_closed=false;
-    explicit NativeLogoutPeer(unsigned throw_at):failure(throw_at){
+    explicit NativeLogoutPeer(unsigned throw_at,bool paired_hooks=false):failure(throw_at),terminal_hooks(paired_hooks){
         peer.connect(acceptor.local_endpoint());auto socket=acceptor.accept();
         Session::RecoveredCharacterHandlers h;
         h.list=[](std::uint64_t){return std::array<std::uint8_t,78>{};};
@@ -260,7 +263,25 @@ struct NativeLogoutPeer {
         h.common_world_lifecycle_factory=[this](Session&)->std::shared_ptr<const Session::CommonWorldLifecycle>{
             auto lifecycle=std::make_shared<Session::CommonWorldLifecycle>();
             lifecycle->prepared=[this](Session& s,const auto& frame){
-                observe(s);return frame==entry&&s.install_common_world_cleanup([this]{event('C');++common;if(failure==2)throw std::runtime_error("Expected common cleanup failure");});
+                observe(s);if(frame!=entry)return false;
+                const auto cleanup=[this]{event('C');++common;if(failure==2)throw std::runtime_error("Expected common cleanup failure");};
+                if(!terminal_hooks)return s.install_common_world_cleanup(cleanup);
+                const auto owners=cleanup_owners.load();
+                require(!s.install_common_world_cleanup([]{},[]{},{})&&
+                    !s.install_common_world_cleanup([]{},{},[](bool){return true;})&&cleanup_owners.load()==owners,
+                    "Half terminal hook pair reached cleanup owner or installed authority");
+                // Synthetic order/settlement hooks only: no Presence claim or
+                // recovery token is fabricated by this real Session fixture.
+                const auto installed=s.install_common_world_cleanup(cleanup,[this]{
+                    observe(*session);event('T');++begun;
+                    if(failure==4)throw std::runtime_error("Expected terminal begin failure");
+                },[this](bool good){
+                    observe(*session);event('F');++settled;settlement_input.store(good);
+                    if(failure==6)throw std::runtime_error("Expected terminal finish failure");
+                    return failure!=5&&good;
+                });
+                if(installed&&failure==7)s.mark_common_world_cleanup_failed(); // Earlier swallowed GAME cleanup error remains sticky.
+                return installed;
             };
             lifecycle->prepared_actor=[this](Session&,const auto& frame)->std::optional<std::uint16_t>{return frame==entry?std::optional<std::uint16_t>{actor}:std::nullopt;};
             lifecycle->ready=[this](Session& s){observe(s);s.set_state(SessionState::InWorld);s.bind_world_delivery_identity({account,character,21,s.battle_generation()});return true;};return lifecycle;
@@ -333,8 +354,8 @@ void recovered_logout_cleanup_barrier(){
     const std::vector<std::uint8_t> prefix_logical{0x73,9,0,0,0};
     const auto prefix=RecoveredWorldFrame::encode(prefix_logical);
     const auto ack=RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0});
-    for(std::uint8_t reason:{0,1,2})for(unsigned failure=0;failure<4;++failure){
-        NativeLogoutPeer f(failure);f.initialize();
+    for(const bool hooks:{false,true})for(std::uint8_t reason:{0,1,2})for(unsigned failure=0;failure<(hooks?8u:4u);++failure){
+        NativeLogoutPeer f(failure,hooks);f.initialize();
         // Already submitted output owns its original FIFO position. The later
         // input includes both coalesced and separately arriving world ticks.
         f.session->send_world_records(prefix_logical);
@@ -344,18 +365,23 @@ void recovered_logout_cleanup_barrier(){
         for(unsigned i=0;i<8;++i){f.pump();f.collect();}
         require(f.received==prefix&&!f.peer_closed&&f.completed.load()==0&&f.common.load()==0&&f.abandon.load()==0&&f.world_calls.load()==0&&f.self_no.load()==1&&f.self_yes.load()==0,
             "03 or gameplay escaped while actual GAME App cleanup was still blocked");
-        require(f.order()==std::vector<char>{'A'},"Cleanup began outside exact App-first ordering");
+        require(f.order()==(hooks?std::vector<char>{'T','A'}:std::vector<char>{'A'})&&f.begun.load()==unsigned(hooks)&&f.settled.load()==0,
+            "Terminal begin did not precede App or finish escaped the remaining cleanup");
         f.release_cleanup();
         {std::unique_lock lock(f.mutex);require(f.changed.wait_for(lock,std::chrono::seconds(2),[&]{return f.abandon.load()==1||f.game_failed.load();}),"GAME cleanup did not attempt later callbacks");}
         require(f.completed.load()==0,"Disconnect completion preceded NET socket final close");
         f.until([&]{return f.peer_closed&&f.completed.load()==1;});
         auto expected=prefix;if(!failure)expected.insert(expected.end(),ack.begin(),ack.end());
         require(f.received==expected,"Logout must retain earlier FIFO and send03 only after wholly successful cleanup");
-        require(f.app.load()==1&&f.common.load()==1&&f.abandon.load()==1&&f.order()==std::vector<char>({'A','C','B','D'})&&
+        require(f.app.load()==1&&f.common.load()==1&&f.abandon.load()==1&&
+            f.order()==(hooks?std::vector<char>{'T','A','C','B','F','D'}:std::vector<char>{'A','C','B','D'})&&
+            f.begun.load()==unsigned(hooks)&&f.settled.load()==unsigned(hooks)&&
+            (!hooks||f.settlement_input.load()==(failure==0||failure==5||failure==6))&&
             f.clean.load()==(failure==0)&&!f.early_complete.load()&&!f.gate_timeout.load()&&!f.wrong_executor.load()&&!f.wrong_identity.load()&&!f.terminal_invalid.load()&&f.world_calls.load()==0&&f.self_no.load()==1&&f.self_yes.load()==0,
             "Logout cleanup attempts/order/clean result/exact owner or final completion changed");
         f.session->close();f.session->close();for(unsigned i=0;i<5;++i){f.pump();f.collect();}
-        require(f.completed.load()==1&&f.app.load()==1&&f.common.load()==1&&f.abandon.load()==1,"Late close or input repeated completed cleanup");
+        require(f.completed.load()==1&&f.app.load()==1&&f.common.load()==1&&f.abandon.load()==1&&
+            f.begun.load()==unsigned(hooks)&&f.settled.load()==unsigned(hooks),"Late close or input repeated completed cleanup/terminal hooks");
     }
 }
 

@@ -1,0 +1,225 @@
+{
+  "round": 499,
+  "previous_goal_turn": "progress",
+  "previous_commit": "11125c354c794791998d09dc3f8c325d62046458",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_PROCESS_LOCAL_TERMINAL_CUSTODY_SOURCE_ONLY",
+  "source_integration": [
+    "Exact private held claim remains occupied while current/ready retire; allocation/drop/failure/unregister quarantine survives prune",
+    "Actual prepared sync/async Session paired begin/finish and early lifecycle release use same original hold",
+    "GAME all-attempted callbacks, exact source fences and sticky failure gate settlement and native03",
+    "Vault slot-erased failures and native Pending-erased material cancellation failures remain sticky",
+    "Existing C++ test sources extended; no build/tests executed"
+  ],
+  "source_review": {
+    "independent": true,
+    "eol": [
+      {
+        "path": "src/core/Application.cpp",
+        "baseline_cr": 8183,
+        "current_cr": 8183,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 6
+      },
+      {
+        "path": "src/game/SharedChannelCharacterOwnership.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 16
+      },
+      {
+        "path": "src/game/SharedChannelCharacterOwnership.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 52
+      },
+      {
+        "path": "src/game/SharedWorldPresence.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 20
+      },
+      {
+        "path": "src/game/SharedWorldPresence.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 41
+      },
+      {
+        "path": "src/game/SharedTaiwanWorldLifecycle.h",
+        "baseline_cr": 79,
+        "current_cr": 79,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 7
+      },
+      {
+        "path": "src/game/SharedTaiwanWorldLifecycle.cpp",
+        "baseline_cr": 262,
+        "current_cr": 248,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 94
+      },
+      {
+        "path": "src/game/SharedTaiwanWorldEntered.h",
+        "baseline_cr": 4,
+        "current_cr": 4,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 3
+      },
+      {
+        "path": "src/game/SharedTaiwanWorldEntered.cpp",
+        "baseline_cr": 430,
+        "current_cr": 397,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 107
+      },
+      {
+        "path": "src/net/Session.h",
+        "baseline_cr": 105,
+        "current_cr": 105,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 11
+      },
+      {
+        "path": "src/net/Session.cpp",
+        "baseline_cr": 737,
+        "current_cr": 737,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 45
+      },
+      {
+        "path": "tests/test_taiwan_channel_worlds.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 88
+      },
+      {
+        "path": "tests/test_session_state.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 33
+      },
+      {
+        "path": "docs/custom-designs.json",
+        "baseline_cr": 6467,
+        "current_cr": 6467,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 10
+      },
+      {
+        "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 9
+      },
+      {
+        "path": "docs/research/tw-three-channel-quarantine-20261019.md",
+        "new_file": true,
+        "cr": 0
+      }
+    ],
+    "custom_registry_other_design_bytes_unchanged": true,
+    "registry_prefix_sha256": "5e4aafbd7b19ea39433d0b9e692f91796957a2b88165d86eadd290bf2b02e8a8",
+    "registry_suffix_sha256": "2812f892d65822f3bd1cd6a240c30d764a3ef9a1aa2740d234d984b4b0cca15c",
+    "opaque_private_original_claim": true,
+    "final_finish_not_scene_current": true,
+    "paired_callbacks_retained_directly_in_session_not_slot_lookup": true,
+    "process_local_only": true,
+    "durable_recovery_complete": false,
+    "missing_terminal_installation": "Conservative occupied quarantine; no unsupported success or automatic release",
+    "test_limit": "No WorldEntered-specific integration fixture added; real clean/fault native supplier coverage and runtime acceptance remain OPEN",
+    "read_only_audit": "Actual record/movement/resource/skill release uses stored exact identity, not Presence current; arbitrary supplier callbacks are not universally qualified"
+  },
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "d2c19d073933d4be266f717c11b0ea1144c2ba2371097b1b7821718852914cc8"
+    },
+    {
+      "path": "src/game/SharedChannelCharacterOwnership.h",
+      "sha256": "4877e9050c459c04486f81438f323d126688d210d96dcda24b696fc0f81d13e3"
+    },
+    {
+      "path": "src/game/SharedChannelCharacterOwnership.cpp",
+      "sha256": "71b859e169a3ccb67bee1d690822d3237bb25e30eaf6902fa13c60845a15fa2d"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.h",
+      "sha256": "7eda60b44f329f6f1cecc31444420d4b003d1dea95713675456141476fda562b"
+    },
+    {
+      "path": "src/game/SharedWorldPresence.cpp",
+      "sha256": "f77f30e9d0cde77517d6ba6e70694135ec6547af6c994f2f1c2eafdaeff1beb1"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.h",
+      "sha256": "2b3fff67c416509fface6b018326f311099e15b532afb7f77e552220b4d2ca0e"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.cpp",
+      "sha256": "28c2de89e928fa36a41cf3f7a68e86881e337a69aaaaad04bfab0ec61923c7ff"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldEntered.h",
+      "sha256": "cee7f33e1a4e35d6d8006bbda2a75a9ea2ce31a6545dc6335ecb05226f403c61"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldEntered.cpp",
+      "sha256": "4205d213e8444d1cbd2b7b8a21708672c504d4abff091cc2019de9e0ed8189ca"
+    },
+    {
+      "path": "src/net/Session.h",
+      "sha256": "d32620992ace3557ac730c639888bd96665716d22979b9b36a75dbe0fcb85d75"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "dc251dc4230b54cf23499478309bfa08135a5c42f38465418d0eb1f57b294c4f"
+    },
+    {
+      "path": "tests/test_taiwan_channel_worlds.cpp",
+      "sha256": "b4ee7eba2eb70fcfae0226a11411d3ff70996cfc80cb0c6527b17e11f3cd398c"
+    },
+    {
+      "path": "tests/test_session_state.cpp",
+      "sha256": "ca28b9d168f5a4ac4f4597db77182c768afc05bd6122429b0e43051bb8507995"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "775f6a9096c96a5bf17500c727fc26c63d5e77d28df0e8848b8b8cdebf4a2655"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "120e2a93bdb4107b6220fc9ee4522468da0b23493c8bdadc5e36641f624a7346"
+    },
+    {
+      "path": "docs/research/tw-three-channel-quarantine-20261019.md",
+      "sha256": "7419d7b3b416ebf1f9772563589e26ad3564132cac723e40d331f41fc983072b"
+    }
+  ]
+}

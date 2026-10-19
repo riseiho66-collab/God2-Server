@@ -1921,6 +1921,9 @@ struct Session::Impl {
     RecoveredCharacterHandlers character_handlers;
     bool common_world_lifecycle_factory_invoked=false; // Serial game executor only.
     std::function<void()> common_world_cleanup; // Serial game executor only.
+    std::function<void()> common_world_terminal_begin; // GAME only; never copied to NET.
+    std::function<bool(bool)> common_world_terminal_finish; // Paired cleanup settlement, not recovery authority.
+    std::atomic<bool> common_world_cleanup_failed{false}; // Sticky GAME-originated failure, no clear operation.
     std::vector<std::uint8_t> character_routes;
     God2ProtocolSpec protocol;
     Buffer input;
@@ -4723,7 +4726,7 @@ struct Session::Impl {
     }
     void write(std::shared_ptr<NativePkReturnPublication::Work> carried={}) {
         if(writes.empty())return;
-        if(native_logout_ack&&writes.front().bytes==native_logout_ack&&(!disconnect_cleanup_done.load()||!disconnect_cleanup_clean.load()||
+        if(native_logout_ack&&writes.front().bytes==native_logout_ack&&(!disconnect_cleanup_done.load()||!disconnect_cleanup_clean.load()||common_world_cleanup_failed.load()||
            native_logout_phase!=NativeLogoutPhase::AckQueued||(owner.native_channel_&&!owner.native_channel_->live_.load()))){
             fail("Native logout acknowledgment source retired before write");return;
         }
@@ -5075,7 +5078,7 @@ struct Session::Impl {
                 throw std::logic_error("Movement response retired before async_write");
             if(qualified_source_live&&!qualified_source_live->load())throw std::logic_error("Qualified world source retired before async_write");
             if(!reply_push_sources_live(captured_pushes))throw std::logic_error("Captured world source retired before async_write");
-            if(native_logout_ack&&bytes==native_logout_ack&&(native_logout_phase!=NativeLogoutPhase::AckQueued||!disconnect_cleanup_done.load()||!disconnect_cleanup_clean.load()||
+            if(native_logout_ack&&bytes==native_logout_ack&&(native_logout_phase!=NativeLogoutPhase::AckQueued||!disconnect_cleanup_done.load()||!disconnect_cleanup_clean.load()||common_world_cleanup_failed.load()||
                (owner.native_channel_&&!owner.native_channel_->live_.load())))throw std::logic_error("Native logout source retired before async_write");
             asio::async_write(socket,buffer,std::move(bound));
         };
@@ -5169,20 +5172,35 @@ struct Session::Impl {
             try{if(auto log=logger("session"))log->info("session_id={} DISCONNECT_GAME_ENTER",s.id);}catch(...){}
             const auto original_account=self->account_id,original_character=self->character_id;
             const auto original_phase=self->state();const auto original_battle=self->battle_generation();
-            bool clean=true;
+            const auto original_current=[&]{return self->account_id==original_account&&self->character_id==original_character&&
+                self->state()==original_phase&&self->battle_generation()==original_battle;};
+            bool clean=!s.common_world_cleanup_failed.load();
             {
-                // Take all three once before any application callback. Its
-                // original common owner survives through application disconnect.
-                auto disconnect=std::exchange(s.on_disconnect,{});
-                auto cleanup=std::exchange(s.common_world_cleanup,{});
-                auto abandon=std::exchange(s.character_handlers.common_world_lifecycle_abandon,{});
-                try {if(disconnect)disconnect(self);}catch(...) {clean=false;report("disconnect callback failed");}
-                try {if(cleanup)cleanup();}catch(...) {clean=false;report("common world cleanup failed");}
-                try {if(abandon)abandon(*self);}catch(...) {clean=false;report("common world lifecycle abandon failed");}
+                auto terminal_finish=std::exchange(s.common_world_terminal_finish,{});
+                {
+                    // Exchange every callback once before entering a supplier.
+                    // The original common owner survives application disconnect.
+                    auto terminal_begin=std::exchange(s.common_world_terminal_begin,{});
+                    auto disconnect=std::exchange(s.on_disconnect,{});
+                    auto cleanup=std::exchange(s.common_world_cleanup,{});
+                    auto abandon=std::exchange(s.character_handlers.common_world_lifecycle_abandon,{});
+                    if(self->native_channel_bound()&&s.native_logout_terminal.load()&&s.character_handlers.common_world_lifecycle&&
+                       (!terminal_begin||!terminal_finish)){
+                        clean=false;report("native channel logout lacks paired terminal claim hooks");
+                    }
+                    try {if(terminal_begin)terminal_begin();}catch(...) {clean=false;report("common world terminal begin failed");}
+                    try {if(disconnect)disconnect(self);}catch(...) {clean=false;report("disconnect callback failed");}
+                    try {if(cleanup)cleanup();}catch(...) {clean=false;report("common world cleanup failed");}
+                    try {if(abandon)abandon(*self);}catch(...) {clean=false;report("common world lifecycle abandon failed");}
+                }
+                if(!original_current()){clean=false;report("disconnect source identity changed during cleanup");}
+                if(s.common_world_cleanup_failed.load())clean=false;
+                try {if(terminal_finish&&!terminal_finish(clean)){clean=false;report("common world terminal settlement refused");}}
+                catch(...) {clean=false;report("common world terminal finish failed");}
             }
-            if(self->account_id!=original_account||self->character_id!=original_character||self->state()!=original_phase||self->battle_generation()!=original_battle){
-                clean=false;report("disconnect source identity changed during cleanup");
-            }
+            // Finish is destroyed on GAME before the final identity/result cut.
+            if(!original_current()){clean=false;report("disconnect source identity changed during terminal settlement");}
+            if(s.common_world_cleanup_failed.load())clean=false;
             // Pure results publish only after every callback copy died on GAME.
             // An unrun GAME post cannot publish this result; a dropped NET
             // continuation below cannot publish successful03.
@@ -5206,7 +5224,7 @@ struct Session::Impl {
         if(closing||close_requested.load()||finished||(owner.native_channel_&&!owner.native_channel_->live_.load())){
             native_logout_phase=NativeLogoutPhase::Failed;if(!closing)close();return;
         }
-        if(!disconnect_cleanup_clean.load()){fail("Native logout GAME cleanup failed");return;}
+        if(!disconnect_cleanup_clean.load()||common_world_cleanup_failed.load()){fail("Native logout GAME cleanup failed");return;}
         if(game_busy||!writes.empty()||native_battle_pending.load()||native_pk_pending.load()||native_pk_terminal.load()){
             fail("Native logout terminal drain changed during cleanup");return;
         }
@@ -5236,7 +5254,7 @@ struct Session::Impl {
             [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             // SessionManager removal is downstream of BOTH final socket close
             // and the exact all-attempted GAME cleanup, never the earlier03.
-            if(auto complete=std::exchange(state.disconnect_complete,{}))complete(self,state.disconnect_cleanup_clean.load());
+            if(auto complete=std::exchange(state.disconnect_complete,{}))complete(self,state.disconnect_cleanup_clean.load()&&!state.common_world_cleanup_failed.load());
             state.game_work.reset();state.network_work.reset();
         });
     }
@@ -6284,14 +6302,21 @@ void Session::bind_world_delivery_identity(WorldDeliveryIdentity identity) {
         throw std::invalid_argument("Complete owned world delivery identity required");
     impl_->world_delivery_identity.store(std::make_shared<const WorldDeliveryIdentity>(identity));
 }
-bool Session::install_common_world_cleanup(std::function<void()> cleanup) {
-    if(!cleanup || closing() || impl_->mode!=ProtocolMode::God2CharacterConnection ||
-       !impl_->character_handlers.common_world_lifecycle || impl_->common_world_cleanup)return false;
+bool Session::install_common_world_cleanup(std::function<void()> cleanup,std::function<void()> terminal_begin,std::function<bool(bool)> terminal_finish) {
+    if(bool(terminal_begin)!=bool(terminal_finish)||!cleanup||closing()||impl_->mode!=ProtocolMode::God2CharacterConnection||
+       !impl_->character_handlers.common_world_lifecycle||impl_->common_world_cleanup||impl_->common_world_terminal_begin||impl_->common_world_terminal_finish)return false;
     if(const auto& own=impl_->character_handlers.common_world_cleanup_owner; own) {
         try {cleanup=own(*this,std::move(cleanup));}catch(...) {return false;}
         if(!cleanup)return false;
     }
-    impl_->common_world_cleanup=std::move(cleanup);return true;
+    if(closing()||impl_->common_world_cleanup||impl_->common_world_terminal_begin||impl_->common_world_terminal_finish)return false;
+    impl_->common_world_cleanup=std::move(cleanup);
+    impl_->common_world_terminal_begin=std::move(terminal_begin);impl_->common_world_terminal_finish=std::move(terminal_finish);return true;
+}
+void Session::mark_common_world_cleanup_failed() noexcept {
+    // Actual lifecycle/vault GAME cleanup callers may only make this Session
+    // permanently less permissive, including before a ready receipt exists.
+    impl_->common_world_cleanup_failed.store(true);
 }
 bool Session::closing() const noexcept {return impl_->close_requested.load()||impl_->native_logout_terminal.load();}
 std::optional<Session::NativeWorldSelectionInput> Session::take_world_selection_input(

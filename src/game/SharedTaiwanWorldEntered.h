@@ -95,6 +95,9 @@ public:
     // actual Source/Current to qualify that no earlier companion/pet binding
     // or HP-loss side effect precedes the saved player publication, including
     // opaque descendants. The exact overlap check is not that semantic proof.
+    // Explicit AsyncOwner::cancel reports the first exact Session/Lease cleanup
+    // failure, including retries after Pending removal. Destructor cleanup stays
+    // noexcept; successful cancellation never clears a prior failure record.
     static SharedTaiwanWorldLifecycle::AsyncOwner create(
         std::shared_ptr<SharedWorldPresence>,std::shared_ptr<shared::SharedActorVisibility>,Source,
         TaiwanWorldEntryIdentity identity=TaiwanWorldEntryIdentity::SelectedCharacter,

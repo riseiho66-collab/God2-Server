@@ -6592,9 +6592,12 @@
         "tests/test_owned_guild_entry_0078.cpp",
         "tests/test_owned_guild_membership_0078.cpp",
         "tests/test_owned_taiwan_guild_actions_dispatch.cpp",
-        "tests/test_session_state.cpp"
+        "tests/test_session_state.cpp",
+        "src/game/SharedTaiwanWorldLifecycle.h",
+        "src/game/SharedTaiwanWorldEntered.h",
+        "src/game/SharedTaiwanWorldEntered.cpp"
       ],
-      "document": "docs/research/tw-three-channel-logout-20261019.md",
+      "document": "docs/research/tw-three-channel-quarantine-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6632,13 +6635,15 @@
         "guild_action_native_ingress": "Round496 actual mixed source freezes full-input classification once, captures original Common53 batch/indices before prefix and dispatches selected indices at accumulated wire offsets under mandatory native Current/budgets. Weak late GAME owner seals full64/exact Session lifecycle; actual returned host capability required; handler finish is not enqueue/write/admission. No replay/rollback or default opcode grant.",
         "guild_action_continuations": "Directory action token is cancellation/continuation only. Exact originating token survives handler end and chained async ACK. Different active/inherited sources deny continuation, retain inherited origin and preserve unrelated successor even on caught nested begin. Retire cancels flags retained after token expiry. Admission false ACK removes only exact still-prepared plan/opening and original full-owner prompt nonce; published/successor state retained.",
         "guild_logout_cleanup": "Round497 actual WORLD02 reason0/1/2 drains original FIFO and GAME work, retires terminal readiness, then exchanges actual App disconnect/common cleanup/abandon once on GAME and attempts all in that order. Full64 identity/phase/battle drift or throw produces clean=false; only exact private phase, clean result and live listener may enqueue original03 once. Final SessionManager completion follows final socket close plus cleanup. No target/durable-save grant.",
-        "application_disconnect_failures": "Actual App cleanup now attempts every stage, retains first exception and propagates prior warning failures. Terminal self-broadcasts drop or refuse once before output observation/NET post. Party departure publishes once, including projection failure; delivery failure cannot double-move candidate. Retired weak host fails explicitly without invoking expired borrowed callbacks."
+        "application_disconnect_failures": "Actual App cleanup now attempts every stage, retains first exception and propagates prior warning failures. Terminal self-broadcasts drop or refuse once before output observation/NET post. Party departure publishes once, including projection failure; delivery failure cannot double-move candidate. Retired weak host fails explicitly without invoking expired borrowed callbacks.",
+        "terminal_claim_custody": "Round499 actual prepared sync/async Lifecycle installs paired Session terminal begin/finish. Exact private full64 claim enters Pending before token allocation or any early scene cancel; local release only detaches. Same issuer/world/indexed original claim may release once only after clean GAME callbacks and exact source fences. Failed/missing/lost/premature completion and world unregister remain occupied quarantine across real reserve/prune. No public clear/retry/recovery.",
+        "terminal_failure_history": "Session sticky failure has no clear; actual Vault consume remembers all-attempted cleanup errors after slot removal. Native SceneOwner pre-registers exact Session/full Lease cancellation record; errors remain observable after Pending erase and supplier-return unpublished cleanup, without throwing from destructor. Normal done(false) idempotent recursion is distinguished from unfinished actual cleanup reentry."
       },
-      "native_gap": "Round497 actual cleanup/03 ordering is source-connected but unexecuted. Complete terminal character-claim hold/quarantine/recovery, per-domain durable-save qualification including retained PK state, target admission and six directed switches/current-client acceptance remain OPEN. Actual native providers/default Main, full07/2A Offer producers, same-peer negotiated seed/profile, current aaf0 EXE versus legacy149c wire/asset lineage, MDT/MDL outdoor geometry, common64/native projection, older guild schemas, selected Web G and native world transfer remain OPEN.",
+      "native_gap": "Round499 actual process-local terminal hold/quarantine source-connected but unexecuted. Durable quarantine/recovery across restart, per-domain save qualification including retained PK state, target admission and six directed switches/current-client acceptance remain OPEN. Missing hook installation/failed allocation conservatively retains occupancy. Actual native providers/default Main, full07/2A Offer producers, same-peer negotiated seed/profile, current aaf0 EXE versus legacy149c wire/asset lineage, MDT/MDL outdoor geometry, common64/native projection, older guild schemas, selected Web G and native world transfer remain OPEN.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_NATIVE_LOGOUT_CLEANUP_BEFORE03_FUTURE_12_CASE_SOCKET_MATRIX_NOT_EXECUTED_NO_DURABLE_HANDOFF_OR_QUARANTINE_COMPLETION"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_PROCESS_LOCAL_TERMINAL_CUSTODY_STICKY_FAILURES_FUTURE_CPP_CASES_NOT_EXECUTED_NO_DURABLE_RECOVERY_OR_HANDOFF_COMPLETION"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

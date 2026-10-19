@@ -354,8 +354,48 @@ bool SharedWorldPresence::release(const Lease& lease) {
     if(preparing_)preparation_reentered_=true;
     const auto found=sessions_.find(lease.session);
     if(found==sessions_.end() || found->second.lease!=lease)return false;
-    if(!ownership_->release(found->second.ownership))return false;
+    const auto claim=found->second.ownership;
+    if(ownership_->terminal(claim)) {
+        if(!ownership_->detach_terminal(claim))return false;
+    }else if(!ownership_->release(claim))return false;
     sessions_.erase(found);return true;
+}
+struct SharedWorldPresence::TerminalRetirement::Data {
+    const std::shared_ptr<const PopulationIdentity> issuer;
+    const std::weak_ptr<SharedChannelCharacterOwnership> ownership;
+    const SharedChannelCharacterOwnership::World world;
+    const SharedChannelCharacterOwnership::Claim claim;
+    const Lease lease;
+    Data(std::shared_ptr<const PopulationIdentity> identity,std::weak_ptr<SharedChannelCharacterOwnership> common,
+        SharedChannelCharacterOwnership::World original,SharedChannelCharacterOwnership::Claim held,Lease exact)
+        :issuer(std::move(identity)),ownership(std::move(common)),world(std::move(original)),claim(std::move(held)),lease(exact) {}
+    ~Data(){SharedChannelCharacterOwnership::quarantine_terminal(claim);}
+};
+std::optional<SharedWorldPresence::TerminalRetirement> SharedWorldPresence::begin_terminal_retirement(const Lease& lease) {
+    owner();if(snapshot_busy_)snapshot_reentered_=true;
+    if(preparing_)preparation_reentered_=true;
+    const auto exact=lease;const auto found=sessions_.find(exact.session);
+    if(found==sessions_.end()||found->second.lease!=exact)return std::nullopt;
+    const auto claim=found->second.ownership;
+    if(!ownership_->begin_terminal(claim))return std::nullopt;
+    // The exact process claim stops being active BEFORE token allocation.
+    // Allocation failure or caught reentry can never restore ordinary release.
+    try {
+        auto data=std::make_shared<const TerminalRetirement::Data>(population_identity_,ownership_,world_identity_,claim,exact);
+        const auto current=sessions_.find(exact.session);
+        if(current==sessions_.end()||current->second.lease!=exact||current->second.ownership!=claim||
+           !ownership_->registered(world_identity_)||!ownership_->terminal(claim)||!ownership_->indexed(claim))return std::nullopt;
+        return TerminalRetirement(std::move(data));
+    }catch(...) {SharedChannelCharacterOwnership::quarantine_terminal(claim);throw;}
+}
+bool SharedWorldPresence::finish_terminal_retirement(const TerminalRetirement& retirement,bool clean) {
+    owner();if(snapshot_busy_)snapshot_reentered_=true;
+    if(preparing_)preparation_reentered_=true;
+    const auto data=retirement.data_;
+    if(!data||data->issuer!=population_identity_||data->ownership.lock()!=ownership_||data->world!=world_identity_||
+       !data->claim||data->claim->world!=data->world||data->claim->session!=data->lease.session||
+       data->claim->account!=data->lease.account||data->claim->character!=data->lease.character)return false;
+    return ownership_->finish_terminal(data->claim,clean);
 }
 std::optional<RecoveredPosition> SharedWorldPresence::saved_position(const Lease& lease) const {
     owner();const auto held=lease;if(!ready(held))return std::nullopt;

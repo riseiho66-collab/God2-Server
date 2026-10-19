@@ -72,6 +72,13 @@ private:
         bool prepare(Session&,const RecoveredWorldEntry::Frame&);
         std::optional<std::uint16_t> prepared_actor(Session&,const RecoveredWorldEntry::Frame&) const;
         bool ready(Session&);
+        // CUSTOM-0159: hold exact process claim through terminal cleanup.
+        std::optional<SharedWorldPresence::TerminalRetirement> terminal_retirement;
+        bool terminal_attempted=false,terminal_failed=false,terminal_finished=false;
+        void arm_terminal_retirement();
+        void begin_terminal(Session&);
+        bool finish_terminal(Session&,bool clean);
+        void fail_terminal() noexcept;
         void release();
     };
     struct AsyncBinding:std::enable_shared_from_this<AsyncBinding> {

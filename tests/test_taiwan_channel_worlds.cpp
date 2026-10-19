@@ -4,6 +4,7 @@
 #include "shared/world/SharedActorVisibility.h"
 #include "db/RecoveredCharacterRepository.h"
 #include <array>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <optional>
@@ -249,9 +250,96 @@ void retained_tokens_do_not_keep_retired_world_alive(){
         !presence->retained_initial_population_current(*old_initial)&&!presence->release(*old_lease)&&ownership->character_reserved(a),
         "Retained private token/scalar old session gained authority over replacement channel slot");
 }
+void terminal_claim_requires_exact_clean_detachment(){
+    Repository repository;seed(repository);SharedTaiwanChannelWorlds worlds(repository);
+    const auto p0=worlds.world(0)->presence(),p1=worlds.world(1)->presence();
+    const auto lease=p0->prepare(sa,account,a,41,repository.position(a));require(lease&&p0->activate(*lease,41),"Terminal source fixture did not activate");
+    const auto population=p0->observe_ready_population();require(bool(population),"Terminal source fixture lacks original population");
+    const auto before=repository.observations;auto wrong=*lease;wrong.account^=std::uint64_t{1}<<32;
+    require(!p0->begin_terminal_retirement(wrong)&&!p1->begin_terminal_retirement(*lease)&&p0->retained_ready_current(*lease),"Foreign or narrowed lease began terminal custody");
+    const auto hold=p0->begin_terminal_retirement(*lease);require(bool(hold),"Exact source could not begin terminal retirement");
+    const auto copy=*hold;
+    require(!p0->current(*lease)&&!p0->ready(*lease)&&!p0->retained_preparation_current(*lease)&&
+        !p0->retained_ready_current(*lease)&&!p0->ready_lease(sa,account,a)&&!p0->retained_population_current(*population)&&
+        worlds.character_reserved(a)&&!p0->begin_terminal_retirement(*lease),"Terminal claim remained active/current or allowed a second token");
+    require(!p1->prepare(sb,account,a,41,repository.position(a))&&!p1->prepare(sa,account,b,41,repository.position(b))&&
+        repository.observations==before,"Pending terminal character or Session reached target repository before cleanup");
+    require(p0->release(*lease)&&!p0->release(*lease)&&worlds.character_reserved(a),"Exact terminal release must detach once without dropping process claim");
+    require(!p1->finish_terminal_retirement(copy,true)&&!p1->finish_terminal_retirement(copy,false)&&
+        !p1->prepare(sb,account,a,41,repository.position(a))&&worlds.character_reserved(a),"Foreign finisher released or poisoned original private custody");
+    unsigned foreign=0;std::thread thread([&]{
+        foreign+=refuses<std::logic_error>([&]{(void)p0->begin_terminal_retirement(*lease);});
+        foreign+=refuses<std::logic_error>([&]{(void)p0->finish_terminal_retirement(copy,true);});
+    });thread.join();
+    require(foreign==2&&p0->finish_terminal_retirement(copy,true)&&!worlds.character_reserved(a)&&repository.observations==before,
+        "Only exact clean detached GAME completion may release terminal claim without observers");
+    const auto next=p1->prepare(sa,account,a,42,repository.position(a));require(next&&p1->activate(*next,42),"Clean terminal completion did not admit target channel");
+    require(!p0->finish_terminal_retirement(*hold,true)&&!p0->finish_terminal_retirement(*hold,false)&&!p0->release(*lease)&&
+        worlds.character_reserved(a)&&p1->retained_ready_current(*next),"Stale copied completion or release affected cross-channel successor");
+    require(p1->release(*next),"Successor failed ordinary release");
+}
+void terminal_failures_never_reopen_character(){
+    for(unsigned mode=0;mode<4;++mode){
+        Repository repository;seed(repository);SharedTaiwanChannelWorlds worlds(repository);
+        const auto p0=worlds.world(0)->presence(),p1=worlds.world(1)->presence();
+        const auto lease=p0->prepare(sa,account,a,41,repository.position(a));require(lease&&p0->activate(*lease,41),"Failed-terminal fixture did not activate");
+        auto hold=p0->begin_terminal_retirement(*lease);require(bool(hold),"Failed-terminal fixture lacks private hold");
+        const auto before=repository.observations;
+        if(mode==1)hold.reset(); // Last handle lost before ordinary local cleanup.
+        if(mode==2)require(!p0->finish_terminal_retirement(*hold,true),"Clean completion before local detach must quarantine");
+        require(p0->release(*lease)&&worlds.character_reserved(a),"Failed/dropped terminal local cleanup freed global claim");
+        if(mode==0)require(!p0->finish_terminal_retirement(*hold,false),"Failed completion cannot report successful release");
+        if(mode==3){ // A completed local cleanup without completion remains occupied.
+            require(!p1->prepare(sb,account,a,41,repository.position(a)),"Missing completion admitted target channel");hold.reset();
+        }
+        if(hold)require(!p0->finish_terminal_retirement(*hold,true),"Quarantined terminal completion was retried as clean");
+        require(worlds.character_reserved(a)&&!p1->prepare(sb,account,a,41,repository.position(a))&&
+            !p1->prepare(sa,account,b,41,repository.position(b))&&repository.observations==before,"Quarantine lost full64 character/Session exclusion or invoked repository");
+        // A new unrelated reservation forces the real immutable registry prune.
+        // It cannot erase an occupied terminal claim merely because current=false.
+        const auto other=p1->prepare(sb,account,b,41,repository.position(b));
+        require(other&&p1->activate(*other,41)&&worlds.character_reserved(a)&&p1->release(*other)&&worlds.character_reserved(a),
+            "Unrelated reserve/prune/release erased quarantined character with matching low32 identity");
+        const auto local=p0->prepare(sd,other_account,d,41,repository.position(d));
+        require(local&&p0->activate(*local,41)&&p0->release(*local),"Terminal local detach retained an unrelated world-local actor handle");
+        require(!p1->prepare(sc,account,a,42,repository.position(a))&&worlds.character_reserved(a),"Later normal mutation revived quarantined source");
+    }
+}
+void terminal_claim_survives_world_unregister(){
+    for(bool detach:{false,true}){
+        Repository repository;seed(repository);auto ownership=std::make_shared<SharedChannelCharacterOwnership>(repository);
+        auto source=std::make_shared<Presence>(repository,ownership,0);Presence target(repository,ownership,1);
+        const auto lease=source->prepare(sa,account,a,41,repository.position(a));require(lease&&source->activate(*lease,41),"World-unregister terminal fixture did not activate");
+        auto hold=source->begin_terminal_retirement(*lease);require(bool(hold),"World-unregister fixture missing terminal token");
+        if(detach)require(source->release(*lease),"World-unregister fixture could not detach exact local entry");
+        source.reset();const auto before=repository.observations;
+        require(ownership->character_reserved(a)&&!target.prepare(sb,account,a,41,repository.position(a))&&
+            !target.prepare(sa,account,b,41,repository.position(b))&&repository.observations==before,
+            "World unregister made pending/quarantined terminal claim disappear");
+        Presence replacement(repository,ownership,0);
+        require(!replacement.finish_terminal_retirement(*hold,true)&&!replacement.finish_terminal_retirement(*hold,false),"Reused channel ordinal gained old private issuer authority");
+        hold.reset();const auto other=replacement.prepare(sb,account,b,41,repository.position(b));
+        require(other&&replacement.activate(*other,41)&&ownership->character_reserved(a)&&replacement.release(*other),"Replacement world prune erased old quarantine");
+        require(!target.prepare(sc,account,a,42,repository.position(a))&&ownership->character_reserved(a),"Dropped orphan token freed globally quarantined character");
+    }
+}
+void terminal_last_handle_drop_is_pure_cancellation(){
+    Repository repository;seed(repository);SharedTaiwanChannelWorlds worlds(repository);const auto presence=worlds.world(0)->presence();
+    const auto lease=presence->prepare(sa,account,a,41,repository.position(a));require(bool(lease),"Pending terminal drop fixture absent");
+    auto hold=presence->begin_terminal_retirement(*lease);require(bool(hold),"Prepared entry cannot begin terminal hold");
+    std::atomic_bool drop=false;
+    std::thread thread([last=*hold,&drop]{while(!drop.load())std::this_thread::yield();(void)last;});
+    hold.reset();drop.store(true);thread.join();
+    const auto before=repository.observations;
+    require(presence->release(*lease)&&worlds.character_reserved(a)&&
+        !worlds.world(1)->presence()->prepare(sb,account,a,41,repository.position(a))&&repository.observations==before,
+        "Last token destructor released character, observed storage or retained a GAME owner on foreign thread");
+}
 } // namespace
 
 void test_taiwan_channel_worlds(){
     distinct_worlds_and_exclusion();failures_and_reentrant_observers();
     construction_and_thread_bounds();retained_tokens_do_not_keep_retired_world_alive();
+    terminal_claim_requires_exact_clean_detachment();terminal_failures_never_reopen_character();
+    terminal_claim_survives_world_unregister();terminal_last_handle_drop_is_pure_cancellation();
 }

@@ -50,19 +50,71 @@ bool SharedTaiwanWorldLifecycle::Binding::current(Session& session) const {
         session.character_id==lease->character && presence->preparation_current(*lease)&&
         session.native_channel_allows_presence(presence);
 }
-void SharedTaiwanWorldLifecycle::Binding::release() {
-    owner();retire_status_incarnation();if(stage==Stage::Released)return;stage=Stage::Released;
+void SharedTaiwanWorldLifecycle::Binding::fail_terminal() noexcept {
+    terminal_failed=true;
+    if(const auto session=connection.lock())session->mark_common_world_cleanup_failed();
+}
+void SharedTaiwanWorldLifecycle::Binding::arm_terminal_retirement() {
+    owner();
     if(!lease)return;
-    if(transport_token) {transports->release(*transport_token);transport_token.reset();}
-    if(const auto session=connection.lock())
-        session->release_common_world_delivery_identity(lease->account,lease->character,lease->generation);
-    // Both owners get cleanup even if visibility/native output fails. Session
-    // independently attempts Application disconnect first. This release does
-    // not supply durable-save or terminal-claim quarantine proof.
+    if(terminal_attempted) {
+        if(!terminal_retirement)throw std::logic_error("TW terminal claim acquisition failed");
+        return;
+    }
+    // Set before allocation/reentry. Presence marks the exact claim first, so
+    // failed token allocation also remains occupied without a recovery grant.
+    terminal_attempted=true;
+    try {
+        terminal_retirement=presence->begin_terminal_retirement(*lease);
+        if(!terminal_retirement)throw std::logic_error("TW terminal claim not retained");
+    }catch(...) {fail_terminal();throw;}
+}
+void SharedTaiwanWorldLifecycle::Binding::begin_terminal(Session& session) {
+    owner();
+    if(!lease || connection.lock().get()!=&session || session.id()!=lease->session ||
+       session.account_id!=lease->account || session.character_id!=lease->character || terminal_finished) {
+        fail_terminal();throw std::logic_error("TW terminal cleanup source mismatch");
+    }
+    arm_terminal_retirement();
+}
+bool SharedTaiwanWorldLifecycle::Binding::finish_terminal(Session& session,bool clean) {
+    owner();
+    if(terminal_finished)return false;
+    terminal_finished=true;
+    const bool exact=lease && connection.lock().get()==&session && session.id()==lease->session &&
+        session.account_id==lease->account && session.character_id==lease->character;
+    clean=clean && exact && terminal_attempted && !terminal_failed && stage==Stage::Released;
+    if(!terminal_retirement){fail_terminal();return false;}
+    try {
+        const bool released=presence->finish_terminal_retirement(*terminal_retirement,clean);
+        if(!released)fail_terminal();
+        return released;
+    }catch(...) {fail_terminal();throw;}
+}
+void SharedTaiwanWorldLifecycle::Binding::release() {
+    owner();retire_status_incarnation();
     std::exception_ptr failure;
-    try {visibility->release(*lease);}catch(...){failure=std::current_exception();}
-    try {presence->release(*lease);}catch(...){if(!failure)failure=std::current_exception();}
-    if(failure)std::rethrow_exception(failure);
+    // Early async cancellation adopts this same hold when Session cleans later.
+    try {arm_terminal_retirement();}catch(...) {failure=std::current_exception();}
+    if(stage==Stage::Released) {
+        if(failure)std::rethrow_exception(failure);
+        if(terminal_failed)throw std::logic_error("TW earlier terminal cleanup failed");
+        return;
+    }
+    stage=Stage::Released;
+    if(!lease){if(failure)std::rethrow_exception(failure);return;}
+    const auto expected=*lease;
+    if(transport_token) {
+        const auto token=*transport_token;transport_token.reset();
+        try {transports->release(token);}catch(...) {if(!failure)failure=std::current_exception();}
+    }
+    try {if(const auto session=connection.lock())
+        session->release_common_world_delivery_identity(expected.account,expected.character,expected.generation);
+    }catch(...) {if(!failure)failure=std::current_exception();}
+    try {visibility->release(expected);}catch(...) {if(!failure)failure=std::current_exception();}
+    try {if(!presence->release(expected))throw std::logic_error("TW terminal lease did not detach");}
+    catch(...) {if(!failure)failure=std::current_exception();}
+    if(failure){fail_terminal();std::rethrow_exception(failure);}
 }
 bool SharedTaiwanWorldLifecycle::Binding::prepare(Session& session,const RecoveredWorldEntry::Frame& wire) {
     owner();if(stage!=Stage::Fresh || session.closing() || !session.account_id || !session.character_id||
@@ -168,7 +220,18 @@ std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle:
     result->prepared=[binding](Session& session,const RecoveredWorldEntry::Frame& frame) {
         try {
             if(!binding->prepare(session,frame))return false;
-            if(!session.install_common_world_cleanup([binding]{binding->release();})) {
+            const auto peer=session.weak_from_this();
+            if(!session.install_common_world_cleanup([binding]{binding->release();},
+                [binding,peer] {
+                    const auto session=peer.lock();
+                    if(!session){binding->fail_terminal();throw std::logic_error("TW terminal Session expired");}
+                    binding->begin_terminal(*session);
+                },
+                [binding,peer](bool clean) {
+                    const auto session=peer.lock();
+                    if(!session){binding->fail_terminal();return false;}
+                    return binding->finish_terminal(*session,clean);
+                })) {
                 binding->release();return false;
             }
             return true;
@@ -194,15 +257,18 @@ Session::CommonWorldLifecycleFactory SharedTaiwanWorldLifecycle::factory(
 void SharedTaiwanWorldLifecycle::AsyncBinding::release() {
     base.owner();base.retire_status_incarnation();if(released)return;released=true;
     auto completion=std::move(done);std::exception_ptr failure;
+    // cancel_common_ready can run before Session's disconnect cleanup.
+    try {base.arm_terminal_retirement();}catch(...) {failure=std::current_exception();}
     if(base.lease) {
         if(const auto session=base.connection.lock()) {
-            session->release_common_world_entry_identity(base.lease->account,base.lease->character,base.lease->generation);
-            try {scene.cancel(*session,*base.lease);}catch(...) {failure=std::current_exception();}
+            try {session->release_common_world_entry_identity(base.lease->account,base.lease->character,base.lease->generation);}
+            catch(...) {if(!failure)failure=std::current_exception();}
+            try {scene.cancel(*session,*base.lease);}catch(...) {if(!failure)failure=std::current_exception();}
         }
     }
     try {base.release();}catch(...) {if(!failure)failure=std::current_exception();}
-    if(completion)try {completion(false);}catch(...) {}
-    if(failure)std::rethrow_exception(failure);
+    if(completion)try {completion(false);}catch(...) {if(!failure)failure=std::current_exception();}
+    if(failure){base.fail_terminal();std::rethrow_exception(failure);}
 }
 void SharedTaiwanWorldLifecycle::AsyncBinding::complete(bool accepted) {
     base.owner();if(released || !done)return;
@@ -271,7 +337,18 @@ std::shared_ptr<const Session::CommonWorldLifecycle> SharedTaiwanWorldLifecycle:
     result->prepared=[binding](Session& session,const RecoveredWorldEntry::Frame& frame) {
         try {
             if(!binding->base.prepare(session,frame))return false;
-            if(!session.install_common_world_cleanup([binding]{binding->release();})) {
+            const auto peer=session.weak_from_this();
+            if(!session.install_common_world_cleanup([binding]{binding->release();},
+                [binding,peer] {
+                    const auto session=peer.lock();
+                    if(!session){binding->base.fail_terminal();throw std::logic_error("TW terminal Session expired");}
+                    binding->base.begin_terminal(*session);
+                },
+                [binding,peer](bool clean) {
+                    const auto session=peer.lock();
+                    if(!session){binding->base.fail_terminal();return false;}
+                    return binding->base.finish_terminal(*session,clean);
+                })) {
                 binding->release();return false;
             }
             return true;

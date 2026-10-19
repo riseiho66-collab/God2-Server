@@ -72,7 +72,8 @@ public:
     using DisconnectHandler = std::function<void(std::shared_ptr<Session>)>;
     // GAME-only transport acknowledgment after final socket close and the
     // once-only application disconnect, cleanup and abandon callbacks return.
-    // clean=false records a throw or source identity drift during cleanup;
+    // clean=false records prior cleanup failure, a throw, source identity drift
+    // or refused terminal settlement;
     // this is neither durable-save proof nor a client logout acknowledgment.
     using DisconnectCompletion = std::function<void(std::shared_ptr<Session>,bool clean)>;
     using RecoveredLoginHandler = std::function<std::uint64_t(const RecoveredC2S0002::Parsed&)>;
@@ -1004,9 +1005,15 @@ public:
     void release_native_pk_entry(const NativePkEntryHold&);
     void abort_native_pk_entry(const NativePkEntryHold&);
     // Game-executor, one-shot transport-owned cleanup; independent of lifecycle
-    // adapter lifetime. Runs before the existing disconnect callback, even if
-    // either callback throws. Only the explicit common-world extension may bind.
-    bool install_common_world_cleanup(std::function<void()> cleanup);
+    // adapter lifetime. Application disconnect precedes cleanup and abandon;
+    // all stages are attempted. Only the explicit common-world extension binds.
+    // Optional GAME-owned terminal claim hooks are a complete pair. Their
+    // result covers cleanup settlement, never durable save or new admission.
+    bool install_common_world_cleanup(std::function<void()> cleanup,
+        std::function<void()> terminal_begin={},std::function<bool(bool clean)> terminal_finish={});
+    // GAME callers only. Irreversible failure latch; never clears a hold,
+    // grants recovery/admission or reports a durable save.
+    void mark_common_world_cleanup_failed() noexcept;
     bool closing() const noexcept;
     // Asynchronous: drain queued writes, with a five-second shutdown deadline.
     void close();
