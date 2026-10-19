@@ -14,6 +14,13 @@ struct RecoveredWorldEntryView {
     std::array<std::uint8_t,37> logical;
     std::uint16_t actor_handle,area,scene,x,y;
     std::uint8_t kind;
+    // Connected normal entry:46874F..4687A8 maps B4 low3 into R+24;
+    // 465435 passes that R to500180, whose50021B/50021E copies it to
+    // world+2C, the previous-direction field read by502700. This is the
+    // issued entry's initial value, not current facing after later events.
+    std::uint8_t entry_movement_direction() const noexcept {
+        return static_cast<std::uint8_t>(((logical[5]&7u)+7u)&7u);
+    }
     // Native149c B0bit31 -> 468204 world+A7F2F3C -> composite72 new NPC
     // slot through 4CBD70 -> 4CAFE0 argument6. Its nonzero branch requests
     // the "npcid:%d" label; existing-slot updates need not recreate it.

@@ -227,6 +227,9 @@ public:
         const std::vector<std::uint8_t>& accepted_tail() const noexcept;
         std::uint8_t config_flag() const noexcept;
         bool entry_written() const noexcept;
+        // Local physical-entry phase, not the CUSTOM-0132 post-battle reuse.
+        // This does not attest client execution or later actor pose.
+        bool original_entry_battle_phase() const noexcept;
         // Actual original-Write custody only; no remote R0/selfslot authority.
         bool world_identity_sender_current() const noexcept;
     private:
@@ -790,6 +793,9 @@ public:
     // Only the actual synchronous world-records game callback can obtain or
     // requalify this transcript. Missing metadata leaves the old sender intact.
     std::optional<NormalWorldInitialization> normal_world_initialization() const;
+    // Read-only observation for the actual game owner, including the movement
+    // callback. Grants no world-records response/input/output callback custody.
+    std::optional<NormalWorldInitialization> normal_world_initialization_on_game() const;
     bool normal_world_initialization_current(const NormalWorldInitialization&) const;
     // Peer observations on the SAME actual game-owner thread. Private receipt
     // constructors record that thread; an unknown/wrong thread or another

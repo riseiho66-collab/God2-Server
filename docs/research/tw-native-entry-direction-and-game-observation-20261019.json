@@ -1,0 +1,208 @@
+{
+  "round": 485,
+  "native": [
+    {
+      "version": 2,
+      "evidence_id": "ev_7df613659a5209ec3c8b1eaf52c973b78306b2d7dab687cd45ed47134314f255",
+      "analysis_sha256": "93da048f2a65ddac0c8c1044b3e3ae275ea40dcca3c2ce010cb42429e745c6df",
+      "procedures": [
+        "0x464910"
+      ],
+      "original_sections": 13,
+      "original_section_bytes_and_headers_identical": true,
+      "closed": true,
+      "synthetic_callers_not_original": true
+    },
+    {
+      "version": 3,
+      "evidence_id": "ev_10b3b84950a919d7f7b0eaf03f836aa8886ffb075f8b6cf0707ecbcfa8a1eca3",
+      "analysis_sha256": "7a12c5a8f87fe36be3102ab410ffcba8ca54a142046afa93ab4e54fa3d9fcb24",
+      "procedures": [
+        "0x500180",
+        "0x4fabb0",
+        "0x4f7380"
+      ],
+      "original_sections": 13,
+      "original_section_bytes_and_headers_identical": true,
+      "closed": true,
+      "synthetic_callers_not_original": true
+    },
+    {
+      "version": 4,
+      "evidence_id": "ev_8304a5fbc935b723a523aae270b8e3b64d47b55943719e362ba4c7c7844097ce",
+      "analysis_sha256": "283f3b5964043d23fd315a94b75443c19c0e01419adfecbeea3002eb6e5dd44f",
+      "procedures": [
+        "0x46c620",
+        "0x46c5a0",
+        "0x46c520"
+      ],
+      "original_sections": 13,
+      "original_section_bytes_and_headers_identical": true,
+      "closed": true,
+      "synthetic_callers_not_original": true
+    },
+    {
+      "version": 5,
+      "evidence_id": "ev_50661c04696d278064d65265be85522ec769f3218915e78598458c6bc282736c",
+      "analysis_sha256": "6bac958dc78d511d352350d3179f6b62a70c3511533a23501db63fb8c900e32b",
+      "procedures": [
+        "0x444f70",
+        "0x55aaaa"
+      ],
+      "original_sections": 13,
+      "original_section_bytes_and_headers_identical": true,
+      "closed": true,
+      "synthetic_callers_not_original": true
+    }
+  ],
+  "current_exe_sha256": "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48",
+  "failed_interior_lookup_preserved": true,
+  "all_five_targets_closed": true,
+  "source_integration": [
+    "Actual entry direction -> explicit first-entry PoseSource -> existing HMD InputSource/HostPlan -> ResourceOwner/MovementHost",
+    "Read-only game-thread actual INIT observation replaces invalid world-records TLS read in movement source",
+    "Provider Current uses retained registry only; no ready_lease or repository read",
+    "Actual kind2 HMD branch, optional raw-tag assertion"
+  ],
+  "authority_boundary": "Existing CUSTOM-0158 server asset/initial-pose publication and CUSTOM-0150 ordinary authority; client projection is not original server B4 producer or remote execution attestation",
+  "open": [
+    "Main complete2A/Entered/initial scene",
+    "Dynamic pose resupply after walking/battle/transfer",
+    "Outdoor MDL and remaining world/gameplay/formulas",
+    "Concentrated build/black-box/original-current-client acceptance"
+  ],
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "migration": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/protocol/RecoveredWorldEntryView.h",
+      "sha256": "c7cfe893377c2dcd4fc7e8349cb734fa8ab1aadc9699a5f11c8de9670fbad3fb"
+    },
+    {
+      "path": "src/net/Session.h",
+      "sha256": "fbeac8d8f3abb2f9ac61f45b8ce719464603bdb7ba09eb225f706670a5ae425f"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "4e60839b4bd1cac618a323afb173abc360fe6c97308789e654ecef77e1d13230"
+    },
+    {
+      "path": "src/game/TaiwanNativeHmdBundleSource.h",
+      "sha256": "c7410829157d77bc918e24530e6234e4bd485ea1badceaf212c8131dccd095e7"
+    },
+    {
+      "path": "src/game/TaiwanNativeHmdBundleSource.cpp",
+      "sha256": "57a2a8edbaa4c83429f6ffaa8f5b74e1f8c26552f5ea6dfae04d3f3c0dafc73b"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.h",
+      "sha256": "27ff9b84fa5047a7ed2b1796a7de8ebde80a8c027cba6b45c0563dd2db907c74"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "sha256": "5d1b5477f6d08c6189459506970db9a36d8a618dcb6fb2a7689ce2eaf27ae1a3"
+    },
+    {
+      "path": "tests/test_taiwan_native_hmd_bundle_source.cpp",
+      "sha256": "29fb926bcbb5cdd7caa09065b25b7bd46a98dfa45f7115862fc5dbce48a5954a"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "d2bdc1cd32db3e26c18a4dc3fbf2b2a568494e25020d648427d07501ef92ec1f"
+    },
+    {
+      "path": "docs/research/tw-native-entry-direction-and-game-observation-20261019.md",
+      "sha256": "f02331a9372dd3f41ac69534b79fe8664a6190d7ece32153d140e6947339b26d"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "86f37d1a5d8b5f36035c64c8baff79e0c0e5d46297b3cc61386374142e7795c2"
+    },
+    {
+      "path": "docs/GOAL_ACCEPTANCE.md",
+      "sha256": "276a34aa61449d1d37ae497bd7d2ac924a5787b92fa9817b64e153cee3393389"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "9850a9bdd9f7e6b25713a4488cacfa34c67676f1749ff54d54b562241bb98688"
+    },
+    {
+      "path": "src/protocol/RecoveredServerRoutes.h",
+      "sha256": "952fee8de59c5bc49233315fe1dc4cfa904b9fbab3b44cea2c4ee8fb3d25bd93"
+    },
+    {
+      "path": "tests/test_protocol_replay.cpp",
+      "sha256": "2c960080ffa32ed0c62daec1ad81a821865c874f489d96a8a85fd11429548f05"
+    },
+    {
+      "path": "docs/research/tw-native-three-channel-selection-20261019.md",
+      "sha256": "e8194bdd460552f4ba7c62462bb920107ed5558cb76ee13e9d949eb6bd90ba15"
+    }
+  ],
+  "owner_additions": {
+    "three_channels": {
+      "required_channels": 3,
+      "shared_character_storage": true,
+      "isolated_worlds_required": true,
+      "switching_required": true,
+      "advertisement_source_implemented": true,
+      "actual_three_channel_gameplay_complete": false,
+      "production_activated": false,
+      "document": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "native_ui_batches": [
+        {
+          "version": 6,
+          "evidence_id": "ev_f0afccfe302d14f44b758023367fcfaec83c3dbeabbabc7571c1c8fad1f7e82b",
+          "analysis_sha256": "6b0afb3f3b568532551adecf17dc54b151097775cadd6114c594d0b2b848ca29",
+          "procedures": [
+            "0x404da0",
+            "0x413e10",
+            "0x4147d0"
+          ],
+          "original_sections": 13,
+          "original_section_bytes_and_headers_identical": true,
+          "closed": true,
+          "synthetic_callers_not_original": true
+        },
+        {
+          "version": 7,
+          "evidence_id": "ev_aa37c5b3599c38fa1d9e34cbc8dfcd43963d9fc4c35edfb1edbc76232e45ac5d",
+          "analysis_sha256": "5374ee5e0d7872a4767b504f0c3991c1e870b7ce5e8445aeb8a06b61d1076115",
+          "procedures": [
+            "0x4068e0",
+            "0x406fb0",
+            "0x4070b0",
+            "0x407a10"
+          ],
+          "original_sections": 13,
+          "original_section_bytes_and_headers_identical": true,
+          "closed": true,
+          "synthetic_callers_not_original": true
+        },
+        {
+          "version": 8,
+          "evidence_id": "ev_673afea822042cc719cdaa2b554aa2366def9843a574f91de80168492f67c5bd",
+          "analysis_sha256": "f2f4d88f5e3143ac79a351811598d6965e8a20ab66c78ad3baccea3605abbbca",
+          "procedures": [
+            "0x406e00",
+            "0x407440",
+            "0x407b00"
+          ],
+          "original_sections": 13,
+          "original_section_bytes_and_headers_identical": true,
+          "closed": true,
+          "synthetic_callers_not_original": true
+        }
+      ]
+    }
+  }
+}

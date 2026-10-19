@@ -18,7 +18,9 @@ bool digest_text(std::string_view s){return s.size()==64&&s.find_first_not_of("0
 bool entry_matches(const Session::NormalWorldInitialization& initial,const RecoveredWorldEntryView& frame,const Scene::Lease& lease){
     // The original issued entry identifies this reservation. Its coordinates
     // do not become the saved position again after a committed ordinary walk.
-    return initial.qualified_scene_identity()&&initial.entry_written()&&initial.entry_frame()==frame.wire&&
+    // 500180 selects46C5A0 ->448300 HMD only for the actual entry kind2.
+    // Other entry kinds use a different native loader, not this HMD bundle.
+    return frame.kind==2&&initial.qualified_scene_identity()&&initial.entry_written()&&initial.entry_frame()==frame.wire&&
         initial.entry_logical().size()==frame.logical.size()&&
         std::equal(initial.entry_logical().begin(),initial.entry_logical().end(),frame.logical.begin())&&
         frame.actor_handle==lease.actor_handle&&frame.area==lease.position.area&&
@@ -162,11 +164,15 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
     std::uint64_t epoch(){
         if(next_epoch==std::numeric_limits<std::uint64_t>::max())throw std::overflow_error("HMD source epoch exhausted");return next_epoch++;
     }
-    bool ready(Session& session,const Scene::Lease& lease)const{
+    bool retained_ready(Session& session,const Scene::Lease& lease)const{
         if(closed||reentered||session.closing()||session.id()!=lease.session||session.account_id!=lease.account||
            session.character_id!=lease.character||session.state()!=SessionState::InWorld||!session.recovered_world_ready()||
            !session.common_world_delivery_current(lease.account,lease.character,lease.generation)||
            session.common_world_entry_current(lease.account,lease.character,lease.generation))return false;
+        return presence->retained_ready_current(lease);
+    }
+    bool ready(Session& session,const Scene::Lease& lease)const{
+        if(!retained_ready(session,lease))return false;
         const auto current=presence->ready_lease(session.id(),session.account_id,session.character_id);return current&&*current==lease;
     }
     std::shared_ptr<Version> stage(Configuration config){
@@ -182,7 +188,7 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
         auto prefix=ascii_path(root);if(prefix.empty()||prefix.back()!='\\')prefix.push_back('\\');
         constexpr std::string_view map_root="Data2\\map\\";prefix.insert(prefix.end(),map_root.begin(),map_root.end());
         for(const auto& configured:out->configuration.areas){
-            if(configured.area<1||configured.area>16||!configured.expected_hmd_tag||!configured.actual_can_file.is_absolute()||
+            if(configured.area<1||configured.area>16||!configured.actual_can_file.is_absolute()||
                !digest_text(configured.expected_can_sha256)||out->areas.contains(configured.area))throw std::invalid_argument("HMD area publication incomplete/duplicate");
             auto base=maps.lookup(p.dataset_id,configured.area,0);if(!base)throw std::invalid_argument("HMD area lacks its actual saved catalog base row");
             auto mdt=base_mdt(*base,p,configured.area);Bytes full=prefix;full.insert(full.end(),mdt.begin(),mdt.end());
@@ -203,7 +209,7 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
     std::shared_ptr<const Bundle> load(const std::shared_ptr<Version>& v,Key key){
         const auto a=v->areas.find(key.first);if(a==v->areas.end())return {};
         const auto area=a->second;const auto* row=area->can.scene(key.second);
-        if(!row||row->tag!=*area->configuration.expected_hmd_tag||!safe_reference(row->reference))return {};
+        if(!row||(area->configuration.expected_hmd_tag&&row->tag!=*area->configuration.expected_hmd_tag)||!safe_reference(row->reference))return {};
         const auto& limits=v->configuration.limits;const auto& cwd=v->configuration.actual_client_directory;
         auto hmd=select_resource({Selection::Kind::TextFile,row->reference,area->logical_directory,cwd,0},limits.hmd_encoded,v->tree);
         if(!hmd)return {};
@@ -259,7 +265,7 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
         Operation operation(*this);affected=entry;const auto peer=entry->session.lock();
         const auto local=[&]{
             const auto at=entries.find(entry->lease.session);const auto map=entry->version->cache.find(entry->bundle->key);
-            return peer&&ready(*peer,entry->lease)&&entry->token->current()&&entry->token->owned_by(*peer,entry->lease)&&
+            return peer&&retained_ready(*peer,entry->lease)&&entry->token->current()&&entry->token->owned_by(*peer,entry->lease)&&
                 version==entry->version&&at!=entries.end()&&at->second.lock()==entry&&map!=entry->version->cache.end()&&map->second==entry->bundle&&
                 peer->battle_generation()==entry->battle&&peer->normal_world_initialization_current_on_game(entry->initialization)&&
                 entry_matches(entry->initialization,entry->entry_view,entry->lease)&&scope.lease==entry->lease&&scope.position.area==entry->bundle->key.first&&
@@ -287,7 +293,7 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
            scope.saved_position.scene!=scope.lease.position.scene||presence->saved_position(scope.lease)!=std::optional{scope.saved_position})return {};
         const auto found=entries.find(session.id());const auto previous=found==entries.end()?std::shared_ptr<Entry>{}:found->second.lock();affected=previous;
         if(!previous&&entries.size()>=capacity)return {};
-        const auto initial=session.normal_world_initialization();if(!initial)return {};
+        const auto initial=session.normal_world_initialization_on_game();if(!initial)return {};
         const auto entry_view=RecoveredWorldEntryView::read(initial->entry_frame());
         if(!entry_view||!entry_matches(*initial,*entry_view,scope.lease))return {};
         const auto battle=session.battle_generation();
@@ -320,6 +326,35 @@ struct TaiwanNativeHmdBundleSource::State:std::enable_shared_from_this<State> {
     ~State(){if(thread!=std::this_thread::get_id())std::terminate();}
 };
 TaiwanNativeHmdBundleSource::TaiwanNativeHmdBundleSource(std::shared_ptr<State> state):state_(std::move(state)){}
+TaiwanNativeHmdBundleSource::PoseSource TaiwanNativeHmdBundleSource::initial_entry_pose_source(
+        std::shared_ptr<SharedWorldPresence> presence){
+    if(!presence)throw std::invalid_argument("Initial entry pose requires actual common presence");
+    const auto thread=std::this_thread::get_id();
+    return [presence=std::move(presence),thread](Session& session,const Scene::FactoryScope& scope)->std::optional<InitialPose>{
+        if(thread!=std::this_thread::get_id())throw std::logic_error("Initial entry pose game owner mismatch");
+        const auto peer=session.weak_from_this().lock();const auto initial=session.normal_world_initialization_on_game();
+        if(!peer||!initial||scope.saved_position!=scope.lease.position||!initial->original_entry_battle_phase())return {};
+        const auto view=RecoveredWorldEntryView::read(initial->entry_frame());
+        if(!view||!entry_matches(*initial,*view,scope.lease))return {};
+        const auto direction=view->entry_movement_direction();
+        const auto weak=std::weak_ptr<Session>(peer);const auto lease=scope.lease;const auto position=scope.saved_position;
+        const auto retained=[presence,weak,thread,initial=*initial,view=*view,lease,position,direction](
+                Session& actual,const Scene::FactoryScope& current,const RecoveredPosition& saved,std::uint8_t facing){
+            if(thread!=std::this_thread::get_id())throw std::logic_error("Initial entry pose Current owner mismatch");
+            return weak.lock().get()==&actual&&current.lease==lease&&current.saved_position==position&&saved==position&&facing==direction&&
+                actual.id()==lease.session&&actual.account_id==lease.account&&actual.character_id==lease.character&&!actual.closing()&&
+                actual.state()==SessionState::InWorld&&actual.recovered_world_ready()&&initial.original_entry_battle_phase()&&
+                actual.normal_world_initialization_current_on_game(initial)&&entry_matches(initial,view,lease)&&
+                actual.common_world_delivery_current(lease.account,lease.character,lease.generation)&&
+                !actual.common_world_entry_current(lease.account,lease.character,lease.generation)&&presence->retained_ready_current(lease);
+        };
+        // Only supply performs a real saved-position read. Held Current never
+        // calls ready_lease/saved_position, which may enter the repository.
+        if(!retained(session,scope,position,direction)||presence->saved_position(lease)!=std::optional{position}||
+           !retained(session,scope,position,direction))return {};
+        return InitialPose{position,direction,retained};
+    };
+}
 std::shared_ptr<TaiwanNativeHmdBundleSource> TaiwanNativeHmdBundleSource::create(const NativeMapCatalog& maps,
         std::shared_ptr<SharedWorldPresence> presence,std::size_t capacity,Configuration config,PoseSource pose){
     if(!presence||!capacity||!pose)throw std::invalid_argument("HMD bundle requires actual common host, capacity and pose supplier");

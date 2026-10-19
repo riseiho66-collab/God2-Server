@@ -15,6 +15,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -90,6 +91,27 @@ Bytes hmd(unsigned pass){
 Bytes rom(){
     auto result=bytes("IGSROM02");result.resize(12,0);
     const auto end=bytes("FILE_END");result.insert(result.end(),end.begin(),end.end());result.resize(24,0);return result;
+}
+RecoveredWorldEntry::Frame entry_with_direction_selector(const RecoveredWorldEntry::Frame& wire,std::uint8_t selector){
+    auto logical=RecoveredWorldFrame::decode(wire);
+    require(logical&&logical->size()==37&&(*logical)[0]==0x2a&&selector<8,"Synthetic entry selector requires full actual 2A");
+    (*logical)[5]=static_cast<std::uint8_t>(((*logical)[5]&0xf8u)|selector);
+    const auto encoded=RecoveredWorldFrame::encode(*logical);
+    RecoveredWorldEntry::Frame result{};require(encoded.size()==result.size(),"Synthetic entry selector changed frame size");
+    std::copy(encoded.begin(),encoded.end(),result.begin());return result;
+}
+void entry_direction_projection(){
+    const auto original=RecoveredWorldEntry::wire(41);
+    const auto before=RecoveredWorldEntryView::read(original);require(bool(before),"Full original entry unavailable");
+    constexpr std::array<std::uint8_t,8> expected{7,0,1,2,3,4,5,6};
+    for(std::uint8_t selector=0;selector<8;++selector){
+        const auto changed=entry_with_direction_selector(original,selector);
+        const auto after=RecoveredWorldEntryView::read(changed);
+        require(after&&after->entry_movement_direction()==expected[selector]&&
+            (after->logical[5]&0xf8u)==(before->logical[5]&0xf8u),"Native B4 selector did not retain its non-direction bits/projection");
+        for(std::size_t at=0;at<before->logical.size();++at)
+            require(at==5||after->logical[at]==before->logical[at],"Selector fixture changed unrelated full entry bytes");
+    }
 }
 void complete_can_bounds(){
     TemporaryFiles files;const auto path=files.root/"fixture.can";
@@ -318,6 +340,11 @@ struct CatalogFixture {
     std::unique_ptr<sqlite3,Close> db;
     std::unique_ptr<SqliteRecoveredCharacterRepository> characters;
     std::unique_ptr<NativeMapCatalog> catalog;
+    std::size_t traced_statements=0;
+    static int trace(unsigned event,void* context,void*,void*) noexcept{
+        if(event==SQLITE_TRACE_STMT)++static_cast<CatalogFixture*>(context)->traced_statements;
+        return 0;
+    }
     NativeMapSource source{NativeMapCatalog::current_dataset_id,"CUSTOM_TEST_NOT_NATIVE:map-catalog",std::string(64,'a'),
         std::string(64,'b'),"149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763",
         "Map_City_Coordniate","0x59a80","0x59d80",1};
@@ -336,9 +363,14 @@ struct CatalogFixture {
         const auto row=bytes("0,0,0,1,2,0,0,0,0,0,fix\\base.mdt,0,0,0");
         sqlite_detail::Statement record(raw,"INSERT INTO native_map_catalog VALUES(?,0,1,?,?,1,0,2)");
         record.bind(1,source.dataset_id);record.bind(2,digest(row));record.bind_blob(3,row);record.done();
+        require(sqlite3_trace_v2(raw,SQLITE_TRACE_STMT,&trace,this)==SQLITE_OK,"Fixture statement trace unavailable");
+        // Positive control keeps zero-SQL assertions from silently using an inert trace.
+        const auto before=traced_statements;
+        sqlite_detail::Statement probe(raw,"SELECT 1");require(probe.row()&&traced_statements>before,"Fixture trace did not observe SQL");
     }
+    ~CatalogFixture(){sqlite3_trace_v2(db.get(),0,nullptr,nullptr);}
 };
-void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_fault=0){
+void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_fault=0,int native_entry_selector=-1){
     TemporaryFiles files;CatalogFixture catalog;
     const auto map=files.root/"Data2"/"map"/"fix";
     const auto selected=selected_scene==0?map/"indoor"/"one.hmd":map/"zero.hmd";
@@ -365,17 +397,30 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_f
     first.common_source_generation=la->generation;second.common_source_generation=lb->generation;
     // The actual Session writes these full bytes. Faults do NOT alter the
     // original ready lease or its durable saved position to make a false match.
-    require(entry_geometry_fault<=5,"Unknown entry geometry fixture fault");
+    // Fault6 retains exact actor/geometry but issues kind1, whose native loader
+    // branch is not HMD; the generic entry view remains valid and unmodified.
+    require(entry_geometry_fault<=6,"Unknown entry geometry fixture fault");
     first.world_frame=RecoveredWorldEntry::wire(41,profile,
         static_cast<std::uint16_t>(pa.x+(entry_geometry_fault==1)),
         static_cast<std::uint16_t>(pa.y+(entry_geometry_fault==2)),
         static_cast<std::uint16_t>(pa.area+(entry_geometry_fault==3)),
-        static_cast<std::uint16_t>(entry_geometry_fault==4?(pa.scene^1):pa.scene));
+        static_cast<std::uint16_t>(entry_geometry_fault==4?(pa.scene^1):pa.scene),
+        static_cast<std::uint16_t>(entry_geometry_fault==6?1:2));
     second.world_frame=RecoveredWorldEntry::wire(42,profile,pb.x,pb.y,pb.area,pb.scene);
+    require(native_entry_selector>=-1&&native_entry_selector<8,"Unknown native entry direction fixture selector");
+    const bool initial_only=native_entry_selector>=0;
+    const auto expected_direction=static_cast<std::uint8_t>(initial_only?(native_entry_selector+7)%8:2);
+    if(initial_only){
+        // Actual kind2 CAN dispatch consumes row+1, without testing byte0.
+        // This tag7 fixture therefore needs no invented native tag discriminator.
+        config.areas[0].expected_hmd_tag.reset();
+        first.world_frame=entry_with_direction_selector(first.world_frame,static_cast<std::uint8_t>(native_entry_selector));
+        second.world_frame=entry_with_direction_selector(second.world_frame,static_cast<std::uint8_t>(native_entry_selector));
+    }
     first.select(false);first.send(BundleSessionPeer::tail(41));first.silent();
     second.select(false);second.send(BundleSessionPeer::tail(42));second.silent();
     bool pose_available=true;
-    const Bundle::PoseSource pose=[&](Session& session,const Scene::FactoryScope& scope)->std::optional<Bundle::InitialPose>{
+    Bundle::PoseSource pose=[&](Session& session,const Scene::FactoryScope& scope)->std::optional<Bundle::InitialPose>{
         if(!pose_available||session.id()!=scope.lease.session||session.account_id!=scope.lease.account||
            session.character_id!=scope.lease.character)return {};
         return Bundle::InitialPose{scope.saved_position,2,
@@ -384,30 +429,40 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_f
                     actual.character_id==current.lease.character&&saved==current.saved_position&&direction==2;
             }};
     };
+    if(initial_only)pose=Bundle::initial_entry_pose_source(presence);
     bool absent_pose_refused=false;
     try{(void)Bundle::create(*catalog.catalog,presence,2,config,{});}catch(const std::invalid_argument&){absent_pose_refused=true;}
     require(absent_pose_refused,"Bundle source invented its mandatory pose supplier");
     auto bundle=Bundle::create(*catalog.catalog,presence,2,config,pose);
     const auto supply=bundle->input_source();
     const Scene::FactoryScope sa{*la,pa},sb{*lb,pb};
-    const auto original_init=first.session->normal_world_initialization();
-    require(original_init&&original_init->qualified_scene_identity()&&original_init->entry_written()&&
+    const auto original_init=first.session->normal_world_initialization_on_game();
+    require(original_init&&original_init->qualified_scene_identity()&&original_init->entry_written()&&original_init->original_entry_battle_phase()&&
         first.session->normal_world_initialization_current_on_game(*original_init),"Actual original 2A INIT not Written/current");
     const auto entry=RecoveredWorldEntryView::read(original_init->entry_frame());
     require(entry&&entry->actor_handle==41,"Actual original 2A actor differs from its real Session prepared actor");
+    if(initial_only){
+        bool tls_refused=false;
+        try{(void)first.session->normal_world_initialization();}catch(const std::logic_error&){tls_refused=true;}
+        require(tls_refused,"Readonly game INIT accessor weakened the original world-callback TLS guard");
+        bool wrong_thread_observed=false;
+        std::thread other([&]{wrong_thread_observed=bool(first.session->normal_world_initialization_on_game());});other.join();
+        require(!wrong_thread_observed&&first.session->normal_world_initialization_current_on_game(*original_init),
+            "Readonly game INIT accessor exposed custody on another thread or retired the actual owner");
+    }
     auto ia=supply(*first.session,sa),ib=supply(*second.session,sb);
     if(entry_geometry_fault) {
-        require((entry->actor_handle!=la->actor_handle||entry->area!=la->position.area||entry->scene!=la->position.scene||entry->x!=la->position.x||entry->y!=la->position.y)&&
+        require((entry->kind!=2||entry->actor_handle!=la->actor_handle||entry->area!=la->position.area||entry->scene!=la->position.scene||entry->x!=la->position.x||entry->y!=la->position.y)&&
             !ia&&ib&&ib->prepared_bundle&&presence->retained_ready_current(*la)&&presence->saved_position(*la)==std::optional{pa}&&
             first.session->normal_world_initialization_current_on_game(*original_init)&&!first.session->closing(),
-            "Mismatched actual 2A actor/geometry supplied resources, rewrote saved pose or closed a valid real Session");
+            "Mismatched actual 2A kind/actor/geometry supplied HMD resources, rewrote saved pose or closed a valid real Session");
         bundle->stop();return;
     }
-    require(entry->actor_handle==la->actor_handle&&entry->area==la->position.area&&entry->scene==la->position.scene&&entry->x==la->position.x&&entry->y==la->position.y,
+    require(entry->kind==2&&entry->actor_handle==la->actor_handle&&entry->area==la->position.area&&entry->scene==la->position.scene&&entry->x==la->position.x&&entry->y==la->position.y,
         "Positive bundle fixture does not match its original actual 2A/lease");
     require(ia&&ib&&ia->prepared_bundle&&ib->prepared_bundle&&ia->source_lifetime&&ib->source_lifetime,
         "Actual CAN selection did not issue complete prepared scene supplies");
-    require(!ia->authority&&!ia->owned_ordinary&&ia->actual_direction==2&&ia->actual_position==pa,
+    require(!ia->authority&&!ia->owned_ordinary&&ia->actual_direction==expected_direction&&ia->actual_position==pa,
         "File source invented authority or a default initial pose");
     require(ia->prepared_bundle->matches(*ia)&&ib->prepared_bundle->matches(*ib),"Private prepared source failed its own full identity");
     require(ia->sources.hmd.actual_source().lexically_normal()==selected.lexically_normal()&&
@@ -426,8 +481,28 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_f
     const auto current=[&](const Bundle::Input& input,const SharedWorldPresence::Lease& lease){
         const auto& images=input.prepared_bundle->resources();
         const Scene::Scope scope{lease,input.actual_position,input.actual_direction,input.actual_initial_scene_generation};
-        return input.current(Scene::Check::Adopt,scope,images,input.sources);
+        const auto before=catalog.traced_statements;
+        const auto result=input.current(Scene::Check::Adopt,scope,images,input.sources);
+        require(catalog.traced_statements==before,"Held bundle Current entered SQLite instead of retained state");
+        return result;
     };
+    std::optional<Bundle::InitialPose> held_entry_pose;
+    const auto pose_current=[&](Session& actual,const Scene::FactoryScope& scope,const RecoveredPosition& saved,std::uint8_t direction){
+        require(held_entry_pose&&held_entry_pose->current,"Actual first-entry pose Current missing");
+        const auto before=catalog.traced_statements;
+        const auto result=held_entry_pose->current(actual,scope,saved,direction);
+        require(catalog.traced_statements==before,"Held first-entry pose Current entered SQLite");return result;
+    };
+    if(initial_only){
+        held_entry_pose=pose(*first.session,sa);
+        require(held_entry_pose&&held_entry_pose->position==pa&&held_entry_pose->direction==expected_direction&&
+            pose_current(*first.session,sa,pa,expected_direction)&&!pose_current(*second.session,sa,pa,expected_direction)&&
+            !pose_current(*first.session,sa,pa,static_cast<std::uint8_t>((expected_direction+1)%8))&&
+            !pose(*second.session,sa),"Actual first-entry supplier substituted facing or borrowed another Session");
+        auto wrong=pa;++wrong.x;
+        require(!pose_current(*first.session,Scene::FactoryScope{*la,wrong},wrong,expected_direction)&&
+            !pose(*first.session,Scene::FactoryScope{*la,wrong}),"First-entry supplier accepted a fabricated saved prefix");
+    }
     require(current(*ia,*la)&&current(*ib,*lb)&&!current(*ia,*lb)&&!supply(*second.session,sa),
         "Foreign full Session/Lease borrowed a selected scene source");
     auto changed=*ia;changed.sources.actual_rom_prefix.push_back('x');
@@ -436,7 +511,7 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_f
     require(!changed.prepared_bundle->matches(changed),"Prepared bundle admitted a fabricated scene epoch");
     const auto actual_account=first.session->account_id;first.session->account_id^=std::uint64_t{1}<<32;
     require(!current(*ia,*la)&&!supply(*first.session,sa),"Bundle source narrowed full account identity");first.session->account_id=actual_account;
-    pose_available=false;require(!supply(*first.session,sa),"Absent real initial pose became a zero/default pose");pose_available=true;
+    if(!initial_only){pose_available=false;require(!supply(*first.session,sa),"Absent real initial pose became a zero/default pose");pose_available=true;}
 
     // File parsing/composition gives no movement authority. Supply the existing
     // explicit CUSTOM-0150 policy only at the actual host's installation seam.
@@ -495,13 +570,20 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_f
         "Actual common position CAS did not advance the durable saved prefix");
     const Scene::FactoryScope moved_scope{*la,*moved};
     auto moved_input=supply(*first.session,moved_scope);
-    const auto after_init=first.session->normal_world_initialization();
-    require(moved_input&&moved_input->actual_position==*moved&&moved_input->actual_direction==2&&
-        moved_input->actual_initial_scene_generation!=latest->actual_initial_scene_generation&&
-        after_init&&after_init->same_initialization(*original_init)&&
-        first.session->normal_world_initialization_current_on_game(*original_init)&&
-        !current(*latest,*la)&&current(*moved_input,*la)&&!supply(*first.session,sa)&&current(*moved_input,*la),
-        "Saved-after pose was compared to original 2A instead of its immutable lease entry pose");
+    const auto after_init=first.session->normal_world_initialization_on_game();
+    require(after_init&&after_init->same_initialization(*original_init)&&after_init->original_entry_battle_phase()&&
+        first.session->normal_world_initialization_current_on_game(*original_init),"Position CAS rewrote original actual INIT lineage");
+    if(initial_only){
+        // Native initial facing is qualified only for the original saved prefix.
+        // A real durable move needs a later genuine pose issuer; never recycle B4.
+        require(!moved_input&&!pose(*first.session,moved_scope)&&!pose(*first.session,sa)&&!supply(*first.session,sa),
+            "First-entry-only supplier reused original B4 after a real common position CAS");
+    }else{
+        require(moved_input&&moved_input->actual_position==*moved&&moved_input->actual_direction==2&&
+            moved_input->actual_initial_scene_generation!=latest->actual_initial_scene_generation&&
+            !current(*latest,*la)&&current(*moved_input,*la)&&!supply(*first.session,sa)&&current(*moved_input,*la),
+            "Saved-after pose was compared to original 2A instead of its immutable lease entry pose");
+    }
     const auto retained_entry=RecoveredWorldEntryView::read(after_init->entry_frame());
     require(retained_entry&&retained_entry->x==la->position.x&&retained_entry->y==la->position.y&&retained_entry->x!=moved->x,
         "Position advance rewrote or reminted the original entry evidence");
@@ -509,8 +591,25 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_f
     // cannot bypass that prerequisite; successful real return refresh is outside
     // this fixture until the actual native return/INIT owner is supplied.
     first.session->set_state(SessionState::InBattle);first.session->set_state(SessionState::InWorld);
-    require(!current(*moved_input,*la)&&!supply(*first.session,moved_scope)&&current(*latest_other,*lb),
+    require((!moved_input||!current(*moved_input,*la))&&!current(*latest,*la)&&
+        !supply(*first.session,moved_scope)&&current(*latest_other,*lb),
         "Battle transition reused a pre-battle INIT/source or retired another Session");
+    if(initial_only){
+        require(!pose_current(*first.session,sa,pa,expected_direction),"Held initial facing survived an actual battle phase change");
+        // Isolate battle refusal from the first character's already-advanced
+        // position: this second Session has never committed a movement step.
+        const auto second_pose=pose(*second.session,sb);
+        require(second_pose&&second_pose->direction==expected_direction,"Unmoved second Session lost genuine first-entry pose");
+        second.session->set_state(SessionState::InBattle);
+        const auto before=catalog.traced_statements;
+        require(!second_pose->current(*second.session,sb,pb,expected_direction)&&catalog.traced_statements==before,
+            "Battle-phase initial pose Current remained usable or entered SQLite");
+        require(!pose(*second.session,sb)&&!current(*latest_other,*lb),"Battle Session reused original first-entry supply");
+        second.session->set_state(SessionState::InWorld);
+        require(!pose(*second.session,sb)&&!supply(*second.session,sb),"Bare battle return fabricated a genuine successor INIT/pose");
+        // This deliberately does not forge the private post-battle INIT receipt;
+        // successful genuine return refresh is not exercised by this fixture.
+    }
     bundle->stop();
     bool stopped_current=false,stopped_read=false;
     try{stopped_current=!current(*latest_other,*lb);}catch(const std::logic_error&){stopped_current=true;}
@@ -521,6 +620,9 @@ void hmd_bundle_lifecycle(std::uint16_t selected_scene,unsigned entry_geometry_f
 
 // Parent registers this named suite; no static initializer runs test code.
 void test_taiwan_native_hmd_bundle_source(){
-    complete_can_bounds();hmd_bundle_lifecycle(0);hmd_bundle_lifecycle(1);
-    for(unsigned fault=1;fault<=5;++fault)hmd_bundle_lifecycle(0,fault);
+    entry_direction_projection();complete_can_bounds();hmd_bundle_lifecycle(0);hmd_bundle_lifecycle(1);
+    for(unsigned fault=1;fault<=6;++fault)hmd_bundle_lifecycle(0,fault);
+    // Boundary projections reach the actual Session -> supplier -> bundle ->
+    // Host path, including selector0 -> direction7 and selector1 -> direction0.
+    hmd_bundle_lifecycle(0,0,0);hmd_bundle_lifecycle(1,0,1);
 }

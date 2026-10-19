@@ -100,3 +100,17 @@ archives; they are not active dependencies or runtime capabilities.
   Stay quiet when unchanged, notify meaningful findings or actionable blockers.
 - PHASE1 remains source/static only. The new goal does not authorize early
   builds, tests, game execution, game SQL, migration or deployment.
+
+## Owner three-channel requirement (2026-10-19)
+
+- After choosing the server, the original Taiwan client must offer exactly
+  three selectable channels and support switching between them. This extends
+  the active full-server goal, not three display labels over one world.
+- Share account/character progress and saved items; isolate world presence,
+  visible actors, monsters, encounters and local broadcasts by channel.
+  Preserve exclusive character ownership and complete save/handoff custody;
+  switching failure cannot duplicate ownership or discard durable progress.
+- Connect actual native configured slots,04/05/06 advertisement, selected
+  destinations, three real endpoints and game-owned scene lifecycle. Use REA
+  for unknown selection/switch contracts. A6 bytes, masks or07 route keys alone
+  are not channel identity or transfer authority. Keep PHASE1 static.

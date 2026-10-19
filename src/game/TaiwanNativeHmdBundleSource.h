@@ -16,7 +16,9 @@ public:
         std::uint16_t area=0;
         std::filesystem::path actual_can_file;
         std::string expected_can_sha256;
-        std::optional<std::uint8_t> expected_hmd_tag; // Explicit subset, no implicit tag1 rule.
+        // Optional operator assertion. The recovered kind2 caller selects the
+        // CAN reference at row+1 without using row0 as its HMD discriminator.
+        std::optional<std::uint8_t> expected_hmd_tag;
     };
     struct Limits {
         std::size_t hmd_encoded=0,hmd_plain=0,rom_encoded=0,rom_plain=0,max_cached_maps=0;
@@ -33,6 +35,12 @@ public:
         std::function<bool(Session&,const Scene::FactoryScope&,const RecoveredPosition&,std::uint8_t)> current;
     };
     using PoseSource=std::function<std::optional<InitialPose>(Session&,const Scene::FactoryScope&)>;
+    // Concrete original-phase source from this Session's actual Written2A.
+    // Refuses saved-position advancement or a post-battle initialization reuse;
+    // those phases require the genuine current pose source, never old facing.
+    // The returned Current retains the entry witness, without codec/SQL/
+    // observers; actual supply/ResourceOwner still qualify the saved pose.
+    static PoseSource initial_entry_pose_source(std::shared_ptr<SharedWorldPresence>);
     static std::shared_ptr<TaiwanNativeHmdBundleSource> create(const NativeMapCatalog&,
         std::shared_ptr<SharedWorldPresence>,std::size_t actual_session_capacity,Configuration,PoseSource);
     ~TaiwanNativeHmdBundleSource();

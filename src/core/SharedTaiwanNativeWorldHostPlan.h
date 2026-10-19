@@ -124,6 +124,8 @@ public:
         // Apply before the database-owned ordinary movement decorator.
         static Sources with_can_hmd_movement_resources(const SharedWorldHostPlan::Context&,
             TaiwanNativeHmdBundleSource::Configuration,TaiwanNativeHmdBundleSource::PoseSource,Sources);
+        static Sources with_initial_entry_can_hmd_movement_resources(const SharedWorldHostPlan::Context&,
+            TaiwanNativeHmdBundleSource::Configuration,Sources);
         // CUSTOM-0150 same-Database whole-version policy selection. Call on
         // actual game Context; real resource supplier must select no authority.
         // Explicit positive interval registers this exact cache with the real
@@ -194,6 +196,8 @@ public:
         static StoredSources with_owned_inventory_movement(const SharedWorldHostPlan::Context&,StoredSources);
         static StoredSources with_can_hmd_movement_resources(const SharedWorldHostPlan::Context&,
             TaiwanNativeHmdBundleSource::Configuration,TaiwanNativeHmdBundleSource::PoseSource,StoredSources);
+        static StoredSources with_initial_entry_can_hmd_movement_resources(const SharedWorldHostPlan::Context&,
+            TaiwanNativeHmdBundleSource::Configuration,StoredSources);
         static StoredSources with_database_owned_ordinary_movement(
             const SharedWorldHostPlan::Context&,std::string profile_key,
             std::size_t max_profiles,std::chrono::milliseconds reload_interval,StoredSources);

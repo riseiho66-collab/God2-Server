@@ -957,6 +957,20 @@ SharedTaiwanNativeWorldHostPlan::Sources::with_actor_status_incarnations(const C
     return sources;
 }
 SharedTaiwanNativeWorldHostPlan::Sources
+SharedTaiwanNativeWorldHostPlan::Sources::with_initial_entry_can_hmd_movement_resources(
+    const Context& context,TaiwanNativeHmdBundleSource::Configuration configuration,Sources sources) {
+    if(!context.common_world)throw std::invalid_argument("TW initial entry pose requires actual common host");
+    return with_can_hmd_movement_resources(context,std::move(configuration),
+        TaiwanNativeHmdBundleSource::initial_entry_pose_source(context.common_world->presence()),std::move(sources));
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::with_initial_entry_can_hmd_movement_resources(
+    const Context& context,TaiwanNativeHmdBundleSource::Configuration configuration,StoredSources sources) {
+    if(!context.common_world)throw std::invalid_argument("TW stored initial entry pose requires actual common host");
+    return with_can_hmd_movement_resources(context,std::move(configuration),
+        TaiwanNativeHmdBundleSource::initial_entry_pose_source(context.common_world->presence()),std::move(sources));
+}
+SharedTaiwanNativeWorldHostPlan::Sources
 SharedTaiwanNativeWorldHostPlan::Sources::with_can_hmd_movement_resources(
     const Context& context,TaiwanNativeHmdBundleSource::Configuration configuration,
     TaiwanNativeHmdBundleSource::PoseSource pose,Sources sources) {

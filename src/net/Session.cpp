@@ -340,6 +340,9 @@ bool Session::NormalWorldInitialization::qualified_scene_identity() const noexce
 bool Session::NormalWorldInitialization::entry_written() const noexcept {
     return data_->entry->written.load() && !data_->entry->retired.load();
 }
+bool Session::NormalWorldInitialization::original_entry_battle_phase() const noexcept {
+    return data_&&data_->entry&&data_->effective_battle==data_->entry->battle;
+}
 bool Session::NormalWorldInitialization::world_identity_sender_current() const noexcept {
     return entry_written() && data_->entry->world_identity_sender.eligible();
 }
@@ -4728,7 +4731,7 @@ struct Session::Impl {
                     s.c2s0002_state=C2S0002State::TerminalSent;
                     logger("session")->info("session_id={} LOGIN_TERMINAL_SENT length=20 opcode=10; acceptance unconfirmed",s.id);
                 }
-                if(is_server_list_mode(s.mode) && (bytes->size()==8 || (!s.character_routes.empty() && bytes->size()==28))) {
+                if(is_server_list_mode(s.mode) && (bytes->size()==8 || (!s.character_routes.empty() && bytes->size()==s.character_routes.size()))) {
                     s.c2s0002_state=C2S0002State::ServerListSent;
                     logger("session")->info("session_id={} SERVER_LIST_SENT entry_id=0 length={} character_routes={}",s.id,bytes->size(),!s.character_routes.empty());
                 }
@@ -5634,6 +5637,13 @@ std::optional<Session::NormalWorldInitialization> Session::normal_world_initiali
     if(!data)return std::nullopt;
     const NormalWorldInitialization result(data);
     if(!normal_world_initialization_current(result))return std::nullopt;
+    return result;
+}
+std::optional<Session::NormalWorldInitialization> Session::normal_world_initialization_on_game() const {
+    const auto data=impl_->normal_initialization.load();
+    if(!data)return std::nullopt;
+    const NormalWorldInitialization result(data);
+    if(!normal_world_initialization_current_on_game(result))return std::nullopt;
     return result;
 }
 bool Session::normal_world_initialization_current(const NormalWorldInitialization& observation) const {

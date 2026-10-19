@@ -6486,8 +6486,11 @@
     {
       "id": "CUSTOM-0158",
       "name": "Taiwan immutable CAN-selected HMD movement bundle",
-      "authority": "OWNER_AUTHORIZED_SERVER_ASSET_PUBLICATION_NOT_NATIVE_DISPATCH_OR_REMOTE_CLIENT_ATTESTATION",
+      "authority": "OWNER_AUTHORIZED_SERVER_ASSET_PUBLICATION_WITH_NATIVE_KIND_AND_INITIAL_DIRECTION_NOT_REMOTE_ATTESTATION",
       "implementation": [
+        "src/net/Session.h",
+        "src/net/Session.cpp",
+        "src/protocol/RecoveredWorldEntryView.h",
         "src/game/TaiwanNativeCanAsset.h",
         "src/game/TaiwanNativeCanAsset.cpp",
         "src/game/TaiwanNativeHmdBundleSource.h",
@@ -6505,19 +6508,45 @@
         "tests/test_main.cpp",
         "tests/CMakeLists.txt"
       ],
-      "document": "docs/research/tw-can-hmd-bundle-source-20261019.md",
+      "document": "docs/research/tw-native-entry-direction-and-game-observation-20261019.md",
       "rules": {
-        "selection": "Complete SHA256-pinned CAN and raw Map_City_Coordniate base-row selectors/path; explicit qualified ASCII absolute client root, configured HMD tag, total size limits and bounded shared map cache",
+        "selection": "Complete SHA256-pinned CAN and raw Map_City_Coordniate base-row selectors/path; explicit qualified ASCII absolute client root, optional operator tag assertion, total size limits and bounded shared map cache; actual issued2A kind2 selects the HMD branch",
+        "initial_pose": "Explicit actual first-entry supplier reads the qualified Written2A, full original lease/saved pose and native B4low3 direction; refuses new supply after saved-prefix advancement or post-battle INIT reuse; retained Current alone does not attest live saved position",
         "resources": "Original selected logical HMD request backslash directory supplies ROM prefix; original Selection and MapAsset/RomAsset readers and composition retained, immutable grid shared across actual Sessions",
         "ownership": "Private issuer supplies full Session/Lease revocation token, server version/resource/scene epochs and private prepared bundle; actual Host/ResourceOwner retires token synchronously before external cleanup",
         "authority": "Actual pose supplier mandatory; no default direction, Authority, rate or policy. Existing CUSTOM-0150 decorator is applied last and remains sole ordinary movement/CAS authority",
-        "reload": "Validate every CAN and rebuild every previously cached map before whole publication; invalid candidate retains old version, successful publication revokes old supplies; no input-time game DB SQL"
+        "reload": "Validate every CAN and rebuild every previously cached map before whole publication; invalid candidate retains old version, successful publication revokes old supplies; no per-input configuration SQL, canonical saved/root observations remain at supply, provider Current is retained-only without SQL"
       },
-      "native_gap": "Relative native448300 manager-root expansion, CAN-tag dispatcher, outdoor MDL integration, actual Main full2A/Entered/scene/pose supply and remote native resource/window authority remain open. Server epochs only name immutable server publications.",
+      "native_gap": "Manager-base initialization/lifetime and alternate consumers, outdoor MDL integration, dynamic pose after walking/battle/transfer, actual Main full2A/Entered/scene supply and current-client runtime acceptance remain open. Server epochs only name immutable server publications, not remote native resource/window authority.",
       "production_activated": false,
       "native_client_acceptance": false,
       "whole_world_complete": false,
       "verification_status": "SOURCE_AND_BOUNDED_STATIC_REVIEW_ONLY_REGRESSION_SOURCE_REGISTERED_NOT_BUILT_OR_RUN"
+    }
+,
+    {
+      "id": "CUSTOM-0159",
+      "name": "Owner-required native three-channel routing topology",
+      "authority": "OWNER_REQUESTED_THREE_NATIVE_SUBGROUPS_WITH_EXPLICIT_ENDPOINTS",
+      "implementation": [
+        "src/protocol/RecoveredServerRoutes.h",
+        "src/net/Session.cpp",
+        "tests/test_protocol_replay.cpp"
+      ],
+      "document": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "rules": {
+        "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
+        "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
+        "replay": "One native current-group endpoint counter advances across all05 rows; the three subgroups select physical endpoint ordinals0,1,2, with route ordinal0",
+        "ownership": "Required final topology shares saved characters and issued-list lineage, isolates world owners and preserves exclusive character/Session/channel custody; advertisement alone supplies none of those owners",
+        "compatibility": "Existing one-channel API and bytes unchanged; Session advertisement telemetry uses actual route-vector width",
+        "availability": "Current-native4074CF..407602 tests WORD bit k; the available wrapper emits0007, opening rows0..2. It refuses group ordinals beyond the actual first10 UI rows. Generic full-record producer retains supplied masks unchanged."
+      },
+      "native_gap": "Actual three listeners and independent game worlds, global character reservation, complete switch save/retirement/handoff recovery and original-current-client acceptance remain unimplemented. UI investigation is documented separately; no mask or client snapshot route key is invented.",
+      "production_activated": false,
+      "native_client_acceptance": false,
+      "three_channel_gameplay_complete": false,
+      "verification_status": "SOURCE_AND_STATIC_REVIEW_ONLY_REGRESSION_SOURCE_REGISTERED_NOT_BUILT_OR_RUN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."
