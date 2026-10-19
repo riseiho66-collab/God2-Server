@@ -1,5 +1,6 @@
 #pragma once
 #include "game/SharedTaiwanMovementSource.h"
+#include "protocol/RecoveredGuildChat.h"
 
 namespace god2 {
 class SharedTaiwanOwnedDeitySkillSource;
@@ -9,7 +10,7 @@ class SharedTaiwanWorldRecordSource final {
 public:
     using Lease=SharedWorldPresence::Lease;
     using Record=RecoveredWorldRecords::Record;
-    enum class Kind {Movement,Others,SelectionItem,InventoryMove,NativeSkill,DeitySelection};
+    enum class Kind {Movement,Others,SelectionItem,InventoryMove,NativeSkill,DeitySelection,OwnedGuildChat};
     struct Run {std::size_t offset,count;Kind kind;};
     struct Scope {
         Lease lease;
@@ -58,6 +59,12 @@ public:
         std::function<void()> invalidate_active;
         std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> source;
     };
+    struct GuildChatBinding {
+        // Explicit existing owned guild policy; no other chat/control grammar.
+        std::function<std::optional<Reply>(Session&,std::span<const RecoveredGuildChat::Request>)> dispatch;
+        std::function<void(Session&)> release;
+        std::function<void()> invalidate_active;
+    };
     struct OtherBinding {
         // This sender's native encrypted output returns in original run order;
         // do not submit it directly ahead of earlier accumulated batch replies.
@@ -86,6 +93,7 @@ public:
         // Independent lossless D5 input; actual mandatory Others owns the
         // issued selection window, validation, save and reply or refusal.
         bool native_skill_selection_requests=false;
+        std::optional<GuildChatBinding> guild_chat={};
     };
     // Mandatory real opcode/whole-batch/run-phase qualification. Current is a
     // pure observer; saved position, phase and battle generation are read again
@@ -108,6 +116,7 @@ public:
         std::weak_ptr<SharedTaiwanOwnedDeitySkillSource> deity_selection_source={};
         bool native_preborn_requests=false;
         bool native_skill_selection_requests=false;
+        bool app_owned_guild_chat=false;
     };
     static Binding create(std::shared_ptr<SharedWorldPresence>,SharedTaiwanMovementSource::Binding,
         OtherBinding,Current,Budgets,std::size_t actual_session_capacity);

@@ -134,6 +134,9 @@ struct SharedWorldHostPlan {
         // LAST CUSTOM-0150 actual Application GAME scheduler owner. Same-cache
         // registration only; legacy plans may leave it absent. No input SQL.
         std::shared_ptr<OwnedOrdinaryMovementPolicyReloads> ordinary_movement_policy_reloads{};
+        // LAST: actual Application-owned guild chat only; original full mixed
+        // Current/run ordering remains mandatory. No other chat fallback.
+        std::optional<SharedTaiwanWorldRecordSource::GuildChatBinding> owned_guild_chat={};
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in

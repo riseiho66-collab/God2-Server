@@ -1,0 +1,147 @@
+{
+  "round": 493,
+  "previous_goal_turn": "progress",
+  "previous_commit": "6ea5efb408442b32288bd23b4c7e777256075152",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_NATIVE_MIXED_THREE_CHANNEL_GUILD_CHAT",
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-chat-round493/native-chat/findings-v2.json",
+    "receipt_sha256": "6e57249fb1d83c1198da26276f0ba4bf7eb651104b5ba9a05132b6e86ff1fee5",
+    "members_verified": 19,
+    "opened_targets": 2,
+    "closed_targets": 2,
+    "original_sections_and_mappings_verified": true,
+    "observations": [
+      "3FFFh is not established as a universal5C wire-sender bound. It is also not party/scene-only: the matching currentCUSTOM-0054 ST hook explicitly checks it.",
+      "Category3 does not traverse the ordinary0/6 actor-bubble lookup at this dispatch point. That does not authorize selecting arbitrary sender IDs or widening existingPeer mappings.",
+      "WireDWORD width does not authorize casting commonuint64 character IDs, truncation, modulo aliases, or substituting an unrelated native actor handle. Keep currentqualifiedPeer compatibility and leave a real source bridge explicit."
+    ],
+    "remaining_unknowns": [
+      "Full native actor lookup domain in4FB690 and downstream rendering/filter behavior475E00.",
+      "Complete70F143 effects andST style/name publication authority beyond the observed current hook contract.",
+      "Actual authoritative common64<->wireDWORD/native actor projection across channels remains open. No mapping or widening was implemented."
+    ],
+    "source_pin_scope": "Captured worktree, not clean parent/final Application; matching immutable native target is independent"
+  },
+  "source_comparison": {
+    "parent_commit": "6ea5efb408442b32288bd23b4c7e777256075152",
+    "application_exact_declared_source_and_eol_changes": true,
+    "application_bytes": 923515,
+    "application_sha256": "01380f4a7812203daf88867a25a1bcbf3e5e515f5b9060b9923f94321cee7749",
+    "legacy_guild_branch_byte_identical": true,
+    "legacy_guild_branch_bytes": 3282,
+    "original_tick_byte_identical": true,
+    "tick_bytes": 2375,
+    "tick_sha256": "a2bd1f1847e14b4d2797af49c36be617588c5e41c09c4cde865a0fde4395059e",
+    "existing_chat_policy_wire_streamer_bytes_unchanged": true,
+    "actual_native_handler_no_default_lab_encoder": true,
+    "actual_native_cancellation_connected": true,
+    "single_host_game_loop": true
+  },
+  "source_integration": [
+    "Actual Context/native mixed OwnedGuildChat capability with original full-batch Current/run order",
+    "Late weak GAME owner installed before Held and actual capability checked before listeners",
+    "One-use all-world membership/exact-Session chat batches with synchronous native cancellation",
+    "Explicit qualified same-Session sender wire source required before DB, no lab fallback",
+    "Legacy branch/tick/policy/wire unchanged; incomplete chat discards unsubmitted sender buffer"
+  ],
+  "open": [
+    "Actual native guild mutation ingress; mounted Common alone is insufficient",
+    "Actual native providers/default Main and qualified sender profile",
+    "Common64/native actor projection and older guild bridges",
+    "Selected Web G, native world transfers, durable save/logout/target admission/recovery",
+    "Six switches/world isolation/current-client acceptance, abort drain and full-server requirements"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "01380f4a7812203daf88867a25a1bcbf3e5e515f5b9060b9923f94321cee7749"
+    },
+    {
+      "path": "src/core/SharedWorldHostPlan.h",
+      "sha256": "af7b7211780227f6ea9f4688622af851cba870794e00b2b0f315dfc19e6300be"
+    },
+    {
+      "path": "src/core/TaiwanThreeChannelPlan.h",
+      "sha256": "66db92c29f0700e909eda38e2c495500014fb953159c88222662af6d5f138294"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "sha256": "8a3d93ae4b611010329c1d049a582fb9ab457b7f71b34dd0bc02568b759d565e"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.h",
+      "sha256": "6c88b0d4894c0b07b66b9e75ce5af3f6167b5607015b4aacd613ebd464287685"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "sha256": "5c2da14513823aa7c6c345011f5ebd5d76fe436ff6a7a33db1573343c37f1c3e"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeRecordHandlerSource.cpp",
+      "sha256": "930fb1feb14c884c326e3820ccd70d3cc27068fd4406eabab593d3d32f1e8dbd"
+    },
+    {
+      "path": "src/game/OwnedTaiwanGuildChatDispatch.h",
+      "sha256": "680f39196c2645e98a9d7b787f0fa2ee6f3af2bfc883a6b5bf2e0994e4aab4cd"
+    },
+    {
+      "path": "src/game/OwnedTaiwanGuildChatDispatch.cpp",
+      "sha256": "c17aabc3265168c3e9278b0d2d9b87ce87b5c97402da3c83493590154feb91b7"
+    },
+    {
+      "path": "src/relations53/SharedGuildChannelDirectory53.h",
+      "sha256": "6102a4d16c4ddb2311f30d91bd0f4668f04fc7e21832c9576b26d93d5d932171"
+    },
+    {
+      "path": "src/relations53/SharedGuildChannelDirectory53.cpp",
+      "sha256": "069707bc7c8fcdbf5dfea743ef9111cf535a89f577b708afd039656995c97946"
+    },
+    {
+      "path": "tests/test_shared_guild_channel_directory53.cpp",
+      "sha256": "20984cb3a93518b3863d06aeb4e847a8bf1675be9889640f2b39c1c63fdda938"
+    },
+    {
+      "path": "tests/test_owned_taiwan_guild_chat_dispatch.cpp",
+      "sha256": "844559e0507d46dd6934eaea6801eba59c3f89e98ef302071f7c341126069daf"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "d9ff0cd26152bc0579903fb571c806b8d70d1e3ef96673627c5faf58b7079814"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "dbb25329db696a83eb8fcfb4f318703171d2b0d8e7b2a61de8dcc78d8b18f3d7"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "4a257485549ae07354f1b6e0ba1b34dc573acf92ada3757bedd7a43e9417d6dc"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "c6efcd3d64f29b693547747614d7952bb3f1b903db90cce2c090c061096ff510"
+    },
+    {
+      "path": "docs/research/tw-three-channel-chat-20261019.md",
+      "sha256": "daed80bad2d166366f051dce19c37be65c833ba14e4e1d02b0f8a0963d950f78"
+    }
+  ]
+}

@@ -1364,6 +1364,10 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
             throw std::logic_error("TW native records require their actual movement owner and fresh sources");
         }
         auto sources=std::move(*owner->records);owner->records.reset();
+        if(context.owned_guild_chat) {
+            if(sources.others.guild_chat)throw std::invalid_argument("TW owned guild chat has competing owners");
+            sources.others.guild_chat=context.owned_guild_chat;
+        }
         auto actual=SharedTaiwanWorldRecordSource::create(owner->common->presence(),owner->binding,
             std::move(sources.others),std::move(sources.current),sources.budgets,owner->capacity);
         if(!actual.records || !actual.release || !actual.invalidate_active)
@@ -1379,7 +1383,7 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
             },
             [owner,release=std::move(actual.release)](Session& session) {owner->check();release(session);},
             [owner] {owner->invalidate();},actual.spectator6e,actual.spectator_close,actual.native_selection_input,actual.native_skill_commands,actual.native_world_skill_requests,actual.deity_selection_source,actual.native_preborn_requests,
-            actual.native_skill_selection_requests
+            actual.native_skill_selection_requests,actual.app_owned_guild_chat
         };
     };
     return plan;

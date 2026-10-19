@@ -28,6 +28,7 @@ struct Work {
     Source::Run run;
     std::vector<RecoveredMovement::Request> movements;
     std::vector<TaiwanNativeSkillCommand::WireRecord> skills;
+    std::vector<RecoveredGuildChat::Request> guild_messages;
 };
 struct Owner {
     const std::thread::id thread=std::this_thread::get_id();
@@ -73,6 +74,8 @@ struct Owner {
         try {const auto deity=others.deity_selection;if(deity)deity->invalidate_active();}
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto skill=others.native_skills;if(skill)skill->invalidate_active();}
+        catch(...) {if(!failure)failure=std::current_exception();}
+        try {const auto guild=others.guild_chat;if(guild)guild->invalidate_active();}
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto invalidate=movement.invalidate_active;invalidate();}catch(...) {if(!failure)failure=std::current_exception();}
         if(failure)std::rethrow_exception(failure);
@@ -174,6 +177,8 @@ struct Owner {
                         return Source::Kind::DeitySelection;
                     if(others.native_skills && std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record))
                         return Source::Kind::NativeSkill;
+                    if(others.guild_chat && std::holds_alternative<RecoveredGuildChat::Request>(record))
+                        return Source::Kind::OwnedGuildChat;
                     return Source::Kind::Others;
                 };
                 const auto kind=classify(records[at]);const bool moving=kind==Source::Kind::Movement;
@@ -191,7 +196,7 @@ struct Owner {
                 }else if(kind!=Source::Kind::SelectionItem && kind!=Source::Kind::InventoryMove && kind!=Source::Kind::DeitySelection)
                     while(end<records.size() && !records[end].valueless_by_exception() && classify(records[end])==kind)++end;
                 if(end==at || prepared.size()>=budgets.max_runs)throw std::invalid_argument("TW mixed native run budget rejected");
-                Work work{{at,end-at,kind},{},{}};
+                Work work{{at,end-at,kind},{},{},{}};
                 if(moving) {
                     work.movements.reserve(end-at);
                     for(std::size_t i=at;i<end;++i) {
@@ -204,6 +209,10 @@ struct Owner {
                     work.skills.reserve(end-at);
                     for(std::size_t i=at;i<end;++i)
                         work.skills.push_back(std::get<TaiwanNativeSkillCommand::WireRecord>(records[i]));
+                }else if(kind==Source::Kind::OwnedGuildChat) {
+                    work.guild_messages.reserve(end-at);
+                    for(std::size_t i=at;i<end;++i)
+                        work.guild_messages.push_back(std::get<RecoveredGuildChat::Request>(records[i]));
                 }
                 runs.push_back(work.run);prepared.push_back(std::move(work));at=end;
             }
@@ -247,6 +256,9 @@ struct Owner {
                     }else if(work.run.kind==Source::Kind::NativeSkill) {
                         if(!others.native_skills)throw std::runtime_error("TW native skill owner unavailable");
                         const auto dispatch=others.native_skills->dispatch;reply=dispatch(session,work.skills);
+                    }else if(work.run.kind==Source::Kind::OwnedGuildChat) {
+                        if(!others.guild_chat)throw std::runtime_error("TW owned guild chat owner unavailable");
+                        const auto dispatch=others.guild_chat->dispatch;reply=dispatch(session,work.guild_messages);
                     }else {
                         const auto dispatch=others.records;reply=dispatch(session,records.subspan(work.run.offset,work.run.count));
                     }
@@ -292,6 +304,8 @@ struct Owner {
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto skill=others.native_skills;if(skill)skill->release(session);}
         catch(...) {if(!failure)failure=std::current_exception();}
+        try {const auto guild=others.guild_chat;if(guild)guild->release(session);}
+        catch(...) {if(!failure)failure=std::current_exception();}
         if(failure)std::rethrow_exception(failure);
         // Application separately performs actual movement/resource retirement.
     }
@@ -322,13 +336,16 @@ SharedTaiwanWorldRecordSource::Binding SharedTaiwanWorldRecordSource::create(
     const bool native_world_skill_requests=others.native_world_skill_requests;
     const bool native_preborn_requests=others.native_preborn_requests;
     const bool native_skill_selection_requests=others.native_skill_selection_requests;
+    if(others.guild_chat && (!others.guild_chat->dispatch || !others.guild_chat->release ||
+       !others.guild_chat->invalidate_active))throw std::invalid_argument("TW owned guild chat requires complete actual owner");
+    const bool app_owned_guild_chat=others.guild_chat.has_value();
     auto owner=std::make_shared<Owner>(std::move(presence),std::move(movement),std::move(others),std::move(current),budgets,capacity);
     return {
         [owner](Session& session,std::span<const Record> records){return owner->records(session,records);},
         [owner](Session& session){owner->release(session);},
         [owner]{owner->poison();},
         spectator6e,spectator_close,native_selection_input,native_skill_commands,native_world_skill_requests,deity_selection_source,native_preborn_requests,
-        native_skill_selection_requests
+        native_skill_selection_requests,app_owned_guild_chat
     };
 }
 }

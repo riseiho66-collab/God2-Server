@@ -1,4 +1,5 @@
 #include "relations53/SharedGuildChannelDirectory53.h"
+#include "game/OwnedTaiwanGuildChatDispatch.h"
 #include <array>
 #include <map>
 #include <stdexcept>
@@ -21,10 +22,14 @@ struct Fixture {
         std::vector<Directory::Host::Live> rows;
         std::set<std::uint64_t> closed;
         std::set<std::uint32_t> online;
+        std::map<std::uint64_t,Directory::Chat::Peer> chat_peers;
+        std::vector<std::pair<std::shared_ptr<Session>,std::vector<std::uint8_t>>> chats;
         unsigned ready=0,sends=0,baselines=0,names=0,closed_calls=0;
+        unsigned chat_reads=0,owner_reads=0;
         std::function<void()> on_ready,on_send,on_baseline,on_enumerate,on_name;
+        std::function<void()> on_chat_peer,on_chat_send;
         std::function<void(bool)> held_ack;
-        bool async=false,throw_send=false,null_baseline=false;
+        bool async=false,throw_send=false,null_baseline=false,throw_chat=false;
     };
     std::array<Channel,3> channels;
     std::shared_ptr<Directory> directory=Directory::create();
@@ -39,12 +44,15 @@ struct Fixture {
         auto& c=channels[k];Directory::Source s;
         s.session=[&c](auto id){const auto at=c.peers.find(id);return at==c.peers.end()?std::shared_ptr<Session>{}:at->second;};
         s.enumerate=[&c]{if(c.on_enumerate)c.on_enumerate();return c.rows;};
-        s.owner=[&c](auto id)->std::optional<Owner>{const auto at=c.owners.find(id);return at==c.owners.end()?std::nullopt:std::optional{at->second};};
+        s.owner=[&c](auto id)->std::optional<Owner>{++c.owner_reads;const auto at=c.owners.find(id);return at==c.owners.end()?std::nullopt:std::optional{at->second};};
         s.peer_ready=[&c](const Owner&){++c.ready;if(c.on_ready)c.on_ready();return true;};s.recipient_ready=s.peer_ready;
         s.closed=[&c](const Owner& value){++c.closed_calls;return c.closed.contains(value.session);};
         s.send=[&c](const Owner&,auto,std::function<void(bool)> ack){++c.sends;if(c.async)c.held_ack=ack;else{ack(true);ack(true);}if(c.on_send)c.on_send();if(c.throw_send)throw std::runtime_error("Synthetic send failure");};
         s.baseline=[&c](const Owner& value)->std::optional<Directory::Common::Baseline>{++c.baselines;if(c.on_baseline)c.on_baseline();if(c.null_baseline)return {};return Directory::Common::Baseline{value,{},false};};
-        s.online=[&c]{return c.online;};s.sync_name=[&c](const Owner&){++c.names;if(c.on_name)c.on_name();};return s;
+        s.online=[&c]{return c.online;};s.sync_name=[&c](const Owner&){++c.names;if(c.on_name)c.on_name();};
+        s.chat_peer=[&c](auto id)->std::optional<Directory::Chat::Peer>{++c.chat_reads;if(c.on_chat_peer)c.on_chat_peer();const auto at=c.chat_peers.find(id);return at==c.chat_peers.end()?std::nullopt:std::optional{at->second};};
+        s.chat_send=[&c](const std::shared_ptr<Session>& peer,auto logical){const auto at=c.peers.find(peer->id());if(at==c.peers.end()||at->second!=peer||peer->closing())throw std::runtime_error("Synthetic chat peer no longer local");c.chats.emplace_back(peer,std::move(logical));if(c.on_chat_send)c.on_chat_send();if(c.throw_chat)throw std::runtime_error("Synthetic chat enqueue exception");};
+        return s;
     }
     void seal(){for(std::uint8_t k=0;k<3;++k)directory->install(k,source(k));directory->seal();}
     ~Fixture(){directory->retire();}
@@ -78,6 +86,7 @@ void routing_and_identity(){
     f.channels[2].on_enumerate=[&]{++f.channels[0].peers[a.session]->account_id;};
     require(refuses([&]{(void)f.binding.enumerate();}),"Later supplier cannot mutate previously captured actual Session");f.channels[2].on_enumerate={};--f.channels[0].peers[a.session]->account_id;
     require(refuses([&]{f.directory->install(0,f.source(0));}),"Sealed source replacement refused");
+    require(f.channels[0].chat_reads+f.channels[1].chat_reads+f.channels[2].chat_reads==0,"Common53 pure and readiness routes never observe chat membership");
 }
 void closure_and_reentry(){
     Fixture f;const auto owner=f.add(1,0x100000005ULL,0x900000003ULL);f.seal();
@@ -118,5 +127,97 @@ void retirement_and_thread(){
     auto unsealed=Directory::create();require(refuses([&]{unsealed->seal();}),"All three sources mandatory");
     auto incomplete=f.source(0);incomplete.sync_name={};require(refuses([&]{unsealed->install(0,incomplete);}),"Every supplied callback mandatory");
 }
+struct ChatFixture:Fixture {
+    std::array<Owner,3> owners;
+    std::array<RecoveredGuildChat::Request,1> requests{RecoveredGuildChat::Request{{3,0xa5,0,0},"guild"}};
+    ChatFixture(){
+        for(std::uint8_t k=0;k<3;++k){
+            const auto actor=std::uint32_t{11}+k;owners[k]=add(k,0x100000001ULL+0x100000000ULL*k,actor,k!=2);
+            channels[k].chat_peers.emplace(owners[k].session,Directory::Chat::Peer{{owners[k].session,owners[k].account,actor,"Player"+std::to_string(k),true,k==1,0},{77,"SyntheticGuild",5,std::uint64_t{8}+k}});
+        }
+        // Actual public phase change supplies a battle generation. The native
+        // ready bit is not forged; these explicit synthetic source callbacks
+        // exercise directory policy only, not native gameplay entitlement.
+        channels[2].peers[owners[2].session]->set_state(SessionState::InBattle);seal();
+    }
+    static Directory::Chat::Prepare renderer(){return [](const auto& sender,const auto& recipient,const auto& request){return RecoveredGuildChat::display(sender.actor.character,recipient.actor.simplified,sender.actor.name+": "+request.legacy_text);};}
+    auto prepare(){return directory->prepare_chat(owners[0].session,requests,renderer());}
+    unsigned submitted()const{return static_cast<unsigned>(channels[0].chats.size()+channels[1].chats.size()+channels[2].chats.size());}
+};
+void chat_routing_and_one_use(){
+    ChatFixture f;auto batch=f.prepare();require(batch.has_value(),"Global guild chat prepares across three supplied worlds");
+    require(f.channels[0].owner_reads+f.channels[1].owner_reads+f.channels[2].owner_reads==0&&f.channels[0].ready+f.channels[1].ready+f.channels[2].ready==0,"Chat does not borrow Common53 owner/readiness policy that excludes battle");
+    unsigned echoes=0;std::vector<std::uint8_t> self;
+    const auto result=f.directory->dispatch_chat(*batch,[&](auto bytes){++echoes;self=std::move(bytes);});
+    require(result.complete&&result.submitted==3&&echoes==1&&f.channels[0].chats.empty()&&f.channels[1].chats.size()==1&&f.channels[2].chats.size()==1,"Self echo only original sender, cross-world sends include eligible battle row");
+    require(self[0]==0x5c&&self[9]==3&&f.channels[1].chats.front().second[9]==0x83,"Existing guild display validation preserves recipient selector/codepage");
+    const auto repeated=f.directory->dispatch_chat(*batch);require(!repeated.complete&&repeated.submitted==0,"Opaque ticket is consumed once");
+    auto next=f.prepare();require(next.has_value(),"Independent later request can prepare");auto moved=std::move(*next);
+    require(!f.directory->dispatch_chat(*next).complete&&f.directory->dispatch_chat(moved).complete,"Moved-from ticket has no dispatch authority");
+    ChatFixture foreign;auto original=foreign.prepare();require(original.has_value()&&!f.directory->dispatch_chat(*original).complete&&foreign.directory->dispatch_chat(*original).complete,"Foreign directory cannot consume or dispatch original issuer ticket");
+    ChatFixture other_guild;other_guild.channels[1].chat_peers.at(other_guild.owners[1].session).membership.guild_id=99;
+    auto audience=other_guild.prepare();require(audience.has_value(),"Other-guild source remains globally observed");
+    const auto scoped=other_guild.directory->dispatch_chat(*audience);require(scoped.complete&&scoped.submitted==2&&other_guild.channels[1].chats.empty(),"Native guild service prevents cross-guild leak");
 }
-void test_shared_guild_channel_directory53(){routing_and_identity();closure_and_reentry();retirement_and_thread();}
+void chat_freshness_and_partial_delivery(){
+    ChatFixture f;auto batch=f.prepare();require(batch.has_value(),"Initial chat prepared");
+    ++f.channels[1].chat_peers.at(f.owners[1].session).membership.membership_revision;
+    require(!f.directory->dispatch_chat(*batch).complete&&f.submitted()==0,"Changed membership refuses before first submission");
+    auto phase=f.prepare();require(phase.has_value(),"Refreshed chat prepared");
+    f.channels[2].peers[f.owners[2].session]->set_state(SessionState::InWorld);f.channels[2].peers[f.owners[2].session]->set_state(SessionState::InBattle);
+    require(!f.directory->dispatch_chat(*phase).complete&&f.submitted()==0,"Battle out-and-back generation cannot reuse original batch");
+    auto identity=f.prepare();require(identity.has_value(),"Current battle source prepares");
+    const auto previous=f.channels[1].peers[f.owners[1].session];auto replacement=std::make_shared<Session>(asio::ip::tcp::socket(f.game),f.game.get_executor(),previous->id(),false,Session::PacketHandler{},Session::DisconnectHandler{});
+    replacement->account_id=previous->account_id;replacement->character_id=previous->character_id;replacement->set_state(previous->state());f.channels[1].peers[previous->id()]=replacement;
+    require(!f.directory->dispatch_chat(*identity).complete&&f.submitted()==0,"Same full scalar identity with replacement pointer refuses");
+    f.channels[1].peers[previous->id()]=previous;
+    auto partial=f.prepare();require(partial.has_value(),"Partial-delivery fixture prepares");
+    f.channels[0].on_chat_send=[&]{++f.channels[1].chat_peers.at(f.owners[1].session).membership.membership_revision;};
+    const auto result=f.directory->dispatch_chat(*partial);require(!result.complete&&result.submitted==1&&f.submitted()==1,"Late membership change stops remainder, retains returned enqueue count");
+    require(!f.directory->dispatch_chat(*partial).complete&&f.submitted()==1,"Partial attempt cannot replay already submitted prefix");
+    ChatFixture throwing;auto failed=throwing.prepare();require(failed.has_value(),"Throwing-send fixture prepares");throwing.channels[0].throw_chat=true;
+    const auto thrown=throwing.directory->dispatch_chat(*failed);require(!thrown.complete&&thrown.submitted==0&&throwing.submitted()==1,"Throwing callback is not reported returned/accepted even if it recorded an attempt");
+    ChatFixture echo;auto echo_batch=echo.prepare();require(echo_batch.has_value(),"Throwing-echo fixture prepares");
+    const auto echo_result=echo.directory->dispatch_chat(*echo_batch,[](auto){throw std::runtime_error("Synthetic echo allocation failure");});
+    require(!echo_result.complete&&echo_result.submitted==0&&echo.submitted()==0,"Echo exception stops chat without throwing through movement caller");
+}
+void chat_renderer_reentry_and_retirement(){
+    ChatFixture f;bool entered=false,nested_refused=false;
+    auto reentrant=f.directory->prepare_chat(f.owners[0].session,f.requests,[&](const auto& sender,const auto& recipient,const auto& request){
+        entered=true;nested_refused=!f.prepare();return ChatFixture::renderer()(sender,recipient,request);
+    });
+    require(entered&&nested_refused&&!reentrant&&f.submitted()==0,"Caught renderer reentry invalidates entire pending preparation");
+    auto batch=f.prepare();require(batch.has_value(),"Clean preparation after refused reentry");
+    f.channels[0].on_chat_send=[&]{require(!f.directory->dispatch_chat(*batch).complete,"Nested consumed dispatch refuses");};
+    const auto result=f.directory->dispatch_chat(*batch);require(!result.complete&&result.submitted==1&&f.submitted()==1,"Caught dispatch reentry invalidates remaining batch");
+    ChatFixture retired;auto before=retired.prepare();require(before.has_value(),"Retire fixture prepares");retired.directory->retire();
+    require(!retired.directory->dispatch_chat(*before).complete&&retired.submitted()==0&&!retired.prepare(),"Retirement revokes all pending chat tickets");
+    ChatFixture late_retire;auto late=late_retire.prepare();require(late.has_value(),"In-callback retire fixture prepares");late_retire.channels[0].on_chat_send=[&]{late_retire.directory->retire();};
+    const auto retired_result=late_retire.directory->dispatch_chat(*late);require(!retired_result.complete&&retired_result.submitted==1&&late_retire.submitted()==1,"Retiring supplier preserves submitted prefix and refuses remaining worlds");
+    ChatFixture render_change;const auto invalid=render_change.directory->prepare_chat(render_change.owners[0].session,render_change.requests,[&](const auto& sender,const auto& recipient,const auto& request){
+        ++render_change.channels[2].chat_peers.at(render_change.owners[2].session).membership.membership_revision;return ChatFixture::renderer()(sender,recipient,request);
+    });require(!invalid&&render_change.submitted()==0,"Renderer changing distant world membership cannot mint ticket");
+    ChatFixture mismatch;mismatch.channels[0].peers[mismatch.owners[0].session]->character_id=0x10000000bULL;mismatch.channels[0].rows[0].character=0x10000000bULL;
+    require(!mismatch.prepare(),"Full64 character may not silently truncate into native32 peer projection");
+    ChatFixture malformed;auto bad=malformed.directory->prepare_chat(malformed.owners[0].session,malformed.requests,[](const auto& sender,const auto& recipient,const auto& request){return RecoveredChat::display(sender.actor.character,recipient.actor.simplified,request.legacy_text);});
+    require(!bad,"Original chat validator still rejects non-guild 5C selector");
+    ChatFixture actor_mismatch;++actor_mismatch.channels[1].chat_peers.at(actor_mismatch.owners[1].session).actor.account;
+    require(!actor_mismatch.prepare(),"Source chat actor must match actual full64 Session account");
+    bool foreign=false;std::thread worker([&]{foreign=refuses([&]{(void)malformed.prepare();});});worker.join();require(foreign,"Chat checks GAME before source callbacks");
+}
+void native_holder_invalidation_stops_actual_directory_batch(){
+    ChatFixture f;
+    struct Observation {Directory::ChatDispatch result;unsigned invalidations=0;bool supplier_observed=false;};
+    const auto observation=std::make_shared<Observation>();const auto holder=OwnedTaiwanGuildChatDispatch::create();const auto binding=holder->binding();
+    holder->install([directory=f.directory,observation](Session& sender,std::span<const RecoveredGuildChat::Request> requests)->std::optional<SharedTaiwanWorldRecordSource::Reply>{
+        auto batch=directory->prepare_chat(sender.id(),requests,ChatFixture::renderer());if(!batch)return SharedTaiwanWorldRecordSource::Reply::no_reply();
+        observation->result=directory->dispatch_chat(*batch);return SharedTaiwanWorldRecordSource::Reply::no_reply();
+    },[directory=f.directory,observation]{++observation->invalidations;directory->invalidate_chat();});
+    f.channels[0].on_chat_send=[binding,observation]{binding.invalidate_active();observation->supplier_observed=observation->invalidations==1;};
+    const auto result=binding.dispatch(*f.channels[0].peers[f.owners[0].session],f.requests);
+    require(!result&&observation->supplier_observed&&observation->invalidations==1,"Native owner cancellation reaches directory before send supplier returns");
+    require(!observation->result.complete&&observation->result.submitted==1&&f.channels[0].chats.size()==1&&f.channels[1].chats.empty()&&f.channels[2].chats.empty(),"Actual directory stops before later worlds after caught outer native invalidation");
+    holder->stop();f.directory->retire();f.directory->invalidate_chat();
+}
+}
+void test_shared_guild_channel_directory53(){routing_and_identity();closure_and_reentry();retirement_and_thread();chat_routing_and_one_use();chat_freshness_and_partial_delivery();chat_renderer_reentry_and_retirement();native_holder_invalidation_stops_actual_directory_batch();}

@@ -6572,9 +6572,17 @@
         "src/handlers/RecoveredMovementService.h",
         "src/handlers/RecoveredMovementService.cpp",
         "tests/test_recovered_movement_service.cpp",
-        "tests/test_shared_guild_channel_directory53.cpp"
+        "tests/test_shared_guild_channel_directory53.cpp",
+        "src/core/SharedWorldHostPlan.h",
+        "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+        "src/game/SharedTaiwanWorldRecordSource.h",
+        "src/game/SharedTaiwanWorldRecordSource.cpp",
+        "src/game/SharedTaiwanNativeRecordHandlerSource.cpp",
+        "src/game/OwnedTaiwanGuildChatDispatch.h",
+        "src/game/OwnedTaiwanGuildChatDispatch.cpp",
+        "tests/test_owned_taiwan_guild_chat_dispatch.cpp"
       ],
-      "document": "docs/research/tw-three-channel-guild-20261019.md",
+      "document": "docs/research/tw-three-channel-chat-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6600,13 +6608,17 @@
         "native_exit_source_audit": "Current bounded source audit reuses matching490 REA20h encoded packet+0Dh exit-required widget evidence. No explicit S2C20h ordinary-notice producer found; C2S20h role text replies23h. Generic raw APIs accept opaque data, not exhaustive runtime safety proof. No guessed producer or selector introduced.",
         "shared_guild53": "Actual exact53 triple Application mounts ONE host-owned Common53 with three complete sealed frame-local directory sources. Global before/after affected audience, certificates/grants and reconciliation share one owner; local bootstrap/admission/Lua/sends remain actual sources. Name sync and native32 online projections route to original frames. Formal53 flags allowed; older schema bridges/lab and guild chat remain open.",
         "guild_directory": "GAME-only weak facades, full64 and exact Session pointers, complete Live rows or whole-candidate refusal; unsealed/retired never means everyone offline. Explicit all-three exactly-one closed proof after live-map removal. Sync ACK deferred until post-supplier exact owner; async ACK weak/once/current topology. Every frame and outer partial-construction path revokes borrowed callbacks before locals die; no ownership cycle.",
-        "pure_guild_world_proof": "New GAME-only current_world_location reads settled cached pose only and refuses owned movement busy/invalid without mutation. Triple53 Owner uses it; preflight SQL checks same pose before/after peer projection and refences full Owner. Existing SQL-backed current_location and single-world behavior retained. Pure pose is not current saved-row/native authority."
+        "pure_guild_world_proof": "New GAME-only current_world_location reads settled cached pose only and refuses owned movement busy/invalid without mutation. Triple53 Owner uses it; preflight SQL checks same pose before/after peer projection and refences full Owner. Existing SQL-backed current_location and single-world behavior retained. Pure pose is not current saved-row/native authority.",
+        "actual_native_guild_chat": "Context carries weak late actual guild binding; native host merges before actual mixed source creation, rejects duplicate owner and propagates installed capability. Exact guild-only runs retain original whole-batch Current, causal native movement/reply ordering, budgets and cleanup. Application checks actual constructed capability before Hold, installs real callback then seals world directory. Legacy handler alone is not native routing.",
+        "guild_chat_custody": "Private move-only one-use batch retains full original all-world Session pointer/identity/phase/battle/ready/membership observations, not frame renderer/spans/callback holders. Requalify complete guild audience and exact endpoint before/after publication. Caught reentry/retirement/native mixed invalidation synchronously poisons active directory operation; stop later peers, expose partial submissions, no atomic broadcast/write/client acceptance claim.",
+        "guild_chat_native_framing": "Schema53 triple requires explicit same-authenticated-Session NativeGuildSenderWire before DB initialization; copied on GAME and invoked synchronously for sender logical records. No default lab codec. Complete sender envelopes return to original mixed accumulator; incomplete chat discards unsubmitted sender buffer and explicit CUSTOM no-reply preserves earlier native output. Peer logical enqueue remains the existing Session native transport path.",
+        "native_chat_trace": "Current5C dispatch46AE96 JMP714200->70FF5B ST extension then ordinary46AE9E. Sender+5 DWORD reads70FFA1/46AFF2.3FFF is conditional CUSTOM0054 ST behavior, returns ordinary on failure; category3 to475E00 text/category bypasses0/6 bubble4FB690. No common64/native mapping or widening inferred; existing actor qualification stays explicit."
       },
-      "native_gap": "Actual explicit three-frame host and shared exact53 guild audience/cache/name/online route are connected in source. Still need real native provider/default Main selection, cross-channel guild chat and older-schema bridges, selected Web G, native world transfers, durable save/logout/target admission/recovery, six switches and current-client acceptance. Source-only, not production activation.",
+      "native_gap": "Actual native mixed guild-chat capability is connected in source with trusted qualified providers; default native sources/Main and sender profile still required. Audit actual native guild mutation ingress separately: mounted Common caches/local legacy mutators do not prove native action routing. Common64/native projection, older guild bridges, selected Web G, native world transfer, durable logout/save/admission, six switches and current-client acceptance remain open.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_SHARED_COMMON53_THREE_WORLD_ROUTING_PURE_WORLD_PROOF_FUTURE_TEST_CASES_NOT_BUILT_OR_RUN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_NATIVE_MIXED_GUILD_CHAT_AND_CURRENT_EXE_TWO_CLOSED_REA_TARGETS_FUTURE_CASES_NOT_BUILT_OR_RUN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

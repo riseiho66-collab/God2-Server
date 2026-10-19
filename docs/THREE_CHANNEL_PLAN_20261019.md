@@ -139,7 +139,10 @@ directory for actual schema53. Global affected-audience proof and publication
 invalidation preserve exact local Session/Owner/send/bootstrap sources. Name
 projection and roster online state route to their original frames. Formal53
 flags pass; older schema47/51/52 mutation bridges and actual lab overrides
-remain refused. Cross-channel guild chat remains open. Ambiguous Web TwWorld
+remain refused. Round493 adds actual native mixed OwnedGuildChat runs, sealed
+all-world membership/pointer checks and a weak late GAME dispatcher. Complete
+original Current and same-Session sender framing sources remain mandatory;
+legacy chat flow alone is not the native route. Ambiguous Web TwWorld
 routing still refuses until selected-channel forwarding exists. Existing
 world-transfer/native bridge restrictions remain. Fresh native factories and
 Live/Authority are trusted sources; metadata does not certify callback identity.
@@ -147,3 +150,8 @@ Next connect real source providers/default Main, older guild/chat bridges,
 selected Web G and durable logout/save/admission, then six switches and current
 client world isolation in the later acceptance phase. See
 research/tw-three-channel-guild-20261019.md for actual492 scope and proof limits.
+
+Round493 evidence: research/tw-three-channel-chat-20261019.md. Native guild
+action ingress must also be audited: a mounted Common coordinator is not proof
+that the native mixed source invokes all local legacy guild mutators. Actual
+provider/Main, native sender projection/profile and later acceptance remain open.

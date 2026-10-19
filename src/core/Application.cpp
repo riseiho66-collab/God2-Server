@@ -9,6 +9,7 @@
 #include "core/ApplicationGameSources.h"
 #include "core/TaiwanThreeChannelPlan.h"
 #include "game/TaiwanChannelCharacterLists.h"
+#include "game/OwnedTaiwanGuildChatDispatch.h"
 #include "core/SharedWorldHostPlan.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
@@ -1003,6 +1004,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             // Startup and --migrate-only retain installed exact50 storage even with gameplay disabled.
             const GuildRelations53FlagsDraft flags53{config.owned_guild_membership_enabled,config.owned_guild_announcements_enabled,config.owned_guild_officers_enabled,config.owned_guild_succession_enabled,config.owned_guild_relations53_enabled};
             const auto migrations=configured_guild_relations53(config.database,flags53);
+            if(channels&&migrations.back().version==53&&!channels->guild_chat_sender_wire)
+                throw std::invalid_argument("Native guild chat requires its actual same-Session sender framing source");
             if(channels&&migrations.back().version!=53&&
                (config.owned_guild_membership_enabled||config.owned_guild_announcements_enabled||
                 config.owned_guild_officers_enabled||config.owned_guild_succession_enabled||config.owned_guild_relations53_enabled))
@@ -1065,6 +1068,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             std::optional<TaiwanThreeChannelPlan::WorldPlans> channel_plans;
             std::shared_ptr<SharedGuildChannelDirectory53> shared_guild_directory53;
             std::shared_ptr<SharedGuildCoordinator53Draft> shared_guild53;
+            const auto guild_sender_wire=channels?channels->guild_chat_sender_wire:TaiwanThreeChannelPlan::NativeGuildSenderWire{};
             if(channels&&migrations.back().version==53) {
                 using Common=SharedGuildCoordinator53Draft;
                 shared_guild_directory53=SharedGuildChannelDirectory53::create();
@@ -1106,6 +1110,9 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             const bool hosted_pk=world_plan&&config.owned_pk_invitation_enabled;
             const bool deity_selection_publication=world_plan&&world_plan->owned_deity_selection_publication;
             const auto taiwan_entry_identity=world_plan?world_plan->taiwan_entry_identity:TaiwanWorldEntryIdentity::SelectedCharacter;
+            // The actual native mixed owner receives weak late-bound guild
+            // capability now; no input runs until the complete frame is held.
+            const auto owned_guild_chat_dispatch=shared_guild_directory53?OwnedTaiwanGuildChatDispatch::create():nullptr;
             if(supplied_world&&(!world_plan||!supplied_world->owns_repository(database.recovered_characters())))
                 throw std::invalid_argument("Channel frame requires its exact same-repository native world");
             // CUSTOM-0150 actual GAME owner, after Database and before every
@@ -1184,7 +1191,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     &database.companions(),&owned_companions,owned_deity_skill_source,
                     config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled,hosted_pk,std::move(initial_actor_inputs),
                     &database.world_displays(),&database.native_npc_display_catalog(),
-                        &database.ordinary_movement_policies(),ordinary_policy_reloads};
+                        &database.ordinary_movement_policies(),ordinary_policy_reloads,
+                    owned_guild_chat_dispatch?std::optional{owned_guild_chat_dispatch->binding()}:std::nullopt};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
@@ -1219,6 +1227,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     taiwan_records=world_plan->make_taiwan_world_records(context);
                     if(!taiwan_records.records || !taiwan_records.release || !taiwan_records.invalidate_active)
                         throw std::invalid_argument("Shared world host requires complete actual Taiwan mixed record sources");
+                    if(owned_guild_chat_dispatch&&!taiwan_records.app_owned_guild_chat)
+                        throw std::invalid_argument("Three-channel guild chat requires its actual native mixed dispatch capability");
                 }
                 if(world_plan->make_taiwan_native_characters) {
                     taiwan_native_characters=world_plan->make_taiwan_native_characters(context);
@@ -2308,11 +2318,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 return OwnedGuildChatService::Peer{*actor,*membership};
                 }catch(const std::exception&){return {};}
             };
-            OwnedGuildChatService guild_chat(guild_chat_peer,[&] {
-                std::vector<OwnedGuildChatService::Peer> peers;
-                for(const auto& [id,unused]:native_chat_sessions)if(auto peer=guild_chat_peer(id))peers.push_back(std::move(*peer));
-                return peers;
-            },[&](const auto& source,const auto& recipient,const RecoveredGuildChat::Request& request) {
+            const OwnedGuildChatService::Prepare project_guild_chat=[&](const auto& source,const auto& recipient,const RecoveredGuildChat::Request& request) {
                 auto message=LegacyChineseCodec::decode(request.legacy_text,source.actor.simplified);
                 if(LegacyChineseCodec::encode(message,source.actor.simplified)!=request.legacy_text)
                     throw std::invalid_argument("Guild source text is not lossless");
@@ -2325,7 +2331,12 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 auto logical=RecoveredGuildChat::display(source.actor.character,recipient.actor.simplified,prefix+body.bytes);
                 if(config.streamer_privileges_enabled)StreamerPresentation::annotate(logical,source.actor.privilege);
                 return logical;
-            });
+            };
+            OwnedGuildChatService guild_chat(guild_chat_peer,[&] {
+                std::vector<OwnedGuildChatService::Peer> peers;
+                for(const auto& [id,unused]:native_chat_sessions)if(auto peer=guild_chat_peer(id))peers.push_back(std::move(*peer));
+                return peers;
+            },project_guild_chat);
             std::map<std::uint64_t,std::pair<std::uint32_t,std::vector<std::uint8_t>>> guild_names_sent;
             const auto sync_guild_name=[&](Session& session,bool initial=false) {
                 try {
@@ -2410,8 +2421,9 @@ std::unique_ptr<OwnedGuildOfficerRuntimeDraft> guild_officer_runtime;
             // inside any frame revokes every endpoint before these locals die.
             struct FrameGuildDirectoryGuard {
                 std::shared_ptr<SharedGuildChannelDirectory53> directory;
-                ~FrameGuildDirectoryGuard(){if(directory)directory->retire();}
-            } frame_guild_directory_guard{shared_guild_directory53};
+                std::shared_ptr<OwnedTaiwanGuildChatDispatch> chat;
+                ~FrameGuildDirectoryGuard(){if(directory)directory->retire();if(chat)chat->stop();}
+            } frame_guild_directory_guard{shared_guild_directory53,owned_guild_chat_dispatch};
             if(guild_membership_enabled && migrations.back().version!=53) {
                 guild_membership=std::make_unique<OwnedGuildMembershipService>(*guild_membership_repository,
                     guild_world_owner,[&](auto account,auto character){return database.trades().load_wallet(account,character);},
@@ -2585,8 +2597,39 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                             const auto at=native_chat_sessions.find(owner.session);
                             const auto peer=at==native_chat_sessions.end()?std::shared_ptr<Session>{}:at->second.lock();
                             if(peer&&guild_world_owner(owner.session)==std::optional{owner})sync_guild_name(*peer);
+                        },
+                        [&](std::uint64_t id)->std::optional<OwnedGuildChatService::Peer>{
+                            if(!guild_delivery_lifetime->load())return {};
+                            return guild_chat_peer(id);
+                        },
+                        [&](const std::shared_ptr<Session>& peer,std::vector<std::uint8_t> logical){
+                            if(!peer||!guild_delivery_lifetime->load()||peer->closing())
+                                throw std::runtime_error("Guild chat source retired before submission");
+                            const auto at=native_chat_sessions.find(peer->id());
+                            if(at==native_chat_sessions.end()||at->second.lock()!=peer)
+                                throw std::runtime_error("Guild chat exact local Session changed before submission");
+                            peer->send_world_records(std::move(logical));
                         }};
                     shared_guild_directory53->install(channel_index,std::move(source));
+                    owned_guild_chat_dispatch->install([&](Session& session,std::span<const RecoveredGuildChat::Request> requests)
+                        ->std::optional<SharedTaiwanWorldRecordSource::Reply> {
+                        using Reply=SharedTaiwanWorldRecordSource::Reply;
+                        auto batch=shared_guild_directory53->prepare_chat(session.id(),requests,project_guild_chat);
+                        if(!batch)return Reply::no_reply();
+                        auto prepared=std::move(*batch);
+                        std::vector<std::uint8_t> own;
+                        // Return sender frames to the actual native run accumulator;
+                        // previous movement/other replies keep their original order.
+                        const auto result=shared_guild_directory53->dispatch_chat(prepared,[&](std::vector<std::uint8_t> logical){
+                            const auto wire=guild_sender_wire(session,logical);
+                            if(!wire||wire->empty())throw std::runtime_error("Native guild sender framing source refused");
+                            own.insert(own.end(),wire->begin(),wire->end());
+                        });
+                        spdlog::info("SHARED_GUILD_CHAT_SUBMISSION session_id={} submitted={} complete={} CUSTOM-0159 no_write_or_client_acceptance_claim",
+                            session.id(),result.submitted,result.complete);
+                        if(!result.complete||own.empty())return Reply::no_reply();
+                        return Reply::wire(std::move(own));
+                    },[directory=shared_guild_directory53]{directory->invalidate_chat();});
                     guild53=shared_guild53;
                 }else guild53=std::make_shared<Common>(factory.relations(),factory.owner(),factory.notice_reader(),supply_repository,guild_world_owner,enumerate,
                     [&](const Common::Owner& owner){const auto peer=private_chat_peer(owner.session);return peer&&peer->ready&&peer->account==owner.account&&peer->character==owner.character;},recipient_ready53,
@@ -10024,6 +10067,7 @@ if(guild_officer_runtime && player_guild(session) &&
                 if(hosted_pk)hosted_pk_lifetime.stop();
                 if(party_preview_transport)party_preview_transport->stop();
                 guild_delivery_lifetime->store(false);
+                if(owned_guild_chat_dispatch)owned_guild_chat_dispatch->stop();
                 stop_blacklist_outputs();
                 if(common_initial_deities)common_initial_deities->stop();
                 if(skill_book_learning_service)skill_book_learning_service->stop();

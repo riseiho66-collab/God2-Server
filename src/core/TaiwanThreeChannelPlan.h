@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
+#include <vector>
 #include <stdexcept>
 #include <functional>
 #include <memory>
@@ -37,6 +39,12 @@ struct TaiwanThreeChannelPlan final {
     SharedTaiwanCharacterListHandoff::Live live;
     SharedTaiwanCharacterListHandoff::Authority authority;
     Factory make_world_plans;
+    // Explicit same authenticated Session cipher/framing source, mandatory
+    // for schema53 Application guild chat. No default lab encoder is selected.
+    // Qualify its actual peer/profile; return complete native envelopes only.
+    using NativeGuildSenderWire=std::function<std::optional<std::vector<std::uint8_t>>(
+        Session&,std::span<const std::uint8_t>)>;
+    NativeGuildSenderWire guild_chat_sender_wire={};
     TaiwanThreeChannelPlan(std::shared_ptr<const TaiwanNativeClientGroupConfiguration> configured,
         std::uint8_t actual_group,std::uint8_t byte_1,
         std::array<TaiwanChannelServers::EndpointPolicy,3> actual_endpoints,

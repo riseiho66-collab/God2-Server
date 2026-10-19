@@ -8,11 +8,33 @@ namespace god2 {
 namespace {
 void game_thread(std::thread::id owner){if(owner!=std::this_thread::get_id())throw std::logic_error("Common53 directory requires GAME");}
 }
+struct SharedGuildChannelDirectory53::ChatTicket {
+    struct Witness {
+        std::weak_ptr<Session> session;
+        std::uint64_t account{},character{},battle{};
+        SessionState phase{};
+        bool closing{},world_ready{},permitted{};
+        std::uint8_t channel{};
+        std::optional<Chat::Peer> peer;
+    };
+    std::weak_ptr<State> owner;
+    std::uint64_t epoch{},sender{};
+    bool consumed=false;
+    std::map<std::uint64_t,Witness> witnesses;
+    std::vector<Chat::Delivery> deliveries;
+};
 struct SharedGuildChannelDirectory53::State {
     const std::thread::id thread=std::this_thread::get_id();
     std::array<std::optional<Source>,3> sources;
     bool sealed=false,retired=false;
     std::uint64_t epoch=1;
+    struct ChatOperation {bool valid=true;};
+    std::shared_ptr<ChatOperation> active_chat;
+    struct ChatGuard {
+        State& state;std::shared_ptr<ChatOperation> operation;
+        explicit ChatGuard(State& source):state(source),operation(std::make_shared<ChatOperation>()){state.active_chat=operation;}
+        ~ChatGuard(){if(state.active_chat==operation)state.active_chat.reset();}
+    };
     struct Row {Host::Live live;std::shared_ptr<Session> peer;std::uint8_t channel;SessionState phase;bool closing;};
     using Rows=std::map<std::uint64_t,Row>;
     void owner() const {game_thread(thread);}
@@ -70,6 +92,85 @@ struct SharedGuildChannelDirectory53::State {
         if(!unchanged(local,revision,rows))return false;
         const auto now=resolve(local,revision,rows,value.session);
         return now&&now->first.peer==row.peer&&now->first.channel==row.channel&&now->second==value;
+    }
+    using ChatWitnesses=std::map<std::uint64_t,ChatTicket::Witness>;
+    ChatWitnesses chat_snapshot(const std::array<Source,3>& local,std::uint64_t revision) const {
+        const auto rows=inspect(local,revision);ChatWitnesses result;
+        for(const auto& [id,row]:rows){
+            auto peer=local[row.channel].chat_peer(id);
+            if(!current(revision)||!row.peer->native_channel_binding_current())throw std::logic_error("Guild chat source retired");
+            if(peer&&(peer->actor.session!=id||peer->actor.account!=row.live.account||!peer->actor.character||
+                peer->actor.character!=row.live.character||row.closing||
+                (row.phase!=SessionState::CharacterSelected&&row.phase!=SessionState::InWorld&&row.phase!=SessionState::InBattle)))
+                throw std::logic_error("Guild chat actor differs from actual full Session identity");
+            result.emplace(id,ChatTicket::Witness{row.peer,row.live.account,row.live.character,row.peer->battle_generation(),row.phase,
+                row.closing,row.peer->recovered_world_ready(),row.live.permitted_state,row.channel,std::move(peer)});
+        }
+        if(!unchanged(local,revision,rows))throw std::logic_error("Guild chat live audience changed");
+        for(const auto& [id,witness]:result){const auto peer=witness.session.lock();
+            if(!peer||peer->battle_generation()!=witness.battle||peer->recovered_world_ready()!=witness.world_ready||!peer->native_channel_binding_current())
+                throw std::logic_error("Guild chat lifecycle changed during qualification");}
+        return result;
+    }
+    static bool same_chat(const ChatWitnesses& a,const ChatWitnesses& b){
+        if(a.size()!=b.size())return false;
+        for(const auto& [id,x]:a){const auto at=b.find(id);if(at==b.end())return false;const auto& y=at->second;
+            const auto before=x.session.lock();const auto after=y.session.lock();
+            if(!before||before!=after||x.account!=y.account||x.character!=y.character||x.battle!=y.battle||x.phase!=y.phase||
+               x.closing!=y.closing||x.world_ready!=y.world_ready||x.permitted!=y.permitted||x.channel!=y.channel||x.peer!=y.peer)return false;}
+        return true;
+    }
+    bool chat_current(const std::array<Source,3>& local,std::uint64_t revision,const ChatWitnesses& before,const std::shared_ptr<ChatOperation>& operation) const {
+        if(!operation->valid||!current(revision))return false;
+        const auto after=chat_snapshot(local,revision);
+        return operation->valid&&current(revision)&&same_chat(before,after);
+    }
+    std::shared_ptr<ChatTicket> prepare_chat(std::uint64_t sender,std::span<const RecoveredGuildChat::Request> requests,Chat::Prepare renderer,const std::shared_ptr<State>& self){
+        owner();if(active_chat){active_chat->valid=false;return {};}
+        try{
+            ChatGuard guard(*this);
+            if(!sender||requests.empty()||!renderer)return {};
+            const auto local=copy();const auto revision=epoch;const auto before=chat_snapshot(local,revision);const auto operation=guard.operation;
+            // Each original service observation is backed by a fresh complete
+            // global source projection. The renderer keeps its existing native
+            // request/display validation; this wrapper grants no chat rights.
+            const auto resolve_peer=[this,local,revision,before,operation](std::uint64_t id)->std::optional<Chat::Peer>{
+                if(!chat_current(local,revision,before,operation))return {};const auto at=before.find(id);return at==before.end()?std::nullopt:at->second.peer;
+            };
+            const auto audience=[this,local,revision,before,operation]{
+                if(!chat_current(local,revision,before,operation))throw std::logic_error("Guild chat audience changed");
+                std::vector<Chat::Peer> peers;for(const auto& [id,row]:before)if(row.peer)peers.push_back(*row.peer);return peers;
+            };
+            const auto render=[this,local,revision,before,operation,renderer=std::move(renderer)](const Chat::Peer& sender_peer,const Chat::Peer& recipient,const RecoveredGuildChat::Request& request){
+                if(!chat_current(local,revision,before,operation))throw std::logic_error("Guild chat renderer source changed");
+                auto bytes=renderer(sender_peer,recipient,request);
+                if(!chat_current(local,revision,before,operation))throw std::logic_error("Guild chat renderer changed audience");return bytes;
+            };
+            Chat service(resolve_peer,audience,render);auto deliveries=service.prepare(sender,requests);
+            if(!deliveries||!chat_current(local,revision,before,operation))return {};
+            auto ticket=std::make_shared<ChatTicket>();ticket->owner=self;ticket->epoch=revision;ticket->sender=sender;ticket->witnesses=before;ticket->deliveries=std::move(*deliveries);return ticket;
+        }catch(...){return {};}
+    }
+    ChatDispatch dispatch_chat(const std::shared_ptr<ChatTicket>& ticket,std::function<void(std::vector<std::uint8_t>)> echo){
+        owner();if(active_chat){active_chat->valid=false;if(ticket&&ticket->owner.lock().get()==this)ticket->consumed=true;return {};}
+        if(!ticket||ticket->owner.lock().get()!=this||ticket->consumed)return {};ticket->consumed=true;
+        ChatDispatch result;
+        try{
+            ChatGuard guard(*this);
+            const auto local=copy();const auto revision=ticket->epoch;
+            if(!chat_current(local,revision,ticket->witnesses,guard.operation))return result;
+            for(const auto& delivery:ticket->deliveries){
+                if(!chat_current(local,revision,ticket->witnesses,guard.operation))return result;
+                const auto at=ticket->witnesses.find(delivery.recipient);if(at==ticket->witnesses.end()||!at->second.peer||!at->second.peer->actor.ready)return result;
+                const auto peer=at->second.session.lock();if(!peer)return result;
+                auto bytes=delivery.logical;
+                if(delivery.recipient==ticket->sender&&echo)echo(std::move(bytes));
+                else local[at->second.channel].chat_send(peer,std::move(bytes));
+                ++result.submitted;
+                if(!chat_current(local,revision,ticket->witnesses,guard.operation))return result;
+            }
+            result.complete=true;return result;
+        }catch(...){return result;}
     }
     std::optional<Owner> find(std::uint64_t id){
         const auto local=copy();const auto revision=epoch;const auto rows=inspect(local,revision);const auto found=resolve(local,revision,rows,id);
@@ -135,7 +236,7 @@ struct SharedGuildChannelDirectory53::State {
         catch(...){complete(false);throw;}
         if(gate->deferred)complete(*gate->deferred);
     }
-    void retire(){owner();if(retired)return;retired=true;++epoch;for(auto& source:sources)source.reset();}
+    void retire(){owner();if(retired)return;retired=true;++epoch;if(active_chat)active_chat->valid=false;for(auto& source:sources)source.reset();}
     ~State(){if(thread!=std::this_thread::get_id())std::terminate();}
 };
 std::shared_ptr<SharedGuildChannelDirectory53> SharedGuildChannelDirectory53::create(std::size_t expected){
@@ -144,11 +245,18 @@ std::shared_ptr<SharedGuildChannelDirectory53> SharedGuildChannelDirectory53::cr
 }
 void SharedGuildChannelDirectory53::install(std::uint8_t k,Source source){
     state_->owner();if(k>=3||state_->sealed||state_->retired||state_->sources[k]||!source.session||!source.enumerate||!source.owner||!source.peer_ready||
-        !source.recipient_ready||!source.closed||!source.send||!source.baseline||!source.online||!source.sync_name)throw std::invalid_argument("Incomplete/late Common53 channel source");
+        !source.recipient_ready||!source.closed||!source.send||!source.baseline||!source.online||!source.sync_name||!source.chat_peer||!source.chat_send)throw std::invalid_argument("Incomplete/late Common53 channel source");
     state_->sources[k]=std::move(source);++state_->epoch;
 }
 void SharedGuildChannelDirectory53::seal(){state_->owner();if(state_->retired||state_->sealed||!state_->sources[0]||!state_->sources[1]||!state_->sources[2])throw std::logic_error("Incomplete/already sealed Common53 directory");state_->sealed=true;++state_->epoch;}
 void SharedGuildChannelDirectory53::retire(){state_->retire();}
+void SharedGuildChannelDirectory53::invalidate_chat(){const auto state=state_;state->owner();if(state->active_chat)state->active_chat->valid=false;}
+std::optional<SharedGuildChannelDirectory53::ChatBatch> SharedGuildChannelDirectory53::prepare_chat(std::uint64_t sender,std::span<const RecoveredGuildChat::Request> requests,Chat::Prepare renderer){
+    const auto state=state_;const auto ticket=state->prepare_chat(sender,requests,std::move(renderer),state);if(!ticket)return {};return ChatBatch(ticket);
+}
+SharedGuildChannelDirectory53::ChatDispatch SharedGuildChannelDirectory53::dispatch_chat(ChatBatch& batch,std::function<void(std::vector<std::uint8_t>)> echo){
+    const auto state=state_;const auto ticket=batch.ticket_;return state->dispatch_chat(ticket,std::move(echo));
+}
 SharedGuildChannelDirectory53::~SharedGuildChannelDirectory53(){state_->retire();}
 SharedGuildChannelDirectory53::Binding SharedGuildChannelDirectory53::binding(){
     state_->owner();const auto thread=state_->thread;const std::weak_ptr<State> weak=state_;
