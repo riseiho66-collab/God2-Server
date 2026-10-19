@@ -6591,9 +6591,10 @@
         "src/relations53/GuildJoinConversation53Runtime.h",
         "tests/test_owned_guild_entry_0078.cpp",
         "tests/test_owned_guild_membership_0078.cpp",
-        "tests/test_owned_taiwan_guild_actions_dispatch.cpp"
+        "tests/test_owned_taiwan_guild_actions_dispatch.cpp",
+        "tests/test_session_state.cpp"
       ],
-      "document": "docs/research/tw-three-channel-actions-20261019.md",
+      "document": "docs/research/tw-three-channel-logout-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6629,13 +6630,15 @@
         "guild_sender_transport_custody": "Round495 actual Session TLS-only WorldReplyPushCapture captures same-Session plain/Accepted logical sends through explicit GAME-only same-peer framer. Private exact final ranges, full delivery tuple, one-use callbacks and producer reservations join actual final FIFO Write in all3 branches. Queue acceptance only after metadata attachment; failure/drop once. No fake C67 component, encoder default, input hold or native action authority.",
         "guild_sender_lifecycle": "Round496 qualified sender uses actual private INIT and explicit same-peer GAME framer; captured branch retains each pure source flag in original Frame, independent async branch retains normal Written output witness, full tuple, reservation and once FIFO callback. GAME profile excluded from NET. Final slices/preappend and pure prewrite checks retain cancellation even after Enqueued settlement. Name cache waits for exact Session/latest serial accepted callback. Queue acceptance is not Written/final admission/client ACK.",
         "guild_action_native_ingress": "Round496 actual mixed source freezes full-input classification once, captures original Common53 batch/indices before prefix and dispatches selected indices at accumulated wire offsets under mandatory native Current/budgets. Weak late GAME owner seals full64/exact Session lifecycle; actual returned host capability required; handler finish is not enqueue/write/admission. No replay/rollback or default opcode grant.",
-        "guild_action_continuations": "Directory action token is cancellation/continuation only. Exact originating token survives handler end and chained async ACK. Different active/inherited sources deny continuation, retain inherited origin and preserve unrelated successor even on caught nested begin. Retire cancels flags retained after token expiry. Admission false ACK removes only exact still-prepared plan/opening and original full-owner prompt nonce; published/successor state retained."
+        "guild_action_continuations": "Directory action token is cancellation/continuation only. Exact originating token survives handler end and chained async ACK. Different active/inherited sources deny continuation, retain inherited origin and preserve unrelated successor even on caught nested begin. Retire cancels flags retained after token expiry. Admission false ACK removes only exact still-prepared plan/opening and original full-owner prompt nonce; published/successor state retained.",
+        "guild_logout_cleanup": "Round497 actual WORLD02 reason0/1/2 drains original FIFO and GAME work, retires terminal readiness, then exchanges actual App disconnect/common cleanup/abandon once on GAME and attempts all in that order. Full64 identity/phase/battle drift or throw produces clean=false; only exact private phase, clean result and live listener may enqueue original03 once. Final SessionManager completion follows final socket close plus cleanup. No target/durable-save grant.",
+        "application_disconnect_failures": "Actual App cleanup now attempts every stage, retains first exception and propagates prior warning failures. Terminal self-broadcasts drop or refuse once before output observation/NET post. Party departure publishes once, including projection failure; delivery failure cannot double-move candidate. Retired weak host fails explicitly without invoking expired borrowed callbacks."
       },
-      "native_gap": "Actual native Common53 action ingress and qualified continuation source integration are connected in round496 but unbuilt/unexecuted. Actual native providers/default Main, same-peer profiles, common64/native projection, older guild schemas, selected Web G, world transfer, durable logout/save/target admission/recovery and six directed switches/current-client acceptance remain OPEN.",
+      "native_gap": "Round497 actual cleanup/03 ordering is source-connected but unexecuted. Complete terminal character-claim hold/quarantine/recovery, per-domain durable-save qualification including retained PK state, target admission and six directed switches/current-client acceptance remain OPEN. Actual native providers/default Main, full07/2A Offer producers, same-peer negotiated seed/profile, current aaf0 EXE versus legacy149c wire/asset lineage, MDT/MDL outdoor geometry, common64/native projection, older guild schemas, selected Web G and native world transfer remain OPEN.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_COMMON53_NATIVE_ACTION_INGRESS_AND_QUALIFIED_CONTINUATIONS_FUTURE_CASES_NOT_EXECUTED"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_NATIVE_LOGOUT_CLEANUP_BEFORE03_FUTURE_12_CASE_SOCKET_MATRIX_NOT_EXECUTED_NO_DURABLE_HANDOFF_OR_QUARANTINE_COMPLETION"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

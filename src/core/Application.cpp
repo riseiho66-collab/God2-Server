@@ -3739,96 +3739,253 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             if(config.owned_pk_invitation_enabled && !hosted_pk)
                 spdlog::warn("OWNED_PK_SOURCE_INCOMPLETE room_authority=unavailable invitations_not_published CUSTOM-0086");
             Session::DisconnectHandler on_disconnect=[&](std::shared_ptr<Session> session) {
+                    // Every cleanup stage runs even after an earlier failure.
+                    // This receipt covers callback completion, not a final save.
+                    std::exception_ptr failure;
+                    const auto remember=[&]() noexcept {if(!failure)failure=std::current_exception();};
+                    const auto attempt=[&](auto&& stage) noexcept {try{stage();}catch(...){remember();}};
                     if(hosted_pk && session) {
+                    attempt([&] {
                         pk_invitations.invalidate(session->id());
+                    });
+                    attempt([&] {
                         if(owned_pk_backend)try{owned_pk_backend->disconnected(*session);}
-                        catch(const std::exception& error){spdlog::warn("PK_DISCONNECT_RETIRE_FAILED reason={}",error.what());}
+                        catch(const std::exception& error){remember();try{spdlog::warn("PK_DISCONNECT_RETIRE_FAILED reason={}",error.what());}catch(...){}}
+                    });
+                    attempt([&] {
                         pk_world_generations.erase(session->id());
+                    });
                     }
+                    attempt([&] {
                     if(party_preview_transport)party_preview_transport->retire_source(*session); // Before throwing observers.
+                    });
+                    attempt([&] {
                     if(blacklist_lifetime->load()) {
                         const auto at=blacklist_replays.find(session->id());
                         if(at!=blacklist_replays.end() && at->second.session.lock()==session)retire_blacklist_output(at->second);
                     }
+                    });
+                    attempt([&] {
                     if(owned_client_options)try{owned_client_options->disconnect(*session);}
-                    catch(const std::exception& error){spdlog::warn("CLIENT_OPTIONS_RETIRE_FAILED reason={}",error.what());}
+                    catch(const std::exception& error){remember();try{spdlog::warn("CLIENT_OPTIONS_RETIRE_FAILED reason={}",error.what());}catch(...){}}
+                    });
                     // Retire this exact source before any unrelated disconnect
                     // observer can throw. Never erase another Session by ID alone.
+                    attempt([&] {
                     if(const auto at=owned_companion_restoration_sources.find(session->id());
                        at!=owned_companion_restoration_sources.end() && at->second->session.lock().get()==session.get())
                         owned_companion_restoration_sources.erase(at);
+                    });
+                    attempt([&] {
                     if(const auto at=blacklist_replays.find(session->id());at!=blacklist_replays.end() &&
                        at->second.session.lock().get()==session.get())blacklist_replays.erase(at);
+                    });
+                    attempt([&] {
                     if(owned_party_directory)try{if(owned_party_directory_retire)owned_party_directory_retire(*session);else owned_party_directory->disconnect(*session);}
-                    catch(const std::exception& error){spdlog::warn("PARTY_DIRECTORY_RETIRE_FAILED reason={}",error.what());}
+                    catch(const std::exception& error){remember();try{spdlog::warn("PARTY_DIRECTORY_RETIRE_FAILED reason={}",error.what());}catch(...){}}
+                    });
+                    attempt([&] {
                     pk_invitations.invalidate(session->id());pk_world_generations.erase(session->id());
+                    });
+                    attempt([&] {
                     native_banks.disconnect(session->id());
+                    });
+                    attempt([&] {
                     bank_items_disconnect(session->id());
+                    });
+                    attempt([&] {
                     trade_sessions.erase(session->id());trade_wallet_sent.erase(session->id());
+                    });
+                    attempt([&] {
                     try{deliver_trades(owned_instance_trades?owned_instance_trades->disconnect(session->id()):native_trades.disconnect(session->id()));}
-                    catch(const std::exception& error){spdlog::warn("NATIVE_TRADE_DISCONNECT_SYNC_FAILED reason={}",error.what());}
+                    catch(const std::exception& error){remember();try{spdlog::warn("NATIVE_TRADE_DISCONNECT_SYNC_FAILED reason={}",error.what());}catch(...){}}
+                    });
                     // Party leases are transient and independent of frozen chat.
-                    auto next=native_parties;
-                    const auto departures=next.disconnect(session->id());
-                    try {auto projected=party_projection(departures);native_parties=std::move(next);deliver_parties(std::move(projected));}
-                    catch(const std::exception& error){native_parties=std::move(next);spdlog::warn("NATIVE_PARTY_DISCONNECT_PROJECTION_FAILED reason={}",error.what());}
+                    attempt([&] {
+                        auto next=native_parties;
+                        const auto departures=next.disconnect(session->id());
+                        std::optional<decltype(party_projection(departures))> projected;
+                        try {projected.emplace(party_projection(departures));}
+                        catch(const std::exception& error){remember();try{spdlog::warn("NATIVE_PARTY_DISCONNECT_PROJECTION_FAILED reason={}",error.what());}catch(...){}}
+                        catch(...){remember();}
+                        // Publish this departure exactly once, even if its
+                        // projection failed. Delivery never moves next again.
+                        native_parties=std::move(next);
+                        if(projected)try{deliver_parties(std::move(*projected));}
+                        catch(const std::exception& error){remember();try{spdlog::warn("NATIVE_PARTY_DISCONNECT_DELIVERY_FAILED reason={}",error.what());}catch(...){}}
+                        catch(...){remember();}
+                    });
+                    attempt([&] {
                     party_sessions.erase(session->id());
+                    });
+                    attempt([&] {
                     pending_visibility.erase(session->id());
+                    });
+                    attempt([&] {
                     pending_visibility_refresh.erase(session->id());
+                    });
+                    attempt([&] {
                     visibility_sessions.erase(session->id());
+                    });
+                    attempt([&] {
                     native_chat_sessions.erase(session->id());
-                    if(guild53){closed_guild_transports.insert(session->id());guild53->disconnected(session->id());}
+                    });
+                    if(guild53){
+                        attempt([&]{closed_guild_transports.insert(session->id());});
+                        attempt([&]{guild53->disconnected(session->id());});
+                    }
+                    attempt([&] {
                     if(guild_bootstrap53)guild_bootstrap53->revoke(session->id());
+                    });
+                    attempt([&] {
                     if(guild_admission53)guild_admission53->disconnected(session->id());
-                    if(guild_succession){closed_guild_transports.insert(session->id());guild_succession->disconnected(session->id());}
-                    if(guild_membership52)guild_membership52->invalidate(session->id());guild_interactions52.erase(session->id());
+                    });
+                    if(guild_succession){
+                        attempt([&]{closed_guild_transports.insert(session->id());});
+                        attempt([&]{guild_succession->disconnected(session->id());});
+                    }
+                    attempt([&]{if(guild_membership52)guild_membership52->invalidate(session->id());});
+                    attempt([&]{guild_interactions52.erase(session->id());});
+                    attempt([&] {
                     guild_names_sent.erase(session->id());guild_name_serial.erase(session->id());
+                    });
+                    attempt([&] {
                     guild_roster.forget(session->id());
+                    });
+                    attempt([&] {
                     if(guild_membership)guild_membership->disconnect(session->id());
+                    });
+                    attempt([&] {
                     if(guild_entry)guild_entry->disconnect(session->id());
+                    });
+                    attempt([&] {
                     if(guild_officer_projection)guild_officer_projection->forget_after_clear(session->id());
                     else if(guild_leader_panel)guild_leader_panel->forget(session->id());
+                    });
+                    attempt([&] {
                     if(guild_announcements)guild_announcements->forget(session->id());
+                    });
+                    attempt([&] {
                     guild_world_generation.erase(session->id());guild_lab_prompted.erase(session->id());
+                    });
+                    attempt([&] {
                     guild_roster_unavailable.erase(session->id());
+                    });
+                    attempt([&] {
                     streamer_sent.erase(session->id());
+                    });
+                    attempt([&] {
                     owned_bag_projected.erase(session->id());
+                    });
+                    attempt([&] {
                     owned_beasts_projected.erase(session->id());
+                    });
+                    attempt([&] {
                     beast_exploration.disconnect(session->id());
+                    });
+                    attempt([&] {
                     deliver_visibility(player_visibility.leave(session->id()));
+                    });
+                    attempt([&] {
                     world.remove_player(session->id());
+                    });
+                    attempt([&] {
                     if(recovered_movement) recovered_movement->remove(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_battle_sent.erase(session->id());
+                    });
+                    attempt([&] {
                     world_display_scene.erase(session->id());
+                    });
+                    attempt([&] {
                     native_monster_placement_gap_logged.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_movement_ready.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_encounters_started.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_world_resources_sent.erase(session->id());
+                    });
+                    attempt([&] {
                     owned_player_and_companions_projected.erase(session->id());
+                    });
+                    attempt([&] {
                     owned_supply_projected.erase(session->id());
+                    });
+                    attempt([&] {
                     owned_weapons_projected.erase(session->id());
+                    });
+                    attempt([&] {
                     owned_armor_projected.erase(session->id());
+                    });
+                    attempt([&] {
                     owned_gems_projected.erase(session->id());
+                    });
+                    attempt([&] {
                     teleport_gem_offers.forget(session->id());
+                    });
+                    attempt([&] {
                     npc_teleports.forget(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_vitals_sent.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_quest_dialogue_sent.erase(session->id());
+                    });
+                    attempt([&] {
                     world_clock_sessions.erase(session->id());
+                    });
+                    attempt([&] {
                     issued_daily_lists.erase(session->id());
+                    });
+                    attempt([&] {
                     knowledge_conversations.remove(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_town_guides_sent.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_remote_ticks.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_remote_appearance.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_town_map_replied.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_town_scene_pending.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_island_return_pending.erase(session->id());
+                    });
+                    attempt([&] {
                     pending_town_guides.erase(session->id());
+                    });
+                    attempt([&] {
                     fruit_quests.remove(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_quest_conversations.remove(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_rounds_granted.erase(session->id());
+                    });
+                    attempt([&] {
                     diagnostic_town_battle_won.erase(session->id());
+                    });
+                    attempt([&] {
                     if(diagnostic_combat) diagnostic_combat->remove(session->id());
+                    });
+                    attempt([&] {
                     if(fixture_battles) fixture_battles->remove(session->id());
+                    });
+                    if(failure)std::rethrow_exception(failure);
                 };
             std::optional<Session::RecoveredCharacterHandlers> game_character_sources;
             // Retire before borrowed repository/maps on every unwind.
@@ -9610,7 +9767,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     on_disconnect=[weak,previous](std::shared_ptr<Session> session) {
                         if(!session)return;
                         const auto host=weak.lock();
-                        if(!host || !host->live)return;
+                        if(!host || !host->live)throw std::logic_error("Disconnect source retired before borrowed cleanup");
                         // Revoke passive per-incarnation custody before any
                         // observer may throw or borrowed movement is removed.
                         if(host->active && host->active->session.lock().get()==session.get())host->active->invalid=true;

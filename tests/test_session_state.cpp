@@ -28,6 +28,10 @@
 #include <fstream>
 #include <charconv>
 #include <optional>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -217,6 +221,143 @@ struct RecoveredSessionPeer {
             static_cast<std::uint8_t>(id),static_cast<std::uint8_t>(id>>8),1,0});
     }
 };
+
+// Separate real NET and GAME executors. GAME runs on its own thread from
+// startup; the bounded disconnect gate lets NET progress while GAME cleanup
+// is still executing. Synthetic lifecycle admission grants no native gameplay,
+// durable-save, cross-world quarantine or private channel authority.
+struct NativeLogoutPeer {
+    using Bytes=std::vector<std::uint8_t>;
+    static constexpr std::uint64_t account=0x100000007ULL,character=0x200001234ULL,id=0x300000002ULL;
+    static constexpr std::uint16_t actor=0x1234;
+    asio::io_context net,game;
+    asio::executor_work_guard<asio::io_context::executor_type> game_work{game.get_executor()};
+    asio::ip::tcp::acceptor acceptor{net,{asio::ip::address_v4::loopback(),0}};
+    asio::ip::tcp::socket peer{net};
+    std::shared_ptr<Session> session;
+    std::thread worker;
+    std::thread::id game_thread;
+    std::mutex mutex;
+    std::condition_variable changed;
+    bool release=false;
+    std::vector<char> events;
+    const unsigned failure;
+    const RecoveredWorldEntry::Frame entry=RecoveredWorldEntry::wire(actor);
+    std::atomic<unsigned> ready{0},app{0},common{0},abandon{0},completed{0},world_calls{0},cleanup_owners{0},self_yes{0},self_no{0};
+    std::atomic<bool> entered{false},wrong_executor{false},wrong_identity{false},early_complete{false},clean{false},game_failed{false},gate_timeout{false},terminal_invalid{false};
+    Bytes received;
+    bool peer_closed=false;
+    explicit NativeLogoutPeer(unsigned throw_at):failure(throw_at){
+        peer.connect(acceptor.local_endpoint());auto socket=acceptor.accept();
+        Session::RecoveredCharacterHandlers h;
+        h.list=[](std::uint64_t){return std::array<std::uint8_t,78>{};};
+        h.create=[](std::uint64_t,const RecoveredCharacterCreate&)->std::uint64_t{throw std::runtime_error("No logout fixture creation");};
+        h.select_created=[](std::uint64_t,std::uint64_t,std::uint8_t)->std::uint64_t{throw std::runtime_error("No logout fixture created selection");};
+        h.select_existing=[](std::uint64_t owner,std::uint8_t token){require(owner==account&&token==0,"Logout fixture exact selection");return character;};
+        h.world_entry=[this](std::uint64_t,std::uint64_t owner,std::uint64_t selected){require(owner==account&&selected==character,"Logout fixture exact entry");return entry;};
+        h.world_ready=[this](Session& s){observe(s);++ready;};
+        h.world_records=[this](Session&,auto)->std::optional<Bytes>{++world_calls;return Bytes{};};
+        h.common_world_lifecycle_factory=[this](Session&)->std::shared_ptr<const Session::CommonWorldLifecycle>{
+            auto lifecycle=std::make_shared<Session::CommonWorldLifecycle>();
+            lifecycle->prepared=[this](Session& s,const auto& frame){
+                observe(s);return frame==entry&&s.install_common_world_cleanup([this]{event('C');++common;if(failure==2)throw std::runtime_error("Expected common cleanup failure");});
+            };
+            lifecycle->prepared_actor=[this](Session&,const auto& frame)->std::optional<std::uint16_t>{return frame==entry?std::optional<std::uint16_t>{actor}:std::nullopt;};
+            lifecycle->ready=[this](Session& s){observe(s);s.set_state(SessionState::InWorld);s.bind_world_delivery_identity({account,character,21,s.battle_generation()});return true;};return lifecycle;
+        };
+        h.common_world_cleanup_owner=[this](Session& s,std::function<void()> cleanup){observe(s);++cleanup_owners;return cleanup;};
+        h.common_world_lifecycle_abandon=[this](Session& s){observe(s);event('B');++abandon;changed.notify_all();if(failure==3)throw std::runtime_error("Expected lifecycle abandon failure");};
+        Session::DisconnectHandler disconnect=[this](std::shared_ptr<Session> actual){
+            observe(*actual);event('A');++app;
+            if(!actual->closing()||actual->recovered_world_ready()||actual->state()==SessionState::Disconnected)terminal_invalid.store(true);
+            // Existing cleanup may broadcast through the original sender too.
+            // Its terminal sender must not add gameplay output ahead of03.
+            actual->send_world_records(std::vector<std::uint8_t>{0x73,77,0,0,0});
+            actual->send_world_records_with_acceptance(std::vector<std::uint8_t>{0x73,78,0,0,0},account,character,21,
+                actual->battle_generation(),[this](bool accepted){accepted?++self_yes:++self_no;});
+            entered.store(true);changed.notify_all();
+            std::unique_lock lock(mutex);
+            if(!changed.wait_for(lock,std::chrono::seconds(5),[this]{return release;})){gate_timeout.store(true);throw std::runtime_error("Logout fixture cleanup gate expired");}
+            lock.unlock();if(failure==1)throw std::runtime_error("Expected App disconnect failure");
+        };
+        Session::DisconnectCompletion complete=[this](std::shared_ptr<Session> actual,bool good){
+            observe(*actual);event('D');
+            if(actual->state()!=SessionState::Disconnected||app.load()!=1||common.load()!=1||abandon.load()!=1)early_complete.store(true);
+            clean.store(good);++completed;changed.notify_all();
+        };
+        session=std::make_shared<Session>(std::move(socket),game.get_executor(),id,false,Session::PacketHandler{},std::move(disconnect),
+            ProtocolMode::God2CharacterConnection,[](const RecoveredC2S0002::Parsed& request){require(request.logical[0]==0,"Logout fixture login opcode");return account;},
+            std::move(h),Bytes{},std::shared_ptr<const NativeTaiwanChannelBinding>{},std::move(complete));
+        peer.non_blocking(true);session->start();
+        worker=std::thread([this]{game_thread=std::this_thread::get_id();try{game.run();}catch(...){game_failed.store(true);changed.notify_all();}});
+    }
+    ~NativeLogoutPeer(){
+        release_cleanup();session->close();
+        for(unsigned i=0;i<100&&completed.load()==0;++i)try{net.restart();net.run_for(std::chrono::milliseconds(2));}catch(...){}
+        game_work.reset();game.stop();if(worker.joinable())worker.join();asio::error_code ignored;peer.close(ignored);
+    }
+    void observe(Session& actual){
+        if(std::this_thread::get_id()!=game_thread)wrong_executor.store(true);
+        if(&actual!=session.get()||actual.id()!=id||actual.account_id!=account||actual.character_id!=character)wrong_identity.store(true);
+    }
+    void event(char value){if(std::this_thread::get_id()!=game_thread)wrong_executor.store(true);std::lock_guard lock(mutex);events.push_back(value);}
+    std::vector<char> order(){std::lock_guard lock(mutex);return events;}
+    void release_cleanup(){std::lock_guard lock(mutex);release=true;changed.notify_all();}
+    void pump(){net.restart();net.run_for(std::chrono::milliseconds(2));require(!game_failed.load(),"Logout GAME executor escaped an unexpected exception");}
+    void send(std::span<const std::uint8_t> bytes){peer.non_blocking(false);asio::write(peer,asio::buffer(bytes.data(),bytes.size()));peer.non_blocking(true);}
+    void collect(){
+        for(;;){std::array<std::uint8_t,512> bytes{};asio::error_code error;const auto n=peer.read_some(asio::buffer(bytes),error);received.insert(received.end(),bytes.begin(),bytes.begin()+n);
+            if(error==asio::error::eof||error==asio::error::connection_reset){peer_closed=true;return;}
+            require(!error||error==asio::error::would_block||error==asio::error::try_again,"Logout fixture unexpected peer error");
+            if(error||!n)return;}
+    }
+    template<class Predicate> void until(Predicate&& done){
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        while(!done()&&std::chrono::steady_clock::now()<deadline){pump();collect();}
+        require(done(),"Logout fixture bounded executor progress timed out");
+    }
+    void expect(std::span<const std::uint8_t> expected){
+        until([&]{return received.size()>=expected.size();});
+        require(std::equal(expected.begin(),expected.end(),received.begin()),"Logout fixture handshake bytes changed");received.erase(received.begin(),received.begin()+expected.size());
+    }
+    void initialize(){
+        expect(RecoveredSeedExchange::hello());send(RecoveredSeedExchange::response);expect(RecoveredPostSeed::frame(0xf6));
+        RecoveredC2S0002::Payload credentials{};credentials[167]=0xc8;send(RecoveredC2S0002::encode(credentials));expect(RecoveredCharacterBootstrap::candidate());
+        std::array<std::uint8_t,38> selected{};selected[0]=0x1a;selected[34]=4;send(RecoveredWorldFrame::encode(selected));
+        expect(RecoveredCharacterCreateResult::committed_success());expect(entry);
+        send(RecoveredSessionPeer::tail(actor));until([this]{return ready.load()==1&&session->recovered_world_ready()&&session->state()==SessionState::InWorld;});
+        require(received.empty()&&cleanup_owners.load()==1&&!wrong_executor.load()&&!wrong_identity.load(),"Logout fixture did not establish exact real ready lifecycle");
+    }
+};
+void recovered_logout_cleanup_barrier(){
+    const std::vector<std::uint8_t> prefix_logical{0x73,9,0,0,0};
+    const auto prefix=RecoveredWorldFrame::encode(prefix_logical);
+    const auto ack=RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0});
+    for(std::uint8_t reason:{0,1,2})for(unsigned failure=0;failure<4;++failure){
+        NativeLogoutPeer f(failure);f.initialize();
+        // Already submitted output owns its original FIFO position. The later
+        // input includes both coalesced and separately arriving world ticks.
+        f.session->send_world_records(prefix_logical);
+        auto logout=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{2,reason});
+        const auto late=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});logout.insert(logout.end(),late.begin(),late.end());f.send(logout);
+        f.until([&]{return f.entered.load();});f.send(late);
+        for(unsigned i=0;i<8;++i){f.pump();f.collect();}
+        require(f.received==prefix&&!f.peer_closed&&f.completed.load()==0&&f.common.load()==0&&f.abandon.load()==0&&f.world_calls.load()==0&&f.self_no.load()==1&&f.self_yes.load()==0,
+            "03 or gameplay escaped while actual GAME App cleanup was still blocked");
+        require(f.order()==std::vector<char>{'A'},"Cleanup began outside exact App-first ordering");
+        f.release_cleanup();
+        {std::unique_lock lock(f.mutex);require(f.changed.wait_for(lock,std::chrono::seconds(2),[&]{return f.abandon.load()==1||f.game_failed.load();}),"GAME cleanup did not attempt later callbacks");}
+        require(f.completed.load()==0,"Disconnect completion preceded NET socket final close");
+        f.until([&]{return f.peer_closed&&f.completed.load()==1;});
+        auto expected=prefix;if(!failure)expected.insert(expected.end(),ack.begin(),ack.end());
+        require(f.received==expected,"Logout must retain earlier FIFO and send03 only after wholly successful cleanup");
+        require(f.app.load()==1&&f.common.load()==1&&f.abandon.load()==1&&f.order()==std::vector<char>({'A','C','B','D'})&&
+            f.clean.load()==(failure==0)&&!f.early_complete.load()&&!f.gate_timeout.load()&&!f.wrong_executor.load()&&!f.wrong_identity.load()&&!f.terminal_invalid.load()&&f.world_calls.load()==0&&f.self_no.load()==1&&f.self_yes.load()==0,
+            "Logout cleanup attempts/order/clean result/exact owner or final completion changed");
+        f.session->close();f.session->close();for(unsigned i=0;i<5;++i){f.pump();f.collect();}
+        require(f.completed.load()==1&&f.app.load()==1&&f.common.load()==1&&f.abandon.load()==1,"Late close or input repeated completed cleanup");
+    }
+}
 
 // Real Session/loopback source regressions, not a test-only receipt factory.
 // Synthetic S31 bytes exercise transport custody, not original selection policy.
@@ -1940,6 +2081,7 @@ void test_session_state() {
     recovered_legacy_selection_learning_reanchor();
     recovered_legacy_selection_learning_reanchor(true);
     recovered_written_deity_selection_transport();
+    recovered_logout_cleanup_barrier();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {
             return std::vector<std::uint8_t>{};

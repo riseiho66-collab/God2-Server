@@ -70,8 +70,9 @@ public:
     };
     using PacketHandler = std::function<void(std::shared_ptr<Session>, Packet)>;
     using DisconnectHandler = std::function<void(std::shared_ptr<Session>)>;
-    // GAME-only transport acknowledgment after cleanup, abandon and the
-    // application disconnect callback return. clean=false records a throw;
+    // GAME-only transport acknowledgment after final socket close and the
+    // once-only application disconnect, cleanup and abandon callbacks return.
+    // clean=false records a throw or source identity drift during cleanup;
     // this is neither durable-save proof nor a client logout acknowledgment.
     using DisconnectCompletion = std::function<void(std::shared_ptr<Session>,bool clean)>;
     using RecoveredLoginHandler = std::function<std::uint64_t(const RecoveredC2S0002::Parsed&)>;

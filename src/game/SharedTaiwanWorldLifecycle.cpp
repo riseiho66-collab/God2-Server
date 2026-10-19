@@ -57,7 +57,8 @@ void SharedTaiwanWorldLifecycle::Binding::release() {
     if(const auto session=connection.lock())
         session->release_common_world_delivery_identity(lease->account,lease->character,lease->generation);
     // Both owners get cleanup even if visibility/native output fails. Session
-    // independently invokes its existing disconnect callback afterwards.
+    // independently attempts Application disconnect first. This release does
+    // not supply durable-save or terminal-claim quarantine proof.
     std::exception_ptr failure;
     try {visibility->release(*lease);}catch(...){failure=std::current_exception();}
     try {presence->release(*lease);}catch(...){if(!failure)failure=std::current_exception();}

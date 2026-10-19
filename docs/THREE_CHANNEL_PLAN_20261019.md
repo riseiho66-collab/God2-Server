@@ -182,3 +182,12 @@ clean only exact still-prepared permissions. The native Current, explicit peer
 profiles, private input/witness sources and later acceptance remain mandatory.
 No default Main activation or completed switching is claimed. See
 research/tw-three-channel-actions-20261019.md for source and verification limits.
+
+Round497 repairs the real native02/reason0..2 logout branch: prior FIFO drains,
+terminal readiness retires, exact once all-attempted GAME cleanup precedes03,
+and final SessionManager completion follows socket close plus GAME completion.
+App failures propagate and party departure cannot be overwritten by a second
+move after delivery failure. This is cleanup ordering, not durable save/handoff:
+terminal claim quarantine, PK recovery and target admission remain OPEN. Current
+REA codec/seed profiling and remaining Main/offer/geometry sources are recorded
+in research/tw-three-channel-logout-20261019.md. No build/tests or activation.

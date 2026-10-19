@@ -1957,6 +1957,12 @@ struct Session::Impl {
             std::forward<Body>(body));
     }
     void append_write(Write value) {
+        if(native_logout_phase==NativeLogoutPhase::Cleaning||native_logout_phase==NativeLogoutPhase::AckQueued||native_logout_phase==NativeLogoutPhase::Failed){
+            if(native_logout_phase!=NativeLogoutPhase::AckQueued||value.bytes!=native_logout_ack||!writes.empty()){
+                native_logout_phase=NativeLogoutPhase::Failed;close_requested.store(true);
+                throw std::logic_error("Native logout cleanup cut acquired new output");
+            }
+        }
         // Every actual FIFO producer reaches this sink. Original provenance
         // must be on Write BEFORE insertion, never attached to writes.back().
         const auto entry=normal_entry.load();const auto original=value.normal_entry;
@@ -2128,6 +2134,13 @@ struct Session::Impl {
     bool closing = false;
     bool finished = false;
     bool game_busy = false;
+    enum class NativeLogoutPhase {None,Draining,Cleaning,AckQueued,Failed};
+    NativeLogoutPhase native_logout_phase=NativeLogoutPhase::None; // NET only; no new input authority.
+    std::uint8_t native_logout_reason=0;
+    std::shared_ptr<std::vector<std::uint8_t>> native_logout_ack; // Exact private terminal Write only.
+    bool disconnect_cleanup_started=false,disconnect_completion_posted=false; // NET only.
+    std::atomic<bool> disconnect_cleanup_done{false},disconnect_cleanup_clean{false};
+    std::atomic<bool> native_logout_terminal{false}; // GAME-visible retirement, distinct from external stop.
     bool native_battle_read_paused=false; // Network strand only; separate hold.
     bool native_pk_read_paused=false;
     asio::cancellation_signal native_pk_read_cancel;
@@ -2993,6 +3006,10 @@ struct Session::Impl {
         }catch(...){fail("Native PK output staged encoding or handoff failed");}
     }
     void read() {
+        if(native_logout_phase!=NativeLogoutPhase::None){
+            if(native_logout_phase==NativeLogoutPhase::Draining)post_status_work(strand,[self=owner.shared_from_this()]{self->impl_->advance_native_logout();});
+            return;
+        }
         if(owned_input_paused())return;
         if(const auto final=native_pk_return_finalisation.load();final&&
            final->phase.load()==NativePkReturnFinalisationStatus::Returned){
@@ -4109,6 +4126,12 @@ struct Session::Impl {
         }
     }
     void resume_world_input(bool awaiting_skill=false) {
+        if(native_logout_phase!=NativeLogoutPhase::None){
+            // Defer past the current NET callback's remaining admission/receipt
+            // bookkeeping before posting the terminal GAME cleanup.
+            if(native_logout_phase==NativeLogoutPhase::Draining)post_status_work(strand,[self=owner.shared_from_this()]{self->impl_->advance_native_logout();});
+            return;
+        }
         if(owned_input_paused())return;
         if(const auto final=native_pk_return_finalisation.load();final&&
            final->phase.load()==NativePkReturnFinalisationStatus::Returned){
@@ -4133,6 +4156,7 @@ struct Session::Impl {
         read();
     }
     void feed_world(std::span<const std::uint8_t> bytes) {
+        if(native_logout_phase!=NativeLogoutPhase::None)return; // Never redispatch a suffix after terminal02.
         if(owned_input_retired.load()){owned_input_paused();return;}
         if(has_input_hold()) {
             // Retain raw suffix/in-flight bytes at the original limit. Do not
@@ -4194,13 +4218,10 @@ struct Session::Impl {
             // for03. Reason alone does not identify the outer destination.
             if(control && control->size()==2 && (*control)[0]==2 && (*control)[1]<=2 &&
                records.empty() && !skill_deadline) {
-                auto reply=std::make_shared<std::vector<std::uint8_t>>(
-                    RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
-                if(!terminal_write_allowed())return;
-                write_bytes+=reply->size();append_write({reply,{}});
-                if(writes.size()==1)write();
-                logger("session")->info("session_id={} NATIVE_LOGOUT_ACK_QUEUED reason={}",id,(*control)[1]);
-                close();return;
+                native_logout_reason=(*control)[1];native_logout_phase=NativeLogoutPhase::Draining;
+                world_input.clear();world_pending_records.clear();
+                arm_timer(close_timeout); // A stuck/drained-away GAME post never earns03.
+                advance_native_logout();return;
             }
             std::optional<RecoveredWorldRecords::UnsupportedRecord> unsupported;
             const auto batch=RecoveredWorldRecords::parse_frame(
@@ -4702,6 +4723,10 @@ struct Session::Impl {
     }
     void write(std::shared_ptr<NativePkReturnPublication::Work> carried={}) {
         if(writes.empty())return;
+        if(native_logout_ack&&writes.front().bytes==native_logout_ack&&(!disconnect_cleanup_done.load()||!disconnect_cleanup_clean.load()||
+           native_logout_phase!=NativeLogoutPhase::AckQueued||(owner.native_channel_&&!owner.native_channel_->live_.load()))){
+            fail("Native logout acknowledgment source retired before write");return;
+        }
         if(!reply_push_sources_live(writes.front().reply_pushes)){
             fail("Captured world push source retired before actual write");return;
         }
@@ -5018,6 +5043,7 @@ struct Session::Impl {
                         data->complete();s.release_callback_input_if_ready(data);
                     }
                 }
+                if(s.native_logout_phase==NativeLogoutPhase::Draining)s.advance_native_logout();
                 }catch(...) {
                     if(movement_marker){movement_marker->fail();s.fail("Movement response completion failed");return;}
                     if(outward_marker){outward_marker->frame->revoke();s.fail("Outward status completion failed");return;}
@@ -5049,6 +5075,8 @@ struct Session::Impl {
                 throw std::logic_error("Movement response retired before async_write");
             if(qualified_source_live&&!qualified_source_live->load())throw std::logic_error("Qualified world source retired before async_write");
             if(!reply_push_sources_live(captured_pushes))throw std::logic_error("Captured world source retired before async_write");
+            if(native_logout_ack&&bytes==native_logout_ack&&(native_logout_phase!=NativeLogoutPhase::AckQueued||!disconnect_cleanup_done.load()||!disconnect_cleanup_clean.load()||
+               (owner.native_channel_&&!owner.native_channel_->live_.load())))throw std::logic_error("Native logout source retired before async_write");
             asio::async_write(socket,buffer,std::move(bound));
         };
         if(status_writer)initiate(retain_actor_status_writer(status_writer,std::move(completion)));
@@ -5068,6 +5096,7 @@ struct Session::Impl {
         }
     }
     void close() {
+        if(native_logout_phase!=NativeLogoutPhase::None&&native_logout_phase!=NativeLogoutPhase::AckQueued)native_logout_phase=NativeLogoutPhase::Failed;
         for(const auto& queued:writes)if(queued.movement_response)queued.movement_response->fail();
         retire_outward_status_writes();
         retire_initial_status_writes(); // Pure revoke BEFORE any cleanup/queue removal, including Released.
@@ -5094,6 +5123,7 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        if(native_logout_phase!=NativeLogoutPhase::None)native_logout_phase=NativeLogoutPhase::Failed;
         // Pure selected movement retirement precedes old callbacks/logging.
         // Written remains a historical physical fact after later failure.
         for(const auto& queued:writes)if(queued.movement_response)queued.movement_response->fail();
@@ -5126,47 +5156,88 @@ struct Session::Impl {
         write_bytes = 0;
         finish();
     }
-    void finish() {
-        if (finished || !closing || game_busy || !writes.empty() || native_battle_pending.load() || native_pk_pending.load() || native_pk_terminal.load()) return;
-        finished = true;
-        timeout_policy=SessionTimeoutPolicy::Normal;
-        hold_timer.cancel();
-        native_pk_timer.cancel();
-        native_pk_terminal_timer.cancel();
-        try { hold_status(); } catch(...) {}
-        owner.state_.store(SessionState::Disconnected);
-        asio::error_code ignored;
-        timer.cancel();
-        socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored);
-        socket.close(ignored);
+    void start_disconnect_cleanup() {
+        if(disconnect_cleanup_started)return;
+        disconnect_cleanup_started=true;
         post_status_work(game, [self = owner.shared_from_this()] {
             auto& s = *self->impl_;
-                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+            [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
             // Diagnostics cannot skip any cleanup or its transport receipt.
             auto report=[&](const char* message) noexcept {
                 try{if(auto log=logger("session"))log->error("session_id={} {}",s.id,message);}catch(...){}
             };
             try{if(auto log=logger("session"))log->info("session_id={} DISCONNECT_GAME_ENTER",s.id);}catch(...){}
+            const auto original_account=self->account_id,original_character=self->character_id;
+            const auto original_phase=self->state();const auto original_battle=self->battle_generation();
             bool clean=true;
-            try {if(auto cleanup=std::exchange(s.common_world_cleanup,{}))cleanup();}
-            catch(...) {
-                clean=false;report("common world cleanup failed");
+            {
+                // Take all three once before any application callback. Its
+                // original common owner survives through application disconnect.
+                auto disconnect=std::exchange(s.on_disconnect,{});
+                auto cleanup=std::exchange(s.common_world_cleanup,{});
+                auto abandon=std::exchange(s.character_handlers.common_world_lifecycle_abandon,{});
+                try {if(disconnect)disconnect(self);}catch(...) {clean=false;report("disconnect callback failed");}
+                try {if(cleanup)cleanup();}catch(...) {clean=false;report("common world cleanup failed");}
+                try {if(abandon)abandon(*self);}catch(...) {clean=false;report("common world lifecycle abandon failed");}
             }
-            try {if(auto abandon=std::exchange(s.character_handlers.common_world_lifecycle_abandon,{}))abandon(*self);}
-            catch(...) {
-                clean=false;report("common world lifecycle abandon failed");
+            if(self->account_id!=original_account||self->character_id!=original_character||self->state()!=original_phase||self->battle_generation()!=original_battle){
+                clean=false;report("disconnect source identity changed during cleanup");
             }
-            try {if(auto disconnect=std::exchange(s.on_disconnect,{}))disconnect(self);}
-            catch (...) {
-                clean=false;report("disconnect callback failed");
-            }
-            // Callback copies above are destroyed on GAME before acknowledgment.
-            // Posting failure propagates to the host's explicit abort path;
-            // never pretend that an unposted receipt drained successfully.
-            if(auto complete=std::exchange(s.disconnect_complete,{}))complete(self,clean);
-            s.game_work.reset();
-            s.network_work.reset();
+            // Pure results publish only after every callback copy died on GAME.
+            // An unrun GAME post cannot publish this result; a dropped NET
+            // continuation below cannot publish successful03.
+            s.disconnect_cleanup_clean.store(clean);s.disconnect_cleanup_done.store(true);
             try{if(auto log=logger("session"))log->info("session_id={} DISCONNECT_GAME_EXIT",s.id);}catch(...){}
+            s.post_status_work(s.strand,[self]{
+                auto& state=*self->impl_;
+                [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+                state.advance_native_logout();state.finish();
+            });
+        });
+    }
+    void advance_native_logout() {
+        if(native_logout_phase==NativeLogoutPhase::Draining){
+            if(closing||close_requested.load()||finished){native_logout_phase=NativeLogoutPhase::Failed;return;}
+            if(game_busy||!writes.empty()||native_battle_pending.load()||native_pk_pending.load()||native_pk_terminal.load())return;
+            native_logout_phase=NativeLogoutPhase::Cleaning;native_logout_terminal.store(true);
+            start_disconnect_cleanup();return;
+        }
+        if(native_logout_phase!=NativeLogoutPhase::Cleaning||!disconnect_cleanup_done.load())return;
+        if(closing||close_requested.load()||finished||(owner.native_channel_&&!owner.native_channel_->live_.load())){
+            native_logout_phase=NativeLogoutPhase::Failed;if(!closing)close();return;
+        }
+        if(!disconnect_cleanup_clean.load()){fail("Native logout GAME cleanup failed");return;}
+        if(game_busy||!writes.empty()||native_battle_pending.load()||native_pk_pending.load()||native_pk_terminal.load()){
+            fail("Native logout terminal drain changed during cleanup");return;
+        }
+        native_logout_ack=std::make_shared<std::vector<std::uint8_t>>(
+            RecoveredWorldFrame::encode(std::array<std::uint8_t,3>{3,0,0}));
+        native_logout_phase=NativeLogoutPhase::AckQueued;
+        append_write({native_logout_ack,{}});write_bytes+=native_logout_ack->size();
+        try{if(auto log=logger("session"))log->info("session_id={} NATIVE_LOGOUT_ACK_QUEUED reason={}",id,native_logout_reason);}catch(...){}
+        write();close(); // Existing03 only, once, after actual GAME cleanup.
+    }
+    void finish() {
+        if(!finished){
+            if(!closing||game_busy||!writes.empty()||native_battle_pending.load()||native_pk_pending.load()||native_pk_terminal.load())return;
+            finished=true;
+            timeout_policy=SessionTimeoutPolicy::Normal;
+            hold_timer.cancel();native_pk_timer.cancel();native_pk_terminal_timer.cancel();
+            try {hold_status();}catch(...){}
+            owner.state_.store(SessionState::Disconnected);
+            asio::error_code ignored;timer.cancel();
+            socket.shutdown(asio::ip::tcp::socket::shutdown_both,ignored);socket.close(ignored);
+        }
+        start_disconnect_cleanup();
+        if(!disconnect_cleanup_done.load()||disconnect_completion_posted)return;
+        disconnect_completion_posted=true;
+        post_status_work(game,[self=owner.shared_from_this()]{
+            auto& state=*self->impl_;
+            [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+            // SessionManager removal is downstream of BOTH final socket close
+            // and the exact all-attempted GAME cleanup, never the earlier03.
+            if(auto complete=std::exchange(state.disconnect_complete,{}))complete(self,state.disconnect_cleanup_clean.load());
+            state.game_work.reset();state.network_work.reset();
         });
     }
 };
@@ -6153,6 +6224,9 @@ void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         (void)retire_battle_self_view_logical_output(logical);[[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
         impl_->reject_qualified_profile_sender();
     }
+    // Cleanup may broadcast party departure to the departing self. Its old
+    // FIFO has drained; this terminal recipient must not mint another push.
+    if(impl_->native_logout_terminal.load())return;
     if(observed_world_callback==this&&impl_->reply_push_capture){
         (void)retire_battle_self_view_logical_output(logical);
         [[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
@@ -6183,7 +6257,7 @@ void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
     impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,attempt,component]() mutable {
         auto& s=*self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
-        if(s.closing || s.close_requested.load()) return;
+        if(s.closing || s.close_requested.load() || s.native_logout_terminal.load()) return;
         if(!is_recovered(s.mode) || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted) {
             s.fail("Recovered world push before accepted world tail");return;
         }
@@ -6219,7 +6293,7 @@ bool Session::install_common_world_cleanup(std::function<void()> cleanup) {
     }
     impl_->common_world_cleanup=std::move(cleanup);return true;
 }
-bool Session::closing() const noexcept {return impl_->close_requested.load();}
+bool Session::closing() const noexcept {return impl_->close_requested.load()||impl_->native_logout_terminal.load();}
 std::optional<Session::NativeWorldSelectionInput> Session::take_world_selection_input(
     const RecoveredSelectionItemRequest::Request& request) {
     const auto window=impl_->selection_window;
@@ -8253,6 +8327,9 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
         (void)retire_battle_self_view_logical_output(logical);[[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
         try{impl_->reject_qualified_profile_sender();}catch(...){if(acceptance){auto once=std::move(acceptance);try{once(false);}catch(...){}}throw;}
     }
+    if(impl_->native_logout_terminal.load()){
+        if(acceptance){auto once=std::move(acceptance);try{once(false);}catch(...){}}return;
+    }
     if(observed_world_callback==this&&impl_->reply_push_capture){
         (void)retire_battle_self_view_logical_output(logical);
         [[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
@@ -8281,7 +8358,7 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
     impl_->post_status_work(impl_->strand,[self=shared_from_this(),logical=std::move(logical),reservation,expected_account,expected_character,expected_world_generation,expected_battle_generation,complete=std::move(complete),component]() mutable {
         auto& s=*self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
-        if(s.closing || s.close_requested.load()) {complete(false);return;}
+        if(s.closing || s.close_requested.load() || s.native_logout_terminal.load()) {complete(false);return;}
         const auto delivery=s.world_delivery_identity.load();
         if(!is_recovered(s.mode) || s.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted || !delivery ||
            delivery->account!=expected_account || delivery->character!=expected_character ||
@@ -8368,6 +8445,6 @@ std::uint64_t Session::id() const noexcept { return impl_->id; }
 std::uint8_t Session::recovered_client_language() const noexcept {
     return recovered_client_language_.load();
 }
-bool Session::recovered_world_ready() const noexcept { return recovered_world_ready_.load(); }
+bool Session::recovered_world_ready() const noexcept { return recovered_world_ready_.load()&&!impl_->native_logout_terminal.load(); }
 const std::string& Session::remote_ip() const noexcept { return impl_->ip; }
 } // namespace god2

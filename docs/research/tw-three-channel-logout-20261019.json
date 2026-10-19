@@ -1,0 +1,161 @@
+{
+  "round": 497,
+  "previous_goal_turn": "progress",
+  "previous_commit": "78ea0b165318ef5099b24fd5e52eebcc35bfd825",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_WORLD02_GAME_CLEANUP_BEFORE03_SOURCE_INTEGRATION",
+  "source_integration": [
+    "Actual02 reason0/1/2 private terminal FIFO/GAME drain and public readiness retirement",
+    "Actual once App disconnect/common cleanup/abandon all attempted on GAME with full64/phase/battle fence",
+    "Original03 only after clean result and actual live terminal source; final completion after socket close plus GAME cleanup",
+    "Actual Application failure propagation, expired weak-host refusal and one-time party departure publication",
+    "Future DB-free separate-NET/GAME socket matrix12 cases through actual authentication/2A/tail and public cleanup installation"
+  ],
+  "source_review": {
+    "independent": true,
+    "application_patch_sha256": "7ab29dba514b0f54bfabe42a184567a951db01c792781e2216922a98f55280d0",
+    "session_patch_sha256": "f4e5898fa309ce3356ac11c8155c0c4a7a71521422379cebce0f61588900e545",
+    "exact03_not_durable_save_or_target_grant": true,
+    "terminal_claim_quarantine_complete": false,
+    "source_identity_reads_on_game": true,
+    "cleanup_callback_destruction_on_game": true,
+    "callback_completion_stage": "FINAL_SOCKET_CLOSE_AND_ONCE_GAME_CLEANUP_NOT_FINAL_SAVE",
+    "future_test_case_count": 12,
+    "tests_not_executed": true,
+    "coverage_limits": "No durable or cross-world custody qualification; identity-drift, listener-stop/drop/timeout/PK/host-abort matrix remains for later verification",
+    "eol": [
+      {
+        "path": "src/core/Application.cpp",
+        "baseline_cr": 8193,
+        "current_cr": 8183,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 169
+      },
+      {
+        "path": "src/net/Session.h",
+        "baseline_cr": 105,
+        "current_cr": 105,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 3
+      },
+      {
+        "path": "src/net/Session.cpp",
+        "baseline_cr": 737,
+        "current_cr": 737,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 118
+      },
+      {
+        "path": "src/game/SharedTaiwanWorldLifecycle.cpp",
+        "baseline_cr": 264,
+        "current_cr": 262,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 3
+      },
+      {
+        "path": "tests/test_session_state.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 142
+      },
+      {
+        "path": "docs/custom-designs.json",
+        "baseline_cr": 6467,
+        "current_cr": 6467,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 8
+      },
+      {
+        "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 9
+      },
+      {
+        "path": "docs/research/tw-three-channel-logout-20261019.md",
+        "new_file": true,
+        "cr": 0
+      }
+    ],
+    "custom_registry_other_design_bytes_unchanged": true,
+    "registry_prefix_sha256": "5e4aafbd7b19ea39433d0b9e692f91796957a2b88165d86eadd290bf2b02e8a8",
+    "registry_suffix_sha256": "2812f892d65822f3bd1cd6a240c30d764a3ef9a1aa2740d234d984b4b0cca15c"
+  },
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-logout-round497/native-profile/findings-v1.json",
+    "receipt_sha256": "f575570f7b3431d62867d4e5120173c290e6283fda39f74524a0152b6b9572a3",
+    "members_verified": 31,
+    "opened_targets": 3,
+    "closed_targets": 3,
+    "selected_addresses": 16,
+    "containing_function_correction": "requested410980 resolves410960",
+    "original_sections_verified": 13,
+    "target_executed": false,
+    "unresolved_next_trace": [
+      "410500/410570 actual seed and encryption-flag provenance",
+      "Full07/2A producers, actual Main, MDT/MDL outdoor geometry and legacy/current lineage"
+    ]
+  },
+  "open": [
+    "Exact terminal character-claim hold/quarantine/recovery and per-domain durable qualification including PK",
+    "Target admission and all six directed switches/current-client acceptance",
+    "Actual native providers/default Main, full07/2A offers, negotiated peer profile, aaf0 vs149c lineage and MDT/MDL geometry",
+    "Other guild schemas, common64/native actor projection, selected Web G and native transfer",
+    "Full Taiwan gameplay/formula/actual MySQL obligations"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "e37159414c3852a2bf0ba0233e92b7ed459b1d42751c68920c03e2785fea00ca"
+    },
+    {
+      "path": "src/net/Session.h",
+      "sha256": "c21ef137bb0dec7842cb91dc680186a93bf973e1c44e3f6ae8916d908cf9300e"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "4b6adfa2bd0b3f00ceba26a4a89cfb665142599659d042f086868449222529ec"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldLifecycle.cpp",
+      "sha256": "93ed01a2a1099c1ea50bd46eebf04f2999036d0654f0661322161f78f98c138b"
+    },
+    {
+      "path": "tests/test_session_state.cpp",
+      "sha256": "a4ba7b4b9a7918f20b2d1128e42c6acb1c82994e1a6def3bc5b6ffdc4a437301"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "c5b762ee99439d48c9beeca010334334ae87d5415cc0a67939a12fe41ce70d96"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "9fb70858b77499eaa5524f2a79abe835c7fb4af3186df8922dff899f8176bc84"
+    },
+    {
+      "path": "docs/research/tw-three-channel-logout-20261019.md",
+      "sha256": "abca1c1df83a359e43df3e1c0616ac380aeb4bc896af0a0d43d60341689337f5"
+    }
+  ]
+}
