@@ -1,0 +1,106 @@
+{
+  "round": 488,
+  "previous_goal_turn": "progress",
+  "previous_commit": "c3bdfdbcee14778ab1e20bc4f8a8e5a21cc012ea",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_OWNER_REQUIRED_THREE_CHANNELS_WITH_EXPLICIT_GAME_DISCONNECT_OBSERVATION",
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-drain-round488/native-switch/case2-exit-findings-v1.json",
+    "receipt_sha256": "bbf9f94377241ea1d974d03cf55f97b465c3e303511b606de106ec4f260af75f",
+    "members_verified": 14,
+    "original_sections_and_mappings_verified": true,
+    "all_targets_closed": true,
+    "evidence_id": "ev_90ba0454e3fe07e8d824ebcc800a548795217027be015c65343ae8e964f22ce0",
+    "remaining_unknowns": [
+      "UI+232DE4 widget name, opening/create writer, and whether its user action is related to channel selection. Next bounded trace is original .text references to displacement232DE4, then qualify its writer function; do not label483B00 as switch.",
+      "Raw4833B3 caller candidate remains without a containing-function qualification.",
+      "Complete cleanup semantics and indirect effects of481590 descendants4F4890/47FBA0/4AFE20/41E680 remain outside this bound.",
+      "4655E0 whole-function decompilation still has the known indirect-dispatch limitation; exact current original table/block evidence is used instead of inventing an interior function."
+    ]
+  },
+  "source_integration": [
+    "Actual Session GAME cleanup/abandon/disconnect completion separated from transport accounting",
+    "Exact accepted Session removal, accept/retry acknowledgment and final GAME marker before stop observation",
+    "Three actual channel observations and existing Application stop integration retaining natural NET/GAME drain",
+    "Explicit callback failure and infrastructure abort distinctions, no native logout wire changes"
+  ],
+  "open": [
+    "Application mounts three complete independent gameplay Contexts and actual client slots",
+    "Shared L-issued lineage/capacity and selected Web G destination",
+    "Durable save/logout/scene release/target admission and six directed switches",
+    "UI+232DE4 widget creation/name and unexpanded cleanup descendants",
+    "Full-server route/formula/storage/gameplay closure and concentrated current-client acceptance"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/net/Session.h",
+      "sha256": "a7cf5589376d146a023d46ade3936df267cb2292feb16a6d969ac10cdc7e5aa7"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "b49fef3cee33b097688deab4c48005ba5ca3520d7b0099945248f4421c99d55c"
+    },
+    {
+      "path": "src/net/TcpServer.h",
+      "sha256": "25471beadcb07ec9e9f782adc0217c7fd851c844f72df7d2f3cb360307bb2616"
+    },
+    {
+      "path": "src/net/TcpServer.cpp",
+      "sha256": "9df49753c854244ec1e092a56247299fc695bc8e2e4e279c7d0b1718e9c74759"
+    },
+    {
+      "path": "src/net/SessionManager.h",
+      "sha256": "7033325e7a5bba3264eb1cc2e532d209db406cd23b2eb43e8ac5136db65e183c"
+    },
+    {
+      "path": "src/net/SessionManager.cpp",
+      "sha256": "af82ea4028f9eafbc392ada8386bd8ec6e2634290dbcbbefbde8356ab1f42904"
+    },
+    {
+      "path": "src/net/TaiwanChannelServers.h",
+      "sha256": "833de3e005de0d1a9d1101ddb4169b785128475c3fcb4b57996d7f502683c423"
+    },
+    {
+      "path": "src/net/TaiwanChannelServers.cpp",
+      "sha256": "3b36bc770089003a6a3dee6ae052412506410827380e858f5278c9848fcfb8cf"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "8055c9f8cd456e22f6a31f8355f988b0936ebd2c28f8d10eca370128a48e8025"
+    },
+    {
+      "path": "tests/test_taiwan_channel_servers.cpp",
+      "sha256": "ab9fde8b5bb006f19683f33ec3d50fc3bcd04b6502292e01628156c6032b3d0a"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "3e09e0ba6de8d37f3b233d40a32404e9653acd3a3768a68e56bffcb4e4cafe95"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "f317311cf89591842d34b849631d9a15fac7456dd5ea9cb9b5775b49f9fec122"
+    },
+    {
+      "path": "docs/research/tw-three-channel-disconnect-drain-20261019.md",
+      "sha256": "ef4bd4fa6280d4412d2811d142564f424396de2a0c127a59ee5cb922ecef62c8"
+    }
+  ]
+}

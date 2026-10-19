@@ -13,7 +13,8 @@ class SessionManager {
 public:
     explicit SessionManager(std::size_t capacity);
     bool add(const std::shared_ptr<Session>& session);
-    void remove(std::uint64_t id);
+    // Completion may remove only this exact accepted incarnation.
+    bool remove(const std::shared_ptr<Session>& session);
     void close_all();
     std::size_t size() const noexcept;
 private:

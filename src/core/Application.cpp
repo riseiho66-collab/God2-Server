@@ -143,6 +143,8 @@
 #include <limits>
 #include <utility>
 #include <exception>
+#include <array>
+#include <optional>
 namespace god2 {
 // CUSTOM-0129/0149: only this original one-shot publisher may mint zero coverage.
 // No public header factory or unrelated Written response can mint this token.
@@ -9925,6 +9927,30 @@ if(guild_officer_runtime && player_guild(session) &&
             });
             asio::signal_set signals(game,SIGINT,SIGTERM);
             asio::steady_timer deadline(game);
+            asio::steady_timer disconnect_drain_timer(game);
+            std::array<std::optional<TcpServer::StopObservation>,2> disconnect_drains{};
+            bool disconnect_cleanup_failed=false;
+            std::function<void()> await_disconnect_drain;
+            await_disconnect_drain=[&] {
+                bool complete=true;
+                for(const auto& observation:disconnect_drains)if(observation) {
+                    if(observation->aborted())throw std::runtime_error("Listener disconnect observation aborted; clean drain is unproved");
+                    if(!observation->complete())complete=false;
+                    else if(!observation->succeeded())disconnect_cleanup_failed=true;
+                }
+                if(complete) {
+                    // stop() releases only the pool work guard. Natural NET
+                    // drain/join still precedes GAME owner destruction below.
+                    network.stop();return;
+                }
+                // CUSTOM-0159 host service cadence, not a native switch rule
+                // or a success timeout. Pending receipts never become success.
+                disconnect_drain_timer.expires_after(std::chrono::milliseconds(10));
+                disconnect_drain_timer.async_wait([&](const asio::error_code& error) {
+                    if(error)throw asio::system_error(error);
+                    await_disconnect_drain();
+                });
+            };
             bool stopping=false;
             auto stop=[&] {
                 if(stopping) return;
@@ -9940,9 +9966,9 @@ if(guild_officer_runtime && player_guild(session) &&
                 spdlog::info("Stopping server and draining sessions");
                 scheduler->stop(); signals.cancel(); deadline.cancel();
                 if(web_gateway)web_gateway->stop();
-                server.stop();
-                if(character_server) character_server->stop();
-                network.stop();
+                disconnect_drains[0]=server.stop_observed();
+                if(character_server)disconnect_drains[1]=character_server->stop_observed();
+                await_disconnect_drain();
             };
             signals.async_wait([&](const asio::error_code& ec,int) { if(!ec) stop(); });
             if(run_for_seconds) {
@@ -9961,6 +9987,8 @@ if(guild_officer_runtime && player_guild(session) &&
             ready.set_value(); announced=true;
             game.run();
             lua.call_event("server_stop");
+            if(disconnect_cleanup_failed)
+                throw std::runtime_error("Session disconnect callbacks failed during drain");
         } catch(...) {
             failure=std::current_exception();
             if(!announced) ready.set_exception(failure);

@@ -1758,6 +1758,7 @@ struct Session::Impl {
     std::optional<std::chrono::steady_clock::time_point> skill_deadline;
     PacketHandler on_packet;
     DisconnectHandler on_disconnect;
+    DisconnectCompletion disconnect_complete;
     RecoveredLoginHandler recovered_login;
     RecoveredCharacterHandlers character_handlers;
     bool common_world_lifecycle_factory_invoked=false; // Serial game executor only.
@@ -1977,12 +1978,14 @@ struct Session::Impl {
 
     Impl(Session& owner_, asio::ip::tcp::socket socket_, asio::any_io_executor game_,
          std::uint64_t id_, bool dump_, PacketHandler packet_, DisconnectHandler disconnect_,ProtocolMode mode_,
-         RecoveredLoginHandler login_,RecoveredCharacterHandlers characters_,std::vector<std::uint8_t> routes_)
+         RecoveredLoginHandler login_,RecoveredCharacterHandlers characters_,std::vector<std::uint8_t> routes_,
+         DisconnectCompletion disconnect_complete_)
         : owner(owner_), socket(std::move(socket_)), strand(asio::make_strand(socket.get_executor())),
           game(std::move(game_)), timer(strand), hold_timer(strand), native_pk_timer(strand), native_pk_terminal_timer(strand), game_work(asio::make_work_guard(game)),
           network_work(asio::make_work_guard(socket.get_executor())),
           id(id_), packet_dump(dump_), mode(mode_), on_packet(std::move(packet_)),
-          on_disconnect(std::move(disconnect_)), recovered_login(std::move(login_)),character_handlers(std::move(characters_)),character_routes(std::move(routes_)) {
+          on_disconnect(std::move(disconnect_)), disconnect_complete(std::move(disconnect_complete_)),
+          recovered_login(std::move(login_)),character_handlers(std::move(characters_)),character_routes(std::move(routes_)) {
         if(recovered_login && mode!=ProtocolMode::God2LegacyCharacterListCandidate && mode!=ProtocolMode::God2CharacterConnection)
             throw std::invalid_argument("Recovered authentication requires candidate mode");
         if((character_handlers.native_list || character_handlers.native_select || character_handlers.native_list_current || character_handlers.native_list_complete) &&
@@ -4946,22 +4949,31 @@ struct Session::Impl {
         post_status_work(game, [self = owner.shared_from_this()] {
             auto& s = *self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
-            logger("session")->info("session_id={} DISCONNECT_GAME_ENTER",s.id);
+            // Diagnostics cannot skip any cleanup or its transport receipt.
+            auto report=[&](const char* message) noexcept {
+                try{if(auto log=logger("session"))log->error("session_id={} {}",s.id,message);}catch(...){}
+            };
+            try{if(auto log=logger("session"))log->info("session_id={} DISCONNECT_GAME_ENTER",s.id);}catch(...){}
+            bool clean=true;
             try {if(auto cleanup=std::exchange(s.common_world_cleanup,{}))cleanup();}
             catch(...) {
-                if(auto log=logger("session"))log->error("session_id={} common world cleanup failed",s.id);
+                clean=false;report("common world cleanup failed");
             }
-            try {if(s.character_handlers.common_world_lifecycle_abandon)s.character_handlers.common_world_lifecycle_abandon(*self);}
+            try {if(auto abandon=std::exchange(s.character_handlers.common_world_lifecycle_abandon,{}))abandon(*self);}
             catch(...) {
-                if(auto log=logger("session"))log->error("session_id={} common world lifecycle abandon failed",s.id);
+                clean=false;report("common world lifecycle abandon failed");
             }
-            try { if (s.on_disconnect) s.on_disconnect(self); }
+            try {if(auto disconnect=std::exchange(s.on_disconnect,{}))disconnect(self);}
             catch (...) {
-                if (auto log = logger("session")) log->error("session_id={} disconnect callback failed", s.id);
+                clean=false;report("disconnect callback failed");
             }
+            // Callback copies above are destroyed on GAME before acknowledgment.
+            // Posting failure propagates to the host's explicit abort path;
+            // never pretend that an unposted receipt drained successfully.
+            if(auto complete=std::exchange(s.disconnect_complete,{}))complete(self,clean);
             s.game_work.reset();
             s.network_work.reset();
-            logger("session")->info("session_id={} DISCONNECT_GAME_EXIT",s.id);
+            try{if(auto log=logger("session"))log->info("session_id={} DISCONNECT_GAME_EXIT",s.id);}catch(...){}
         });
     }
 };
@@ -4969,9 +4981,10 @@ struct Session::Impl {
 Session::Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,
                  std::uint64_t id, bool packet_dump, PacketHandler on_packet,
                  DisconnectHandler on_disconnect,ProtocolMode mode,RecoveredLoginHandler recovered_login,RecoveredCharacterHandlers characters,
-                 std::vector<std::uint8_t> character_routes,std::shared_ptr<const NativeTaiwanChannelBinding> native_channel)
+                 std::vector<std::uint8_t> character_routes,std::shared_ptr<const NativeTaiwanChannelBinding> native_channel,
+                 DisconnectCompletion disconnect_complete)
     : impl_(std::make_unique<Impl>(*this, std::move(socket), std::move(game_executor), id,
-                                  packet_dump, std::move(on_packet), std::move(on_disconnect),mode,std::move(recovered_login),std::move(characters),std::move(character_routes))),
+                                  packet_dump, std::move(on_packet), std::move(on_disconnect),mode,std::move(recovered_login),std::move(characters),std::move(character_routes),std::move(disconnect_complete))),
       native_channel_(std::move(native_channel)),native_channel_acceptance_([&]()->std::optional<NativeChannelAcceptance>{
           if(!native_channel_)return {};
           if(mode!=ProtocolMode::God2CharacterConnection||!id||!impl_->character_handlers.native_select)

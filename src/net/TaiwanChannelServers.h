@@ -41,6 +41,9 @@ public:
     // Revokes each binding before GAME can perform more input. Keep sources,
     // worlds/repositories alive until all actual Session disconnect jobs drain.
     void stop();
+    // One receipt per actual G listener, with the same issuer on every call.
+    // Even after stop(), observation still joins pending disconnect callbacks.
+    std::array<TcpServer::StopObservation,3> stop_observed();
     asio::ip::tcp::endpoint endpoint(std::uint8_t channel) const;
     std::vector<std::uint8_t> advertisement() const;
 private:

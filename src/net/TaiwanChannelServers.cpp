@@ -119,6 +119,13 @@ void TaiwanChannelServers::stop() {
     for(auto& listener:listeners_)if(listener)try{listener->stop();}catch(...){if(!failure)failure=std::current_exception();}
     if(failure)std::rethrow_exception(failure);
 }
+std::array<TcpServer::StopObservation,3> TaiwanChannelServers::stop_observed() {
+    owner();
+    // Retire all three before requesting any receipt; on a posting exception
+    // stop() has still attempted every listener, never leaving a live binding.
+    stop();
+    return {listeners_[0]->stop_observed(),listeners_[1]->stop_observed(),listeners_[2]->stop_observed()};
+}
 asio::ip::tcp::endpoint TaiwanChannelServers::endpoint(std::uint8_t channel) const {
     owner();if(channel>=3)throw std::out_of_range("Native channel ordinal must be0..2");
     return listeners_[channel]->bound_endpoint();

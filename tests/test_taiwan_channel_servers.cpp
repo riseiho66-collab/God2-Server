@@ -9,9 +9,11 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 namespace {
 using namespace god2;
@@ -164,14 +166,112 @@ void actual_three_listener_bindings(){
         thread_refusals+=refuses<std::logic_error>([&]{(void)f.held[0]->native_channel_allows_destination(0,0);});
         thread_refusals+=refuses<std::logic_error>([&]{(void)f.held[0]->native_channel_binding_current();});
     });foreign.join();require(thread_refusals==4,"Bound listener/source Game-owner checks were bypassed");
-    f.servers->stop(); // Binding revocation is synchronous, before NET drain.
+    const auto observations=f.servers->stop_observed(); // Revocation is synchronous, before NET drain.
+    const auto repeated=f.servers->stop_observed();
+    for(const auto& observation:observations)
+        require(!observation.complete()&&!observation.succeeded()&&!observation.aborted(),"Triple stop completed before actual executor acknowledgments");
     for(std::uint8_t k=0;k<3;++k)
         require(f.held[k]->native_channel_bound()&&f.held[k]->native_channel_ordinal()==std::optional{k}&&
             !f.held[k]->native_channel_binding_current()&&
             !f.held[k]->native_channel_allows_presence(f.worlds.world(k)->presence())&&
             !f.held[k]->native_channel_allows_destination(0,k),"Stop rewrote metadata or left retained accepted binding live");
     require(refuses<std::logic_error>([&]{(void)f.servers->advertisement();})&&
-        refuses<std::logic_error>([&]{f.servers->start();}),"Stopped topology advertised or restarted");f.drain();
+        refuses<std::logic_error>([&]{f.servers->start();}),"Stopped topology advertised or restarted");
+    // NET accept cancellation may finish now, but each pure final GAME marker
+    // is still paused. A receipt is not merely synchronous socket retirement.
+    for(unsigned k=0;k<64;++k){f.network.restart();f.network.poll();}
+    for(const auto& observation:observations)require(!observation.complete(),"Triple stop bypassed final GAME marker");
+    const auto stop_deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+    while(std::chrono::steady_clock::now()<stop_deadline&&
+        std::any_of(observations.begin(),observations.end(),[](const auto& value){return !value.complete();})){f.pump();f.checked();}
+    for(std::size_t k=0;k<observations.size();++k)
+        require(observations[k].complete()&&observations[k].succeeded()&&!observations[k].aborted()&&
+            repeated[k].complete()&&repeated[k].succeeded(),"One actual channel/repeated stop observation did not acknowledge clean drain");
+    f.drain();
+}
+
+void observed_stop_waits_for_actual_game_callbacks(bool throwing){
+    Fixture f;
+    struct CallbackState {
+        explicit CallbackState(std::thread::id actual_owner):owner(actual_owner){}
+        const std::thread::id owner;
+        unsigned abandon_calls=0,disconnect_calls=0;
+        bool correct_owner=true,reentrant_pending=false;
+        std::vector<char> callback_order;
+        std::shared_ptr<Session> held;
+        std::optional<TcpServer::StopObservation> reentrant;
+        std::weak_ptr<TcpServer> listener;
+    };
+    const auto state=std::make_shared<CallbackState>(f.owner);
+    // These aliases are assertion-only. Every asynchronous callback owns pure
+    // state and a weak listener, never references these aliases, f or locals.
+    auto& abandon_calls=state->abandon_calls;auto& disconnect_calls=state->disconnect_calls;
+    auto& correct_owner=state->correct_owner;auto& reentrant_pending=state->reentrant_pending;
+    auto& callback_order=state->callback_order;auto& held=state->held;auto& reentrant=state->reentrant;
+    auto source=f.sources(0,f.worlds.world(0));
+    source.characters.common_world_lifecycle_abandon=[state,throwing](Session&){
+        ++state->abandon_calls;state->callback_order.push_back('a');state->correct_owner&=std::this_thread::get_id()==state->owner;
+        if(throwing)throw std::runtime_error("Expected synthetic abandon failure");
+    };
+    source.disconnected=[state,throwing](std::shared_ptr<Session> session){
+        ++state->disconnect_calls;state->callback_order.push_back('d');state->held=std::move(session);
+        state->correct_owner&=std::this_thread::get_id()==state->owner&&state->held->state()==SessionState::Disconnected;
+        // Early assertion/construction failures can unwind the listener before
+        // Fixture drains GAME. Its callbacks still own state, but never touch a
+        // destroyed server; normal execution below requires the real receipt.
+        if(const auto listener=state->listener.lock()){
+            state->reentrant=listener->stop_observed();
+            state->reentrant_pending=!state->reentrant->complete()&&!state->reentrant->succeeded()&&!state->reentrant->aborted();
+        }
+        if(throwing)throw std::runtime_error("Expected synthetic disconnect failure");
+    };
+    // Real listener/Session and real private disconnect completion; no auth,
+    // native entry hooks, fabricated save receipt or DB operation is provided.
+    auto server=std::make_shared<TcpServer>(f.network,f.game.get_executor(),"127.0.0.1",0,4,false,
+        std::move(source.packet),std::move(source.disconnected),ProtocolMode::God2CharacterConnection,
+        std::move(source.authenticate),std::move(source.characters));state->listener=server;server->start();
+    f.peers[0]=std::make_unique<asio::ip::tcp::socket>(f.client);auto& peer=*f.peers[0];
+    peer.connect(server->bound_endpoint());peer.non_blocking(true);f.expect(peer,RecoveredSeedExchange::hello());
+    peer.non_blocking(false);asio::write(peer,asio::buffer(RecoveredSeedExchange::response));peer.non_blocking(true);
+    f.expect(peer,RecoveredPostSeed::frame(0xf6));
+    const auto stopped=server->stop_observed(),copy=stopped;
+    const auto repeated=server->stop_observed();
+    require(!stopped.complete()&&!stopped.succeeded()&&!stopped.aborted(),"Stop observation completed before executing stop");
+    // Keep GAME paused while NET processes stop, pending accept/read cancellation
+    // and actual Session close. Disconnect callback ownership has not run yet.
+    for(unsigned k=0;k<128;++k){f.network.restart();f.network.poll();}
+    require(abandon_calls==0&&disconnect_calls==0&&!stopped.complete()&&!copy.complete(),"NET retirement bypassed paused GAME callbacks");
+    const auto callback_deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+    while(!disconnect_calls&&std::chrono::steady_clock::now()<callback_deadline){f.game.restart();f.game.poll();}
+    require(abandon_calls==1&&disconnect_calls==1&&correct_owner&&callback_order==std::vector<char>{'a','d'}&&
+        held&&reentrant&&reentrant_pending&&!stopped.complete()&&!repeated.complete(),
+        "Abandon/disconnect were skipped, reordered, repeated or reported complete inside GAME callback");
+    // GAME has returned, but exact SessionManager removal still needs NET and
+    // its resulting final GAME marker. A failing callback must still join both.
+    for(unsigned k=0;k<128;++k){f.network.restart();f.network.poll();}
+    require(!stopped.complete()&&!stopped.aborted(),"NET acknowledgment bypassed the final GAME marker");
+    const auto marker_deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+    while(!stopped.complete()&&!stopped.aborted()&&std::chrono::steady_clock::now()<marker_deadline){f.game.restart();f.game.poll();}
+    require(stopped.complete()&&!stopped.aborted()&&stopped.succeeded()==!throwing&&copy.complete()&&
+        repeated.complete()&&reentrant->complete()&&reentrant->succeeded()==!throwing&&
+        abandon_calls==1&&disconnect_calls==1,"Final stop lost callback failure or did not complete exact repeated observations");
+    // Observation does not promise Session destruction; this copy stays owned
+    // after completion. Clean means callbacks returned, never durable-save proof.
+    require(held->state()==SessionState::Disconnected,"Completed observation required destruction of retained Session");
+    server.reset();f.drain();held.reset();f.drain();
+}
+void unstarted_observed_stop_is_repeatable(){
+    Fixture f;
+    auto server=std::make_unique<TcpServer>(f.network,f.game.get_executor(),"127.0.0.1",0,4,false,
+        Session::PacketHandler{},Session::DisconnectHandler{});
+    const auto first=server->stop_observed(),second=server->stop_observed();
+    require(!first.complete()&&!first.succeeded()&&!first.aborted(),"Unstarted listener fabricated synchronous completion");
+    for(unsigned k=0;k<32;++k){f.network.restart();f.network.poll();}
+    require(!first.complete()&&!second.complete(),"Unstarted stop bypassed final GAME marker");
+    f.game.restart();f.game.poll();
+    require(first.complete()&&first.succeeded()&&!first.aborted()&&second.complete()&&second.succeeded(),"Unstarted/repeated stop could not acknowledge cleanly");
+    const auto later=server->stop_observed();require(later.complete()&&later.succeeded(),"Repeated stop did not observe same completed receipt");
+    server.reset();f.drain();require(first.complete()&&first.succeeded(),"Copied stop observation depended on listener lifetime");
 }
 
 struct PortReservation {
@@ -230,4 +330,6 @@ void legacy_unbound_session_remains_unbound(){
 
 void test_taiwan_channel_servers(){
     actual_three_listener_bindings();invalid_sources_and_atomic_bind_rollback();legacy_unbound_session_remains_unbound();
+    observed_stop_waits_for_actual_game_callbacks(false);observed_stop_waits_for_actual_game_callbacks(true);
+    unstarted_observed_stop_is_repeatable();
 }

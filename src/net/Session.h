@@ -70,6 +70,10 @@ public:
     };
     using PacketHandler = std::function<void(std::shared_ptr<Session>, Packet)>;
     using DisconnectHandler = std::function<void(std::shared_ptr<Session>)>;
+    // GAME-only transport acknowledgment after cleanup, abandon and the
+    // application disconnect callback return. clean=false records a throw;
+    // this is neither durable-save proof nor a client logout acknowledgment.
+    using DisconnectCompletion = std::function<void(std::shared_ptr<Session>,bool clean)>;
     using RecoveredLoginHandler = std::function<std::uint64_t(const RecoveredC2S0002::Parsed&)>;
     // Once-published owned original account-stage input. Parsing is not target
     // permission or a cross-socket issued-list receipt. No mutable native data.
@@ -756,7 +760,8 @@ public:
             DisconnectHandler on_disconnect, ProtocolMode mode=ProtocolMode::Fixture,
             RecoveredLoginHandler recovered_login={},RecoveredCharacterHandlers characters={},
             std::vector<std::uint8_t> character_routes={},
-            std::shared_ptr<const NativeTaiwanChannelBinding> native_channel={});
+            std::shared_ptr<const NativeTaiwanChannelBinding> native_channel={},
+            DisconnectCompletion disconnect_complete={});
     ~Session();
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
