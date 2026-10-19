@@ -6557,9 +6557,11 @@
         "src/net/SessionManager.cpp",
         "src/core/Application.cpp",
         "src/core/ApplicationGameFrame.h",
-        "tests/test_application_game_frame.cpp"
+        "tests/test_application_game_frame.cpp",
+        "src/core/ApplicationGameSources.h",
+        "tests/test_application_game_sources.cpp"
       ],
-      "document": "docs/research/tw-three-channel-application-frame-20261019.md",
+      "document": "docs/research/tw-three-channel-source-export-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6574,15 +6576,17 @@
         "channel_binding": "Private actual-listener endpoint/world descriptor, weak affine ownership, per-Session this/full64-ID/local-endpoint constructor correlation; GAME pre/post checks on selection/readiness/records/lifecycle and exact handoff native destination constrain bound Sessions; no public rebind, authentication/issuer authority unchanged",
         "retirement": "Descriptor retirement precedes posted socket stop, including infrastructure abort. Exact GAME cleanup/abandon/application disconnect are independently attempted before exact accepted Session removal; accept/retry cancellation and final GAME marker qualify copied listener stop observations. Callback failure is terminal complete but unsuccessful; infrastructure abort never counts as completion. Sources/worlds/repositories still outlive full NET/GAME drain; no save, client ACK or object destruction is certified.",
         "host_drain": "Actual existing Application joins account/G observations before releasing only the network pool work guard, retains natural NET/GAME join, surfaces callback failure after drain. Three-listener owner returns all three actual observations.10ms polling is CUSTOM host service cadence, never native timeout or timeout-to-success.",
-        "native_exit_followup": "UI+232DE4 is a WORD shared message-widget handle written483C10;483B40 accepts encoded character data through476570,483A80/483AB0 set232F68=1 for exit-required dismissal mode. Qualified4820A0 gates GUI-26 on that mode. No channel selector/fixed title or resource-ID meaning for19000 is established.",
+        "native_exit_followup": "Qualified468AE0 inbound dispatch table46B5D4[20] selects46928A, passes packet+0D encoded text to483A80. Receive state-3/world+AA25ED4==0 uses resourceED via483AB0. These are inbound/error message origins, not player channel selection or server save/transfer rules.",
         "gameplay_frame": "Actual Application single mounted mutable cohort now lives in one GAME-owned standard C++20 suspended frame. Stable coroutine lambda and shared DB/account-hashing host outlive the frame. One pure Hold retains reference-captured locals; one existing GAME loop drains after actual NET join publication/main GAME-work release before tail resume/owner destruction. No copied dangling builder closures or per-channel nested loops.",
-        "frame_safety": "Private move-only handle; GAME-only access/destruction, one Hold, stored startup/tail exceptions, active-resume latch through local destruction, no done query on an executing coroutine; clear owner handle before destroy to refuse reentrant held-abort cleanup. Exceptional host abort remains separate and unproved; frame supplies no saves/native switch authority."
+        "frame_safety": "Private move-only handle; GAME-only access/destruction, one Hold, stored startup/tail exceptions, active-resume latch through local destruction, no done query on an executing coroutine; clear owner handle before destroy to refuse reentrant held-abort cleanup. Exceptional host abort remains separate and unproved; frame supplies no saves/native switch authority.",
+        "gameplay_exports": "Actual mounted frame owns final packet/disconnect/auth/account/optional G sources and start/retire/revoke callbacks. Process host borrows after require_held, constructs G then actual-port routes/L/Web and owns signal/deadline/disconnect polls. Source pointer unpublishes through RAII on normal/abort. All late wrappers and tick remain original.",
+        "export_teardown": "Host ownership slots precede retirement/revocation scope guard, including partial-bind failure. Admission/retire latches fence reentry before callbacks; original ordered retirement and actual GAME vault/WholeBag revocation precede listener destruction. Existing frame guards stay idempotent. Normal full NET/GAME drain precedes host-scope exit then frame Lua tail; exceptional abort drain remains unproved, no all-weak-capture claim."
       },
-      "native_gap": "Actual source/tick/retire exports and process listener/signal orchestration still need separation from one mounted cohort, then three fresh native Owners/complete gameplay Contexts, actual three client slots/configured endpoints/Main, shared L lineage/retained selected-list routing and guild audience invalidation, selected Web G destination, durable save/logout/target admission and current-client acceptance. Next native trace: qualify469294/465DC5/46B5BD/501FA6 containing functions and input messages.",
+      "native_gap": "Exactly one source frame remains mounted. Need three fresh complete Context/native Owners, actual configured slots/endpoints/Main, shared character custody and L-issued lineage/retained L issue-current-complete routing, shared guild invalidation, selected Web G destination, durable save/logout/target admission, six switches and current-client acceptance. Native465DC5/501FA6 roots and resourceED text remain open.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_MOUNTED_GAMEPLAY_FRAME_AND_FUTURE_LIFETIME_CASES_NOT_BUILT_OR_RUN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_MOUNTED_SOURCE_EXPORT_PROCESS_HOST_AND_THREE_FRAME_LIFETIME_CASES_NOT_BUILT_OR_RUN"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

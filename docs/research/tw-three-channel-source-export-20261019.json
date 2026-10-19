@@ -1,0 +1,98 @@
+{
+  "round": 490,
+  "previous_goal_turn": "progress",
+  "previous_commit": "bf341e25447c4a70a9e68f8eca10fe7de94f0b4b",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_FRAME_SOURCE_EXPORT_AND_PROCESS_HOSTING",
+  "native": {
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-source-export-round490/native-switch/inbound-exit-message-findings-v1.json",
+    "receipt_sha256": "c090ee7fd6a6eb55f84f6e553877ca4f1a51be33c9f5ae5ce42a599622db6064",
+    "members_verified": 15,
+    "original_sections_and_mappings_verified": true,
+    "all_targets_closed": true,
+    "evidence_id": "ev_7b3f6be82ef48573662a4139d612af98066ccf81cb0e29300776ff5b0cb4fe08",
+    "remaining_unknowns": [
+      "Meaning and producers of bytes1..12 in inbound20h buffer; exact message contents and intended server event. No full opcode20 packet validation contract recovered.",
+      "Human-readable value and provenance of resource recordEDh; this round does not read game DBs or execute resource codecs.",
+      "Containing native roots and trigger/input conditions of465DC5 and501FA6 remain next bounded paths.",
+      "413420 return-value production and lower transport error semantics are not expanded this round.",
+      "Full468AE0 routine boundaries remain limited: provider metadata splits at46AE9A, while original control flow reaches46B539. Decompiled stack/argument recovery has warnings; raw instruction widths, branch sites and selected table entries are used for the claims above."
+    ]
+  },
+  "source_comparison": {
+    "parent_commit": "bf341e25447c4a70a9e68f8eca10fe7de94f0b4b",
+    "retained_gameplay_bytes": 826707,
+    "retained_gameplay_sha256": "93245cd5c8f1e0bbc9e36d9b9b89b1f1a6440200a140a4aedae2bd25ac7c0289",
+    "exact_gameplay_comparison_after_declared_export_declarations": true,
+    "tick_byte_identical": true,
+    "tick_bytes": 2375,
+    "tick_sha256": "a2bd1f1847e14b4d2797af49c36be617588c5e41c09c4cde865a0fde4395059e",
+    "single_host_game_loop": true,
+    "single_owned_hold": true
+  },
+  "source_integration": [
+    "Actual final gameplay sources exported inside held frame with abort-safe unpublication",
+    "G/L/Web binding, actual-port routes, signals/deadlines/disconnect observations moved to process host",
+    "Ordered reentry-fenced gameplay retirement and actual GAME holder revocation before listener destruction",
+    "Three independent frame/export future lifetime source cases, no native grants"
+  ],
+  "open": [
+    "Mount three fresh complete gameplay/native Contexts/Owners with shared custody and L lineage",
+    "Actual three configured slots/endpoints/Main and retained selected L list routing",
+    "Shared guild mutation invalidation and selected Web G destination",
+    "Durable save/logout/target admission, six switches and current-client acceptance",
+    "Exceptional abort drain plus remaining full-server routes/formulas/storage/gameplay requirements"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/ApplicationGameSources.h",
+      "sha256": "45467ab187e19a8602875e21d61db5bb63be907054f4e95010bf3f33f8d01da3"
+    },
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "efc8491606247172f71e1b41b0464e2b0b9e2c826ac45818501761404ac533ba"
+    },
+    {
+      "path": "tests/test_application_game_sources.cpp",
+      "sha256": "ff19464c5d268b819ffba9c0ae006f261e49e6dff70d5acca82f8cef5f4272cf"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "3257967b9350edd8fac78f8b7255b7e76959e3b4242998cb976727fe9b81a07c"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "a4118ccb5f05dd2f91781b397f4b6b4c5f4d496b0c3b96481ff2a22b1d3035a8"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "d654552d8d909e2778b29740c0dc06ea31987b2f1a5fa2626b4838c502d8651b"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "b1cab81e09701564260b368ca0248713f81f5a9381daa58212496b82bf49f2ab"
+    },
+    {
+      "path": "docs/research/tw-three-channel-source-export-20261019.md",
+      "sha256": "962e7b247f4c185f3c928379efc9d28d8a1356ee5684b3953ddd1822d48703fd"
+    }
+  ]
+}

@@ -46,6 +46,14 @@ are not implemented or accepted yet.
    one cohort: export sources/tick/retire to the host, build all three cohorts,
    route L issuance by retained selected-channel receipt and compose shared
    handoff/guild invalidation before enabling three listeners in Main.
+   Round490 now exports the full final packet/disconnect/authentication,
+   account/optional-G source sets and gameplay start/retire/revoke callbacks
+   from inside that held frame. Actual G/L/Web construction, routes, signals,
+   deadlines and disconnect observation polling run in the process host.
+   Borrowed exports unpublish on completion and abort; host-scope retirement
+   and GAME transport revocation precede listener destruction. Exactly one
+   cohort remains mounted. Next construct three fresh complete Context/source
+   frames with the shared custody/L lineage and route actual L receipts.
 3. Carry explicit authoritative channel identity through connection/handoff/
    world ownership. Share account/character storage; isolate presence, actors,
    monsters, encounters, proximity and local broadcasts. Audit per-listener
@@ -87,6 +95,11 @@ are not implemented or accepted yet.
    exit. This is a shared message widget with exit-required mode, not evidence
    of channel selection. Qualify469294/465DC5/46B5BD/501FA6 actual containing
    functions and message inputs next; numeric19000 is not named a resource ID.
+   Round490 qualifies468AE0 inbound dispatch and original46B5D4[20] ->46928A:
+   it passes packet+0D encoded text to483A80, requesting exit after dismissal.
+   The receive-state-3 branch also supplies text resourceED to483AB0 when
+   world+AA25ED4 is zero. These are inbound/error-message origins, not a player
+   channel selector.465DC5/501FA6 roots and actual resourceED text remain open.
 5. After source closure, verify original UI selection for all three channels,
    all six directed cross-channel switches, same-channel action, invalid/full/
    unavailable targets, duplicate ownership attempts, disconnect/retry, save

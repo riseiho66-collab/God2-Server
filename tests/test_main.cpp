@@ -20,6 +20,7 @@ void test_taiwan_native_hmd_bundle_source();
 void test_taiwan_channel_worlds();
 void test_taiwan_channel_servers();
 void test_application_game_frame();
+void test_application_game_sources();
 int main(int argc,char** argv) {
     const std::pair<const char*,void(*)()> suites[]={
         {"packet",test_packet},{"decoder",test_decoder},{"dispatcher",test_dispatcher},{"lua",test_lua},
@@ -39,7 +40,8 @@ int main(int argc,char** argv) {
         {"taiwan_native_hmd_bundle_source",test_taiwan_native_hmd_bundle_source},
         {"taiwan_channel_worlds",test_taiwan_channel_worlds},
         {"taiwan_channel_servers",test_taiwan_channel_servers},
-        {"application_game_frame",test_application_game_frame}
+        {"application_game_frame",test_application_game_frame},
+        {"application_game_sources",test_application_game_sources}
     };
     try {
         bool found=false;

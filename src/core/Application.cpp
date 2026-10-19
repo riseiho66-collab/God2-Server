@@ -6,6 +6,7 @@
 #include "db/GuildOfficerSqliteMigrations.h"
 #include "core/Application.h"
 #include "core/ApplicationGameFrame.h"
+#include "core/ApplicationGameSources.h"
 #include "core/SharedWorldHostPlan.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
@@ -982,6 +983,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             // The coroutine lambda itself stays alive on this GAME stack until
             // its frame has finished/destroyed; never return reference-captured
             // handlers from a temporary builder. This is the actual Main path.
+            ApplicationGameSources* channel_sources=nullptr; // Borrowed only while its actual frame is held.
             auto channel_gameplay=[&]() -> ApplicationGameFrame {
             // CUSTOM-0150 actual GAME owner, after Database and before every
             // Context supplier. No policy load occurs without explicit selection.
@@ -3555,18 +3557,17 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     if(diagnostic_combat) diagnostic_combat->remove(session->id());
                     if(fixture_battles) fixture_battles->remove(session->id());
                 };
-            std::unique_ptr<TcpServer> character_server;
-            // Retire before character_server and borrowed repository/maps on every unwind.
+            std::optional<Session::RecoveredCharacterHandlers> game_character_sources;
+            // Retire before borrowed repository/maps on every unwind.
             struct BlacklistOutputLifetime {
                 const decltype(stop_blacklist_outputs)& stop;
                 ~BlacklistOutputLifetime(){stop();}
             } blacklist_output_guard{stop_blacklist_outputs};
-            // Declared AFTER character_server: revoke real callbacks first on
-            // every unwind. Its later destructor post retains only an empty vault.
+            // Real callbacks retire before the borrowed repository/maps on unwind.
+            // Process listeners borrow exports only while this frame is held.
             WholeBagMoveHostGuard whole_bag_move_lifetime{whole_bag_moves};
             WorldLifecycleVaultGuard common_world_lifetime{
                 common_world?std::make_shared<WorldLifecycleVault>(config.max_sessions):nullptr};
-            std::vector<std::uint8_t> character_routes;
             if(config.recovered_dual_connection) {
                 auto game_handlers=character_handlers;
                 if(config.recovered_world_entry) {
@@ -9859,44 +9860,14 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(failure)std::rethrow_exception(failure);
                     };
                 }
-                character_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),
-                    config.host,config.character_port,config.max_sessions,config.packet_dump,
-                    on_packet,on_disconnect,ProtocolMode::God2CharacterConnection,recovered_login,std::move(game_handlers));
-                const auto routes=RecoveredServerRoutes::wire(asio::ip::make_address_v4(config.host).to_bytes(),character_server->port());
-                character_routes.assign(routes.begin(),routes.end());
+                game_character_sources.emplace(std::move(game_handlers));
             }
             if(config.recovered_account_auth) character_handlers.authenticate_async=async_login;
-            TcpServer server(network.context(),game.get_executor(),config.host,config.port,config.max_sessions,config.packet_dump,
-                on_packet,on_disconnect,config.protocol_mode,std::move(recovered_login),std::move(character_handlers),std::move(character_routes));
-            std::unique_ptr<WebClientGateway> web_gateway;
-            if(web_plan) {
-                std::vector<WebNativeRoute> routes;
-                // Wildcard listeners are reached locally. No DNS/destination
-                // supplied by the browser, and dynamic TW G uses its bound port.
-                auto reachable=[](asio::ip::tcp::endpoint endpoint) {
-                    if(endpoint.address().is_unspecified())endpoint.address(endpoint.address().is_v4()?
-                        asio::ip::address(asio::ip::address_v4::loopback()):asio::ip::address(asio::ip::address_v6::loopback()));
-                    return endpoint;
-                };
-                for(const auto& request:web_plan->routes) {
-                    using Role=WebServerPlan::Role;
-                    if(request.role==Role::TwAccount||request.role==Role::TwWorld) {
-                        if(!config.recovered_account_auth||!is_credential_mode(config.protocol_mode)||
-                           config.protocol_mode==ProtocolMode::God2CharacterConnection)
-                            throw std::invalid_argument("WEB TW requires hosted native authentication and role");
-                        if(request.role==Role::TwWorld&&!character_server)
-                            throw std::invalid_argument("WEB TW world listener missing");
-                        routes.push_back({request.role==Role::TwAccount?"/tw/native":"/tw/native-game",
-                            reachable({asio::ip::make_address(config.host),request.role==Role::TwAccount?server.port():character_server->port()})});
-                    } else throw std::invalid_argument("WEB native role invalid");
-                }
-                web_gateway=std::make_unique<WebClientGateway>(network.context(),web_plan->policy,std::move(routes));
-            }
             auto known=script_times(config.script_root);
             unsigned ticks=0;
             auto trade_checked=std::chrono::steady_clock::now();
-            // Declared after native/listener owners: retire scheduled cache
-            // authority before their drain on every later exceptional unwind.
+            // GAME-owned cache lifetime; exported retirement runs before host
+            // listeners close, and this guard remains for frame abort cleanup.
             struct OrdinaryPolicyReloadGuard {
                 const std::shared_ptr<OwnedOrdinaryMovementPolicyReloads> owner;
                 ~OrdinaryPolicyReloadGuard(){if(owner)owner->stop();}
@@ -9934,11 +9905,96 @@ if(guild_officer_runtime && player_guild(session) &&
                     }
                 }
             });
+            bool gameplay_retired=false;
+            auto retire_gameplay=[&] {
+                if(gameplay_retired)return;gameplay_retired=true;
+                if(ordinary_policy_reloads)ordinary_policy_reloads->stop();
+                if(hosted_pk)hosted_pk_lifetime.stop();
+                if(party_preview_transport)party_preview_transport->stop();
+                guild_delivery_lifetime->store(false);
+                stop_blacklist_outputs();
+                if(common_initial_deities)common_initial_deities->stop();
+                if(skill_book_learning_service)skill_book_learning_service->stop();
+                if(whole_bag_moves)whole_bag_moves->stop_dispatch();
+                scheduler->stop();
+            };
+            ApplicationGameSources exports{std::move(on_packet),std::move(on_disconnect),std::move(recovered_login),
+                std::move(character_handlers),std::move(game_character_sources),
+                [&] {scheduler->start();lua.call_event("server_start");},std::move(retire_gameplay),
+                [&] {
+                    if(common_world_lifetime.vault)common_world_lifetime.vault->revoke();
+                    if(whole_bag_moves)whole_bag_moves->revoke();
+                }};
+            struct UnpublishSources {
+                ApplicationGameSources*& published;
+                ~UnpublishSources(){published=nullptr;}
+            } unpublish_sources{channel_sources};
+            channel_sources=&exports; // Last construction before the pure Hold.
+            // Keep every reference-captured gameplay local in this owned frame
+            // while the process host runs and drains the actual event loops.
+            co_await ApplicationGameFrame::Hold{};
+            channel_sources=nullptr;
+            lua.call_event("server_stop");
+            co_return;
+            };
+            auto channel_runtime=channel_gameplay();
+            channel_runtime.require_held(); // Rethrows startup errors before running GAME.
+            if(!channel_sources)throw std::logic_error("Held gameplay frame did not publish its actual sources");
+            bool disconnect_cleanup_failed=false;
+            { // All host copies/listeners die before the actual gameplay frame resumes.
+            auto& sources=*channel_sources;
+            std::unique_ptr<TcpServer> character_server;
+            std::unique_ptr<TcpServer> account_server;
+            std::unique_ptr<WebClientGateway> web_gateway;
+            struct HostGameplayRetirement {
+                ApplicationGameSources& sources;
+                ~HostGameplayRetirement() {
+                    try{sources.retire();}catch(...){
+                        try{spdlog::error("Gameplay retirement failed during host unwind");}catch(...){}
+                    }
+                    // Existing GAME revocations are noexcept. The source
+                    // holders must be emptied before any listener destructor.
+                    sources.revoke_transport();
+                }
+            } host_gameplay_retirement{sources};
+            std::vector<std::uint8_t> character_routes;
+            if(sources.character) {
+                character_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),
+                    config.host,config.character_port,config.max_sessions,config.packet_dump,
+                    sources.packet,sources.disconnected,ProtocolMode::God2CharacterConnection,sources.authenticate,std::move(*sources.character));
+                const auto routes=RecoveredServerRoutes::wire(asio::ip::make_address_v4(config.host).to_bytes(),character_server->port());
+                character_routes.assign(routes.begin(),routes.end());
+            }
+            account_server=std::make_unique<TcpServer>(network.context(),game.get_executor(),config.host,config.port,config.max_sessions,config.packet_dump,
+                sources.packet,sources.disconnected,config.protocol_mode,sources.authenticate,std::move(sources.account),std::move(character_routes));
+            auto& server=*account_server;
+            if(web_plan) {
+                std::vector<WebNativeRoute> routes;
+                // Wildcard listeners are reached locally. No DNS/destination
+                // supplied by the browser, and dynamic TW G uses its bound port.
+                auto reachable=[](asio::ip::tcp::endpoint endpoint) {
+                    if(endpoint.address().is_unspecified())endpoint.address(endpoint.address().is_v4()?
+                        asio::ip::address(asio::ip::address_v4::loopback()):asio::ip::address(asio::ip::address_v6::loopback()));
+                    return endpoint;
+                };
+                for(const auto& request:web_plan->routes) {
+                    using Role=WebServerPlan::Role;
+                    if(request.role==Role::TwAccount||request.role==Role::TwWorld) {
+                        if(!config.recovered_account_auth||!is_credential_mode(config.protocol_mode)||
+                           config.protocol_mode==ProtocolMode::God2CharacterConnection)
+                            throw std::invalid_argument("WEB TW requires hosted native authentication and role");
+                        if(request.role==Role::TwWorld&&!character_server)
+                            throw std::invalid_argument("WEB TW world listener missing");
+                        routes.push_back({request.role==Role::TwAccount?"/tw/native":"/tw/native-game",
+                            reachable({asio::ip::make_address(config.host),request.role==Role::TwAccount?server.port():character_server->port()})});
+                    } else throw std::invalid_argument("WEB native role invalid");
+                }
+                web_gateway=std::make_unique<WebClientGateway>(network.context(),web_plan->policy,std::move(routes));
+            }
             asio::signal_set signals(game,SIGINT,SIGTERM);
             asio::steady_timer deadline(game);
             asio::steady_timer disconnect_drain_timer(game);
             std::array<std::optional<TcpServer::StopObservation>,2> disconnect_drains{};
-            bool disconnect_cleanup_failed=false;
             std::function<void()> await_disconnect_drain;
             await_disconnect_drain=[&] {
                 bool complete=true;
@@ -9963,17 +10019,10 @@ if(guild_officer_runtime && player_guild(session) &&
             bool stopping=false;
             auto stop=[&] {
                 if(stopping) return;
-                if(ordinary_policy_reloads)ordinary_policy_reloads->stop();
-                if(hosted_pk)hosted_pk_lifetime.stop(); // Offers BEFORE backend/vault/scheduler/network.
-                if(party_preview_transport)party_preview_transport->stop(); // Before scheduler/network and borrowed game teardown.
-                guild_delivery_lifetime->store(false);
-                stop_blacklist_outputs();
-                stopping=true;
-                if(common_initial_deities)common_initial_deities->stop();
-                if(skill_book_learning_service)skill_book_learning_service->stop();
-                if(whole_bag_moves)whole_bag_moves->stop_dispatch();
+                stopping=true; // Fence reentry before retiring any actual gameplay source.
+                sources.retire();
                 spdlog::info("Stopping server and draining sessions");
-                scheduler->stop(); signals.cancel(); deadline.cancel();
+                signals.cancel();deadline.cancel();
                 if(web_gateway)web_gateway->stop();
                 disconnect_drains[0]=server.stop_observed();
                 if(character_server)disconnect_drains[1]=character_server->stop_observed();
@@ -9990,24 +10039,17 @@ if(guild_officer_runtime && player_guild(session) &&
             }
             server.start();
             if(web_gateway)web_gateway->start();
-            scheduler->start(); lua.call_event("server_start");
+            sources.start();
             spdlog::info("{} listening on {}:{} [protocol={}; mock_login={}]",config.name,config.host,server.port(),
                 config.protocol_mode==ProtocolMode::Fixture?"PLACEHOLDER":config.protocol_mode==ProtocolMode::God2LegacyCharacterListCandidate?"GOD2_LEGACY_CHARACTER_LIST_CANDIDATE_UNVERIFIED":config.protocol_mode==ProtocolMode::God2PostServerSelect?"GOD2_POST_SERVER_SELECT_LAB":config.protocol_mode==ProtocolMode::God2ServerList?"GOD2_SERVER_LIST_LAB":config.protocol_mode==ProtocolMode::God2LoginTerminal?"GOD2_LOGIN_TERMINAL_LAB":config.protocol_mode==ProtocolMode::God2C2S0002?"GOD2_C2S0002_LAB":config.protocol_mode==ProtocolMode::God2PostSeed?"GOD2_POST_SEED_LAB":"GOD2_RECOVERED_SEED_ONLY",config.mock_login);
             ready.set_value(); announced=true;
-            // Keep every reference-captured gameplay local in this owned frame
-            // while the process host runs and drains the actual event loops.
-            co_await ApplicationGameFrame::Hold{};
-            lua.call_event("server_stop");
-            if(disconnect_cleanup_failed)
-                throw std::runtime_error("Session disconnect callbacks failed during drain");
-            co_return;
-            };
-            auto channel_runtime=channel_gameplay();
-            channel_runtime.require_held(); // Rethrows startup errors before running GAME.
             game.run(); // One host loop; no nested event pumping per channel.
             if(!network_joined.load(std::memory_order_acquire))
                 throw std::runtime_error("GAME loop ended before the host joined NET");
+            } // Normal full NET/GAME drain precedes destruction of host-side copies.
             channel_runtime.finish_after_drain();
+            if(disconnect_cleanup_failed)
+                throw std::runtime_error("Session disconnect callbacks failed during drain");
         } catch(...) {
             failure=std::current_exception();
             if(!announced) ready.set_exception(failure);
