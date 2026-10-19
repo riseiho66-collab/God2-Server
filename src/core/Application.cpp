@@ -1231,6 +1231,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 std::optional<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource> selection;
                 std::optional<OwnedSkillBookLearningService::LearningPublication> latest_learning;
                 std::shared_ptr<const LearnedPkSources> paired;
+                std::optional<LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource> legacy_selection;
             };
             struct PendingCompanionSelection {
                 std::shared_ptr<const CanonicalCompanionSource> previous;
@@ -1238,6 +1239,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 std::optional<OwnedTaiwanPkPlayerEntrySource::Observation> player;
                 std::optional<OwnedTaiwanPkCompanionSource::Observation> companion;
                 std::optional<Session::WorldResponseWrite> response;
+                std::optional<Session::WorldCallbackOutput> legacy_output;
             };
             struct OwnedCompanionRestorationSource {
                 std::weak_ptr<Session> session;
@@ -1277,6 +1279,9 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 std::optional<OwnedSkillBookLearningService::LearningPublication> learning_publication;
                 std::shared_ptr<const CanonicalCompanionSource> canonical_source; // Distinct Written successors.
                 std::shared_ptr<PendingCompanionSelection> pending_selection; // Actual outer callback only.
+                // Retire admission history before legacy SQL. Only the exact
+                // pending private cohort may establish its canonical successor.
+                bool selection_unjoined=false;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -1424,13 +1429,15 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 source->last_observed_write=CompanionWriteObservation::Pending;
                 source->expected_receiving_prefix.reset();
                 if(source->pending_selection)return; // Never query the consumed predecessor during C67.
+                if(source->selection_unjoined){source->last_observed_write=CompanionWriteObservation::Stale;return;}
                 if(const auto canonical=source->canonical_source){
                     const auto current=[&]{
                         return local() && source->canonical_source==canonical && source->session.lock().get()==&session &&
                             !session.closing() && source->normal_initialization &&
                             session.normal_world_initialization_current_on_game(*source->normal_initialization) &&
                             ((canonical->learning && canonical->learning->current(session)) ||
-                             (canonical->selection && canonical->selection->current(session)));
+                             (canonical->selection && canonical->selection->current(session)) ||
+                             (canonical->legacy_selection && canonical->legacy_selection->current(session)));
                     };
                     if(!current() || !owned_companions.restoration_current(*canonical->material) || !current()){
                         source->last_observed_write=CompanionWriteObservation::Stale;return;
@@ -2808,6 +2815,8 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 const auto original_material=holder->material;const auto original_whole=holder->whole_response;
                 const auto original_wire=holder->whole_response_wire;
                 const auto pending=holder->pending_selection;const auto publication=holder->learning_publication;
+                const bool selection_unjoined=holder->selection_unjoined;
+                if(selection_unjoined&&!pending)return; // Never replay old learning after an unjoined C67.
                 const auto initial=holder->normal_initialization;const auto world=common_world;
                 const auto host=common_initial_deities;
                 const auto attempt=[&]{
@@ -2818,6 +2827,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 const auto snapshot=holder->initial_player;const auto frame=holder->initial_player_frame;
                 const auto offset=holder->initial_player_wire_offset;
                 const auto learning=skill_book_learning_service;const auto selection=owned_deity_skill_source;
+                const auto legacy=legacy_deity_selections;
                 const auto peer=session.weak_from_this().lock();
                 // Normal learning also uses the actual legacy CharacterSelected
                 // entry. Common presence belongs only to the separate PK pair.
@@ -2827,6 +2837,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     const auto now=owned_companion_restoration_sources.find(session.id());
                     return !companion_reentered && now!=owned_companion_restoration_sources.end() && now->second==holder &&
                         holder->session.lock()==peer && holder->canonical_source==previous && holder->pending_selection==pending &&
+                        holder->selection_unjoined==selection_unjoined && legacy_deity_selections==legacy &&
                         holder->material==original_material && holder->whole_response==original_whole && holder->whole_response_wire==original_wire &&
                         common_initial_deities==host && holder->pk_player==original_player && holder->pk_publication==original_companion &&
                         holder->initial_player==snapshot && holder->initial_player_frame==frame && holder->initial_player_wire_offset==offset &&
@@ -2847,19 +2858,44 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 if(!local())return;
                 std::optional<OwnedSkillBookLearningService::WrittenLearningSource> written_learning;
                 std::optional<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource> written_selection;
+                std::optional<LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource> written_legacy;
                 std::optional<RecoveredOwnedCompanions::Restoration> after;
                 auto latest_learning=previous?previous->latest_learning:std::optional<OwnedSkillBookLearningService::LearningPublication>{};
                 if(pending){
-                    if(pending->response && pending->response->status()==Session::WorldResponseWriteStatus::Failed){
-                        session.close();throw std::runtime_error("Selection whole response failed; no SQL retry");
+                    if(pending->previous!=previous || pending->material!=before_material)return;
+                    if(pending->legacy_output){
+                        if(world||pending->response||!legacy||!selection_unjoined)
+                            throw std::logic_error("Legacy selection cannot borrow shared response custody");
+                        const auto status=pending->legacy_output->status();
+                        if(status==Session::WorldCallbackOutputStatus::Failed){
+                            session.close();throw std::runtime_error("Legacy selection output failed; no SQL retry");
+                        }
+                        if(status==Session::WorldCallbackOutputStatus::NoOutput){
+                            if(local()){if(learning)learning->release(session);holder->pending_selection.reset();}
+                            return; // Retired baseline stays retired, no manufactured successor.
+                        }
+                        if(status!=Session::WorldCallbackOutputStatus::Written)return;
+                        written_legacy=legacy->observe(session);
+                        if(!written_legacy || !written_legacy->output().same_occurrence(*pending->legacy_output) ||
+                           !written_legacy->initialization().same_initialization(*initial) || !local()){
+                            session.close();throw std::runtime_error("Written legacy selection lost its exact pending source");
+                        }
+                        after=owned_companions.selection_successor_from_committed(*before_material,written_legacy->publications());
+                        if(!after){
+                            if(local()){if(learning)learning->release(session);holder->pending_selection.reset();}
+                            return; // Complete authority changed; never renew admission equality.
+                        }
+                    }else{
+                        if(pending->response && pending->response->status()==Session::WorldResponseWriteStatus::Failed){
+                            session.close();throw std::runtime_error("Selection whole response failed; no SQL retry");
+                        }
+                        if(!pending->response || pending->response->status()!=Session::WorldResponseWriteStatus::Written || !selection)return;
+                        written_selection=selection->observe_selection_publication(session);
+                        if(!written_selection || &written_selection->response().wire()!=&pending->response->wire() || !local()){
+                            session.close();throw std::runtime_error("Written selection lost its private canonical source");
+                        }
+                        after=owned_companions.selection_successor_from_committed(*before_material,written_selection->publications());
                     }
-                    if(!pending->response || pending->response->status()!=Session::WorldResponseWriteStatus::Written ||
-                       pending->previous!=previous || pending->material!=before_material || !selection)return;
-                    written_selection=selection->observe_selection_publication(session);
-                    if(!written_selection || &written_selection->response().wire()!=&pending->response->wire() || !local()){
-                        session.close();throw std::runtime_error("Written selection lost its private canonical source");
-                    }
-                    after=owned_companions.selection_successor_from_committed(*before_material,written_selection->publications());
                 }else if(publication && (!latest_learning || *latest_learning!=*publication)){
                     if(!learning)return;
                     written_learning=learning->written_learning_source(session,*publication);
@@ -2874,7 +2910,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 auto before_player=pending?pending->player:(previous&&previous->paired?std::optional{previous->paired->player}:holder->pk_player);
                 auto before_companion=pending?pending->companion:(previous&&previous->paired?std::optional{previous->paired->companion}:holder->pk_publication);
                 std::shared_ptr<const LearnedPkSources> paired;
-                if(config.owned_initial_player_enabled && world && before_player && before_companion && attempt){
+                if(!written_legacy && config.owned_initial_player_enabled && world && before_player && before_companion && attempt){
                     const auto presence=world->presence();const auto lease=before_player->combat().appearance().material().lease;
                     if(lease!=attempt->lease || !local())return;
                     auto player=written_selection?
@@ -2889,17 +2925,20 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 }
                 auto next=std::make_shared<const CanonicalCompanionSource>(CanonicalCompanionSource{
                     material,written_learning?written_learning->original_restoration():material,
-                    written_learning,written_selection,latest_learning,paired});
+                    written_learning,written_selection,latest_learning,paired,written_legacy});
                 if(!local() || !owned_companions.restoration_current(*material) || !local() ||
                    (written_learning&&!written_learning->current(session)) ||
-                   (written_selection&&!written_selection->current(session)) || !local())return;
+                   (written_selection&&!written_selection->current(session)) ||
+                   (written_legacy&&!written_legacy->current(session)) || !local())return;
                 if(written_selection && learning && !learning->reanchor_selection(session,before_material,material,*written_selection))
                     throw std::runtime_error("Written selection could not advance the actual learning entry");
+                if(written_legacy && learning && !learning->reanchor_selection(session,before_material,material,*written_legacy))
+                    throw std::runtime_error("Written legacy selection could not advance the actual learning entry");
                 if(!local() || (paired && (!paired->player.current() || !local() || !paired->companion.current() || !local()))){
                     if(learning)learning->release(session);session.close();
                     throw std::runtime_error("Written companion successor lost its final owner cut");
                 }
-                holder->canonical_source=std::move(next);holder->pending_selection.reset();
+                holder->canonical_source=std::move(next);holder->pending_selection.reset();holder->selection_unjoined=false;
             };
             const auto learned_pk_sources=[&](const std::shared_ptr<Session>& peer,
                     const Session::NormalWorldInitialization& initialization)->std::shared_ptr<const LearnedPkSources>{
@@ -2917,7 +2956,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 const auto entered=host->attempts.find(peer->id());
                 if(entered==host->attempts.end())return {};
                 const auto attempt=entered->second;const auto presence=world->presence();
-                if(!canonical || !canonical->paired || holder->pending_selection || !holder->normal_initialization ||
+                if(!canonical || !canonical->paired || holder->pending_selection || holder->selection_unjoined || !holder->normal_initialization ||
                    !holder->normal_initialization->same_initialization(initialization))return {};
                 const auto local=[&]{
                     const auto now=owned_companion_restoration_sources.find(peer->id());
@@ -9670,18 +9709,30 @@ if(guild_officer_runtime && player_guild(session) &&
                             std::optional<LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource> selection;
                         };
                         std::map<std::uint64_t,Attempt> attempts;
+                        bool reading=false,reentered=false;
+                        std::optional<LegacyTaiwanOwnedDeitySelectionRegistry::Callback> active;
                     };
                     if(!legacy_deity_selections)throw std::logic_error("Legacy C67 registry configuration missing");
                     const auto registry=legacy_deity_selections;
                     const auto custody=std::make_shared<LegacySelectionOutputCustody>();
                     const auto capacity=config.max_sessions;
                     const auto original=game_handlers.world_records;
-                    game_handlers.world_records=[original,custody,capacity,registry](Session& session,
+                    game_handlers.world_records=[&,original,custody,capacity,registry](Session& session,
                         std::span<const RecoveredWorldRecords::Record> records)
                         ->std::optional<std::vector<std::uint8_t>> {
+                        if(custody->reading){
+                            custody->reentered=true;if(custody->active)registry->abandon(*custody->active);
+                            throw std::logic_error("Legacy canonical selection callback reentered");
+                        }
+                        custody->reading=true;custody->reentered=false;
+                        struct ReadingEnd {
+                            std::shared_ptr<LegacySelectionOutputCustody> owner;
+                            ~ReadingEnd(){owner->active.reset();owner->reading=false;}
+                        } reading_end{custody};
                         const auto peer=session.weak_from_this().lock();
                         const auto prior=custody->attempts.find(session.id());
-                        if(prior!=custody->attempts.end()) {
+                        const bool had_prior=prior!=custody->attempts.end();
+                        if(had_prior) {
                             if(!peer || prior->second.peer.lock()!=peer)
                                 throw std::logic_error("Legacy selection output Session incarnation conflict");
                             const auto status=prior->second.output.status();
@@ -9691,8 +9742,19 @@ if(guild_officer_runtime && player_guild(session) &&
                             // Observe the actual private committed chain only after
                             // all original output components are Written. Historical
                             // phase/INIT retirement simply clears this live source.
-                            prior->second.selection=registry->observe(session);
+                            const auto previous_output=prior->second.output;
+                            auto observed=registry->observe(session);
+                            const auto now=custody->attempts.find(session.id());
+                            if(now==custody->attempts.end() || now->second.peer.lock()!=peer ||
+                               !now->second.output.same_occurrence(previous_output))
+                                throw std::runtime_error("Legacy selection observer retired its original output owner");
+                            now->second.selection=std::move(observed);
                         }
+                        // Join the previous Written cohort before begin retires
+                        // its registry source. Never observe/apply a historical
+                        // latest token without our pre-SQL pending occurrence.
+                        advance_companion_successors(session);
+                        if(custody->reentered)throw std::logic_error("Legacy selection advancement was invalidated");
                         const bool selection=std::any_of(records.begin(),records.end(),[](const auto& record) {
                             return std::holds_alternative<RecoveredDeitySelection::Request>(record);
                         });
@@ -9701,12 +9763,49 @@ if(guild_officer_runtime && player_guild(session) &&
                            !session.recovered_world_ready())
                             return original(session,records);
                         if(!peer || session.closing())throw std::runtime_error("Legacy selection output owner unavailable");
-                        if(prior==custody->attempts.end() && custody->attempts.size()>=capacity)
+                        if(!had_prior && custody->attempts.size()>=capacity)
                             throw std::runtime_error("Legacy selection output capacity exhausted");
                         const auto initialization=session.normal_world_initialization();
                         if(!initialization || !initialization->entry_written() ||
                            !session.normal_world_initialization_current_on_game(*initialization))
                             throw std::runtime_error("Legacy selection lacks its actual normal initialization");
+                        observe_companion_restoration_write(session);
+                        std::shared_ptr<OwnedCompanionRestorationSource> holder;
+                        std::shared_ptr<PendingCompanionSelection> draft;
+                        std::function<bool()> owner_current;
+                        const auto at=owned_companion_restoration_sources.find(session.id());
+                        if(at!=owned_companion_restoration_sources.end()){
+                            holder=at->second;
+                            const auto previous=holder->canonical_source;
+                            const auto material=previous?previous->material:holder->material;
+                            const auto original_material=holder->material;
+                            const auto whole=holder->whole_response;const auto wire=holder->whole_response_wire;
+                            const bool unjoined=holder->selection_unjoined;
+                            owner_current=[&,previous,material,original_material,whole,wire,unjoined]{
+                                const auto now=owned_companion_restoration_sources.find(session.id());
+                                return !custody->reentered && !common_world && legacy_deity_selections==registry &&
+                                    now!=owned_companion_restoration_sources.end() && now->second==holder &&
+                                    holder->session.lock()==peer && holder->canonical_source==previous && !holder->pending_selection &&
+                                    holder->selection_unjoined==unjoined && holder->material==original_material &&
+                                    (previous?previous->material:holder->material)==material &&
+                                    holder->whole_response==whole && holder->whole_response_wire==wire &&
+                                    holder->normal_initialization && holder->normal_initialization->same_initialization(*initialization) &&
+                                    holder->account==session.account_id && holder->character==session.character_id &&
+                                    holder->phase_at_restore==session.state() && !session.closing() && session.recovered_world_ready() &&
+                                    holder->battle_generation_at_restore==session.battle_generation() &&
+                                    holder->all_submission_calls_returned && initialization->entry_written() &&
+                                    session.normal_world_initialization_current_on_game(*initialization);
+                            };
+                            if(material && !unjoined && owner_current() &&
+                               (holder->last_observed_write==CompanionWriteObservation::WrittenSavedDeityPrefixCurrent ||
+                                holder->last_observed_write==CompanionWriteObservation::NoRecords) &&
+                               owned_companions.restoration_current(*material) && owner_current())
+                                draft=std::make_shared<PendingCompanionSelection>(PendingCompanionSelection{previous,material,{},{},{},{}});
+                            // Missing complete authority does not invent a grant
+                            // or reject the original independent selection flow.
+                            if(!owner_current())throw std::runtime_error("Legacy selection preparation lost its actual owner");
+                        }
+                        if(custody->reentered)throw std::logic_error("Legacy selection preparation was invalidated");
                         const auto output=session.capture_world_callback_output(*initialization);
                         if(!output || output->selection_keys().empty())
                             throw std::runtime_error("Legacy selection lacks its actual callback output custody");
@@ -9716,13 +9815,23 @@ if(guild_officer_runtime && player_guild(session) &&
                         session.hold_world_input_until_callback_output_written(*output);
                         custody->attempts.insert_or_assign(session.id(),
                             LegacySelectionOutputCustody::Attempt{peer,*initialization,*output});
+                        if(owner_current&&!owner_current())throw std::runtime_error("Legacy selection capture lost its actual owner");
+                        if(draft)draft->legacy_output=*output;
                         const auto callback=registry->begin(session,*initialization,*output);
+                        custody->active=callback;
                         struct End {
                             std::shared_ptr<LegacyTaiwanOwnedDeitySelectionRegistry> registry;
                             LegacyTaiwanOwnedDeitySelectionRegistry::Callback callback;
                             ~End(){registry->abandon(callback);}
                         } end{registry,callback};
+                        if(custody->reentered || (owner_current&&!owner_current()))
+                            throw std::runtime_error("Legacy selection admission lost its actual owner before SQL");
+                        if(holder){
+                            holder->pending_selection=draft;holder->selection_unjoined=true;
+                            if(!draft&&skill_book_learning_service)skill_book_learning_service->release(session);
+                        }
                         auto response=original(session,records); // Actual original once, including all outer appenders.
+                        if(custody->reentered)throw std::logic_error("Legacy selection dispatch was invalidated");
                         registry->finish(session,callback,response.has_value());
                         return response;
                     };

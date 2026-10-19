@@ -1,6 +1,7 @@
 #pragma once
 #include "net/Session.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
+#include "game/LegacyTaiwanOwnedDeitySelectionRegistry.h"
 #include "handlers/RecoveredOwnedCompanions.h"
 #include "protocol/RecoveredInventoryItemRequest.h"
 #include "protocol/RecoveredTargetItemRequest.h"
@@ -133,9 +134,20 @@ public:
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical_after,
         SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource);
+    // Actual legacy callback cohort, not a manufactured whole-response receipt.
+    // Uses the identical complete predecessor/commit/history/after checks.
+    bool reanchor_selection(Session&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical_after,
+        LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource);
     void release(Session&);
     void stop();
 private:
+    using SelectionSource=std::variant<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource,
+        LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource>;
+    bool reanchor_selection_impl(Session&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration>,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration>,SelectionSource);
     std::optional<UseResult> use_request(Session&,UseRequest,
         const std::shared_ptr<SharedWorldPresence>& presence,bool with_source);
     bool publication_current(Session&,const std::shared_ptr<LearningPublication::Data>&);

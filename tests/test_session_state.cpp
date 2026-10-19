@@ -18,6 +18,8 @@
 #include "handlers/RecoveredOwnedCompanions.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "game/LegacyTaiwanOwnedDeitySelectionRegistry.h"
+#include "handlers/OwnedSkillBookLearningService.h"
+#include "db/SqliteSkillBookLearningRepository.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -400,6 +402,200 @@ void recovered_callback_output_transport() {
 
 // True Registry -> helper private commit -> typed original sender custody.
 // These are source regressions only; matching baseline S31 bytes carry no tag.
+// Isolated regression material only: no learned book, activation grant or native
+// gameplay formula is invented. All private readsets/commits come from their
+// real repository issuers; the actual Session writes the original restoration.
+void recovered_legacy_selection_learning_reanchor() {
+    using Source=LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource;
+    using Restoration=RecoveredOwnedCompanions::Restoration;
+    struct Close {void operator()(sqlite3* value)const {sqlite3_close_v2(value);}};
+    sqlite3* raw=nullptr;require(sqlite3_open(":memory:",&raw)==SQLITE_OK,"Legacy learning DB open failed");
+    std::unique_ptr<sqlite3,Close> db(raw);
+    sqlite_detail::execute(raw,"PRAGMA foreign_keys=ON");
+    SqliteMigrationManager(raw,default_sqlite_migrations()).migrate();
+    sqlite_detail::execute(raw,"INSERT INTO accounts(id,username,password_hash) VALUES(7,'legacy-learning-fixture','hash')");
+    SqliteAccountRepository accounts(raw);
+    SqliteRecoveredCharacterRepository characters(raw);
+    SqliteCompanionRepository companions(raw);
+    SqliteOwnedInventoryRepository inventory(raw,accounts,characters);
+    SqliteNativeEquipmentSnapshotRepository equipment(raw,accounts,characters);
+    NativeSkillBookCatalog books(raw);NativeSkillCatalog skills(raw);
+    SqliteSkillBookLearningRepository repository(inventory,equipment,companions,books,skills);
+    RecoveredOwnedCompanions helper(companions);
+    sqlite_detail::execute(raw,SqliteOwnedInventoryRepository::schema());
+    sqlite_detail::execute(raw,SqliteNativeEquipmentSnapshotRepository::schema());
+    sqlite_detail::execute(raw,SqliteSkillBookLearningRepository::schema());
+    std::array<std::uint8_t,40> profile{};profile[0]='L';
+    const auto character=characters.create(RecoveredSessionPeer::account,profile).id;
+    require(character>0&&character<=0x3fff,"Legacy learning test actor outside native domain");
+    const auto actor=static_cast<std::uint16_t>(character);
+    const auto position=characters.commit_position(RecoveredSessionPeer::account,character,{},1,1,18,14);
+    for(std::uint8_t key=1;key<=16;++key) {
+        sqlite_detail::Statement metadata(raw,"INSERT INTO native_companion_metadata VALUES('GOD',?,?,1,X'4C',?,zeroblob(396))");
+        metadata.bind(1,2800+key);metadata.bind(2,std::string(SqliteCompanionRepository::source_sha256));
+        metadata.bind(3,std::string(64,'a'));metadata.done();
+        RecoveredDeityState::Declaration::Bytes declaration{0x30,key,'L'};
+        RecoveredDeityState::Status::Bytes status{0x31,key,1};
+        const std::array<std::uint8_t,4> skill{0x34,key,0,1};
+        companions.store_deity(RecoveredSessionPeer::account,character,
+            {*RecoveredDeityState::Declaration::parse(declaration),*RecoveredDeityState::Status::parse(status),
+                {*RecoveredDeityState::Skill::parse(skill)}},{},
+            {SqliteCompanionRepository::source_sha256,"CUSTOM_TEST_NOT_NATIVE","legacy-learning-selection-fixture"});
+    }
+    const auto root=characters.list_for_account(RecoveredSessionPeer::account).front();
+    // An explicitly empty full population is not an implicit free-cell grant.
+    OwnedInventorySnapshot bag{root,1,std::string(64,'b'),"fixture-empty-full-population",{}};
+    require(inventory.replace_from_issuer({},bag,[&](const auto&,const auto&,auto){return std::optional{bag};}).has_value(),
+        "Legacy learning full inventory fixture missing");
+    NativeEquipmentSnapshot worn{root,position,NativeEquipmentSnapshot::client_pin,NativeEquipmentSnapshot::kind,
+        std::string(64,'c'),"fixture-full-empty-native-bank",std::vector<std::uint8_t>(NativeEquipmentSnapshot::record_bytes),1,actor};
+    worn.record[1]=0xa5;worn.record[2]=0x5a; // Opaque empty-cell bytes must survive.
+    worn.record[1200]=0xda;worn.record[1201]=static_cast<std::uint8_t>(actor);
+    worn.record[1202]=static_cast<std::uint8_t>(actor>>8);worn.record[1214]=0x82;
+    require(equipment.replace_from_issuer({},worn,[&](const auto&,const auto&,auto){return std::optional{worn};}).has_value(),
+        "Legacy learning full equipment fixture missing");
+    auto canonical=std::make_shared<const Restoration>(helper.restore_with_source(RecoveredSessionPeer::account,character,repository));
+    require(canonical->learning_source()&&canonical->learning_source()->activations().empty(),
+        "Legacy learning fixture manufactured an activation");
+    const auto original=canonical;
+    LuaEngine lua;OwnedSkillBookLearningService learning(repository,lua,1);
+    LegacyTaiwanOwnedDeitySelectionRegistry registry(1,helper);
+    std::vector<Session::WorldRecordsWrite> restoration_writes;
+    std::optional<Session::NormalWorldInitialization> initialization;
+    std::optional<Session::WorldCallbackOutput> output;
+    std::optional<Source> applied;
+    unsigned idle_stage=0,selection_callbacks=0,pending_refusals=0;
+    bool pending_registry_refused=false,bootstrapped=false;
+    RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
+        const bool idle=std::all_of(records.begin(),records.end(),[](const auto& record){
+            return std::holds_alternative<RecoveredWorldRecords::Tick>(record);
+        });
+        if(idle) {
+            if(idle_stage++==0) {
+                initialization=session.normal_world_initialization();require(initialization.has_value(),"Legacy restoration INIT absent");
+                for(const auto& batch:original->batches())restoration_writes.push_back(session.send_world_records_observed(batch));
+            }else if(!bootstrapped) {
+                const auto supplied=[&](Session& actual)->std::shared_ptr<const Restoration> {
+                    if(!initialization||!actual.normal_world_initialization_current_on_game(*initialization)||
+                       restoration_writes.size()!=original->batches().size()||!helper.restoration_current(*original))return {};
+                    for(std::size_t i=0;i<restoration_writes.size();++i)
+                        if(restoration_writes[i].status()!=Session::WorldRecordsWriteStatus::Written||
+                           restoration_writes[i].logical()!=original->batches()[i]||
+                           !actual.world_records_write_current(restoration_writes[i]))return {};
+                    return original;
+                };
+                const auto bootstrap=learning.bootstrap(session,{},supplied);
+                require(bootstrap&&bootstrap->empty(),"Empty real learning bootstrap fabricated an output receipt");
+                bootstrapped=true;
+            }
+            return std::vector<std::uint8_t>{};
+        }
+        require(bootstrapped,"Legacy C67 preceded actual restoration/learning entry");
+        const auto init=session.normal_world_initialization();require(init.has_value(),"Legacy selection INIT absent");
+        output=session.capture_world_callback_output(*init);require(output.has_value(),"Legacy reanchor output capture absent");
+        session.hold_world_input_until_callback_output_written(*output);
+        const auto callback=registry.begin(session,*init,*output);
+        if(applied) {
+            // begin invalidates the old callback source before any new SQL.
+            // An old Written token cannot stand in for this Pending callback.
+            require(!applied->current(session)&&!learning.reanchor_selection(session,canonical,canonical,*applied),
+                "Pending next C67 borrowed the old Written source");
+            ++pending_refusals;
+        }
+        LegacyWorldReply reply(std::vector<std::uint8_t>{});
+        for(const auto& record:records) {
+            const auto* request=std::get_if<RecoveredDeitySelection::Request>(&record);
+            require(request!=nullptr,"Legacy selection regression received an unrelated record");
+            auto child=registry.select(session,*request);require(child.has_value(),"Legacy true selection producer refused fixture");
+            reply.append(std::move(*child));
+        }
+        registry.finish(session,callback,true);registry.abandon(callback);
+        pending_registry_refused=!registry.observe(session)&&output->status()==Session::WorldCallbackOutputStatus::Pending;
+        ++selection_callbacks;
+        return session.take_world_callback_reply(std::move(reply));
+    },character,48171);
+    peer.select(false);peer.send(RecoveredSessionPeer::tail(actor));peer.silent();
+    const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
+    peer.send(tick);
+    for(const auto& batch:original->batches())peer.expect(RecoveredWorldFrame::encode(batch));
+    peer.silent();peer.send(tick);peer.silent();
+    require(bootstrapped&&initialization&&peer.session->normal_world_initialization_current_on_game(*initialization),
+        "Legacy learning bootstrap did not retain its real INIT");
+    const auto send_selection=[&](std::initializer_list<std::uint8_t> keys) {
+        std::vector<std::uint8_t> logical,expected;
+        for(const auto key:keys) {
+            logical.insert(logical.end(),{0x67,key});
+            const auto rows=companions.load_deities(RecoveredSessionPeer::account,character);
+            const auto found=std::find_if(rows.begin(),rows.end(),[&](const auto& row){return row.snapshot.status.key_raw()==key;});
+            require(found!=rows.end(),"Legacy reanchor test selection has no saved deity");
+            const auto frame=RecoveredWorldFrame::encode(found->snapshot.status.encode());
+            expected.insert(expected.end(),frame.begin(),frame.end());
+        }
+        peer.send(RecoveredWorldFrame::encode(logical));peer.expect(expected);peer.silent();
+        require(pending_registry_refused&&output&&output->status()==Session::WorldCallbackOutputStatus::Written,
+            "Legacy selection became observable before its complete original output");
+        const auto written=registry.observe(*peer.session);
+        require(written&&written->current(*peer.session),"Actual legacy Written source missing");
+        return *written;
+    };
+    const auto first=send_selection({1,1});
+    require(first.publications().size()==2&&!first.publications()[1].committed().changed(),
+        "Idempotent C67 did not retain its separate private commit");
+    const auto next_value=helper.selection_successor_from_committed(*canonical,first.publications());
+    require(next_value.has_value(),"Legacy private chain could not advance full restoration");
+    const auto next=std::make_shared<const Restoration>(*next_value);
+    require(!learning.reanchor_selection(*peer.session,next,next,first)&&
+            !learning.reanchor_selection(*peer.session,canonical,canonical,first),
+        "Wrong complete predecessor or after-state adopted a legacy selection");
+    const auto saved_character=peer.session->character_id;
+    peer.session->character_id^=std::uint64_t{1}<<32;
+    require(!learning.reanchor_selection(*peer.session,canonical,next,first),"Legacy reanchor narrowed common character identity");
+    peer.session->character_id=saved_character;
+    const auto saved_account=peer.session->account_id;
+    peer.session->account_id^=std::uint64_t{1}<<32;
+    require(!learning.reanchor_selection(*peer.session,canonical,next,first),"Legacy reanchor narrowed common account identity");
+    peer.session->account_id=saved_account;
+    RecoveredSessionPeer foreign(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>>{
+        return std::vector<std::uint8_t>{};
+    },character,48172);
+    foreign.select(false);foreign.send(RecoveredSessionPeer::tail(actor));foreign.silent();
+    const auto foreign_init=foreign.session->normal_world_initialization();
+    require(foreign_init&&!foreign_init->same_initialization(first.initialization())&&
+            !learning.reanchor_selection(*foreign.session,canonical,next,first),
+        "Foreign real INIT/Session adopted a legacy selection");
+    require(learning.reanchor_selection(*peer.session,canonical,next,first),"Real Written legacy selection failed to reanchor existing learning Entry");
+    require(!learning.reanchor_selection(*peer.session,canonical,next,first)&&
+            !learning.reanchor_selection(*peer.session,next,next,first),"Same private legacy source reanchored twice");
+    canonical=next;applied=first;
+    for(const std::uint8_t key:{std::uint8_t{1},std::uint8_t{2}}) {
+        const auto written=send_selection({key});
+        const auto successor=helper.selection_successor_from_committed(*canonical,written.publications());
+        require(successor.has_value(),"Repeated/next C67 lost full private predecessor");
+        auto after=std::make_shared<const Restoration>(*successor);
+        require(learning.reanchor_selection(*peer.session,canonical,after,written)&&
+                !learning.reanchor_selection(*peer.session,canonical,after,written),
+            "Repeated selected key or next C67 failed exactly-once reanchor");
+        canonical=std::move(after);applied=written;
+    }
+    // Complete equipment provenance changes are not cured by matching S31 bytes.
+    const auto last=send_selection({3});
+    const auto last_value=helper.selection_successor_from_committed(*canonical,last.publications());
+    require(last_value.has_value(),"Final legacy selection full successor missing");
+    const auto last_after=std::make_shared<const Restoration>(*last_value);
+    const auto equipment_before=equipment.load(RecoveredSessionPeer::account,character,NativeEquipmentSnapshot::client_pin,NativeEquipmentSnapshot::kind);
+    require(equipment_before.has_value(),"Legacy stale-equipment fixture missing before state");
+    auto changed=*equipment_before;++changed.revision;changed.source_record="fixture-opaque-after-selection";changed.record[1]^=0x01;
+    require(equipment.replace_from_issuer(equipment_before,changed,[&](const auto&,const auto&,auto){return std::optional{changed};}).has_value(),
+        "Legacy stale-equipment fixture issuer failed");
+    require(last.current(*peer.session)&&!learning.reanchor_selection(*peer.session,canonical,last_after,last),
+        "Written S31 alone renewed a stale complete equipment source");
+    registry.release(*peer.session);
+    require(!last.current(*peer.session)&&!learning.reanchor_selection(*peer.session,canonical,last_after,last),
+        "Released legacy source revived through saved equality");
+    require(selection_callbacks==4&&pending_refusals==3&&!peer.session->closing(),
+        "Legacy learning reanchor test lost a real callback or changed transport");
+}
+
 void recovered_causal_deity_reply_transport() {
     using Status=Session::WorldCallbackOutputStatus;
     struct Close {void operator()(sqlite3* value)const {sqlite3_close_v2(value);}};
@@ -1602,6 +1798,7 @@ void test_session_state() {
     recovered_battle_self_view_transport();
     recovered_callback_output_transport();
     recovered_causal_deity_reply_transport();
+    recovered_legacy_selection_learning_reanchor();
     recovered_written_deity_selection_transport();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {

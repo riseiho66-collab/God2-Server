@@ -71,7 +71,14 @@ struct OwnedSkillBookLearningService::Entry {
     std::uint16_t actor;
     std::shared_ptr<const RecoveredOwnedCompanions::Restoration> original_restoration;
     struct SelectionAnchor {
-        const SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source;
+        const SelectionSource source;
+        bool current(Session& session)const {
+            return std::visit([&](const auto& actual){return actual.current(session);},source);
+        }
+        template<class Source> bool same_source(const Source& candidate)const {
+            const auto* held=std::get_if<Source>(&source);
+            return held && held->same_source(candidate);
+        }
     };
     std::shared_ptr<const SelectionAnchor> selection_anchor;
     bool bootstrap_complete_without_reply=false;
@@ -375,7 +382,20 @@ bool OwnedSkillBookLearningService::reanchor_selection(Session& session,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical,
         SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource source) {
+    return reanchor_selection_impl(session,std::move(predecessor),std::move(canonical),SelectionSource{std::move(source)});
+}
+bool OwnedSkillBookLearningService::reanchor_selection(Session& session,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical,
+        LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource source) {
+    return reanchor_selection_impl(session,std::move(predecessor),std::move(canonical),SelectionSource{std::move(source)});
+}
+bool OwnedSkillBookLearningService::reanchor_selection_impl(Session& session,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical,
+        SelectionSource selection_source) {
     Operation operation(*this);
+    return std::visit([&](const auto& source)->bool {
     const auto found=entries_.find(session.id());
     if(found==entries_.end())return predecessor&&canonical&&source.current(session); // No Entry is minted.
     const auto entry=found->second;const auto original=entry->original_restoration;
@@ -387,7 +407,7 @@ bool OwnedSkillBookLearningService::reanchor_selection(Session& session,
     };
     if(!predecessor||!canonical||!predecessor->owns_learning_repository(repository_)||
        !canonical->owns_learning_repository(repository_)||!predecessor->learning_source()||!canonical->learning_source()||
-       !local()||(anchor&&anchor->source.same_source(source))||!source.current(session)||!local())return false;
+       !local()||(anchor&&anchor->same_source(source))||!source.current(session)||!local())return false;
     if(latest && (latest->phase.load()!=LearningPublication::Data::Phase::Bound||!latest->response||
        latest->response->status()!=Session::WorldResponseWriteStatus::Written||
        !session.world_response_write_current_on_game(*latest->response)))return false;
@@ -407,11 +427,12 @@ bool OwnedSkillBookLearningService::reanchor_selection(Session& session,
     if(!after||!local()||!same_learning(*after,*canonical->learning_source())||
        !same_roster(canonical->deity_roster(),after->roster())||history!=canonical->batches()||
        !qualify_presence(session,entry,after->equipment())||!local()||!source.current(session)||!local())return false;
-    const auto next=std::make_shared<const Entry::SelectionAnchor>(Entry::SelectionAnchor{source});
+    const auto next=std::make_shared<const Entry::SelectionAnchor>(Entry::SelectionAnchor{selection_source});
     if(!local())return false;
     entry->original_restoration=std::move(canonical);entry->selection_anchor=next;
     entry->pending_publication.reset(); // Historical Bound token is not revived.
     return ready(session,entry,true);
+    },selection_source);
 }
 bool OwnedSkillBookLearningService::publication_local(Session& session,const std::shared_ptr<Entry>& entry,
         const std::shared_ptr<LearningPublication::Data>& data)const {
@@ -542,7 +563,7 @@ std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningSe
     }
     const auto previous=entry?entry->latest_publication:std::shared_ptr<LearningPublication::Data>{};
     const auto selection=entry?entry->selection_anchor:std::shared_ptr<const Entry::SelectionAnchor>{};
-    if(selection&&(!selection->source.current(session)||!ready(session,entry,true)))return std::nullopt;
+    if(selection&&(!selection->current(session)||!ready(session,entry,true)))return std::nullopt;
     std::shared_ptr<LearningPublication::Data> data;
     const auto slot=std::visit([](const auto& request){return request.raw_slot;},owned_request);
     const auto item_id=std::visit([](const auto& request){return request.client_item_id;},owned_request);
@@ -575,7 +596,7 @@ std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningSe
         std::optional<SqliteSkillBookLearningRepository::Restoration> before_source;
         if(with_source) {
             if(selection){
-                if(!entry->original_restoration->learning_source()||!selection->source.current(session)||!request_current())return std::nullopt;
+                if(!entry->original_restoration->learning_source()||!selection->current(session)||!request_current())return std::nullopt;
                 before_source.emplace(*entry->original_restoration->learning_source());
                 if(!repository_.restoration_current(*before_source)||!request_current())return std::nullopt;
             }else if(previous) {
