@@ -10,6 +10,7 @@
 #include "core/TaiwanThreeChannelPlan.h"
 #include "game/TaiwanChannelCharacterLists.h"
 #include "game/OwnedTaiwanGuildChatDispatch.h"
+#include "game/OwnedTaiwanGuildActionsDispatch.h"
 #include "core/SharedWorldHostPlan.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
@@ -1004,8 +1005,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             // Startup and --migrate-only retain installed exact50 storage even with gameplay disabled.
             const GuildRelations53FlagsDraft flags53{config.owned_guild_membership_enabled,config.owned_guild_announcements_enabled,config.owned_guild_officers_enabled,config.owned_guild_succession_enabled,config.owned_guild_relations53_enabled};
             const auto migrations=configured_guild_relations53(config.database,flags53);
-            if(channels&&migrations.back().version==53&&!channels->guild_chat_sender_wire)
-                throw std::invalid_argument("Native guild chat requires its actual same-Session sender framing source");
+            if(channels&&migrations.back().version==53&&(!channels->guild_chat_sender_wire||!channels->guild_action_sender_wire))
+                throw std::invalid_argument("Native guild chat/actions require their actual same-Session framing sources");
             if(channels&&migrations.back().version!=53&&
                (config.owned_guild_membership_enabled||config.owned_guild_announcements_enabled||
                 config.owned_guild_officers_enabled||config.owned_guild_succession_enabled||config.owned_guild_relations53_enabled))
@@ -1069,6 +1070,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             std::shared_ptr<SharedGuildChannelDirectory53> shared_guild_directory53;
             std::shared_ptr<SharedGuildCoordinator53Draft> shared_guild53;
             const auto guild_sender_wire=channels?channels->guild_chat_sender_wire:TaiwanThreeChannelPlan::NativeGuildSenderWire{};
+            const auto guild_action_sender_wire=channels?channels->guild_action_sender_wire:TaiwanThreeChannelPlan::NativeGuildSenderWire{};
             if(channels&&migrations.back().version==53) {
                 using Common=SharedGuildCoordinator53Draft;
                 shared_guild_directory53=SharedGuildChannelDirectory53::create();
@@ -1113,6 +1115,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             // The actual native mixed owner receives weak late-bound guild
             // capability now; no input runs until the complete frame is held.
             const auto owned_guild_chat_dispatch=shared_guild_directory53?OwnedTaiwanGuildChatDispatch::create():nullptr;
+            const auto owned_guild_actions_dispatch=shared_guild_directory53?OwnedTaiwanGuildActionsDispatch::create():nullptr;
             if(supplied_world&&(!world_plan||!supplied_world->owns_repository(database.recovered_characters())))
                 throw std::invalid_argument("Channel frame requires its exact same-repository native world");
             // CUSTOM-0150 actual GAME owner, after Database and before every
@@ -1192,7 +1195,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     config.owned_skillbook_learning_enabled,config.owned_initial_player_enabled,hosted_pk,std::move(initial_actor_inputs),
                     &database.world_displays(),&database.native_npc_display_catalog(),
                         &database.ordinary_movement_policies(),ordinary_policy_reloads,
-                    owned_guild_chat_dispatch?std::optional{owned_guild_chat_dispatch->binding()}:std::nullopt};
+                    owned_guild_chat_dispatch?std::optional{owned_guild_chat_dispatch->binding()}:std::nullopt,
+                    owned_guild_actions_dispatch?std::optional{owned_guild_actions_dispatch->binding()}:std::nullopt};
                 if(world_plan->make_taiwan_entered_async) {
                     taiwan_entered_async=world_plan->make_taiwan_entered_async(context);
                     if(!taiwan_entered_async.entered || !taiwan_entered_async.cancel)
@@ -1227,6 +1231,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     taiwan_records=world_plan->make_taiwan_world_records(context);
                     if(!taiwan_records.records || !taiwan_records.release || !taiwan_records.invalidate_active)
                         throw std::invalid_argument("Shared world host requires complete actual Taiwan mixed record sources");
+                    if(owned_guild_actions_dispatch&&!taiwan_records.app_owned_guild_actions)
+                        throw std::invalid_argument("Three-channel guild actions require actual native mixed dispatch capability");
                     if(owned_guild_chat_dispatch&&!taiwan_records.app_owned_guild_chat)
                         throw std::invalid_argument("Three-channel guild chat requires its actual native mixed dispatch capability");
                 }
@@ -2337,24 +2343,56 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 for(const auto& [id,unused]:native_chat_sessions)if(auto peer=guild_chat_peer(id))peers.push_back(std::move(*peer));
                 return peers;
             },project_guild_chat);
+            std::map<std::uint64_t,std::uint64_t> guild_world_generation;
             std::map<std::uint64_t,std::pair<std::uint32_t,std::vector<std::uint8_t>>> guild_names_sent;
+            std::map<std::uint64_t,std::uint64_t> guild_name_serial;
+            const auto guild_name_delivery_lifetime=std::make_shared<std::atomic_bool>(true);
+            struct GuildNameLifetime {std::shared_ptr<std::atomic_bool> live;~GuildNameLifetime(){live->store(false);}} guild_name_guard{guild_name_delivery_lifetime};
             const auto sync_guild_name=[&](Session& session,bool initial=false) {
                 try {
+                if(shared_guild_directory53&&!shared_guild_directory53->action_permitted())return;
                 if(!session.recovered_world_ready() || !owned_player_and_companions_projected.contains(session.id()))return;
                 const auto actor=private_chat_peer(session.id());if(!actor || !actor->ready)return;
                 const auto membership=database.guilds().load(actor->account,actor->character);
                 const auto name=membership?LegacyChineseCodec::encode(membership->name_utf8,actor->simplified):std::string{};
+                if(shared_guild_directory53&&!shared_guild_directory53->action_permitted())return;
                 const auto next=std::pair{actor->character,RecoveredGuildChat::name(name)};
                 auto& previous=guild_names_sent[session.id()];
+                bool deferred_name=false;
                 if(previous!=next) {
                     // Preserve the accepted non-member initializer. A prior
                     // nonempty projection needs an explicit native clear.
                     if(membership || (previous.first && previous.second!=RecoveredGuildChat::name(""))) {
-                        session.send_world_records(next.second);
+                        if(shared_guild_directory53) {
+                            const auto init=session.normal_world_initialization_on_game();
+                            const auto generation=guild_world_generation.find(session.id());
+                            if(!init||generation==guild_world_generation.end()||!shared_guild_directory53->action_permitted())return;
+                            auto& serial=guild_name_serial[session.id()];if(serial==UINT64_MAX)return;const auto ticket=++serial;
+                            const auto directory=shared_guild_directory53;const auto live=directory->action_liveness();
+                            const auto weak=session.weak_from_this();const auto id=session.id(),account=session.account_id,character=session.character_id;
+                            const auto executor=game.get_executor();const auto lifetime=guild_name_delivery_lifetime;
+                            session.send_qualified_world_records_with_acceptance(*init,next.second,
+                                [directory,framer=guild_action_sender_wire](Session& peer,auto logical){
+                                    if(!directory->action_permitted())return std::optional<std::vector<std::uint8_t>>{};
+                                    auto wire=framer(peer,logical);if(!directory->action_permitted())return std::optional<std::vector<std::uint8_t>>{};return wire;
+                                },{account,character,generation->second,session.battle_generation()},
+                                [&,executor,lifetime,weak,id,account,character,ticket,next,live](bool accepted){
+                                    if(!lifetime->load())return;
+                                    asio::post(executor,[&,lifetime,weak,id,account,character,ticket,next,live,accepted]{
+                                        if(!lifetime->load()||!accepted||!live->load())return;
+                                        try{const auto peer=weak.lock();
+                                        const auto at=guild_name_serial.find(id);const auto found=native_chat_sessions.find(id);
+                                        if(peer&&found!=native_chat_sessions.end()&&found->second.lock()==peer&&peer->account_id==account&&peer->character_id==character&&
+                                            at!=guild_name_serial.end()&&at->second==ticket)guild_names_sent[id]=next;
+                                        }catch(const std::exception& error){spdlog::warn("OWNED_GUILD_NAME_ACK_UNAVAILABLE session_id={} reason={}",id,error.what());}
+                                    });
+                                },live);
+                            deferred_name=true;
+                        }else session.send_world_records(next.second);
                         spdlog::info("OWNED_GUILD_NAME_PROJECTED session_id={} character_id={} initial={} membership={} CUSTOM-0075",
                             session.id(),actor->character,initial,membership.has_value());
                     }
-                    previous=next;
+                    if(!deferred_name)previous=next;
                 }
                 }catch(const std::exception& error) {
                     // Invalid maintenance state must not interrupt unrelated
@@ -2374,7 +2412,6 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 return database.guild_roster().load(account,character);
             },[&] {return shared_guild_directory53?shared_guild_directory53->binding().online():local_guild_online();});
             std::set<std::uint64_t> guild_roster_unavailable;
-            std::map<std::uint64_t,std::uint64_t> guild_world_generation;
             std::set<std::uint64_t> guild_lab_prompted;
             std::unique_ptr<OwnedGuildMembershipService> guild_membership;
             std::unique_ptr<OwnedGuildEntryService> guild_entry;
@@ -2392,6 +2429,7 @@ std::unique_ptr<OwnedGuildOfficerRuntimeDraft> guild_officer_runtime;
             std::shared_ptr<GuildRelationCacheBootstrap53> guild_bootstrap53;
             std::shared_ptr<GuildAdmission53Application> guild_admission53;
             std::unique_ptr<SharedGuildApplication53Draft> guild53_routes;
+            std::weak_ptr<SharedTaiwanWorldRecordSource::GuildActionsBinding::Batch> active_guild_action_batch;
             std::shared_ptr<OwnedGuildSuccessionApplicationDraft> guild_succession;
             std::shared_ptr<EffectiveGuildJoinConversationServiceDraft> guild_membership52;
             std::unique_ptr<EffectiveGuildJoinConversationRuntimeDraft> guild_conversation52;
@@ -2402,6 +2440,7 @@ std::unique_ptr<OwnedGuildOfficerRuntimeDraft> guild_officer_runtime;
             bool announcement_write_publication_suppressed=false;
             const auto guild_world_owner=
                     [&](std::uint64_t id)->std::optional<OwnedGuildMembershipService::Owner> {
+                        if(shared_guild_directory53&&!shared_guild_directory53->action_permitted())return {};
                         const auto at=native_chat_sessions.find(id);if(at==native_chat_sessions.end())return {};
                         const auto session=at->second.lock();if(!session || !session->recovered_world_ready() ||
                             session->state()==SessionState::InBattle || !owned_player_and_companions_projected.contains(id) ||
@@ -2422,8 +2461,9 @@ std::unique_ptr<OwnedGuildOfficerRuntimeDraft> guild_officer_runtime;
             struct FrameGuildDirectoryGuard {
                 std::shared_ptr<SharedGuildChannelDirectory53> directory;
                 std::shared_ptr<OwnedTaiwanGuildChatDispatch> chat;
-                ~FrameGuildDirectoryGuard(){if(directory)directory->retire();if(chat)chat->stop();}
-            } frame_guild_directory_guard{shared_guild_directory53,owned_guild_chat_dispatch};
+                std::shared_ptr<OwnedTaiwanGuildActionsDispatch> actions;
+                ~FrameGuildDirectoryGuard(){if(actions)actions->stop();if(directory)directory->retire();if(chat)chat->stop();}
+            } frame_guild_directory_guard{shared_guild_directory53,owned_guild_chat_dispatch,owned_guild_actions_dispatch};
             if(guild_membership_enabled && migrations.back().version!=53) {
                 guild_membership=std::make_unique<OwnedGuildMembershipService>(*guild_membership_repository,
                     guild_world_owner,[&](auto account,auto character){return database.trades().load_wallet(account,character);},
@@ -2571,7 +2611,17 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     const auto at=native_chat_sessions.find(owner.session);const auto peer=at==native_chat_sessions.end()?std::shared_ptr<Session>{}:at->second.lock();
                     if(!peer||guild_world_owner(owner.session)!=std::optional{owner}){ack(false);return;}
                     peer->bind_world_delivery_identity({owner.account,owner.character,owner.world_generation,owner.battle_generation});
-                    peer->send_world_records_with_acceptance(std::move(logical),owner.account,owner.character,owner.world_generation,owner.battle_generation,[executor,lifetime,ack=std::move(ack)](bool accepted)mutable{if(!lifetime->load())return;asio::post(executor,[lifetime,ack=std::move(ack),accepted]()mutable{if(lifetime->load())ack(accepted);});});
+                    auto completion=[executor,lifetime,ack=std::move(ack)](bool accepted)mutable{if(!lifetime->load())return;asio::post(executor,[lifetime,ack=std::move(ack),accepted]()mutable{if(lifetime->load())ack(accepted);});};
+                    if(shared_guild_directory53){
+                        const auto init=peer->normal_world_initialization_on_game();const auto directory=shared_guild_directory53;
+                        if(!init||!directory->action_permitted()){completion(false);return;}
+                        const auto live=directory->action_liveness();
+                        peer->send_qualified_world_records_with_acceptance(*init,std::move(logical),
+                            [directory,framer=guild_action_sender_wire](Session& actual,auto bytes){
+                                if(!directory->action_permitted())return std::optional<std::vector<std::uint8_t>>{};
+                                auto wire=framer(actual,bytes);if(!directory->action_permitted())return std::optional<std::vector<std::uint8_t>>{};return wire;
+                            },{owner.account,owner.character,owner.world_generation,owner.battle_generation},std::move(completion),live);
+                    }else peer->send_world_records_with_acceptance(std::move(logical),owner.account,owner.character,owner.world_generation,owner.battle_generation,std::move(completion));
                 };
                 // Build-matched ordered native reset supplies an EXPECTED cache
                 // baseline. Client execution/acceptance stays deferred to phase2.
@@ -2643,13 +2693,81 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         const auto level=RecoveredRoleLevel::parse(identity.role->logical);if(!level)return {};
                         const auto name=LegacyChineseCodec::encode(identity.name_utf8,owner.name_codepage==936);
                         if(LegacyChineseCodec::decode(name,owner.name_codepage==936)!=identity.name_utf8)return {};
+                        if(guild_world_owner(owner.session)!=std::optional{owner})return {};
                         return GuildRelationCacheBootstrap53::Self{owner,name,level->level(),identity.profile[29]};
-                    },send,[&](const Common::Owner& owner){if(guild53&&guild_world_owner(owner.session)==std::optional{owner})guild53->sync(owner.session,false);});
+                    },shared_guild_directory53?shared_guild_directory53->binding().send:Common::Send(send),[&](const Common::Owner& owner){if(guild53&&guild_world_owner(owner.session)==std::optional{owner})guild53->sync(owner.session,false);});
                 guild53_routes=std::make_unique<SharedGuildApplication53Draft>(guild53,factory.original(),[&](auto session,auto index,auto opcode,bool committed){spdlog::info("GUILD53_ACTION session_id={} index={} opcode={} committed={} CUSTOM-0083 CUSTOM-0084 cache_basis=ordered_native_reset acceptance=deferred",session,index,opcode,committed);});
                 guild_admission53=std::make_shared<GuildAdmission53Application>(guild53,factory.neighbors(),factory.original(),factory.owner(),supply_repository,
                     recipient_ready53,[&](auto account,auto character){return database.trades().load_wallet(account,character);},
                     [&](const auto& input){return lua.owned_guild_membership(input);});
                 guild53_routes->admission(guild_admission53);
+                if(owned_guild_actions_dispatch) {
+                    using Actions=SharedTaiwanWorldRecordSource::GuildActionsBinding;
+                    struct AppGuildBatch final:Actions::Batch {
+                        SharedGuildApplication53Draft* routes;
+                        SharedGuildApplication53Draft::Capture captured;
+                        SharedGuildChannelDirectory53::ActionScope action;
+                        Session::WorldReplyPushCapture* sender=nullptr;
+                        std::uint64_t session;
+                        bool ended=false;
+                        AppGuildBatch(SharedGuildApplication53Draft& r,SharedGuildChannelDirectory53::ActionScope a,std::uint64_t id)
+                            :routes(&r),action(std::move(a)),session(id){}
+                        void cancel() noexcept {action.invalidate();if(sender)sender->invalidate();}
+                        void finish(bool accepted){
+                            const bool cancelled=accepted&&!ended&&!action.current();if(cancelled)accepted=false;
+                            if(!accepted)cancel();
+                            if(!ended){ended=true;try{routes->retire(session,captured);}catch(...){cancel();action.finish(false);throw;}}
+                            action.finish(accepted);
+                            if(cancelled)throw std::logic_error("Native guild action continuation cancelled before completion");
+                        }
+                        ~AppGuildBatch(){if(!ended)try{finish(false);}catch(...){}}
+                    };
+                    Actions binding;
+                    binding.handles=[&](Session& session,const auto& record){return guild53_routes&&guild53_routes->owns(session.id(),record);};
+                    binding.capture=[&](Session& session,auto records,auto indices)->Actions::Capture {
+                        // Actual TLS qualification; Context factories/copies do not supply input authority.
+                        if(!session.normal_world_initialization())throw std::logic_error("Native guild action needs original world callback");
+                        auto batch=std::make_shared<AppGuildBatch>(*guild53_routes,shared_guild_directory53->begin_action(),session.id());
+                        active_guild_action_batch=batch;
+                        try{
+                            batch->captured=guild53_routes->capture(session.id(),records);
+                            if(!batch->captured||!batch->action.current())throw std::logic_error("Native guild original capture retired");
+                            std::size_t next=0;
+                            for(std::size_t i=0;i<records.size();++i)if(batch->captured->recognizes(i)){
+                                if(next==indices.size()||indices[next++]!=i)throw std::logic_error("Native guild selected original indices changed");
+                            }
+                            if(next!=indices.size())throw std::logic_error("Native guild captured selection omitted an original index");
+                            return batch;
+                        }catch(...){const auto failure=std::current_exception();try{batch->finish(false);}catch(...){}active_guild_action_batch.reset();std::rethrow_exception(failure);}
+                    };
+                    binding.dispatch=[&](Session& session,const Actions::Capture& captured,std::size_t index,std::size_t offset)
+                        ->std::optional<SharedTaiwanWorldRecordSource::Reply> {
+                        const auto batch=std::dynamic_pointer_cast<AppGuildBatch>(captured);
+                        if(!batch||batch->session!=session.id()||!batch->action.current())throw std::logic_error("Native guild batch/current changed");
+                        const auto directory=shared_guild_directory53;
+                        auto sender=session.capture_world_reply_pushes([directory,framer=guild_action_sender_wire](Session& peer,auto logical){
+                            if(!directory->action_permitted())return std::optional<std::vector<std::uint8_t>>{};
+                            auto bytes=framer(peer,logical);if(!directory->action_permitted())return std::optional<std::vector<std::uint8_t>>{};return bytes;
+                        });
+                        batch->sender=&sender;struct SenderEnd {AppGuildBatch& b;~SenderEnd(){b.sender=nullptr;}} sender_end{*batch};
+                        const auto result=guild53_routes->execute(session.id(),batch->captured,index);
+                        if(!result.recognized||!batch->action.current())throw std::logic_error("Native guild execution cancelled");
+                        auto bytes=sender.finish(offset);
+                        if(!batch->action.current()){sender.invalidate();throw std::logic_error("Native guild sender cancelled");}
+                        using Reply=SharedTaiwanWorldRecordSource::Reply;
+                        return bytes.empty()?Reply::no_reply():Reply::wire(std::move(bytes));
+                    };
+                    binding.finish_batch=[&](Session& session,const Actions::Capture& captured,bool accepted){
+                        const auto batch=std::dynamic_pointer_cast<AppGuildBatch>(captured);
+                        if(!batch||batch->session!=session.id())throw std::logic_error("Foreign native guild completion");
+                        batch->finish(accepted);if(active_guild_action_batch.lock()==batch)active_guild_action_batch.reset();
+                    };
+                    binding.release=[&](Session& session){if(const auto batch=std::dynamic_pointer_cast<AppGuildBatch>(active_guild_action_batch.lock());batch&&batch->session==session.id()){
+                        batch->finish(false);active_guild_action_batch.reset();}};
+                    binding.invalidate_active=[&]{if(const auto batch=std::dynamic_pointer_cast<AppGuildBatch>(active_guild_action_batch.lock()))batch->cancel();};
+                    owned_guild_actions_dispatch->install(std::move(binding));
+                }
+
             }
 
             const auto prepare_owned_panel=[&](std::uint64_t id,bool open=false)->std::optional<OwnedGuildOfficerProjectionDraft::Plan> {
@@ -3664,7 +3782,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     if(guild_admission53)guild_admission53->disconnected(session->id());
                     if(guild_succession){closed_guild_transports.insert(session->id());guild_succession->disconnected(session->id());}
                     if(guild_membership52)guild_membership52->invalidate(session->id());guild_interactions52.erase(session->id());
-                    guild_names_sent.erase(session->id());
+                    guild_names_sent.erase(session->id());guild_name_serial.erase(session->id());
                     guild_roster.forget(session->id());
                     if(guild_membership)guild_membership->disconnect(session->id());
                     if(guild_entry)guild_entry->disconnect(session->id());
@@ -10067,6 +10185,7 @@ if(guild_officer_runtime && player_guild(session) &&
                 if(hosted_pk)hosted_pk_lifetime.stop();
                 if(party_preview_transport)party_preview_transport->stop();
                 guild_delivery_lifetime->store(false);
+                if(owned_guild_actions_dispatch)owned_guild_actions_dispatch->stop();
                 if(owned_guild_chat_dispatch)owned_guild_chat_dispatch->stop();
                 stop_blacklist_outputs();
                 if(common_initial_deities)common_initial_deities->stop();

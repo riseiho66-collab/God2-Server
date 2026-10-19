@@ -74,6 +74,13 @@ public:
         catch(...) {return {};}
         return Accepted{owner,state.operation,*name};
     }
+    // Rejected delivery of an old prompt must not revoke a later context.
+    bool invalidate_exact(const Owner& owner,const Wire::Prompt& prompt) {
+        const auto at=pending_.find(owner.session);
+        if(at==pending_.end() || at->second.owner!=owner ||
+            Wire::prompt(at->second.context,at->second.operation)!=std::optional{prompt})return false;
+        pending_.erase(at);return true;
+    }
     // On world departure/close clear permission, retain nonce generation.
     // Session IDs must be lifetime-unique. Transport disconnect may release
     // its clock only if the caller guarantees that ID is never reused.

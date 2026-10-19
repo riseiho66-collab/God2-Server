@@ -152,6 +152,25 @@ void publication_and_stale() {
     plan=f.menu(2);lease=f.service->prepare_choice(2,f.now);f.service->disconnect(2);
     check(!f.service->consume(*lease,f.action(*lease),f.now)); // Never reuse disconnected session ID.
 }
+void rejected_delivery_is_exact() {
+    Fixture f;
+    const auto first=f.service->prepare(1,f.now);const auto successor=f.service->prepare(1,f.now);
+    check(first && successor && first->lease.request!=successor->lease.request);
+    f.service->reject_exact(*first); // Delayed false ACK for the replaced menu.
+    check(f.service->published(*successor,f.now));
+    f.service->reject_exact(*first);f.service->reject_exact(*successor);
+    auto lease=f.service->prepare_choice(1,f.now);check(lease && *lease==successor->lease);
+    check(f.service->consume(*lease,f.action(*lease,2),f.now)==Entry::Choice::Exit);
+    const auto current=f.service->prepare(1,f.now);check(bool(current));
+    auto forged=*current;forged.logical.back()^=1;f.service->reject_exact(forged);
+    check(f.service->published(*current,f.now)); // Whole plan equality, not only nonce.
+    f.service->invalidate(1);
+    const auto rejected=f.service->prepare(1,f.now);check(bool(rejected));
+    f.service->reject_exact(*rejected);f.service->reject_exact(*rejected);
+    check(!f.service->published(*rejected,f.now));
+    const auto next=f.service->prepare(1,f.now);check(next && next->lease.request==rejected->lease.request+1);
+    f.service->reject_exact(*rejected);check(f.service->published(*next,f.now));
+}
 void sql_eligibility() {
     Fixture f;auto plan=f.menu(2);auto lease=f.service->prepare_choice(2,f.now);check(bool(lease));
     sqlite_detail::execute(f.db,"UPDATE character_role_snapshots SET revision=revision+1 WHERE character_id=2");
@@ -181,7 +200,7 @@ void nonce_ceiling() {
 }
 }
 int main() {
-    try{lifecycle();recognition_scope();publication_and_stale();sql_eligibility();nonce_ceiling();
+    try{lifecycle();recognition_scope();publication_and_stale();rejected_delivery_is_exact();sql_eligibility();nonce_ceiling();
         std::cout<<"PASS entry service checks="<<checks<<"; actual class/full-SQL fixture, not client/UI acceptance\n";return 0;}
     catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }

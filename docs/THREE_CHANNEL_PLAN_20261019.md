@@ -174,3 +174,11 @@ cases are source-registered, not executed. The native Common53 action bridge
 still needs full-original batch/current/index/continuation/lifetime integration;
 see research/tw-three-channel-sender-20261019.md. No native action activation,
 three-channel default Main, switching or client acceptance is claimed.
+
+Round496 connects actual native mixed Common53 action capture/index/dispatch
+and original-run sender custody to Application, with cancellation retained across
+qualified async bootstrap, admission and name continuations. Stale false ACKs
+clean only exact still-prepared permissions. The native Current, explicit peer
+profiles, private input/witness sources and later acceptance remain mandatory.
+No default Main activation or completed switching is claimed. See
+research/tw-three-channel-actions-20261019.md for source and verification limits.

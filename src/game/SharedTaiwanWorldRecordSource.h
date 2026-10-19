@@ -10,7 +10,7 @@ class SharedTaiwanWorldRecordSource final {
 public:
     using Lease=SharedWorldPresence::Lease;
     using Record=RecoveredWorldRecords::Record;
-    enum class Kind {Movement,Others,SelectionItem,InventoryMove,NativeSkill,DeitySelection,OwnedGuildChat};
+    enum class Kind {Movement,Others,SelectionItem,InventoryMove,NativeSkill,DeitySelection,OwnedGuildChat,OwnedGuildAction};
     struct Run {std::size_t offset,count;Kind kind;};
     struct Scope {
         Lease lease;
@@ -65,6 +65,26 @@ public:
         std::function<void(Session&)> release;
         std::function<void()> invalidate_active;
     };
+    struct GuildActionsBinding {
+        class Batch {
+        protected:
+            Batch()=default;
+        public:
+            virtual ~Batch()=default;
+        };
+        using Capture=std::shared_ptr<Batch>;
+        // Pure selector, evaluated once per original remaining record before
+        // any prefix. Selection is not native opcode/phase permission.
+        std::function<bool(Session&,const Record&)> handles;
+        // Original complete batch and ordered selected original indices. No
+        // borrowed span may escape this synchronous capture call.
+        std::function<Capture(Session&,std::span<const Record>,std::span<const std::size_t>)> capture;
+        std::function<std::optional<Reply>(Session&,const Capture&,std::size_t,std::size_t)> dispatch;
+        // Handler completion only; neither FIFO acceptance nor socket write.
+        std::function<void(Session&,const Capture&,bool)> finish_batch;
+        std::function<void(Session&)> release;
+        std::function<void()> invalidate_active;
+    };
     struct OtherBinding {
         // This sender's native encrypted output returns in original run order;
         // do not submit it directly ahead of earlier accumulated batch replies.
@@ -94,6 +114,7 @@ public:
         // issued selection window, validation, save and reply or refusal.
         bool native_skill_selection_requests=false;
         std::optional<GuildChatBinding> guild_chat={};
+        std::optional<GuildActionsBinding> guild_actions={};
     };
     // Mandatory real opcode/whole-batch/run-phase qualification. Current is a
     // pure observer; saved position, phase and battle generation are read again
@@ -117,6 +138,7 @@ public:
         bool native_preborn_requests=false;
         bool native_skill_selection_requests=false;
         bool app_owned_guild_chat=false;
+        bool app_owned_guild_actions=false;
     };
     static Binding create(std::shared_ptr<SharedWorldPresence>,SharedTaiwanMovementSource::Binding,
         OtherBinding,Current,Budgets,std::size_t actual_session_capacity);

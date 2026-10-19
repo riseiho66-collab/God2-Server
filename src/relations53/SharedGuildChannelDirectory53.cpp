@@ -23,11 +23,30 @@ struct SharedGuildChannelDirectory53::ChatTicket {
     std::map<std::uint64_t,Witness> witnesses;
     std::vector<Chat::Delivery> deliveries;
 };
+struct SharedGuildChannelDirectory53::ActionToken {
+    const std::thread::id thread=std::this_thread::get_id();
+    std::weak_ptr<State> issuer;
+    std::uint64_t epoch{};
+    std::shared_ptr<std::atomic_bool> live=std::make_shared<std::atomic_bool>(true);
+};
 struct SharedGuildChannelDirectory53::State {
     const std::thread::id thread=std::this_thread::get_id();
     std::array<std::optional<Source>,3> sources;
     bool sealed=false,retired=false;
     std::uint64_t epoch=1;
+    const std::shared_ptr<std::atomic_bool> lifetime=std::make_shared<std::atomic_bool>(true);
+    std::shared_ptr<ActionToken> active_action,inherited_action;
+    std::vector<std::weak_ptr<std::atomic_bool>> action_tokens; // Also tracks flags retained without their GAME token.
+    bool action_gate() const {return (!active_action||active_action->live->load())&&(!inherited_action||inherited_action->live->load())&&(!active_action||!inherited_action||active_action==inherited_action);}
+    std::shared_ptr<ActionToken> action_origin() const {return inherited_action?inherited_action:active_action;}
+    struct InheritAction {
+        State& state;std::shared_ptr<ActionToken> previous;
+        InheritAction(State& s,const std::shared_ptr<ActionToken>& token):state(s),previous(s.inherited_action){
+            if(previous&&previous!=token){previous->live->store(false);if(token)token->live->store(false);}
+            else s.inherited_action=token;
+        }
+        ~InheritAction(){state.inherited_action=std::move(previous);}
+    };
     struct ChatOperation {bool valid=true;};
     std::shared_ptr<ChatOperation> active_chat;
     struct ChatGuard {
@@ -38,9 +57,9 @@ struct SharedGuildChannelDirectory53::State {
     struct Row {Host::Live live;std::shared_ptr<Session> peer;std::uint8_t channel;SessionState phase;bool closing;};
     using Rows=std::map<std::uint64_t,Row>;
     void owner() const {game_thread(thread);}
-    bool current(std::uint64_t revision) const {return sealed&&!retired&&epoch==revision;}
+    bool current(std::uint64_t revision) const {return sealed&&!retired&&epoch==revision&&action_gate();}
     std::array<Source,3> copy() const {
-        owner();if(!sealed||retired)throw std::logic_error("Common53 directory unavailable");
+        owner();if(!sealed||retired||!action_gate())throw std::logic_error("Common53 directory unavailable");
         return {*sources[0],*sources[1],*sources[2]};
     }
     static bool scalars_current(const Rows& rows){
@@ -222,13 +241,17 @@ struct SharedGuildChannelDirectory53::State {
         // in the ACK: only weak directory state plus exact identity evidence.
         struct Gate {bool done=false,dispatching=true;std::optional<bool> deferred;std::function<void(bool)> ack;};
         auto gate=std::make_shared<Gate>();gate->ack=std::move(ack);const auto row=found->first;const auto thread_id=thread;
-        auto complete=[weak,gate,revision,value,peer=std::weak_ptr<Session>(row.peer),channel=row.channel,thread_id](bool accepted){
+        const auto origin=action_origin();
+        auto complete=[weak,gate,revision,value,origin,peer=std::weak_ptr<Session>(row.peer),channel=row.channel,thread_id](bool accepted){
             game_thread(thread_id);if(gate->done)return;if(gate->dispatching){if(!gate->deferred)gate->deferred=accepted;return;}gate->done=true;bool good=false;
-            if(accepted)if(const auto state=weak.lock())try{
+            if(accepted&&(!origin||origin->live->load()))if(const auto state=weak.lock())try{
                 if(state->current(revision)){const auto sources=state->copy();const auto now=state->inspect(sources,revision);const auto current=state->resolve(sources,revision,now,value.session);
                     good=current&&current->first.peer==peer.lock()&&current->first.channel==channel&&current->second==value;}
             }catch(...){good=false;}
-            if(gate->ack)gate->ack(good);
+            if(gate->ack){
+                if(const auto state=weak.lock()){InheritAction inherited(*state,origin);gate->ack(good&&(!origin||origin->live->load())&&state->action_gate());}
+                else gate->ack(false);
+            }
         };
         try{local[row.channel].send(value,std::move(bytes),complete);}catch(...){gate->dispatching=false;complete(false);throw;}
         gate->dispatching=false;
@@ -236,9 +259,49 @@ struct SharedGuildChannelDirectory53::State {
         catch(...){complete(false);throw;}
         if(gate->deferred)complete(*gate->deferred);
     }
-    void retire(){owner();if(retired)return;retired=true;++epoch;if(active_chat)active_chat->valid=false;for(auto& source:sources)source.reset();}
+    void retire(){owner();if(retired)return;retired=true;lifetime->store(false);++epoch;
+        for(const auto& weak:action_tokens)if(const auto live=weak.lock())live->store(false);
+        if(active_chat)active_chat->valid=false;for(auto& source:sources)source.reset();}
     ~State(){if(thread!=std::this_thread::get_id())std::terminate();}
 };
+SharedGuildChannelDirectory53::ActionScope::ActionScope(std::shared_ptr<ActionToken> token):token_(std::move(token)){}
+SharedGuildChannelDirectory53::ActionScope::~ActionScope() noexcept {if(!finished_)try{finish(false);}catch(...){std::terminate();}}
+SharedGuildChannelDirectory53::ActionScope::ActionScope(ActionScope&& other) noexcept:token_(std::move(other.token_)),finished_(other.finished_){other.finished_=true;}
+SharedGuildChannelDirectory53::ActionScope& SharedGuildChannelDirectory53::ActionScope::operator=(ActionScope&& other) noexcept {
+    if(this!=&other){if(!finished_)try{finish(false);}catch(...){std::terminate();}token_=std::move(other.token_);finished_=other.finished_;other.finished_=true;}return *this;
+}
+void SharedGuildChannelDirectory53::ActionScope::invalidate() noexcept {if(token_)token_->live->store(false);}
+bool SharedGuildChannelDirectory53::ActionScope::current() const {
+    if(!token_||finished_)return false;game_thread(token_->thread);const auto state=token_->issuer.lock();
+    return state&&state->active_action==token_&&state->current(token_->epoch)&&token_->live->load();
+}
+void SharedGuildChannelDirectory53::ActionScope::finish(bool accepted){
+    if(!token_){finished_=true;return;}game_thread(token_->thread);
+    if(finished_){if(!accepted)invalidate();return;}const auto state=token_->issuer.lock();
+    const bool invalid=accepted&&(!state||state->active_action!=token_||!state->current(token_->epoch)||!token_->live->load());
+    if(!accepted||invalid)invalidate();
+    if(state){state->owner();if(state->epoch!=token_->epoch||state->retired)invalidate();
+        if(state->active_action==token_)state->active_action.reset();}
+    finished_=true;if(invalid)throw std::logic_error("Cancelled/stale Common53 action cannot finish accepted");
+}
+SharedGuildChannelDirectory53::ActionScope SharedGuildChannelDirectory53::begin_action(){
+    const auto state=state_;state->owner();
+    if(state->active_action||state->inherited_action){
+        // An old ACK cannot cancel an unrelated active successor by trying
+        // to begin another scope and catching the resulting refusal.
+        if(state->active_action&&(!state->inherited_action||state->active_action==state->inherited_action))state->active_action->live->store(false);
+        if(state->inherited_action)state->inherited_action->live->store(false);
+        throw std::logic_error("Nested Common53 action continuation");
+    }
+    if(!state->sealed||state->retired)throw std::logic_error("Common53 action needs sealed live directory");
+    auto token=std::make_shared<ActionToken>();token->issuer=state;token->epoch=state->epoch;
+    state->action_tokens.erase(std::remove_if(state->action_tokens.begin(),state->action_tokens.end(),[](const auto& weak){return weak.expired();}),state->action_tokens.end());
+    state->action_tokens.push_back(token->live);state->active_action=token;return ActionScope(std::move(token));
+}
+bool SharedGuildChannelDirectory53::action_permitted() const {const auto state=state_;state->owner();return state->sealed&&!state->retired&&state->action_gate();}
+std::shared_ptr<const std::atomic_bool> SharedGuildChannelDirectory53::action_liveness() const {
+    const auto state=state_;state->owner();const auto origin=state->action_origin();return origin?origin->live:state->lifetime;
+}
 std::shared_ptr<SharedGuildChannelDirectory53> SharedGuildChannelDirectory53::create(std::size_t expected){
     if(expected!=3)throw std::invalid_argument("Common53 requires exactly three channels");
     return std::shared_ptr<SharedGuildChannelDirectory53>(new SharedGuildChannelDirectory53(std::make_shared<State>()));

@@ -63,6 +63,12 @@ public:
         if(!current(plan.lease,now))return false;
         pending_.insert_or_assign(plan.lease.owner.session,plan.lease);return true;
     }
+    // A rejected enqueue retires only its still-prepared menu. A later menu
+    // or an already-published choice is outside this delivery receipt.
+    void reject_exact(const Plan& plan) {
+        const auto at=prepared_.find(plan.lease.owner.session);
+        if(at!=prepared_.end() && at->second==plan)prepared_.erase(at);
+    }
     std::optional<Lease> prepare_choice(std::uint64_t session,Time now) {
         observe_world(session,now);
         const auto at=pending_.find(session);return at==pending_.end()?std::nullopt:std::optional{at->second};

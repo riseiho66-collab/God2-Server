@@ -53,6 +53,13 @@ public:
             prepared_.erase(session);published_.insert_or_assign(session,opening);return true;
         }catch(...){return false;}
     }
+    // A false enqueue ACK can retire only this exact still-prepared opening.
+    // It never revokes an already-published opening or a successor nonce.
+    void reject_exact(const Opening& opening){
+        const auto session=opening.interaction.owner.session;
+        const auto at=prepared_.find(session);if(at==prepared_.end() || at->second!=opening)return;
+        prepared_.erase(at);conversations_.invalidate_exact(opening.interaction.owner,opening.prompt);
+    }
     std::optional<Opening> opening(std::uint64_t session)const{const auto at=published_.find(session);return at==published_.end()?std::nullopt:std::optional{at->second};}
     std::optional<Plan> capture_before_prefix(const Opening& opening,const Wire::Request& request,Time now)const{
         try{const auto session=opening.interaction.owner.session;if(this->opening(session)!=std::optional{opening} || !bound(opening,request) || !opening_current(opening,now) || !actor_ready_ || !actor_ready_(opening.interaction.owner))return {};

@@ -58,7 +58,7 @@ public:
         const auto weak=weak_from_this();common_->deliver(plan->lease.owner,{plan->logical.begin(),plan->logical.end()},
             [weak,plan=*plan](bool accepted){if(const auto self=weak.lock()){
                 if(accepted)self->entry_.published(plan,OwnedGuildEntryService::Clock::now());
-                else self->entry_.invalidate(plan.lease.owner.session);
+                else self->entry_.reject_exact(plan);
             }});return true;
     }
     bool choose(std::uint64_t session,const Captured& captured,const Records::Record& record,Service::Time now){
@@ -73,7 +73,7 @@ public:
         const auto weak=weak_from_this();common_->deliver(opening->interaction.owner,{opening->prompt.begin(),opening->prompt.end()},
             [weak,opening=*opening](bool accepted){if(const auto self=weak.lock()){
                 if(accepted)self->service_.published(opening,Service::Conversation::Clock::now());
-                else self->service_.invalidate(opening.interaction.owner.session);
+                else self->service_.reject_exact(opening);
             }});return true;
     }
     bool submit(std::uint64_t session,const Captured& captured,std::size_t index,Service::Time now){

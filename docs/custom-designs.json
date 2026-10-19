@@ -6582,9 +6582,18 @@
         "src/game/OwnedTaiwanGuildChatDispatch.cpp",
         "tests/test_owned_taiwan_guild_chat_dispatch.cpp",
         "src/relations53/SharedGuildApplication53Draft.h",
-        "tests/test_world_reply_push_capture.cpp"
+        "tests/test_world_reply_push_capture.cpp",
+        "src/game/OwnedTaiwanGuildActionsDispatch.cpp",
+        "src/game/OwnedTaiwanGuildActionsDispatch.h",
+        "src/handlers/OwnedGuildEntryService.h",
+        "src/handlers/OwnedGuildMembershipConversation.h",
+        "src/relations53/GuildAdmission53Application.h",
+        "src/relations53/GuildJoinConversation53Runtime.h",
+        "tests/test_owned_guild_entry_0078.cpp",
+        "tests/test_owned_guild_membership_0078.cpp",
+        "tests/test_owned_taiwan_guild_actions_dispatch.cpp"
       ],
-      "document": "docs/research/tw-three-channel-sender-20261019.md",
+      "document": "docs/research/tw-three-channel-actions-20261019.md",
       "rules": {
         "advertisement": "Exactly three distinct explicit loopback endpoints; preserve supplied full04 group record,05 reserved byte and06 route bodies; recompute each frame checksum and zero-seed wire encoding",
         "configuration": "Three actual ordered native subgroup slots are required; a supplied mask is opaque here and is not the configured slot count",
@@ -6618,13 +6627,15 @@
         "guild_action_batch_capture": "Round494 Common53 adapter owns full original records and frozen selected indices/old grants/plans. Exact private adapter and admission issuer identities, strict selected original-index one-use execution and retirement; no recapture after prefixes. Existing legacy handles delegate. This is not an actual native mutation capability or Session lease.",
         "guild_action_sender_gap": "Native guild mutation mount deliberately remains OPEN until actual sender bytes and pending acceptance callbacks join original native run/final response custody. Existing Session acceptance(true) means FIFO append, not Written. Bootstrap/menu/prompt asynchronous grants remain real; no fake ACK or repurposed C67 tags. Actual native legacy overwrite is documented.",
         "guild_sender_transport_custody": "Round495 actual Session TLS-only WorldReplyPushCapture captures same-Session plain/Accepted logical sends through explicit GAME-only same-peer framer. Private exact final ranges, full delivery tuple, one-use callbacks and producer reservations join actual final FIFO Write in all3 branches. Queue acceptance only after metadata attachment; failure/drop once. No fake C67 component, encoder default, input hold or native action authority.",
-        "guild_sender_lifecycle": "Qualified one-envelope logical.size()+3 wire bounds, aggregate original source order, equal tuple rebind supported, reserves before moving ACK closure, frame/count limits retained until actual Write removal. GAME profile excluded from NET receipts. Stale/finished handles affect only old window; explicit rejection/invalidations/throwing posts settle failure once. Existing deferred C67 translates generic ranges or rejects overlap/immutable conflict."
+        "guild_sender_lifecycle": "Round496 qualified sender uses actual private INIT and explicit same-peer GAME framer; captured branch retains each pure source flag in original Frame, independent async branch retains normal Written output witness, full tuple, reservation and once FIFO callback. GAME profile excluded from NET. Final slices/preappend and pure prewrite checks retain cancellation even after Enqueued settlement. Name cache waits for exact Session/latest serial accepted callback. Queue acceptance is not Written/final admission/client ACK.",
+        "guild_action_native_ingress": "Round496 actual mixed source freezes full-input classification once, captures original Common53 batch/indices before prefix and dispatches selected indices at accumulated wire offsets under mandatory native Current/budgets. Weak late GAME owner seals full64/exact Session lifecycle; actual returned host capability required; handler finish is not enqueue/write/admission. No replay/rollback or default opcode grant.",
+        "guild_action_continuations": "Directory action token is cancellation/continuation only. Exact originating token survives handler end and chained async ACK. Different active/inherited sources deny continuation, retain inherited origin and preserve unrelated successor even on caught nested begin. Retire cancels flags retained after token expiry. Admission false ACK removes only exact still-prepared plan/opening and original full-owner prompt nonce; published/successor state retained."
       },
-      "native_gap": "Round495 actual Session sender transport custody is connected in source, with unexecuted real-socket cases. Common53 native action Kind/batch/dispatch/Current/continuation/lifetime bridge still OPEN; no activation inferred from transport API. Default native sources/Main, actual peer profile, common64/native projection, older guild bridges, selected Web G, native transfer, durable save/logout/admission/recovery and six switches/client acceptance remain open.",
+      "native_gap": "Actual native Common53 action ingress and qualified continuation source integration are connected in round496 but unbuilt/unexecuted. Actual native providers/default Main, same-peer profiles, common64/native projection, older guild schemas, selected Web G, world transfer, durable logout/save/target admission/recovery and six directed switches/current-client acceptance remain OPEN.",
       "production_activated": false,
       "native_client_acceptance": false,
       "three_channel_gameplay_complete": false,
-      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_SESSION_SENDER_FIFO_CUSTODY_FUTURE_SOCKET_CASES_NOT_EXECUTED_NATIVE_ACTION_BRIDGE_OPEN"
+      "verification_status": "SOURCE_AND_INDEPENDENT_STATIC_REVIEW_ONLY_ACTUAL_COMMON53_NATIVE_ACTION_INGRESS_AND_QUALIFIED_CONTINUATIONS_FUTURE_CASES_NOT_EXECUTED"
     }
   ],
   "current_scope": "Taiwan-only server by owner request 2026-10-18; other regional implementations retired."

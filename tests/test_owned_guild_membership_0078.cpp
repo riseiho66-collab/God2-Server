@@ -119,8 +119,24 @@ void lifecycle_tests() {
     check(exhausted.open(new_session,Op::Create,epoch,true).has_value());
     check(!exhausted.consume(owner,request(),epoch,true));
 }
+void rejected_prompt_is_exact() {
+    Service service{name_valid};const auto first=service.open(owner,Op::Create,epoch,true);check(bool(first));
+    auto forged=*first;forged.back()^=1;
+    check(!service.invalidate_exact(owner,forged) && service.pending(owner.session));
+    auto foreign=owner;foreign.character+=std::uint64_t{1}<<32;
+    check(!service.invalidate_exact(foreign,*first) && service.pending(owner.session));
+    check(service.invalidate_exact(owner,*first) && !service.pending(owner.session));
+    const auto next=service.open(owner,Op::Join,epoch,true);check(next && (*next)[1]==2);
+    check(!service.invalidate_exact(owner,*first) && service.pending(owner.session));
+    check(service.consume(owner,request(2,Op::Join),epoch,true).has_value());
+    const auto expired=service.open(owner,Op::Create,epoch,true);check(bool(expired));
+    const auto later=epoch+Service::lifetime+std::chrono::seconds{1};
+    const auto replacement=service.open(owner,Op::Join,later,true);check(replacement && (*replacement)[1]==4);
+    check(!service.invalidate_exact(owner,*expired) && service.pending(owner.session));
+    check(service.consume(owner,request(4,Op::Join),later,true).has_value());
+}
 }
 int main() {
-    try {wire_tests();lifecycle_tests();std::cout<<"Owned guild membership0078 checks="<<checks<<" PASSED (isolated; not runtime/client acceptance)\n";return 0;}
+    try {wire_tests();lifecycle_tests();rejected_prompt_is_exact();std::cout<<"Owned guild membership0078 checks="<<checks<<" PASSED (isolated; not runtime/client acceptance)\n";return 0;}
     catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

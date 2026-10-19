@@ -2,6 +2,7 @@
 #include "SharedGuildCoordinator53Draft.h"
 #include "handlers/OwnedGuildChatService.h"
 #include "net/Session.h"
+#include <atomic>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +18,8 @@ namespace god2 {
 // worlds. This directory grants no membership, native publication or readiness.
 // Retire before framed sources unwind; copied facades retain only weak state.
 class SharedGuildChannelDirectory53 final {
+    struct State;
+    struct ActionToken;
     struct ChatTicket;
 public:
     using Common=SharedGuildCoordinator53Draft;
@@ -49,6 +52,26 @@ public:
         std::function<std::set<std::uint32_t>()> online;
         std::function<void(const Owner&)> sync_name;
     };
+    // Cancellation/continuation only; this token grants no native input or SQL authority.
+    class ActionScope final {
+    public:
+        ~ActionScope() noexcept;
+        ActionScope(ActionScope&&) noexcept;
+        ActionScope& operator=(ActionScope&&) noexcept;
+        ActionScope(const ActionScope&)=delete;
+        ActionScope& operator=(const ActionScope&)=delete;
+        bool current() const;
+        void invalidate() noexcept;
+        void finish(bool handler_accepted); // Not queue acceptance, Written or client ACK.
+    private:
+        friend class SharedGuildChannelDirectory53;
+        explicit ActionScope(std::shared_ptr<ActionToken>);
+        std::shared_ptr<ActionToken> token_;
+        bool finished_=false;
+    };
+    ActionScope begin_action();
+    bool action_permitted() const;
+    std::shared_ptr<const std::atomic_bool> action_liveness() const;
     static std::shared_ptr<SharedGuildChannelDirectory53> create(std::size_t expected=3);
     class ChatBatch final {
     public:
@@ -78,7 +101,6 @@ public:
     SharedGuildChannelDirectory53(const SharedGuildChannelDirectory53&)=delete;
     SharedGuildChannelDirectory53& operator=(const SharedGuildChannelDirectory53&)=delete;
 private:
-    struct State;
     explicit SharedGuildChannelDirectory53(std::shared_ptr<State> state):state_(std::move(state)){}
     std::shared_ptr<State> state_;
 };

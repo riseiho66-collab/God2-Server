@@ -296,6 +296,39 @@ void refused_capture(Failure failure){
     peer.pump();require(ack.no==refusals,"Failure cleanup repeated the throwing refusal callback");
 }
 
+void qualified_capture_retains_source_cancellation(){
+    // Future socket cases for the actual qualified API's active-capture branch.
+    // Explicit fixture framing remains test-only, never native qualification.
+    for(unsigned mode=0;mode<4;++mode){
+        unsigned encodings=0,async_profiles=0,yes=0,no=0;
+        const auto live=std::make_shared<std::atomic_bool>(true);
+        Peer peer([&](Session& actual,auto)->std::optional<Bytes>{
+            auto capture=actual.capture_world_reply_pushes([&](Session&,auto logical)->std::optional<Bytes>{
+                ++encodings;if(mode==1)live->store(false);return framed(logical);
+            });
+            const auto init=actual.normal_world_initialization();
+            require(init.has_value(),"Qualified fixture requires actual private input initialization");
+            actual.send_qualified_world_records_with_acceptance(*init,row(41),
+                [&](Session&,auto logical)->std::optional<Bytes>{++async_profiles;return framed(logical);},
+                {Peer::account,Peer::character,Peer::world_generation,actual.battle_generation()},
+                [&](bool accepted){accepted?++yes:++no;if(mode==3&&accepted)live->store(false);},live);
+            try{
+                auto result=capture.finish(0);
+                if(mode==2)live->store(false); // Retained after the capture handle finished.
+                return result;
+            }catch(const std::exception&){return Bytes{};}
+        });
+        peer.ready();peer.invoke();
+        if(mode==0){peer.expect(framed(row(41)));peer.silent();}
+        else peer.closed_without_output();
+        require(encodings==1&&async_profiles==0,"Qualified captured push must use only its original-run profile");
+        require((mode==0||mode==3)?(yes==1&&no==0):(yes==0&&no==1),
+            "Captured cancellation must preserve once-only FIFO acceptance stage");
+        peer.pump();
+        require(yes+no==1,"Later failure repeated qualified captured acknowledgment");
+    }
+}
+
 void outside_callback_is_not_authority(){
     unsigned encodings=0;
     Peer peer([](Session&,auto)->std::optional<Bytes>{return Bytes{};});peer.ready();
@@ -311,7 +344,7 @@ void test_world_reply_push_capture(){
     static_assert(!std::is_move_constructible_v<Session::WorldReplyPushCapture>);
     static_assert(!std::is_copy_assignable_v<Session::WorldReplyPushCapture>);
     static_assert(!std::is_move_assignable_v<Session::WorldReplyPushCapture>);
-    final_fifo_and_original_callback_order();empty_scope_and_relative_base();finished_old_scope_cannot_poison_successor();outside_callback_is_not_authority();
+    final_fifo_and_original_callback_order();empty_scope_and_relative_base();finished_old_scope_cannot_poison_successor();qualified_capture_retains_source_cancellation();outside_callback_is_not_authority();
     for(const auto failure:{Failure::Drop,Failure::Invalidate,Failure::Nested,Failure::ProfileThrow,Failure::ProfileReentry,
         Failure::ProfileNull,Failure::ProfileLength,Failure::WrongOffset,Failure::OverflowOffset,Failure::AlteredFinal,
         Failure::Account,Failure::Character,Failure::ExpectedAccount,Failure::ExpectedCharacter,Failure::Delivery,

@@ -137,6 +137,9 @@ struct SharedWorldHostPlan {
         // LAST: actual Application-owned guild chat only; original full mixed
         // Current/run ordering remains mandatory. No other chat fallback.
         std::optional<SharedTaiwanWorldRecordSource::GuildChatBinding> owned_guild_chat={};
+        // LAST: original-batch Application-owned guild actions; mandatory
+        // native Current still qualifies every frozen run and original phase.
+        std::optional<SharedTaiwanWorldRecordSource::GuildActionsBinding> owned_guild_actions={};
     };
     // Called once on the actual Application game owner before any listener.
     // Assemble the real Entered owner; retain its actual resources strongly in

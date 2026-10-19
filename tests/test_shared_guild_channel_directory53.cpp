@@ -219,5 +219,101 @@ void native_holder_invalidation_stops_actual_directory_batch(){
     require(!observation->result.complete&&observation->result.submitted==1&&f.channels[0].chats.size()==1&&f.channels[1].chats.empty()&&f.channels[2].chats.empty(),"Actual directory stops before later worlds after caught outer native invalidation");
     holder->stop();f.directory->retire();f.directory->invalidate_chat();
 }
+void action_observer_cancellation_and_successor(){
+    for(unsigned mode=0;mode<3;++mode){
+        Fixture f;const auto owner=f.add(1,0x100000011ULL,0x900000011ULL);f.seal();
+        auto action=f.directory->begin_action();const auto live=f.directory->action_liveness();
+        bool observed=false,nested_refused=false;
+        const auto cancel=[&]{
+            if(mode==2)nested_refused=refuses([&]{(void)f.directory->begin_action();});else action.invalidate();
+            observed=!live->load()&&!action.current()&&!f.directory->action_permitted();
+        };
+        if(mode==0){f.channels[1].on_ready=cancel;require(!f.binding.peer_ready(owner),"Cancellation inside ready observer refuses its positive result");}
+        if(mode==1){f.channels[1].on_baseline=cancel;require(!f.binding.baseline(owner),"Cancellation inside baseline observer refuses its returned evidence");}
+        if(mode==2){f.channels[1].on_name=cancel;require(refuses([&]{f.binding.sync_name(owner);}),"Caught nested action invalidates name observer continuation");}
+        require(observed&&(mode!=2||nested_refused),"Action observer sees cancellation synchronously before returning");
+        if(mode==0)require(refuses([&]{action.finish(true);}),"Cancelled scope cannot claim handler acceptance");
+        action.finish(false);require(f.directory->action_permitted(),"Failed handler clears active pointer without retaining global cancellation");
+        auto next=f.directory->begin_action();const auto next_live=f.directory->action_liveness();
+        action.invalidate();action.finish(false);
+        require(next.current()&&next_live->load()&&f.directory->action_permitted(),"Old finished action cannot cancel or clear actual successor");
+        next.finish(true);
+    }
 }
-void test_shared_guild_channel_directory53(){routing_and_identity();closure_and_reentry();retirement_and_thread();chat_routing_and_one_use();chat_freshness_and_partial_delivery();chat_renderer_reentry_and_retirement();native_holder_invalidation_stops_actual_directory_batch();}
+void action_delayed_ack_after_handler_end(){
+    for(bool accepted:{false,true}){
+        Fixture f;const auto owner=f.add(0,0x100000012ULL,0x900000012ULL);f.seal();f.channels[0].async=true;
+        auto action=f.directory->begin_action();const auto live=f.directory->action_liveness();
+        unsigned calls=0;bool good=!accepted,inherited=false;
+        f.binding.send(owner,{0x91},[&](bool value){
+            ++calls;good=value;inherited=f.directory->action_liveness()==live;
+            require(f.directory->action_permitted()==accepted,"Delayed ACK inherits accepted or cancelled origin after active pointer cleared");
+            require(f.binding.owner(owner.session).has_value()==accepted,"Cancelled delayed continuation cannot recover fresh owner authority");
+        });
+        require(calls==0&&action.current(),"Actual async source retains unresolved ACK during handler");
+        const auto ack=f.channels[0].held_ack;action.finish(accepted);
+        require(!action.current()&&f.directory->action_permitted()&&live->load()==accepted,"Handler finish clears active pointer but preserves exact origin liveness");
+        ack(true);ack(true);
+        require(calls==1&&good==accepted&&inherited,"Handler acceptance permits one delayed ACK; failed handler refuses positive supplier ACK");
+    }
+    Fixture abandoned;const auto owner=abandoned.add(2,0x100000013ULL,0x900000013ULL);abandoned.seal();abandoned.channels[2].async=true;
+    unsigned calls=0;bool good=true;std::shared_ptr<const std::atomic_bool> live;
+    {auto action=abandoned.directory->begin_action();live=abandoned.directory->action_liveness();
+        abandoned.binding.send(owner,{0x92},[&](bool accepted){++calls;good=accepted;});}
+    require(!live->load()&&abandoned.directory->action_permitted(),"Abandoning scope cancels its own origin and clears active pointer");
+    abandoned.channels[2].held_ack(true);require(calls==1&&!good,"Abandoned handler cannot later publish positive ACK");
+}
+void action_chained_ack_inherits_original_scope(){
+    Fixture f;const auto owner=f.add(0,0x100000014ULL,0x900000014ULL);f.seal();f.channels[0].async=true;
+    auto action=f.directory->begin_action();const auto original_live=f.directory->action_liveness();
+    unsigned first=0,second=0;bool first_good=false,second_good=true,second_inherited=false;
+    f.binding.send(owner,{0x93},[&](bool accepted){
+        ++first;first_good=accepted;
+        require(accepted&&f.directory->action_liveness()==original_live,"First delayed chunk inherits original accepted action");
+        f.binding.send(owner,{0x94},[&](bool chained){
+            ++second;second_good=chained;second_inherited=f.directory->action_liveness()==original_live;
+            require(!f.directory->action_permitted(),"Cancelled inherited chunk blocks follow-on publication even beside live successor");
+            require(refuses([&]{f.binding.send(owner,{0x95},{});}),"Cancelled chained ACK cannot send a later chunk");
+        });
+    });
+    const auto first_ack=f.channels[0].held_ack;action.finish(true);first_ack(true);
+    require(first==1&&first_good&&second==0&&f.channels[0].sends==2,"Accepted handler may continue one later async chunk");
+    const auto second_ack=f.channels[0].held_ack;action.invalidate();
+    auto successor=f.directory->begin_action();const auto successor_live=f.directory->action_liveness();
+    require(successor.current()&&successor_live->load(),"Old origin cancellation leaves independent successor live");
+    second_ack(true);second_ack(true);
+    require(second==1&&!second_good&&second_inherited&&f.channels[0].sends==2,"Chained delayed chunk retains old cancellation after original active pointer cleared");
+    require(successor.current()&&successor_live->load()&&f.directory->action_permitted(),"Inherited callback restores successor gate after cancelling old continuation");
+    successor.finish(true);
+}
+void action_live_ack_cannot_borrow_active_successor(){
+    Fixture f;const auto owner=f.add(0,0x100000015ULL,0x900000015ULL);f.seal();f.channels[0].async=true;
+    auto original=f.directory->begin_action();const auto original_live=f.directory->action_liveness();
+    unsigned calls=0;bool good=true;
+    f.binding.send(owner,{0x96},[&](bool accepted){
+        ++calls;good=accepted;
+        require(f.directory->action_liveness()==original_live,"Retained ACK always keeps its original token");
+        require(!f.directory->action_permitted(),"Different active and inherited issuers deny causal continuation");
+        require(refuses([&]{f.binding.send(owner,{0x97},{});}),"Retained ACK cannot attach a continuation to successor token");
+        require(refuses([&]{(void)f.directory->begin_action();}),"Retained ACK cannot begin a nested action");
+    });
+    const auto ack=f.channels[0].held_ack;original.finish(true);
+    auto successor=f.directory->begin_action();const auto successor_live=f.directory->action_liveness();
+    ack(true);ack(true);
+    require(calls==1&&!good&&f.channels[0].sends==1,"Overlapping retained ACK is rejected once before follow-on sends");
+    require(!original_live->load()&&successor_live->load()&&successor.current()&&f.directory->action_permitted(),"Caught old ACK nested refusal cancels only original source and leaves successor live");
+    successor.finish(true);
+}
+void action_liveness_survives_token_and_retires(){
+    Fixture f;f.seal();const auto lifetime=f.directory->action_liveness();
+    std::shared_ptr<const std::atomic_bool> finished_live;
+    {auto action=f.directory->begin_action();finished_live=f.directory->action_liveness();
+        require(finished_live!=lifetime&&action.current(),"Action has distinct liveness from directory lifetime");action.finish(true);}
+    // No send retains this action token. Only the public atomic flag survives.
+    require(finished_live->load()&&lifetime->load()&&f.directory->action_liveness()==lifetime,"Accepted expired token leaves flag alive until real directory retirement");
+    f.directory->retire();
+    require(!finished_live->load()&&!lifetime->load()&&!f.directory->action_permitted(),"Retirement revokes retained flags even after their action tokens expired");
+    require(refuses([&]{(void)f.directory->begin_action();}),"Retired directory cannot issue new action scope");
+}
+}
+void test_shared_guild_channel_directory53(){routing_and_identity();closure_and_reentry();retirement_and_thread();chat_routing_and_one_use();chat_freshness_and_partial_delivery();chat_renderer_reentry_and_retirement();native_holder_invalidation_stops_actual_directory_batch();action_observer_cancellation_and_successor();action_delayed_ack_after_handler_end();action_chained_ack_inherits_original_scope();action_live_ack_cannot_borrow_active_successor();action_liveness_survives_token_and_retires();}

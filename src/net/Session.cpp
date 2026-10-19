@@ -82,6 +82,7 @@ constexpr auto skill_sequence_timeout = std::chrono::seconds(5);
 // Installed only by the real posted world-records game job below. A foreign
 // public caller cannot nominate itself as game owner or read game-owned IDs.
 thread_local const Session* observed_world_callback=nullptr;
+thread_local Session* qualified_world_push_profile=nullptr; // Actual GAME-only framer, never a NET callback.
 // Separate actual callback occurrence for opt-in movement sender custody.
 // No old normal/bootstrap capture API is broadened by this TLS scope.
 thread_local const Session* observed_movement_callback=nullptr;
@@ -824,7 +825,7 @@ void Session::schedule_actor_status_work(const Executor& executor,
 
 struct Session::WorldReplyPushCapture::Data {
     struct Pending {
-        struct Frame {std::shared_ptr<Reservation> reservation;std::function<void(bool)> callback;};
+        struct Frame {std::shared_ptr<Reservation> reservation;std::function<void(bool)> callback;std::shared_ptr<const std::atomic_bool> source_live{};};
         const std::weak_ptr<Session> session;
         const std::uint64_t account,character,battle;
         const SessionState phase;
@@ -874,6 +875,22 @@ struct Session::Impl {
         }
         ~ReplyPushFinal(){settle(false);}
     };
+    struct QualifiedWorldPushPending {
+        std::atomic<bool> settled{false},invalid{false};
+        std::function<void(bool)> callback;
+        explicit QualifiedWorldPushPending(std::function<void(bool)> value):callback(std::move(value)){}
+        void settle(bool accepted) noexcept {
+            if(settled.exchange(true))return;
+            if(callback){auto once=std::move(callback);try{once(accepted);}catch(...){}}
+        }
+        ~QualifiedWorldPushPending(){settle(false);}
+    };
+    std::shared_ptr<QualifiedWorldPushPending> qualified_push_active; // GAME-only framing reentry fence, no profile retained.
+    [[noreturn]] void reject_qualified_profile_sender(){
+        if(qualified_world_push_profile){auto& source=*qualified_world_push_profile->impl_;
+            if(const auto pending=source.qualified_push_active){pending->invalid.store(true);source.poison_callback_reply();poison_world_response();pending->settle(false);}}
+        throw std::logic_error("Qualified world profile may frame but may not send/reenter");
+    }
     // This marker is DISTINCT from the Data retained by Application. Its last
     // post/Write owner retiring an uncompleted attempt marks Failed even while
     // the game still retains the private handle. Pure data only, on any thread.
@@ -916,9 +933,21 @@ struct Session::Impl {
     std::shared_ptr<WorldReplyPushCapture::Data> reply_push_capture;
     bool reply_push_failed=false; // Actual callback GAME only.
     std::size_t reply_push_frames=0; // Bounded across all scopes in one callback.
+    static bool reply_push_sources_live(const std::shared_ptr<ReplyPushPending>& pending) noexcept {
+        if(!pending)return false;
+        for(const auto& frame:pending->frames)if(frame.source_live&&!frame.source_live->load())return false;
+        return true;
+    }
+    static bool reply_push_sources_live(const std::shared_ptr<ReplyPushFinal>& final) noexcept {
+        if(!final)return true;
+        // FIFO acceptance settles Pending, but its pure source flags remain
+        // retained by the actual Write until physical write/remove.
+        for(const auto& pending:final->fragments)if(!reply_push_sources_live(pending))return false;
+        return true;
+    }
     bool reply_push_current(const std::shared_ptr<ReplyPushPending>& pending,bool game) const {
         const auto delivery=world_delivery_identity.load();
-        if(!pending||pending->failed.load()||pending->settled.load()||pending->session.lock().get()!=&owner||close_requested.load()||
+        if(!pending||pending->failed.load()||pending->settled.load()||!reply_push_sources_live(pending)||pending->session.lock().get()!=&owner||close_requested.load()||
            mode!=ProtocolMode::God2CharacterConnection||!owner.recovered_world_ready()||owner.state()!=pending->phase||owner.battle_generation()!=pending->battle||
            !delivery||!pending->delivery||delivery->account!=pending->account||delivery->character!=pending->character||delivery->battle_generation!=pending->battle||
            delivery->world_generation!=pending->delivery->world_generation||!delivery->world_generation)return false;
@@ -931,7 +960,8 @@ struct Session::Impl {
         if(reply_push_capture)reply_push_capture->pending->collect(false,callbacks,count);
         ReplyPushPending::invoke(callbacks,count,false);
     }
-    void capture_reply_push(std::span<const std::uint8_t> logical,std::function<void(bool)> callback={},const WorldDeliveryIdentity* expected=nullptr){
+    void capture_reply_push(std::span<const std::uint8_t> logical,std::function<void(bool)> callback={},const WorldDeliveryIdentity* expected=nullptr,
+        std::shared_ptr<const std::atomic_bool> source_live={}){
         const auto capture=reply_push_capture;
         try{
             if(!capture||capture->thread!=std::this_thread::get_id()||observed_world_callback!=&owner||!callback_output_active||reply_push_failed||capture->finished||capture->encoding||
@@ -945,17 +975,18 @@ struct Session::Impl {
             {std::lock_guard lock(budget->mutex);if(charge>max_buffer-budget->bytes||budget->count>=max_writes)throw std::overflow_error("Captured world push producer budget");
                 budget->bytes+=charge;++budget->count;reservation->charged=true;}
             capture->encoding=true;struct Reset {bool& flag;~Reset(){flag=false;}} reset{capture->encoding};
+            if(source_live&&!source_live->load())throw std::logic_error("Captured world push source retired before profile");
             auto framed=capture->profile(owner,logical);
             // Opaque one-envelope framing only. The existing final callback
             // validator still owns protocol validity; no fallback codec exists.
             if(!framed||framed->size()!=charge||framed->size()<4||std::size_t((*framed)[0])+256u*(*framed)[1]!=framed->size()||
-               pending->wire.size()>max_buffer-framed->size()||pending->frames.size()>=max_writes||reply_push_failed||!reply_push_current(pending,true))
+               pending->wire.size()>max_buffer-framed->size()||pending->frames.size()>=max_writes||reply_push_failed||!reply_push_current(pending,true)||(source_live&&!source_live->load()))
                 throw std::logic_error("Captured world push profile/source/bounds mismatch");
             // Complete every potentially allocating growth before moving the
             // sole acceptance callback into a noexcept Frame commit.
             pending->frames.reserve(pending->frames.size()+1);
             pending->wire.reserve(pending->wire.size()+framed->size());
-            pending->frames.push_back({std::move(reservation),std::move(callback)});++reply_push_frames;
+            pending->frames.push_back({std::move(reservation),std::move(callback),std::move(source_live)});++reply_push_frames;
             pending->wire.insert(pending->wire.end(),framed->begin(),framed->end());
             if(callback_output_activity==std::numeric_limits<std::size_t>::max())throw std::overflow_error("Captured world push callback activity");
             ++callback_output_activity; // No independent observed component/Write.
@@ -1917,6 +1948,7 @@ struct Session::Impl {
         std::shared_ptr<BattleSelfView::Data> battle_self_view{}; // LAST: exact whole-Write occurrence.
         std::shared_ptr<CallbackComponentAttempt> callback_component{}; // LAST: actual self-Write only.
         std::shared_ptr<ReplyPushFinal> reply_pushes{}; // LAST: producer reservations through actual FIFO lifetime.
+        std::shared_ptr<const std::atomic_bool> qualified_source_live{}; // LAST: pure cancellation, never authority.
     };
     std::deque<Write> writes;
     template<class Executor,class Body>
@@ -4670,6 +4702,12 @@ struct Session::Impl {
     }
     void write(std::shared_ptr<NativePkReturnPublication::Work> carried={}) {
         if(writes.empty())return;
+        if(!reply_push_sources_live(writes.front().reply_pushes)){
+            fail("Captured world push source retired before actual write");return;
+        }
+        if(writes.front().qualified_source_live&&!writes.front().qualified_source_live->load()){
+            fail("Qualified world push source retired before actual write");return;
+        }
         if(writes.front().held){
             if(carried){
                 const auto pending=writes.front().pending_return_continuation.lock();
@@ -4697,6 +4735,8 @@ struct Session::Impl {
             }
         }
         auto bytes = writes.front().bytes;
+        const auto qualified_source_live=writes.front().qualified_source_live;
+        const auto captured_pushes=writes.front().reply_pushes;
         const auto movement_marker=writes.front().movement_response;
         if(movement_marker && (!movement_frame_current(movement_marker,bytes) || writes.front().held ||
            movement_marker->receipt->status.load()!=MovementResponseWriteStatus::Queued)) {
@@ -5007,6 +5047,8 @@ struct Session::Impl {
                writes.front().movement_response!=movement_marker || writes.front().bytes!=bytes || writes.front().held ||
                movement_marker->receipt->status.load()!=MovementResponseWriteStatus::Queued))
                 throw std::logic_error("Movement response retired before async_write");
+            if(qualified_source_live&&!qualified_source_live->load())throw std::logic_error("Qualified world source retired before async_write");
+            if(!reply_push_sources_live(captured_pushes))throw std::logic_error("Captured world source retired before async_write");
             asio::async_write(socket,buffer,std::move(bound));
         };
         if(status_writer)initiate(retain_actor_status_writer(status_writer,std::move(completion)));
@@ -5375,6 +5417,7 @@ std::optional<Session::WorldCallbackSelectionEmission> Session::mint_callback_se
     }catch(...){data->fail();return {};}
 }
 void Session::send_world_callback_reply_frame(LegacyWorldReplyFrame frame){
+    if(qualified_world_push_profile){[[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();impl_->reject_qualified_profile_sender();}
     if(observed_world_callback==this&&impl_->reply_push_capture&&frame.emission_){[[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();impl_->fail_reply_pushes();throw std::logic_error("Causal selection push cannot use generic reply capture");}
     if(frame.emission_){
         const auto source=impl_->callback_output_capture;
@@ -5396,6 +5439,7 @@ void Session::send_world_callback_reply_frame(LegacyWorldReplyFrame frame){
 }
 std::vector<std::uint8_t> Session::take_world_callback_reply(LegacyWorldReply reply){
     if(reply.ranges_.empty())return std::move(reply.wire_);
+    if(qualified_world_push_profile)impl_->reject_qualified_profile_sender();
     if(observed_world_callback==this&&impl_->reply_push_capture){impl_->fail_reply_pushes();throw std::logic_error("Causal selection final reply cannot use generic capture");}
     const auto source=impl_->callback_output_capture;
     if(observed_world_callback!=this||!impl_->callback_output_active||!source||
@@ -5780,6 +5824,7 @@ void Session::send_world_records(std::vector<std::uint8_t> logical) {
 Session::WorldRecordsWrite Session::send_world_records_observed(std::vector<std::uint8_t> logical) {
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
+    if(qualified_world_push_profile)impl_->reject_qualified_profile_sender();
     if(observed_world_callback!=this)
         throw std::logic_error("Observed world sender requires actual world-records game callback");
     if(impl_->mode!=ProtocolMode::God2CharacterConnection || closing() || !recovered_world_ready() ||
@@ -6104,6 +6149,10 @@ bool Session::normal_world_response_callback_current(const NormalWorldResponseAt
 }
 void Session::send_world_records_impl(std::vector<std::uint8_t> logical,
         std::shared_ptr<WorldRecordsWrite::Data> observed,std::optional<WorldCallbackSelectionEmission> emission) {
+    if(qualified_world_push_profile){
+        (void)retire_battle_self_view_logical_output(logical);[[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
+        impl_->reject_qualified_profile_sender();
+    }
     if(observed_world_callback==this&&impl_->reply_push_capture){
         (void)retire_battle_self_view_logical_output(logical);
         [[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
@@ -8105,8 +8154,105 @@ void Session::abort_native_pk_entry(const NativePkEntryHold& hold) {
         s.native_pk_reservation.reset();s.complete_native_pk(data,false);
     });
 }
+void Session::send_qualified_world_records_with_acceptance(const NormalWorldInitialization& initialization,
+    std::vector<std::uint8_t> logical,WorldReplyPushWire profile,WorldDeliveryIdentity expected,std::function<void(bool)> acceptance,
+    std::shared_ptr<const std::atomic_bool> source_live){
+    const auto init=initialization; // Retain exact receipt across synchronous provider reentry.
+    std::shared_ptr<Impl::QualifiedWorldPushPending> pending;
+    try{pending=std::make_shared<Impl::QualifiedWorldPushPending>(std::move(acceptance));}
+    catch(...){if(acceptance){auto once=std::move(acceptance);try{once(false);}catch(...){}}return;}
+    try{
+        // The private receipt proves the actual GAME thread before any bare
+        // account/character read. A caller cannot nominate a new owner thread.
+        if(!normal_world_initialization_current_on_game(init)||!native_channel_binding_current()||(source_live&&!source_live->load())){
+            if(observed_world_callback==this&&impl_->reply_push_capture)impl_->fail_reply_pushes();
+            pending->settle(false);return;
+        }
+        if(qualified_world_push_profile)impl_->reject_qualified_profile_sender();
+        if(observed_world_callback==this&&impl_->reply_push_capture){
+            // The enclosing original-run profile owns these bytes. Do not
+            // invoke the async profile or mint an independent side component.
+            if(source_live&&!source_live->load()){impl_->fail_reply_pushes();pending->settle(false);return;}
+            (void)retire_battle_self_view_logical_output(logical);
+            [[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
+            impl_->capture_reply_push(logical,[pending](bool enqueued){pending->settle(enqueued);},&expected,std::move(source_live));return;
+        }
+        if(impl_->qualified_push_active){
+            impl_->qualified_push_active->invalid.store(true);impl_->qualified_push_active->settle(false);pending->settle(false);return;
+        }
+        impl_->qualified_push_active=pending;
+        struct Reset {Impl& state;std::shared_ptr<Impl::QualifiedWorldPushPending> pending;~Reset(){if(state.qualified_push_active==pending)state.qualified_push_active.reset();}} reset{*impl_,pending};
+        const auto component=impl_->observe_callback_push(WorldCallbackOutput::Kind::AcceptedWorldRecords,logical);
+        (void)retire_battle_self_view_logical_output(logical);
+        [[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
+        const auto tuple_current=[&]{const auto actual=impl_->world_delivery_identity.load();return actual&&expected.account&&expected.character&&expected.world_generation&&
+            expected.account==account_id&&expected.character==character_id&&actual->account==expected.account&&actual->character==expected.character&&
+            actual->world_generation==expected.world_generation&&actual->battle_generation==expected.battle_generation&&battle_generation()==expected.battle_generation;};
+        if(!profile||logical.empty()||logical.size()>RecoveredWorldFrame::max_logical_size||!tuple_current()) {pending->settle(false);return;}
+        const auto recipient=capture_normal_world_output_on_game(init);
+        if(!recipient){pending->settle(false);return;}
+        const auto charge=logical.size()+3;auto budget=impl_->budget;
+        auto reservation=std::make_shared<Reservation>(budget,charge,1,false);
+        bool reserved=false;
+        {std::lock_guard lock(budget->mutex);if(charge<=max_buffer-budget->bytes&&budget->count<max_writes){budget->bytes+=charge;++budget->count;reservation->charged=true;reserved=true;}}
+        if(!reserved){pending->settle(false);return;}
+        if(source_live&&!source_live->load()){pending->settle(false);return;}
+        std::optional<std::vector<std::uint8_t>> framed;
+        {
+            struct ProfileScope {Session* previous;explicit ProfileScope(Session& owner):previous(qualified_world_push_profile){qualified_world_push_profile=&owner;}~ProfileScope(){qualified_world_push_profile=previous;}} scope(*this);
+            framed=profile(*this,logical); // Synchronous GAME-only explicit profile; no sender side effects.
+        }
+        if(!framed||framed->size()!=charge||framed->size()<4||std::size_t((*framed)[0])+256u*(*framed)[1]!=framed->size()||
+           pending->invalid.load()||pending->settled.load()||(source_live&&!source_live->load())||!normal_world_initialization_current_on_game(init)||
+           !normal_world_output_current_on_game(*recipient)||!native_channel_binding_current()||!tuple_current()){
+            pending->settle(false);return;
+        }
+        const auto wire=std::make_shared<const std::vector<std::uint8_t>>(std::move(*framed));
+        const auto target=recipient->data_;
+        // No profile, logical renderer or GAME-owned supplier crosses this
+        // handoff. The private pending owner fails a dropped/unrun post once.
+        impl_->post_status_work(impl_->strand,[self=shared_from_this(),target,wire,reservation,pending,component,expected,source_live]() mutable {
+            auto& state=*self->impl_;
+            [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+            const auto tuple_current=[&]{const auto actual=state.world_delivery_identity.load();return actual&&actual->account==expected.account&&actual->character==expected.character&&
+                actual->world_generation==expected.world_generation&&actual->battle_generation==expected.battle_generation&&self->battle_generation()==expected.battle_generation;};
+            if(state.closing||state.close_requested.load()||pending->invalid.load()||pending->settled.load()||(source_live&&!source_live->load())||
+               state.mode!=ProtocolMode::God2CharacterConnection||state.c2s0002_state!=Impl::C2S0002State::WorldTailAccepted||!tuple_current()){pending->settle(false);return;}
+            try{
+                auto bytes=std::make_shared<std::vector<std::uint8_t>>(*wire);
+                if(bytes->empty()||bytes->size()!=reservation->bytes||*bytes!=*wire||bytes->size()>max_buffer-state.write_bytes||state.writes.size()>=max_writes){
+                    pending->settle(false);state.fail("Qualified world push frame/queue limit");return;
+                }
+                if(!state.terminal_write_allowed()){pending->settle(false);return;}
+                bool queued=false;
+                {
+                    std::lock_guard lock(target->sync->mutex);
+                    if(!pending->invalid.load()&&!pending->settled.load()&&(!source_live||source_live->load())&&state.normal_output_transport_current_locked(target)&&tuple_current()){
+                        Impl::Write output{bytes,std::move(reservation)};
+                        output.qualified_source_live=source_live;
+                        if(component){component->frame=bytes;component->receipt->wire.store(bytes);output.callback_component=component;}
+                        state.append_write(std::move(output));state.write_bytes+=bytes->size();queued=true;
+                    }
+                }
+                // Source mutex is released before the once callback. Queued
+                // records may still fail later; this is not Written/client ACK.
+                if(queued&&source_live&&!source_live->load()){pending->settle(false);state.fail("Qualified world push source retired after insertion");return;}
+                pending->settle(queued);
+                if(queued&&!state.writes.empty()&&state.writes.front().bytes==bytes&&!state.close_requested.load())state.write();
+            }catch(...){pending->settle(false);state.fail("Qualified world push handoff failed");}
+        });
+    }catch(...){
+        if(observed_world_callback==this&&impl_->reply_push_capture)impl_->fail_reply_pushes();
+        pending->invalid.store(true);pending->settle(false);
+    }
+}
+
 void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logical,
     std::uint64_t expected_account,std::uint64_t expected_character,std::uint64_t expected_world_generation,std::uint64_t expected_battle_generation,std::function<void(bool)> acceptance) {
+    if(qualified_world_push_profile){
+        (void)retire_battle_self_view_logical_output(logical);[[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();
+        try{impl_->reject_qualified_profile_sender();}catch(...){if(acceptance){auto once=std::move(acceptance);try{once(false);}catch(...){}}throw;}
+    }
     if(observed_world_callback==this&&impl_->reply_push_capture){
         (void)retire_battle_self_view_logical_output(logical);
         [[maybe_unused]] const auto status_admission=begin_actor_status_writer();invalidate_actor_status_writes();

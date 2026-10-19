@@ -45,6 +45,8 @@ struct TaiwanThreeChannelPlan final {
     using NativeGuildSenderWire=std::function<std::optional<std::vector<std::uint8_t>>(
         Session&,std::span<const std::uint8_t>)>;
     NativeGuildSenderWire guild_chat_sender_wire={};
+    // Guild actions and async bootstrap/name pushes use this actual same-peer source.
+    NativeGuildSenderWire guild_action_sender_wire={};
     TaiwanThreeChannelPlan(std::shared_ptr<const TaiwanNativeClientGroupConfiguration> configured,
         std::uint8_t actual_group,std::uint8_t byte_1,
         std::array<TaiwanChannelServers::EndpointPolicy,3> actual_endpoints,

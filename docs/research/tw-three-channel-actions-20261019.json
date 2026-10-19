@@ -1,0 +1,358 @@
+{
+  "round": 496,
+  "previous_goal_turn": "progress",
+  "previous_commit": "ace0db4b27d02be82df987979fe858eedc4b6120",
+  "goal_status": "active",
+  "authority": "CUSTOM-0159_ACTUAL_NATIVE_COMMON53_ACTION_AND_QUALIFIED_CONTINUATION_SOURCE_INTEGRATION",
+  "source_integration": [
+    "Actual native mixed full-original guild-action capture before prefix and strict original-index dispatch at current wire offset",
+    "Application weak late GAME owner with full64/exact Session lifecycle, reentry/cancellation propagation and required mounted capability",
+    "Qualified captured and async sender retains pure cancellation through final actual Write; mandatory explicit same-peer GAME profile",
+    "Directory cancellation origin survives handler end/chained ACK; overlapping old ACK and nested begin preserve unrelated successor",
+    "Name acceptance cache uses exact pointer/latest serial; admission false ACK exact prepared plan/opening and original full-owner nonce cleanup"
+  ],
+  "source_review": {
+    "independent": true,
+    "actual_native_action_capability_added": true,
+    "default_main_selected": false,
+    "handler_finish_is_not_enqueue": true,
+    "ack_stage": "FIFO_ENQUEUED_AFTER_METADATA_BEFORE_WRITE_NOT_WRITTEN_OR_FINAL_ADMISSION_OR_CLIENT_ACK",
+    "profiles_excluded_from_net": true,
+    "full64_identity_preserved": true,
+    "source_flags_checked_after_settlement_before_async_write": true,
+    "declared_session_patch_sha256": "7dfe000f7987a197b7c71c948d4964ec2140be097dbf1b9c3afb564ca8f5ec53",
+    "registered_future_holder_suite": "owned_taiwan_guild_actions_dispatch",
+    "future_qualified_capture_cases": 4,
+    "tests_not_executed": true,
+    "coverage_limits": "Independent async qualification, every native final-admission/C67 coexistence/drop/abort path and real topology acceptance still require concentrated verification",
+    "eol": [
+      {
+        "path": "src/core/Application.cpp",
+        "baseline_cr": 8205,
+        "current_cr": 8193,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 136
+      },
+      {
+        "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+        "baseline_cr": 1106,
+        "current_cr": 1106,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 5
+      },
+      {
+        "path": "src/core/SharedWorldHostPlan.h",
+        "baseline_cr": 68,
+        "current_cr": 68,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 3
+      },
+      {
+        "path": "src/core/TaiwanThreeChannelPlan.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 2
+      },
+      {
+        "path": "src/game/SharedTaiwanNativeRecordHandlerSource.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 1
+      },
+      {
+        "path": "src/game/SharedTaiwanWorldRecordSource.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 61
+      },
+      {
+        "path": "src/game/SharedTaiwanWorldRecordSource.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 23
+      },
+      {
+        "path": "src/game/OwnedTaiwanGuildActionsDispatch.cpp",
+        "new_file": true,
+        "cr": 0
+      },
+      {
+        "path": "src/game/OwnedTaiwanGuildActionsDispatch.h",
+        "new_file": true,
+        "cr": 0
+      },
+      {
+        "path": "src/handlers/OwnedGuildEntryService.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 6
+      },
+      {
+        "path": "src/handlers/OwnedGuildMembershipConversation.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 7
+      },
+      {
+        "path": "src/net/Session.cpp",
+        "baseline_cr": 737,
+        "current_cr": 737,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 151
+      },
+      {
+        "path": "src/net/Session.h",
+        "baseline_cr": 105,
+        "current_cr": 105,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 8
+      },
+      {
+        "path": "src/relations53/GuildAdmission53Application.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 2
+      },
+      {
+        "path": "src/relations53/GuildJoinConversation53Runtime.h",
+        "baseline_cr": 141,
+        "current_cr": 141,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 7
+      },
+      {
+        "path": "src/relations53/SharedGuildChannelDirectory53.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 69
+      },
+      {
+        "path": "src/relations53/SharedGuildChannelDirectory53.h",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 23
+      },
+      {
+        "path": "tests/CMakeLists.txt",
+        "baseline_cr": 993,
+        "current_cr": 993,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 2
+      },
+      {
+        "path": "tests/test_main.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 2
+      },
+      {
+        "path": "tests/test_owned_guild_entry_0078.cpp",
+        "baseline_cr": 187,
+        "current_cr": 186,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 20
+      },
+      {
+        "path": "tests/test_owned_guild_membership_0078.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 17
+      },
+      {
+        "path": "tests/test_shared_guild_channel_directory53.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 97
+      },
+      {
+        "path": "tests/test_world_reply_push_capture.cpp",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 34
+      },
+      {
+        "path": "tests/test_owned_taiwan_guild_actions_dispatch.cpp",
+        "new_file": true,
+        "cr": 0
+      },
+      {
+        "path": "docs/custom-designs.json",
+        "baseline_cr": 6467,
+        "current_cr": 6467,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 16
+      },
+      {
+        "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+        "baseline_cr": 0,
+        "current_cr": 0,
+        "unchanged_bytes_retained": true,
+        "changed_lines_lf": 8
+      },
+      {
+        "path": "docs/research/tw-three-channel-actions-20261019.md",
+        "new_file": true,
+        "cr": 0
+      }
+    ],
+    "custom_registry_other_design_bytes_unchanged": true,
+    "registry_prefix_sha256": "5e4aafbd7b19ea39433d0b9e692f91796957a2b88165d86eadd290bf2b02e8a8",
+    "registry_suffix_sha256": "2812f892d65822f3bd1cd6a240c30d764a3ef9a1aa2740d234d984b4b0cca15c"
+  },
+  "native_reuse": {
+    "new_targets": 0,
+    "receipt": "C:/Users/risei/.codex/artifact-archives/god2-server/20261019/three-channel-chat-round493/native-chat/findings-v2.json",
+    "sha256": "6e57249fb1d83c1198da26276f0ba4bf7eb651104b5ba9a05132b6e86ff1fee5",
+    "members_verified": 19,
+    "claim": "Unchanged current-client selection/switch/chat evidence only. Ordinary source analysis adds no native formula/projection/framing recovery; earlier Application snapshot is not final496 source."
+  },
+  "open": [
+    "Actual native providers/default Main and qualified same-peer profiles",
+    "Common64/native actor projection and older guild schema bridges",
+    "Selected-channel Web G and native world transfer",
+    "Durable logout/save/target admission/recovery, all six directed switches and current-client acceptance",
+    "Full Taiwan gameplay/formula/actual MySQL obligations"
+  ],
+  "whole_game_denominator": null,
+  "whole_game_completion_percent": null,
+  "complete_gameplay_route_credit": 0,
+  "three_channel_gameplay_complete": false,
+  "production_activated": false,
+  "execution": {
+    "build": false,
+    "tests": false,
+    "lua": false,
+    "codec": false,
+    "native_execution": false,
+    "game_execution": false,
+    "game_db_sql": false,
+    "schema_install": false,
+    "migration": false,
+    "import_export": false,
+    "activation": false,
+    "deployment": false
+  },
+  "sources": [
+    {
+      "path": "src/core/Application.cpp",
+      "sha256": "7843208629a713b60a3f7bac25dd9bdecb0721a721a7c9a164008a47f011f6b2"
+    },
+    {
+      "path": "src/core/SharedTaiwanNativeWorldHostPlan.cpp",
+      "sha256": "de4b5f2adb14390fa1c23b58b06995bc2995633568885fbe17903e1382b66856"
+    },
+    {
+      "path": "src/core/SharedWorldHostPlan.h",
+      "sha256": "eeb7c53e97c8fc15f468a6667b35ca932843e5a5221a4ed96a4b395a587548fa"
+    },
+    {
+      "path": "src/core/TaiwanThreeChannelPlan.h",
+      "sha256": "c6667812d9cd5555db653a5df8f81ea6da9ec123d0baecb8ff4bde80fb3b3420"
+    },
+    {
+      "path": "src/game/SharedTaiwanNativeRecordHandlerSource.cpp",
+      "sha256": "7d77776224f36a04ffc9833f1262303307cd89283f8476d7e760fce0fb0b3c74"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.cpp",
+      "sha256": "5fb56b1428131755a81af4f0ec1dab0395c1217500fc9b31c232fc505b2136e5"
+    },
+    {
+      "path": "src/game/SharedTaiwanWorldRecordSource.h",
+      "sha256": "22052844b319b060a91801d7bc0108c80eddea3b1fa413d09213d8670c77dee2"
+    },
+    {
+      "path": "src/game/OwnedTaiwanGuildActionsDispatch.cpp",
+      "sha256": "aca5af503c01bfd7f94ac0ceaa3b26a51b92596ad4ab37af84803e758ccc9297"
+    },
+    {
+      "path": "src/game/OwnedTaiwanGuildActionsDispatch.h",
+      "sha256": "452b9693be178b6d0762072464b63ed80b34e23d25003768a4fb5e63b608b296"
+    },
+    {
+      "path": "src/handlers/OwnedGuildEntryService.h",
+      "sha256": "1c3e79ae05c527da1612fc64f3c2e6fc96d8dff13120549dc6f4b50619203e8c"
+    },
+    {
+      "path": "src/handlers/OwnedGuildMembershipConversation.h",
+      "sha256": "fea4918ad4c70b0beb9a87aedf145eb69894415b6022f37b3950ec854f783325"
+    },
+    {
+      "path": "src/net/Session.cpp",
+      "sha256": "91295492a7183d667e5292b386aa5dd44a03e0e8909599c7be7c07a88017e70e"
+    },
+    {
+      "path": "src/net/Session.h",
+      "sha256": "f0fb656948b2959c110f3f290c36c3c9f4ebec636a3b902ea89b5c1808011746"
+    },
+    {
+      "path": "src/relations53/GuildAdmission53Application.h",
+      "sha256": "84ad55b28c577c43925896c45f2706b566691a458f360012c43b624b0f28d301"
+    },
+    {
+      "path": "src/relations53/GuildJoinConversation53Runtime.h",
+      "sha256": "0e9d19b15a4d9de31bdf7c96d4c99feae07748fc469d8bb6f9e9ba54efeb1983"
+    },
+    {
+      "path": "src/relations53/SharedGuildChannelDirectory53.cpp",
+      "sha256": "9a9fabbec55e8de416229f220ded35b6bbdc5c8f9ebea2d7bb4284e691d00dd1"
+    },
+    {
+      "path": "src/relations53/SharedGuildChannelDirectory53.h",
+      "sha256": "b6eb8774a18ee702197ca95e684577e807395b54b04802b76d94e02ff1f6419c"
+    },
+    {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "f40f7637e9223d06a9223d4b3670ab46f4ae1e1408b1fc19937a1c0f47696b7c"
+    },
+    {
+      "path": "tests/test_main.cpp",
+      "sha256": "2bbfe2e8800547e5151bac6c25ba64caa77ecc02e43d227807f550dc953a4eb4"
+    },
+    {
+      "path": "tests/test_owned_guild_entry_0078.cpp",
+      "sha256": "15a47c370e0a9a48d50a3437a7192eae58a8c6789a0122cf59879c12bef2f1a1"
+    },
+    {
+      "path": "tests/test_owned_guild_membership_0078.cpp",
+      "sha256": "a0c4ddd3c885d5870e036e21390dd74f726a90bab333cc4e9b72a6f3bef16f33"
+    },
+    {
+      "path": "tests/test_shared_guild_channel_directory53.cpp",
+      "sha256": "fa54e6e65015f7e11438c81228d7dd7aa0c6b9eef5aeec21297c9798926a3f23"
+    },
+    {
+      "path": "tests/test_world_reply_push_capture.cpp",
+      "sha256": "d314dd982b3fb3ca8a9bf5a3b9bafa19754eedd2c83ea278506dac18923d2b4e"
+    },
+    {
+      "path": "tests/test_owned_taiwan_guild_actions_dispatch.cpp",
+      "sha256": "d055459527c5d0544f54088860e3331c25b2990ed0f03f5ef6ed4185483d5eb5"
+    },
+    {
+      "path": "docs/custom-designs.json",
+      "sha256": "87079f1ca83a62efe5fd144902b382d99aa9333c6e9818c15c738b72b03c5fd2"
+    },
+    {
+      "path": "docs/THREE_CHANNEL_PLAN_20261019.md",
+      "sha256": "b1ee8ba5782c305feb4f7d424b60e20461df96a967dc265441e0efa14667a887"
+    },
+    {
+      "path": "docs/research/tw-three-channel-actions-20261019.md",
+      "sha256": "723fe6313307c6642645216f814f64b59654536326b9a13a5174f3fd4f8572f4"
+    }
+  ]
+}

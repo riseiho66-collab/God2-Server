@@ -855,6 +855,14 @@ public:
         std::uint64_t expected_account,std::uint64_t expected_character,
         std::uint64_t expected_world_generation,std::uint64_t expected_battle_generation,std::function<void(bool)> acceptance);
     struct WorldDeliveryIdentity {std::uint64_t account{},character{},world_generation{},battle_generation{};};
+    // Actual same GAME owner + current private INIT; outside an original-run
+    // capture this also requires the original entry Written transport witness.
+    // The side-effect-free profile runs only on GAME. Acceptance means FIFO insertion,
+    // never Written/client ACK. The optional pure flag only cancels transport;
+    // it grants no input/game authority. Ordinary sends keep their profile.
+    void send_qualified_world_records_with_acceptance(const NormalWorldInitialization&,
+        std::vector<std::uint8_t> logical,WorldReplyPushWire,WorldDeliveryIdentity expected,std::function<void(bool)> acceptance,
+        std::shared_ptr<const std::atomic_bool> source_live={});
     // Game executor binds an immutable synchronized world identity after selection.
     void bind_world_delivery_identity(WorldDeliveryIdentity identity);
     // Explicit common-world extension only, bound to its actual presence lease.

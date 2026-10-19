@@ -77,6 +77,8 @@ struct Owner {
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto guild=others.guild_chat;if(guild)guild->invalidate_active();}
         catch(...) {if(!failure)failure=std::current_exception();}
+        try {const auto guild=others.guild_actions;if(guild)guild->invalidate_active();}
+        catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto invalidate=movement.invalidate_active;invalidate();}catch(...) {if(!failure)failure=std::current_exception();}
         if(failure)std::rethrow_exception(failure);
     }
@@ -160,41 +162,54 @@ struct Owner {
         // lease occupying the same bookkeeping key.
         if(slot->connection.lock().get()!=&session || slot->lease!=*actual_lease)return std::nullopt;
         if(!stored(session,slot)) {slot->live=false;return std::nullopt;}
+        Source::GuildActionsBinding::Capture guild_capture;
         try {
             if(records.empty() || records.size()>budgets.max_records)throw std::invalid_argument("TW mixed native record budget rejected");
             std::vector<Work> prepared;std::vector<Source::Run> runs;
+            std::vector<Source::Kind> kinds;kinds.reserve(records.size());
+            std::vector<std::size_t> guild_indices;guild_indices.reserve(records.size());
+            // Freeze every classification once. Stateful selector callbacks
+            // cannot relabel a lookahead or a later run after a committed prefix.
+            for(std::size_t index=0;index<records.size();++index) {
+                const auto& record=records[index];
+                if(record.valueless_by_exception())throw std::invalid_argument("TW mixed native record has no variant");
+                auto kind=Source::Kind::Others;
+                if(std::holds_alternative<RecoveredMovement::Request>(record))kind=Source::Kind::Movement;
+                else if(others.selection_item && std::holds_alternative<RecoveredSelectionItemRequest::Request>(record))
+                    kind=Source::Kind::SelectionItem;
+                else if(others.inventory_move && std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record))
+                    kind=Source::Kind::InventoryMove;
+                else if(others.deity_selection && std::holds_alternative<RecoveredDeitySelection::Request>(record))
+                    kind=Source::Kind::DeitySelection;
+                else if(others.native_skills && std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record))
+                    kind=Source::Kind::NativeSkill;
+                else if(others.guild_chat && std::holds_alternative<RecoveredGuildChat::Request>(record))
+                    kind=Source::Kind::OwnedGuildChat;
+                else if(others.guild_actions) {
+                    const auto handles=others.guild_actions->handles;
+                    if(handles(session,record)) {kind=Source::Kind::OwnedGuildAction;guild_indices.push_back(index);}
+                    if(!stored(session,slot))throw std::runtime_error("TW guild action selector invalidated the actual batch");
+                }
+                kinds.push_back(kind);
+            }
             // Prepare every run and allocate all movement vectors before any
             // policy/gameplay callback can commit a prefix.
             for(std::size_t at=0;at<records.size();) {
-                if(records[at].valueless_by_exception())throw std::invalid_argument("TW mixed native record has no variant");
-                const auto classify=[this](const Source::Record& record) {
-                    if(std::holds_alternative<RecoveredMovement::Request>(record))return Source::Kind::Movement;
-                    if(others.selection_item && std::holds_alternative<RecoveredSelectionItemRequest::Request>(record))
-                        return Source::Kind::SelectionItem;
-                    if(others.inventory_move && std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record))
-                        return Source::Kind::InventoryMove;
-                    if(others.deity_selection && std::holds_alternative<RecoveredDeitySelection::Request>(record))
-                        return Source::Kind::DeitySelection;
-                    if(others.native_skills && std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record))
-                        return Source::Kind::NativeSkill;
-                    if(others.guild_chat && std::holds_alternative<RecoveredGuildChat::Request>(record))
-                        return Source::Kind::OwnedGuildChat;
-                    return Source::Kind::Others;
-                };
-                const auto kind=classify(records[at]);const bool moving=kind==Source::Kind::Movement;
+                const auto kind=kinds[at];const bool moving=kind==Source::Kind::Movement;
                 std::size_t end=at+1;
                 if(kind==Source::Kind::NativeSkill) {
                     const auto& first=std::get<TaiwanNativeSkillCommand::WireRecord>(records[at]);
                     while(std::get<TaiwanNativeSkillCommand::WireRecord>(records[end-1]).continuation()) {
                         if(end==records.size() || end-at>=RecoveredSkillCommand::max_sequence_records ||
-                           records[end].valueless_by_exception() || classify(records[end])!=kind ||
+                           kinds[end]!=kind ||
                            !TaiwanNativeSkillCommand::same_sequence(first,
                                std::get<TaiwanNativeSkillCommand::WireRecord>(records[end])))
                             throw std::invalid_argument("TW native skill run requires one complete original sequence");
                         ++end;
                     }
-                }else if(kind!=Source::Kind::SelectionItem && kind!=Source::Kind::InventoryMove && kind!=Source::Kind::DeitySelection)
-                    while(end<records.size() && !records[end].valueless_by_exception() && classify(records[end])==kind)++end;
+                }else if(kind!=Source::Kind::SelectionItem && kind!=Source::Kind::InventoryMove &&
+                    kind!=Source::Kind::DeitySelection && kind!=Source::Kind::OwnedGuildAction)
+                    while(end<records.size() && kinds[end]==kind)++end;
                 if(end==at || prepared.size()>=budgets.max_runs)throw std::invalid_argument("TW mixed native run budget rejected");
                 Work work{{at,end-at,kind},{},{},{}};
                 if(moving) {
@@ -220,6 +235,12 @@ struct Owner {
             std::size_t completed=0,frames=0;
             if(!qualify(session,slot,Source::Check::BeforeBatch,records,runs,0,0,output,0))
                 throw std::runtime_error("TW mixed whole-batch native qualification failed");
+            if(!guild_indices.empty()) {
+                const auto capture=others.guild_actions->capture;
+                guild_capture=capture(session,records,guild_indices);
+                if(!guild_capture || !stored(session,slot))
+                    throw std::runtime_error("TW guild action full original batch capture rejected");
+            }
             for(std::size_t index=0;index<prepared.size();++index) {
                 const auto& work=prepared[index];
                 if(work.run.kind==Source::Kind::Movement && session.state()!=SessionState::InWorld)
@@ -259,6 +280,10 @@ struct Owner {
                     }else if(work.run.kind==Source::Kind::OwnedGuildChat) {
                         if(!others.guild_chat)throw std::runtime_error("TW owned guild chat owner unavailable");
                         const auto dispatch=others.guild_chat->dispatch;reply=dispatch(session,work.guild_messages);
+                    }else if(work.run.kind==Source::Kind::OwnedGuildAction) {
+                        if(!others.guild_actions || !guild_capture)throw std::runtime_error("TW owned guild action batch unavailable");
+                        const auto dispatch=others.guild_actions->dispatch;
+                        reply=dispatch(session,guild_capture,work.run.offset,output.size());
                     }else {
                         const auto dispatch=others.records;reply=dispatch(session,records.subspan(work.run.offset,work.run.count));
                     }
@@ -280,12 +305,21 @@ struct Owner {
             }
             if(completed!=records.size() || !qualify(session,slot,Source::Check::BeforeReturn,records,runs,
                 prepared.size(),completed,output,frames))throw std::runtime_error("TW mixed final native source qualification failed");
+            if(guild_capture) {
+                const auto finish=others.guild_actions->finish_batch;finish(session,guild_capture,true);
+                if(!stored(session,slot))throw std::runtime_error("TW guild action batch completion invalidated the actual source");
+            }
             return output;
         }catch(...) {
+            const auto original=std::current_exception();
             slot->live=false; // Terminal for this exact stored generation until lifecycle release.
+            // A failed capture may already own pending sender callbacks. Stop
+            // that actual action owner even when it could not return a handle.
+            try {if(others.guild_actions)others.guild_actions->invalidate_active();}catch(...) {}
+            try {if(guild_capture)others.guild_actions->finish_batch(session,guild_capture,false);}catch(...) {}
             // Actual handler prefixes may already be durable. No rollback,
             // replay, tick discard or fabricated failure/success packet.
-            throw;
+            std::rethrow_exception(original);
         }
     }
     void release(Session& session) {
@@ -305,6 +339,8 @@ struct Owner {
         try {const auto skill=others.native_skills;if(skill)skill->release(session);}
         catch(...) {if(!failure)failure=std::current_exception();}
         try {const auto guild=others.guild_chat;if(guild)guild->release(session);}
+        catch(...) {if(!failure)failure=std::current_exception();}
+        try {const auto guild=others.guild_actions;if(guild)guild->release(session);}
         catch(...) {if(!failure)failure=std::current_exception();}
         if(failure)std::rethrow_exception(failure);
         // Application separately performs actual movement/resource retirement.
@@ -339,13 +375,17 @@ SharedTaiwanWorldRecordSource::Binding SharedTaiwanWorldRecordSource::create(
     if(others.guild_chat && (!others.guild_chat->dispatch || !others.guild_chat->release ||
        !others.guild_chat->invalidate_active))throw std::invalid_argument("TW owned guild chat requires complete actual owner");
     const bool app_owned_guild_chat=others.guild_chat.has_value();
+    if(others.guild_actions && (!others.guild_actions->handles || !others.guild_actions->capture ||
+       !others.guild_actions->dispatch || !others.guild_actions->finish_batch || !others.guild_actions->release ||
+       !others.guild_actions->invalidate_active))throw std::invalid_argument("TW owned guild actions require complete actual batch owner");
+    const bool app_owned_guild_actions=others.guild_actions.has_value();
     auto owner=std::make_shared<Owner>(std::move(presence),std::move(movement),std::move(others),std::move(current),budgets,capacity);
     return {
         [owner](Session& session,std::span<const Record> records){return owner->records(session,records);},
         [owner](Session& session){owner->release(session);},
         [owner]{owner->poison();},
         spectator6e,spectator_close,native_selection_input,native_skill_commands,native_world_skill_requests,deity_selection_source,native_preborn_requests,
-        native_skill_selection_requests,app_owned_guild_chat
+        native_skill_selection_requests,app_owned_guild_chat,app_owned_guild_actions
     };
 }
 }
