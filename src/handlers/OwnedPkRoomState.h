@@ -13,6 +13,30 @@ namespace god2 {
 // refresh, two Session bindings, turn/skill policy, outbox transport receipts,
 // terminal WORLD re-entry and reconnect before Application can install it.
 class OwnedPkRoomState {
+    // Per-room, single-executor fence. A staged Battle is a different object,
+    // so Battle's own callback fence cannot protect the containing Room.
+    struct CallbackState {bool operating=false,invalidated=false,recovery=false;};
+    class Operation {
+    public:
+        explicit Operation(CallbackState& value):state_(value){
+            if(state_.operating){state_.invalidated=true;throw DatabaseError("PK Room callback reentry rejected");}
+            if(state_.recovery)throw DatabaseError("PK Room requires durable recovery");
+            state_.operating=true;state_.invalidated=false;
+        }
+        ~Operation(){
+            // An unexpected callback during persistence may follow a COMMIT.
+            // Retain the claim/history, but never retry an old mutable model.
+            if(persisting_&&state_.invalidated)state_.recovery=true;
+            state_.operating=false;
+        }
+        Operation(const Operation&)=delete;
+        Operation& operator=(const Operation&)=delete;
+        void current()const{if(state_.invalidated)throw DatabaseError("PK Room callback invalidated its operation");}
+        void persist(){current();persisting_=true;}
+    private:
+        CallbackState& state_;
+        bool persisting_=false;
+    };
 public:
     using Repository=SqliteOwnedPkRoomRepository;
     using Ticket=Repository::Ticket;
@@ -28,13 +52,17 @@ public:
     // Ticket; an equal room/readset from another issuer is insufficient.
     bool owns_ticket(const Ticket& ticket)const noexcept{
         const auto at=rooms_.find(ticket.id());
-        return at!=rooms_.end()&&at->second.ticket.same_incarnation(ticket);
+        return at!=rooms_.end()&&!at->second.callbacks.recovery&&at->second.ticket.same_incarnation(ticket);
     }
-    void abandon(const Ticket& ticket)noexcept{repository_.abandon(ticket);}
+    void abandon(const Ticket& ticket)noexcept{
+        const auto at=rooms_.find(ticket.id());
+        if(at!=rooms_.end()&&at->second.callbacks.operating){at->second.callbacks.invalidated=true;return;}
+        repository_.abandon(ticket);
+    }
     // Only server-side activation. Both entries become DURABLE outbox rows;
     // this does not change Session states or claim their queues accepted them.
     void activate(const Ticket& ticket){
-        if(rooms_.contains(ticket.id()))throw DatabaseError("PK room already active in this executor");
+        reject_existing_activation(ticket.id());
         // CUSTOM-0114 same issuer claim also covers retained recovery. A
         // different RoomState cannot own another mutable Battle concurrently.
         auto claim=repository_.claim_runtime(ticket);
@@ -53,7 +81,7 @@ public:
     // No seed restart, Session binding, sends, grant reset, saved settlement,
     // lock release or private source rehydration across process restart.
     void restore_retained(const Ticket& ticket){
-        if(rooms_.contains(ticket.id()))throw DatabaseError("PK room already active in this executor");
+        reject_existing_activation(ticket.id());
         auto claim=repository_.claim_runtime(ticket);
         const auto retained=repository_.recover_retained(ticket);
         if(retained.released_finished())
@@ -69,7 +97,7 @@ public:
         rooms_.insert(std::move(node));
     }
     std::optional<BattleSnapshot> inspect(std::uint64_t room)const{
-        const auto at=rooms_.find(room);if(at==rooms_.end())return {};
+        const auto at=rooms_.find(room);if(at==rooms_.end()||at->second.callbacks.recovery)return {};
         return at->second.battle.inspect();
     }
     // CUSTOM-0119 derives the expected complete checkpoint including RNG
@@ -86,21 +114,28 @@ public:
     // rooms; it cannot bypass persisted input/grant phases. Use submit_native
     // and the atomic paired resolver below for collection rooms.
     void act(std::uint64_t room,std::uint64_t controller,std::uint64_t revision,
-             const BattleAction& action,const Battle::Rule& rule,const Project& project,
-             const std::optional<NativeSkillRecord>& definition={}){
-        auto at=rooms_.find(room);if(at==rooms_.end()||!project)throw DatabaseError("PK active room unavailable");
-        auto& current=at->second;
+             const BattleAction& supplied_action,const Battle::Rule& supplied_rule,const Project& supplied_project,
+             const std::optional<NativeSkillRecord>& supplied_definition={}){
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto action=supplied_action;const auto rule=supplied_rule;const auto project=supplied_project;
+        const auto definition=supplied_definition;operation.current();
+        if(!rule||!project)throw DatabaseError("PK active room unavailable");
         if(controller!=current.ticket.input().pair.challenger.character&&
            controller!=current.ticket.input().pair.recipient.character)
             throw DatabaseError("PK controller is not either owned participant");
         const auto before=current.battle.checkpoint();
         auto staged=current.battle;
         Replies replies;
-        (void)staged.act(controller,revision,action,rule,[&](const auto& state,const auto& result){
-            replies=project(state,result);return replies[0];
+        const Battle::Rule checked_rule=[&](const auto& input){
+            operation.current();const auto result=rule(input);operation.current();return result;
+        };
+        (void)staged.act(controller,revision,action,checked_rule,[&](const auto& state,const auto& result){
+            operation.current();replies=project(state,result);operation.current();return replies[0];
         });
         const auto after=staged.checkpoint();
+        operation.persist();
         repository_.advance(current.ticket,before,after,replies,definition);
+        operation.current();
         static_assert(std::is_nothrow_move_assignable_v<Battle>);
         current.battle=std::move(staged);
     }
@@ -112,12 +147,15 @@ public:
     // The permit values are server-owned, NEVER decoded from native bytes.
     // One player's input cannot mutate shared HP/MP before BOTH inputs exist.
     // Still not wired to Application; no completed35/gameplay claim.
-    void submit_native(std::uint64_t room,const NativeCaller& caller,
+    void submit_native(std::uint64_t room,const NativeCaller& supplied_caller,
                        std::uint64_t server_battle_revision,std::uint64_t server_grant_epoch,
-                       const std::string& current_profile_readset_sha256,
-                       const RecoveredPkCommandSelection::Policy& policy,
-                       std::span<const RecoveredWorldRecords::Record> records){
-        auto& current=find(room);const auto viewer=owned_viewer(current,caller,current_profile_readset_sha256);
+                       const std::string& supplied_profile,
+                       const RecoveredPkCommandSelection::Policy& supplied_policy,
+                       std::span<const RecoveredWorldRecords::Record> supplied_records){
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto caller=supplied_caller;const auto profile=supplied_profile;const auto policy=supplied_policy;
+        const std::vector<RecoveredWorldRecords::Record> records(supplied_records.begin(),supplied_records.end());
+        operation.current();const auto viewer=owned_viewer(current,caller,profile);
         const auto phase=repository_.round(current.ticket);
         if(server_battle_revision!=current.battle.inspect().revision||phase.battle_revision()!=server_battle_revision||
            phase.grant_epoch()!=server_grant_epoch||policy.client_actor!=0||policy.client_side!=0||
@@ -126,20 +164,24 @@ public:
         const auto selection=RecoveredPkCommandSelection::select(current.battle.inspect(),viewer,policy,records);
         if(!selection)throw DatabaseError("PK native selection is outside the owned attack policy");
         auto definition=selection->skill_key?repository_.scalar_definition_document(*selection->skill_key):std::string{};
+        operation.persist();
         repository_.submit_intent(current.ticket,phase,viewer,
             OwnedPkRound::Intent{selection->action,selection->skill_key,std::move(definition)});
+        operation.current();
         // The paired resolver below consumes the persisted pair. Its actual
         // authority/order/Rule hosting remain open; no first-arrival action
         // is executed here.
     }
-    void control_native(std::uint64_t room,const NativeCaller& caller,std::uint64_t server_phase_revision,
-                        const std::string& current_profile_readset_sha256,
-                        const RecoveredBattleCommand::ControlRequest& request){
-        auto& current=find(room);const auto viewer=owned_viewer(current,caller,current_profile_readset_sha256);
+    void control_native(std::uint64_t room,const NativeCaller& supplied_caller,std::uint64_t server_phase_revision,
+                        const std::string& supplied_profile,
+                        const RecoveredBattleCommand::ControlRequest& supplied_request){
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto caller=supplied_caller;const auto profile=supplied_profile;const auto request=supplied_request;
+        operation.current();const auto viewer=owned_viewer(current,caller,profile);
         const auto phase=repository_.round(current.ticket);
         if(phase.revision()!=server_phase_revision||phase.battle_revision()!=current.battle.inspect().revision)
             throw DatabaseError("PK native notification has a stale server phase permit");
-        repository_.control(current.ticket,phase,viewer,request);
+        operation.persist();repository_.control(current.ticket,phase,viewer,request);operation.current();
     }
     OwnedPkRound round(std::uint64_t room){return repository_.round(find(room).ticket);}
     // Typed grant epoch is separate from checkpoint/outbox revision; exact-live
@@ -149,7 +191,8 @@ public:
         return repository_.pending_grants(current.ticket,current.battle.checkpoint());
     }
     void grant_submitted(std::uint64_t room,std::uint64_t epoch,std::uint8_t viewer){
-        repository_.grant_submitted(find(room).ticket,epoch,viewer);
+        auto& current=find(room);Operation operation(current.callbacks);
+        operation.persist();repository_.grant_submitted(current.ticket,epoch,viewer);operation.current();
     }
     // CUSTOM-0086 order/skip-on-terminal policy is supplied by the eventual
     // server/Lua authority. No C2S byte, arrival order, or client animation
@@ -163,30 +206,35 @@ public:
     // native control masks and pure gameplay Rule remain authoritative inputs;
     // none is inferred from initial masks, arrival order or client counters.
     // No caller-supplied templates/checkpoint/round can mint this private source.
-    void resolve_collected_basic(std::uint64_t room,const std::array<std::uint8_t,2>& order,
-                                 const OwnedPkRound::Masks& next_control_masks,const Battle::Rule& rule){
-        auto& current=find(room);
+    void resolve_collected_basic(std::uint64_t room,const std::array<std::uint8_t,2>& supplied_order,
+                                 const OwnedPkRound::Masks& supplied_masks,const Battle::Rule& supplied_rule){
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto order=supplied_order;const auto next_control_masks=supplied_masks;const auto rule=supplied_rule;
+        operation.current();
         const auto prior=repository_.round(current.ticket);
         Resolution source{order,OwnedTaiwanPkBasicResultSource::prepare(
             current.ticket,current.battle.inspect(),prior,order),next_control_masks};
-        resolve_collected_impl(room,source,rule,prior.document());
+        operation.current();resolve_collected_impl(room,source,rule,prior.document(),operation);
     }
     // CUSTOM-0122 explicit result-notification mode. No caller next-mask
     // guess: the actual staged post-Battle roster supplies notification bounds.
     void resolve_collected_basic_notifications(std::uint64_t room,
-            const std::array<std::uint8_t,2>& order,const Battle::Rule& rule){
-        auto& current=find(room);
+            const std::array<std::uint8_t,2>& supplied_order,const Battle::Rule& supplied_rule){
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto order=supplied_order;const auto rule=supplied_rule;operation.current();
         const auto prior=repository_.round(current.ticket);
         Resolution source{order,OwnedTaiwanPkBasicResultSource::prepare(
             current.ticket,current.battle.inspect(),prior,order),{}};
-        resolve_collected_impl(room,source,rule,prior.document(),true);
+        operation.current();resolve_collected_impl(room,source,rule,prior.document(),operation,true);
     }
-    void resolve_collected(std::uint64_t room,const Resolution& source,const Battle::Rule& rule){
-        resolve_collected_impl(room,source,rule,{});
+    void resolve_collected(std::uint64_t room,const Resolution& supplied_source,const Battle::Rule& supplied_rule){
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto source=supplied_source;const auto rule=supplied_rule;operation.current();
+        resolve_collected_impl(room,source,rule,{},operation);
     }
 private:
     void resolve_collected_impl(std::uint64_t room,const Resolution& source,const Battle::Rule& rule,
-                                const std::optional<std::string>& expected_round,bool notifications=false){
+                                const std::optional<std::string>& expected_round,Operation& operation,bool notifications=false){
         if(!rule||!((source.order==std::array<std::uint8_t,2>{0,1})||
                      (source.order==std::array<std::uint8_t,2>{1,0})))
             throw DatabaseError("PK paired order requires explicit server policy");
@@ -198,6 +246,9 @@ private:
            !OwnedPkRound::masks_valid(source.next_control_masks))
             throw DatabaseError("PK two owned commands are not ready for paired settlement");
         auto staged=current.battle;
+        const Battle::Rule checked_rule=[&](const auto& input){
+            operation.current();const auto result=rule(input);operation.current();return result;
+        };
         Replies replies;
         std::size_t executed=0;
         for(const auto viewer:source.order){
@@ -210,7 +261,7 @@ private:
             const auto& peer=viewer==0?current.ticket.input().pair.challenger:
                                   current.ticket.input().pair.recipient;
             const auto& templates=source.templates_by_actor[viewer];
-            (void)staged.act(peer.character,staged.inspect().revision,intent.action,rule,
+            (void)staged.act(peer.character,staged.inspect().revision,intent.action,checked_rule,
                 [&](const BattleSnapshot& state,const BattleActionResult& result){
                     const bool final_bulk=state.state==BattleState::Finished||executed==1;
                     const auto projected=RecoveredPkActionProjection::logical(state,result,templates,
@@ -238,7 +289,7 @@ private:
             // pair, not an invented Battle revision/independent receipt stage.
             for(auto& reply:replies)reply.insert(reply.end(),terminal.begin(),terminal.end());
         }
-        repository_.settle(current.ticket,before,after,prior,following,replies);
+        operation.persist();repository_.settle(current.ticket,before,after,prior,following,replies);operation.current();
         static_assert(std::is_nothrow_move_assignable_v<Battle>);
         current.battle=std::move(staged);
     }
@@ -254,7 +305,8 @@ public:
         return repository_.pending(find(room).ticket);
     }
     void submitted(std::uint64_t room,std::uint64_t revision,std::uint8_t viewer){
-        repository_.submitted(find(room).ticket,revision,viewer);
+        auto& current=find(room);Operation operation(current.callbacks);
+        operation.persist();repository_.submitted(current.ticket,revision,viewer);operation.current();
     }
     // Finished rooms/owner locks are retained. No generic clear(), loss of a
     // peer, simulated89 or re-login is an authorized settlement/recovery.
@@ -264,8 +316,9 @@ private:
     // consume this seam. It supplies this actual runtime-owned checkpoint;
     // native input/public submitted flags cannot request a resource save.
     void commit_terminal_resources(std::uint64_t room,const Replies& actually_written){
-        const auto& current=find(room);
-        repository_.commit_terminal_resources(current.ticket,current.battle.checkpoint(),actually_written);
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto written=actually_written;operation.persist();
+        repository_.commit_terminal_resources(current.ticket,current.battle.checkpoint(),written);operation.current();
     }
     // CUSTOM-0132 stronger paired preparation guard, distinct from own early
     // terminal context. Runtime claim supplies checkpoint; existing save only.
@@ -287,16 +340,23 @@ private:
     // Battle; source observers never construct them from native/scalar input.
     Repository::FinishedReturnReleasePlan prepare_finished_return_release(std::uint64_t room,
             const Replies& actually_written,const std::array<std::array<std::uint8_t,4>,2>& payloads){
-        const auto& current=find(room);
-        return repository_.prepare_finished_return_release(current.ticket,current.claim,
-            current.battle.checkpoint(),actually_written,payloads);
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto written=actually_written;const auto inputs=payloads;operation.current();
+        auto plan=repository_.prepare_finished_return_release(current.ticket,current.claim,
+            current.battle.checkpoint(),written,inputs);
+        operation.current();return plan;
     }
     Repository::FinishedReturnReleaseReceipt commit_finished_return_release(std::uint64_t room,
             const Repository::FinishedReturnReleasePlan& plan,
             const std::function<void(sqlite3*)>& final_stored_fence){
-        auto& current=find(room);
+        auto& current=find(room);Operation operation(current.callbacks);
+        const auto retained_plan=plan;const auto fence=final_stored_fence;operation.current();
+        if(!fence)throw DatabaseError("PK finished return requires its stored observer");
+        const auto checked_fence=[&](sqlite3* db){operation.current();fence(db);operation.current();};
+        operation.persist();
         auto receipt=repository_.commit_finished_return_release(current.ticket,current.claim,
-            current.battle.checkpoint(),plan,final_stored_fence);
+            current.battle.checkpoint(),retained_plan,checked_fence);
+        operation.current();
         current.finished_return.emplace(receipt); // Exact existing Room stamp; shared pointer copy only.
         return receipt;
     }
@@ -306,7 +366,9 @@ private:
     }
     bool retire_finished_return_release(std::uint64_t room,const Repository::FinishedReturnReleaseReceipt& receipt)noexcept{
         const auto at=rooms_.find(room);
-        if(at==rooms_.end()||!at->second.finished_return||*at->second.finished_return!=receipt||
+        if(at==rooms_.end())return false;
+        if(at->second.callbacks.operating){at->second.callbacks.invalidated=true;return false;}
+        if(at->second.callbacks.recovery||!at->second.finished_return||*at->second.finished_return!=receipt||
            !repository_.finished_return_release_runtime_current(at->second.ticket,at->second.claim,
                 at->second.battle.inspect(),receipt))return false;
         // This exact Room's Finished Battle has no later legal mutation: every
@@ -315,10 +377,16 @@ private:
         rooms_.erase(at);return true;
     }
     struct Room {Ticket ticket;Battle battle;Repository::RuntimeClaim claim;
-        std::optional<Repository::FinishedReturnReleaseReceipt> finished_return{};};
+        std::optional<Repository::FinishedReturnReleaseReceipt> finished_return{};
+        CallbackState callbacks{};};
     using Rooms=std::map<std::uint64_t,Room>;
     Repository& repository_;
     Rooms rooms_;
+    void reject_existing_activation(std::uint64_t room){
+        const auto at=rooms_.find(room);if(at==rooms_.end())return;
+        if(at->second.callbacks.operating)at->second.callbacks.invalidated=true;
+        throw DatabaseError("PK room already active in this executor");
+    }
     static std::uint8_t owned_viewer(const Room& current,const NativeCaller& caller,const std::string& profile){
         const auto& input=current.ticket.input();
         if(!caller.in_battle||profile!=input.profile_readset_sha256)
@@ -331,7 +399,8 @@ private:
         throw DatabaseError("PK native caller identity/generations do not match either owner");
     }
     Room& find(std::uint64_t room){
-        const auto at=rooms_.find(room);if(at==rooms_.end())throw DatabaseError("PK room not bound in this executor");
+        const auto at=rooms_.find(room);if(at==rooms_.end()||at->second.callbacks.recovery)
+            throw DatabaseError("PK room not bound or requires durable recovery");
         return at->second;
     }
 };

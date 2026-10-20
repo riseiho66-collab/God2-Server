@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace god2 {
 std::optional<RecoveredAccountLogin::Attempt> RecoveredAccountLogin::prepare(const RecoveredC2S0002::Parsed& request) {
@@ -50,45 +51,69 @@ std::uint64_t RecoveredAccountLogin::authenticate(const RecoveredC2S0002::Parsed
 }
 void RecoveredAccountLogin::authenticate_async(const RecoveredC2S0002::Parsed& request,
     asio::any_io_executor workers,asio::any_io_executor game,Completion done) {
+    // Own the accepted bytes before repository callbacks. A retry must never
+    // authenticate a caller buffer changed while the first lookup was running.
+    authenticate_async_attempt(request,workers,game,std::move(done),1);
+}
+void RecoveredAccountLogin::authenticate_async_attempt(RecoveredC2S0002::Parsed request,
+    asio::any_io_executor workers,asio::any_io_executor game,Completion done,unsigned retries_left) {
     // Entry and completion run on the serial game executor. Only hashing runs
     // on workers; no worker touches the game-owned SQLite connection.
     std::optional<Attempt> attempt;
-    try {
-        if(pending_>=64) throw std::runtime_error("Authentication queue full");
-        attempt=prepare(request);
-    } catch(...) { done(0,std::current_exception());return; }
-    if(!attempt) { done(0,{});return; }
+    if(pending_>=64) {
+        done(0,std::make_exception_ptr(std::runtime_error("Authentication queue full")));return;
+    }
+    // Reserve before the repository callback as well as before worker dispatch;
+    // synchronous source reentry must not bypass the same finite queue bound.
     ++pending_;
-    auto work=asio::make_work_guard(game);
-    asio::post(workers,[this,work,attempt=std::move(*attempt),request,workers,game,done]() mutable {
-        bool verified=false;
-        std::string created_hash;
-        std::exception_ptr error;
-        try {
-            if(attempt.account) verified=PasswordHash::verify(attempt.password,attempt.account->password_hash);
-            else created_hash=PasswordHash::create(attempt.password);
-        } catch(...) { error=std::current_exception(); }
-        asio::post(game,[this,work,attempt=std::move(attempt),request,workers,game,done,verified,
-                         created_hash=std::move(created_hash),error]() mutable {
-            --pending_;
-            if(error) { done(0,error);return; }
-            std::uint64_t id=0;
+    try {
+        attempt=prepare(request);
+    } catch(...) { --pending_;done(0,std::current_exception());return; }
+    if(!attempt) { --pending_;done(0,{});return; }
+    try {
+        auto work=asio::make_work_guard(game);
+        asio::post(workers,[this,work,attempt=std::move(*attempt),request,workers,game,done,retries_left]() mutable {
+            bool verified=false;
+            std::string created_hash;
+            std::exception_ptr error;
             try {
-                if(attempt.account) {
-                    auto current=accounts_.find_by_id(attempt.account->id);
-                    if(current && current->password_hash==attempt.account->password_hash && verified)
-                        id=current->id;
-                    else if(current && current->password_hash!=attempt.account->password_hash) {
-                        authenticate_async(request,workers,game,done);return;
-                    }
-                } else if(accounts_.find_by_username(attempt.identity)) {
-                    // Another concurrent first login won registration. Verify
-                    // its original password; never overwrite or blindly bind.
-                    authenticate_async(request,workers,game,done);return;
-                } else id=accounts_.create(attempt.identity,created_hash).id;
-            } catch(...) { done(0,std::current_exception());return; }
-            done(id,{});
+                if(attempt.account) verified=PasswordHash::verify(attempt.password,attempt.account->password_hash);
+                else created_hash=PasswordHash::create(attempt.password);
+            } catch(...) { error=std::current_exception(); }
+            asio::post(game,[this,work,attempt=std::move(attempt),request,workers,game,done,verified,retries_left,
+                             created_hash=std::move(created_hash),error]() mutable {
+                --pending_;
+                if(error) { done(0,error);return; }
+                std::uint64_t id=0;
+                bool retry=false;
+                try {
+                    if(attempt.account) {
+                        auto current=accounts_.find_by_id(attempt.account->id);
+                        // A hash result belongs to this exact saved account, not
+                        // to a replacement/rebound row that happens to share it.
+                        const bool same_owner=current && current->id==attempt.account->id &&
+                            current->username==attempt.account->username &&
+                            current->created_at==attempt.account->created_at;
+                        if(same_owner && current->password_hash==attempt.account->password_hash && verified)
+                            id=current->id;
+                        else if(same_owner && current->password_hash!=attempt.account->password_hash && retries_left)
+                            retry=true;
+                    } else if(accounts_.find_by_username(attempt.identity)) {
+                        // Another concurrent first login won registration. Verify
+                        // its original password; never overwrite or blindly bind.
+                        retry=retries_left!=0;
+                    } else id=accounts_.create(attempt.identity,created_hash).id;
+                } catch(...) { done(0,std::current_exception());return; }
+                // A completion may reject by throwing. Do not catch that as a
+                // repository failure and invoke the same completion a second time.
+                if(retry) {authenticate_async_attempt(request,workers,game,done,retries_left-1);return;}
+                done(id,{});
+            });
         });
-    });
+    } catch(...) {
+        // A rejected worker submission never owns a pending slot. Keep the
+        // game-owned queue usable and complete on this original game caller.
+        --pending_;done(0,std::current_exception());
+    }
 }
 }

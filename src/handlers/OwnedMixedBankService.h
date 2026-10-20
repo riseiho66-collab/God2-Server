@@ -28,13 +28,13 @@ public:
     // Both repositories MUST share the same SQLite connection; paired proofs
     // verify the full repository is inside the plain mutation transaction.
     OwnedMixedBankService(SqliteOwnedMixedBankRepository&,SqliteOwnedForeignBankRepository&,SqliteOwnedArmorBankRepository&,SqliteBankItemsRepository&,
-        Lookup,Permit,Renew,Eligible,PlainProjection,Receipt,QualifyWeapon,SqliteBeastBankRepository* beasts=nullptr,EligibleBeast beast_eligible={});
+        Lookup,Permit,Renew,Eligible,PlainProjection,Receipt,QualifyWeapon,SqliteBeastBankRepository* beasts=nullptr,EligibleBeast beast_eligible={},RecoveredBankService::CaptureLease capture_lease={});
     Batches open(std::uint64_t session,std::uint16_t target,Clock::time_point now);
     Result handle(std::uint64_t session,std::span<const RecoveredBankItems::Request>,Clock::time_point now);
     void disconnect(std::uint64_t session){callbacks_.invalidate_if_running();contexts_.erase(session);}
 private:
     using Snapshot=SqliteBeastBankRepository::Snapshot;
-    struct Context {std::uint16_t target;RecoveredBankService::Peer peer;Snapshot expected;};
+    struct Context {std::uint16_t target;RecoveredBankService::Peer peer;Snapshot expected;std::optional<RecoveredBankService::LeaseSource> lease;};
     void require_live(std::uint64_t,const RecoveredBankService::Peer&,std::uint16_t,Clock::time_point) const;
     static void append(Batches&,std::span<const std::uint8_t>);
     Batches synchronization(const Snapshot&,const Snapshot* before,bool bags) const;
@@ -59,6 +59,7 @@ private:
             callbacks_.require_current();return result;
         }
     }
+    RecoveredBankService::CaptureLease capture_lease_;
     SynchronousCallbackFence callbacks_;
 
 };

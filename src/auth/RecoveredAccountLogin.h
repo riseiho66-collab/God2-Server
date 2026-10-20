@@ -17,11 +17,15 @@ public:
     // Read-only binding for explicit shared adapters; authentication unchanged.
     bool owns_repository(const AccountRepository& accounts) const noexcept {return &accounts_==&accounts;}
     using Completion=std::function<void(std::uint64_t,std::exception_ptr)>;
+    // Source custody and queue policy: at most one saved-state race retry,
+    // always with the entry credentials. This is not a native protocol rule.
     void authenticate_async(const RecoveredC2S0002::Parsed&,asio::any_io_executor workers,
                             asio::any_io_executor game,Completion done);
 private:
     struct Attempt { std::string identity,password; std::optional<Account> account; };
     std::optional<Attempt> prepare(const RecoveredC2S0002::Parsed&);
+    void authenticate_async_attempt(RecoveredC2S0002::Parsed,asio::any_io_executor workers,
+                                   asio::any_io_executor game,Completion,unsigned retries_left);
     unsigned pending_=0;
     AccountRepository& accounts_;
     bool allow_registration_;

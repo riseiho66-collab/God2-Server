@@ -18,12 +18,12 @@ struct Harness {
     std::function<void(std::string_view)> callback;
     void observe(std::string_view stage){const auto hook=callback;if(hook)hook(stage);}
     Service service;
-    explicit Harness(unsigned slots=50,bool file=false):fixture(slots,file),repository(fixture.repo()),plain_repo(fixture.raw),
+    explicit Harness(unsigned slots=50,bool file=false,RecoveredBankService::CaptureLease capture={}):fixture(slots,file),repository(fixture.repo()),plain_repo(fixture.raw),
         peer(RecoveredBankService::Peer{77,1,fixture.ids[0],1,1,1,1,true}),
         service(repository,plain_repo,[this](auto session){observe("lookup");return session==77?peer:std::nullopt;},[this](auto,auto target,auto){observe("permit");return permit&&target==279;},
             [this](auto,auto){observe("renew");++renews;},[this](const auto& row){observe("eligible");return row.item_id==3107&&row.count&&row.source_sha256==SqliteArmorSlotRepository::source_sha256;},
             [this](auto slot,const auto& row){observe("plain");if(fail_projection)throw DatabaseError("injected projection failure");RecoveredInventoryProjection::Metadata bytes{};bytes[0]=static_cast<std::uint8_t>(row.item_id);bytes[1]=static_cast<std::uint8_t>(row.item_id>>8);return RecoveredInventoryProjection::encode({slot,row.count,bytes}).value();},
-            [this]{observe("receipt");if(fixed_receipt)return *fixed_receipt;std::ostringstream stream;stream<<std::string(56,'e')<<std::hex<<std::setw(8)<<std::setfill('0')<<serial++;return stream.str();},[this](auto key){observe("weapon");return key==60010;}){fixture.install();}
+            [this]{observe("receipt");if(fixed_receipt)return *fixed_receipt;std::ostringstream stream;stream<<std::string(56,'e')<<std::hex<<std::setw(8)<<std::setfill('0')<<serial++;return stream.str();},[this](auto key){observe("weapon");return key==60010;},std::move(capture)){fixture.install();}
     static auto now(){return Service::Clock::now();}
     auto open(){return service.open(77,279,now());}
     auto handle(RecoveredBankItems::Kind kind,std::uint8_t source,std::uint8_t destination,std::uint8_t quantity=1,std::uint8_t page=0,std::uint16_t target=279){const std::array requests{RecoveredBankItems::Request{kind,target,page,source,destination,quantity}};return service.handle(77,requests,now());}
@@ -74,6 +74,8 @@ void foreign_admission(){
         const auto before=f.rows();rejects([&]{h.open();});require(f.rows()==before,"Foreign qualification failure changed saved rows");}
 }
 void callback_lifecycle_regression(){
+    god2_test::bank_shared_source_regressions([](auto capture){return std::make_unique<Harness>(50,false,std::move(capture));},[](auto& h){h.fixture.add(0,1001,0xa1,7);h.fixture.scalar(5,3107,7,3);},[](auto& h){return h.fixture.rows();},[](auto& h){return h.fixture.raw;},[](auto& h){return h.handle(RecoveredBankItems::Kind::Deposit,5,2,2);});
+
     for(bool full:{false,true}){
         Harness h;h.fixture.add(0,1001,0xa1,7);h.fixture.scalar(5,3107,7,3);h.open();const auto before=h.fixture.rows();
         const auto result=god2_test::bank_revoke_on_receipt(h.fixture.raw,h.service,[&]{return h.handle(RecoveredBankItems::Kind::Deposit,full?0:5,2,full?1:2);});

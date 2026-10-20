@@ -101,5 +101,32 @@ int main(){try {
             require(refused&&cuts==2&&bank.load_bank(1,fresh.id)==original,"Money new/existing provision escaped final lifecycle cut");
         }
     }
+    {
+        unsigned receipts_seen=0;
+        RecoveredBankService expiring(bank,[&](auto session)->std::optional<RecoveredBankService::Peer>{return session==7?std::optional{peer}:std::nullopt;},
+            [](const auto&,auto target){return target==531;},[&]{++receipts_seen;return std::string(64,'e');});
+        require(expiring.open(7,531,now).has_value(),"Expiry pure-current fixture open failed");
+        const auto source=expiring.capture_lease(7,531,now);expiring.renew_items(7,now-std::chrono::seconds(61));
+        require(!source.current(),"Backdated renewal did not expire its source");const auto before=bank.load(1,role.id);
+        // Admission time is intentionally before expiry; real current() must
+        // still reject at the repository cut without sleeping or private access.
+        const auto denied=expiring.handle(7,std::span(&deposit,1),now-std::chrono::seconds(62));
+        require(receipts_seen==1&&denied.rejected&&!denied.committed&&bank.load(1,role.id)==before,
+            "Money pure current accepted an expired lease through stale admission time");
+    }
+    // Opaque shared identity survives copies only until its exact money lease
+    // retires. Reopening the same peer/target is a NEW source, never ABA revival.
+    {
+        service.open(7,531,now);const auto old=service.capture_lease(7,531,now),copy=old;
+        require(old.current()&&old.matches(peer,531)&&old.owns(7,1,role.id,531),"Qualified shared bank source missing");
+        auto wrong=peer;++wrong.character;require(!old.matches(wrong,531)&&!old.owns(7,1,role.id,999),"Bank source accepted another owner/target");
+        service.disconnect(7);require(!old.current()&&!copy.current(),"Retirement left copied bank source valid");
+        service.open(7,531,now);const auto fresh=service.capture_lease(7,531,now);
+        require(fresh.current()&&!old.current()&&!copy.current(),"Identical owner reopen revived old bank source");
+        service.renew_items(7,now-std::chrono::seconds(61));require(!fresh.current(),"Expired source remained current");
+        service.renew_items(7,now);require(!fresh.current()&&!service.permits_items(7,531,now),"Renew resurrected expired bank source");
+        service.open(7,531,now);const auto denied_source=service.capture_lease(7,531,now);
+        require(!service.permits_items(7,999,now)&&!denied_source.current(),"Rejected access observation retained source");
+    }
     std::cout<<"Bank typed native framing, lease/access, test isolation, cancel and canonical sync passed\n";
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

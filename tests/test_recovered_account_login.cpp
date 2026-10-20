@@ -1,8 +1,11 @@
 #include "auth/RecoveredAccountLogin.h"
+#include "auth/PasswordHash.h"
 #include "db/SqliteDatabase.h"
 #include <algorithm>
 #include <stdexcept>
 #include <string_view>
+#include <functional>
+#include <vector>
 
 namespace {
 void require(bool ok,const char* message) { if(!ok) throw std::runtime_error(message); }
@@ -13,6 +16,35 @@ god2::RecoveredC2S0002::Parsed request(std::string_view name,std::string_view pa
     std::copy(name.begin(),name.end(),p.begin()+1);
     std::copy(password.begin(),password.end(),p.begin()+25);
     return *god2::RecoveredC2S0002::parse(god2::RecoveredC2S0002::encode(p));
+}
+// A game-owner repository seam, not a substitute password verifier. Return an
+// owned read snapshot while a callback changes the next observable revision.
+struct LoginAccountSource final:god2::AccountRepository {
+    std::vector<god2::Account> rows;
+    std::function<void()> after_name;
+    std::function<void()> before_id;
+    god2::Account create(const std::string&,const std::string&) override {
+        throw std::runtime_error("Unexpected registration in login lifecycle case");
+    }
+    std::optional<god2::Account> find_by_username(const std::string& name) override {
+        std::optional<god2::Account> result;
+        for(const auto& row:rows)if(row.username==name){result=row;break;}
+        const auto callback=after_name;if(callback)callback();
+        return result;
+    }
+    std::optional<god2::Account> find_by_id(std::uint64_t id) override {
+        const auto callback=before_id;if(callback)callback();
+        for(const auto& row:rows)if(row.id==id)return row;
+        return {};
+    }
+};
+void drain_login(asio::io_context& workers,asio::io_context& game,unsigned& completed) {
+    for(unsigned pump=0;pump<8 && !completed;++pump) {
+        workers.restart();workers.poll();game.restart();game.poll();
+    }
+    require(completed==1,"login lifecycle case did not complete exactly once");
+    workers.restart();workers.poll();game.restart();game.poll();
+    require(completed==1,"login lifecycle case completed twice");
 }
 }
 void test_recovered_account_login() {
@@ -113,5 +145,96 @@ void test_recovered_account_login() {
     require(race_completed==2 && race_accepted==1,"registration race accepted conflicting passwords");
     const auto maximum=request(std::string(23,'n'),std::string(131,'p'));
     require(registration.authenticate(maximum)!=0,"maximum legal credential length rejected");
+
+    const auto replacement_hash=god2::PasswordHash::create("local-secret");
+    // A password revision race must retry entry bytes, even if a synchronous
+    // source callback changed the caller's request before prepare returned.
+    {
+        LoginAccountSource source;source.rows={*saved,
+            god2::Account{999,"god2-bytes:6f74686572",saved->password_hash,"other-created"}};
+        auto mutable_request=input;
+        source.after_name=[&] {
+            source.after_name={};mutable_request=request("other","local-secret");
+            source.rows[0].password_hash=replacement_hash;
+        };
+        god2::RecoveredAccountLogin login(source,false);
+        asio::io_context own_game,own_workers;unsigned done=0;std::uint64_t accepted=0;
+        login.authenticate_async(mutable_request,own_workers.get_executor(),own_game.get_executor(),
+            [&](auto account,auto error){require(!error,"copied login request raised error");accepted=account;++done;});
+        drain_login(own_workers,own_game,done);
+        require(accepted==id,"login retried mutated caller credentials");
+    }
+    // Same hash is not evidence for a renamed or replaced account incarnation.
+    for(bool changed_name:{true,false}) {
+        LoginAccountSource source;source.rows={*saved};
+        source.after_name=[&] {
+            source.after_name={};
+            if(changed_name)source.rows[0].username="god2-bytes:72656e616d6564";
+            else source.rows[0].created_at+="-replacement";
+        };
+        god2::RecoveredAccountLogin login(source,false);
+        asio::io_context own_game,own_workers;unsigned done=0;std::uint64_t accepted=99;
+        login.authenticate_async(input,own_workers.get_executor(),own_game.get_executor(),
+            [&](auto account,auto error){require(!error,"changed login owner raised error");accepted=account;++done;});
+        drain_login(own_workers,own_game,done);
+        require(!accepted,"old password work authenticated a changed account owner");
+    }
+    {
+        LoginAccountSource source;source.rows={*saved};unsigned reads=0;
+        source.before_id=[&] {
+            source.rows[0].password_hash=(++reads%2)?replacement_hash:saved->password_hash;
+        };
+        god2::RecoveredAccountLogin login(source,false);
+        asio::io_context own_game,own_workers;unsigned done=0;std::uint64_t accepted=99;
+        login.authenticate_async(input,own_workers.get_executor(),own_game.get_executor(),
+            [&](auto account,auto error){require(!error,"repeated login revision raised error");accepted=account;++done;});
+        drain_login(own_workers,own_game,done);
+        require(!accepted && reads==2,"changing account hash caused unbounded retries or stale authentication");
+    }
+    {
+        LoginAccountSource source;source.rows={*saved};unsigned lookups=0;
+        source.after_name=[&] {if(++lookups==2)throw std::runtime_error("Retry source unavailable");};
+        source.before_id=[&] {source.rows[0].password_hash=replacement_hash;};
+        god2::RecoveredAccountLogin login(source,false);
+        asio::io_context own_game,own_workers;unsigned done=0;
+        login.authenticate_async(input,own_workers.get_executor(),own_game.get_executor(),
+            [&](auto account,auto error) {
+                require(!account && bool(error),"retry preparation did not preserve its error");
+                ++done;throw std::runtime_error("Completion sentinel");
+            });
+        own_workers.poll();bool propagated=false;
+        try {own_game.poll();} catch(const std::runtime_error& error) {
+            propagated=std::string_view(error.what())=="Completion sentinel";
+        }
+        require(propagated && done==1,"retry completion exception caused duplicate callback or was swallowed");
+        source.after_name={};source.before_id={};done=0;std::uint64_t accepted=0;
+        login.authenticate_async(input,own_workers.get_executor(),own_game.get_executor(),
+            [&](auto account,auto error){require(!error,"failed retry leaked a queue slot");accepted=account;++done;});
+        drain_login(own_workers,own_game,done);
+        require(accepted==id,"login did not recover after retry completion exception");
+    }
+    {
+        LoginAccountSource source;source.rows={*saved};god2::RecoveredAccountLogin login(source,false);
+        asio::io_context own_game,own_workers;unsigned rejected=0;
+        unsigned prepare_entries=0;
+        source.after_name=[&] {
+            if(++prepare_entries<65)
+                login.authenticate_async(input,asio::any_io_executor{},own_game.get_executor(),
+                    [&](auto account,auto error){require(!account && bool(error),"recursive worker rejection failed");++rejected;});
+        };
+        login.authenticate_async(input,asio::any_io_executor{},own_game.get_executor(),
+            [&](auto account,auto error){require(!account && bool(error),"outer worker rejection failed");++rejected;});
+        require(prepare_entries==64 && rejected==65,"repository reentry bypassed authentication queue bound");
+        source.after_name={};rejected=0;
+        for(unsigned submission=0;submission<65;++submission)
+            login.authenticate_async(input,asio::any_io_executor{},own_game.get_executor(),
+                [&](auto account,auto error){require(!account && bool(error),"failed worker submission was not rejected");++rejected;});
+        require(rejected==65,"failed worker submission did not complete");
+        unsigned done=0;std::uint64_t accepted=0;
+        login.authenticate_async(input,own_workers.get_executor(),own_game.get_executor(),
+            [&](auto account,auto error){require(!error,"failed worker leaked login queue capacity");accepted=account;++done;});
+        drain_login(own_workers,own_game,done);
+        require(accepted==id,"failed worker submissions exhausted login queue");
+    }
 #endif
 }

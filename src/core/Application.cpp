@@ -2091,6 +2091,9 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     ((owner_bag_projector && config.fruit_village_quests_enabled && FruitVillageQuestRules::material(slot.item_id)) ||
                      qualified_supply_policy(slot.item_id,1).has_value());
             };
+            const auto capture_bank_lease=[&](std::uint64_t id,std::uint16_t target,auto now) {
+                return native_banks.capture_lease(id,target,now);
+            };
             RecoveredBankItemsService native_bank_items(database.bank_items(),
                 [&](std::uint64_t id)->std::optional<RecoveredBankService::Peer> {
                     const auto peer=trade_peer(id);if(!peer || !recovered_movement)return {};
@@ -2105,7 +2108,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     std::random_device entropy;constexpr char digits[]="0123456789abcdef";std::string result;result.reserve(64);
                     for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}
                     return result;
-                },owner_bag_projection,bank_bag_proof);
+                },owner_bag_projection,bank_bag_proof,capture_bank_lease);
             // CUSTOM-0067: independent opt-in unified armor/MED bank context.
             // Existing scalar service remains selected when this flag is false.
             std::unique_ptr<OwnedArmorBankService> owned_armor_bank;
@@ -2124,7 +2127,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                         std::random_device entropy;constexpr char digits[]="0123456789abcdef";std::string result;result.reserve(64);
                         for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}
                         return result;
-                    },qualified_weapon);
+                    },qualified_weapon,capture_bank_lease);
                 spdlog::info("OWNED_ARMOR_BANK_ENABLED CUSTOM-0067 full_instance no_grants no_formula");
             }
             // CUSTOM-0068: independent full weapon/gem route. Disabled by default;
@@ -2145,7 +2148,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                         std::random_device entropy;constexpr char digits[]="0123456789abcdef";std::string result;result.reserve(64);
                         for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}
                         return result;
-                    },qualified_weapon);
+                    },qualified_weapon,capture_bank_lease);
                 spdlog::info("OWNED_FOREIGN_BANK_ENABLED CUSTOM-0068 full_instance no_grants no_formula");
             }
             // CUSTOM-0070: independent opt-in complete cross-category vault custody.
@@ -2171,7 +2174,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                         const auto fields=RecoveredBeastInventoryFields::decode(value.inventory_metadata);
                         return fields && lua.beast_bank_allowed(static_cast<std::uint8_t>(request.kind),request.page,request.quantity,
                             fields->native_exploring_label(),value.panel.control7_alternate(),value.panel.control8_alternate());
-                    });
+                    },capture_bank_lease);
                 spdlog::info("OWNED_MIXED_BANK_ENABLED CUSTOM-0070 full_instance no_grants no_formula");
             }
             const auto bank_items_disconnect=[&](std::uint64_t id) {
@@ -2179,14 +2182,23 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             };
             const auto bank_items_open=[&](std::uint64_t id,std::uint16_t target,auto now) {
                 if(!owned_armor_bank&&!owned_foreign_bank&&!owned_mixed_bank)return native_bank_items.open(id,target,now);
-                // Only the accepted money bank lease may allocate original empty
-                // scalar capacity. Metadata/storage reads never grant capacity.
-                if(!native_banks.permits_items(id,target,now))throw DatabaseError("Armor bank lease missing");
-                const auto peer=trade_peer(id);if(!peer || !peer->ready)throw DatabaseError("Armor bank owner missing");
-                database.bank_items().provision_empty(peer->account,peer->character);
-                if(owned_mixed_bank){if(beast_bank_repository)beast_exploration.disconnect(id);return owned_mixed_bank->open(id,target,now);}
-                if(owned_foreign_bank)return owned_foreign_bank->open(id,target,now);
-                return owned_armor_bank->open(id,target,now);
+                try {
+                    // One actual money lease source spans allocation AND the
+                    // selected item route. Closing/reopening cannot revive it.
+                    const auto lease=capture_bank_lease(id,target,now);
+                    const auto peer=trade_peer(id);
+                    if(!peer || !peer->ready || !lease.owns(id,peer->account,peer->character,target))
+                        throw DatabaseError("Typed bank allocation owner changed");
+                    database.bank_items().provision_empty(peer->account,peer->character,[&]{lease.require_current();});
+                    lease.require_current();
+                    RecoveredBankItemsService::Batches projected;
+                    if(owned_mixed_bank) {
+                        if(beast_bank_repository)beast_exploration.disconnect(id);
+                        lease.require_current();projected=owned_mixed_bank->open(id,target,now);
+                    } else if(owned_foreign_bank)projected=owned_foreign_bank->open(id,target,now);
+                    else projected=owned_armor_bank->open(id,target,now);
+                    lease.require_current();return projected;
+                }catch(...) {bank_items_disconnect(id);throw;}
             };
             const auto bank_items_handle=[&](std::uint64_t id,std::span<const RecoveredBankItems::Request> requests,auto now) {
                 if(owned_mixed_bank){if(beast_bank_repository)beast_exploration.disconnect(id);auto result=owned_mixed_bank->handle(id,requests,now);return RecoveredBankItemsService::Result{std::move(result.batches),result.committed,result.rejected};}

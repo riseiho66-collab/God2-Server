@@ -10,9 +10,21 @@ std::vector<std::uint8_t> RecoveredBankService::synchronization(const SqliteBank
     std::vector<std::uint8_t> out;append(out,RecoveredBank::balance(s.bank.amount));
     append(out,RecoveredTrade::wallet(s.wallet.amount));return out;
 }
+void RecoveredBankService::retire_context(std::uint64_t session) noexcept {
+    if(const auto found=contexts_.find(session);found!=contexts_.end()) {
+        if(found->second.lease)found->second.lease->valid=false;
+        contexts_.erase(found);
+    }
+}
+RecoveredBankService::LeaseSource RecoveredBankService::capture_lease(std::uint64_t session,std::uint16_t target,Clock::time_point now) {
+    if(!permits_items(session,target,now))throw DatabaseError("Bank lease source is not qualified");
+    const auto found=contexts_.find(session);
+    if(found==contexts_.end() || !found->second.lease)throw DatabaseError("Bank lease source disappeared");
+    const LeaseSource source(found->second.lease);source.require_current();return source;
+}
 bool RecoveredBankService::permits_items(std::uint64_t session,std::uint16_t target,Clock::time_point now) {
     auto operation=callbacks_.enter();
-    const auto deny=[&]{contexts_.erase(session);return false;};
+    const auto deny=[&]{retire_context(session);return false;};
     try {
     std::optional<Context> held;
     if(const auto found=contexts_.find(session);found!=contexts_.end())held=found->second;
@@ -24,19 +36,23 @@ bool RecoveredBankService::permits_items(std::uint64_t session,std::uint16_t tar
        !invoke_adapter(access_,*live,target))return deny();
     const bool saved=repo_.load(live->account,live->character)==c.expected;
     callbacks_.require_current();return saved?true:deny();
-    }catch(...){contexts_.erase(session);return false;}
+    }catch(...){retire_context(session);return false;}
 }
 void RecoveredBankService::renew_items(std::uint64_t session,Clock::time_point now) {
     auto operation=callbacks_.enter();
-    if(const auto found=contexts_.find(session);found!=contexts_.end())found->second.expires=now+std::chrono::seconds(60);
+    if(const auto found=contexts_.find(session);found!=contexts_.end()) {
+        if(!found->second.lease || !LeaseSource(found->second.lease).current()){retire_context(session);return;}
+        found->second.expires=now+std::chrono::seconds(60);found->second.lease->expires=found->second.expires;
+    }
 }
 std::optional<std::vector<std::uint8_t>> RecoveredBankService::open(std::uint64_t session,
     std::uint16_t target,Clock::time_point now) {
     auto operation=callbacks_.enter();
     try {
+        retire_context(session); // Reopening never preserves the predecessor source.
         const auto peer=invoke_adapter(lookup_,session);
         if(!target || !peer || !peer->ready || peer->session!=session || !peer->account || !peer->character ||
-           !invoke_adapter(access_,*peer,target)){contexts_.erase(session);return {};}
+           !invoke_adapter(access_,*peer,target)){retire_context(session);return {};}
         const auto current=[&]{callbacks_.require_current();};
         repo_.provision_bank(peer->account,peer->character,current);callbacks_.require_current();
         const auto saved=repo_.load(peer->account,peer->character);callbacks_.require_current();
@@ -46,15 +62,17 @@ std::optional<std::vector<std::uint8_t>> RecoveredBankService::open(std::uint64_
         require(live&&live->ready&&live->session==session&&live->account==peer->account&&live->character==peer->character&&
             live->area==peer->area&&live->scene==peer->scene&&invoke_adapter(access_,*live,target),"Bank open callback changed world owner/access");
         callbacks_.require_current();
-        contexts_.insert_or_assign(session,Context{*peer,target,saved,now+std::chrono::seconds(60)});return response;
-    }catch(...){contexts_.erase(session);throw;}
+        const auto expires=now+std::chrono::seconds(60);
+        auto lease=std::make_shared<LeaseSource::State>(LeaseSource::State{*peer,target,expires});
+        contexts_.insert_or_assign(session,Context{*peer,target,saved,expires,std::move(lease)});return response;
+    }catch(...){retire_context(session);throw;}
 }
 RecoveredBankService::Result RecoveredBankService::handle(std::uint64_t session,
     std::span<const RecoveredBank::Request> requests,Clock::time_point now) {
     auto operation=callbacks_.enter();Result result;
     std::optional<Peer> live;std::optional<Context> opened;
     const auto reject=[&]() {
-        result.rejected=true;contexts_.erase(session);
+        result.rejected=true;retire_context(session);
         if(callbacks_.invalidated())return result;
         // Recovery never reopens a lease and does not run after revocation.
         try {
@@ -82,22 +100,24 @@ RecoveredBankService::Result RecoveredBankService::handle(std::uint64_t session,
         };
         check_live();
         if(r.kind==RecoveredBank::Kind::Close) {
-            require(r.window_kind==1,"Bank window close kind invalid");contexts_.erase(session);return result;
+            require(r.window_kind==1,"Bank window close kind invalid");retire_context(session);return result;
         }
         require(repo_.load(live->account,live->character)==context.expected,"Bank saved snapshot changed");callbacks_.require_current();
         const SqliteBankRepository::Request proposal{context.expected,r.kind==RecoveredBank::Kind::Deposit?
             SqliteBankRepository::Operation::Deposit:SqliteBankRepository::Operation::Withdraw,r.amount};
         const auto next=SqliteBankRepository::plan(proposal);
         auto projected=synchronization(next);const auto receipt=invoke_adapter(receipt_);check_live();
-        const auto committed=repo_.commit(receipt,proposal,[&]{callbacks_.require_current();});
+        const LeaseSource source(context.lease);
+        const auto committed=repo_.commit(receipt,proposal,[&]{callbacks_.require_current();source.require_current();});
         // A commit is durable even if a later callback retires its lease.
         static_assert(std::is_nothrow_copy_assignable_v<SqliteBankRepository::Snapshot>);
         static_assert(std::is_nothrow_move_assignable_v<std::vector<std::uint8_t>>);
         static_assert(std::is_nothrow_move_constructible_v<Result>);
         result.logical=std::move(projected);result.committed=true;
-        if(callbacks_.invalidated()){contexts_.erase(session);result.logical.clear();return result;}
+        if(callbacks_.invalidated() || !source.current()){retire_context(session);result.logical.clear();return result;}
         if(const auto fresh=contexts_.find(session);fresh!=contexts_.end()) {
             fresh->second.expected=committed;fresh->second.expires=now+std::chrono::seconds(60);
+            if(fresh->second.lease)fresh->second.lease->expires=fresh->second.expires;
         }
         return result;
     }catch(...){return reject();}

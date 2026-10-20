@@ -13,8 +13,8 @@ template<class T>const T* at(const std::vector<T>& rows,std::size_t slot){const 
 const StoredBeastSnapshot* pet(const std::vector<StoredBeastSnapshot>& rows,std::size_t slot){const auto found=std::find_if(rows.begin(),rows.end(),[&](const auto& row){return row.inventory_slot==slot;});return found==rows.end()?nullptr:&*found;}
 RecoveredInventoryProjection::Metadata scalar_metadata(const StoredInventorySlot& row){RecoveredInventoryProjection::Metadata bytes{};bytes[0]=static_cast<std::uint8_t>(row.item_id);bytes[1]=static_cast<std::uint8_t>(row.item_id>>8);return bytes;}
 }
-OwnedMixedBankService::OwnedMixedBankService(SqliteOwnedMixedBankRepository& repo,SqliteOwnedForeignBankRepository& foreign_repo,SqliteOwnedArmorBankRepository& armor_repo,SqliteBankItemsRepository& plain_repo,Lookup lookup,Permit permit,Renew renew,Eligible eligible,PlainProjection plain,Receipt receipt,QualifyWeapon weapon,SqliteBeastBankRepository* beasts,EligibleBeast beast_eligible)
-    :repo_(repo),foreign_repo_(foreign_repo),armor_repo_(armor_repo),plain_repo_(plain_repo),lookup_(std::move(lookup)),permit_(std::move(permit)),renew_(std::move(renew)),eligible_(std::move(eligible)),plain_(std::move(plain)),receipt_(std::move(receipt)),weapon_(std::move(weapon)),beasts_(beasts),beast_eligible_(std::move(beast_eligible)){
+OwnedMixedBankService::OwnedMixedBankService(SqliteOwnedMixedBankRepository& repo,SqliteOwnedForeignBankRepository& foreign_repo,SqliteOwnedArmorBankRepository& armor_repo,SqliteBankItemsRepository& plain_repo,Lookup lookup,Permit permit,Renew renew,Eligible eligible,PlainProjection plain,Receipt receipt,QualifyWeapon weapon,SqliteBeastBankRepository* beasts,EligibleBeast beast_eligible,RecoveredBankService::CaptureLease capture_lease)
+    :repo_(repo),foreign_repo_(foreign_repo),armor_repo_(armor_repo),plain_repo_(plain_repo),lookup_(std::move(lookup)),permit_(std::move(permit)),renew_(std::move(renew)),eligible_(std::move(eligible)),plain_(std::move(plain)),receipt_(std::move(receipt)),weapon_(std::move(weapon)),beasts_(beasts),beast_eligible_(std::move(beast_eligible)),capture_lease_(std::move(capture_lease)){
     require(bool(lookup_)&&bool(permit_)&&bool(renew_)&&bool(eligible_)&&bool(plain_)&&bool(receipt_)&&bool(weapon_),"Owned bank requires qualified adapters");
 }
 OwnedMixedBankService::Snapshot OwnedMixedBankService::load_snapshot(std::uint64_t account,std::uint64_t character) const{return beasts_?beasts_->load(account,character):Snapshot(repo_.load(account,character));}
@@ -67,20 +67,27 @@ OwnedMixedBankService::Batches OwnedMixedBankService::open(std::uint64_t session
     try {
         const auto peer=invoke_adapter(lookup_,session);
         require(peer&&peer->ready&&peer->session==session&&peer->account&&peer->character&&invoke_adapter(permit_,session,target,now),"Owned bank opening lease rejected");
+        std::optional<RecoveredBankService::LeaseSource> lease;
+        if(capture_lease_) {
+            lease=capture_lease_(session,target,now);callbacks_.require_current();
+            require(lease->matches(*peer,target),"Bank dependency owner changed during capture");
+            callbacks_.depend_on([source=*lease]{return source.current();});
+        }
         auto saved=load_snapshot(peer->account,peer->character);callbacks_.require_current();
         auto projected=synchronization(saved,nullptr,false);callbacks_.require_current();
         require(load_snapshot(peer->account,peer->character)==saved,"Owned bank changed during open projection");callbacks_.require_current();
         require_live(session,*peer,target,now);
-        contexts_.insert_or_assign(session,Context{target,*peer,std::move(saved)});return projected;
+        contexts_.insert_or_assign(session,Context{target,*peer,std::move(saved),std::move(lease)});return projected;
     } catch(...) {contexts_.erase(session);throw;}
 }
 OwnedMixedBankService::Result OwnedMixedBankService::handle(std::uint64_t session,std::span<const RecoveredBankItems::Request> requests,Clock::time_point now) {
     auto operation=callbacks_.enter();Result result;
     try {
         // No map iterator/reference or caller-owned request spans a callback.
-        require(requests.size()==1,"Owned bank batch missing");const auto r=requests.front();
         std::optional<Context> held;
         if(const auto found=contexts_.find(session);found!=contexts_.end())held=found->second;
+        if(held && held->lease)callbacks_.depend_on([source=*held->lease]{return source.current();});
+        require(requests.size()==1,"Owned bank batch missing");const auto r=requests.front();
         const auto peer=invoke_adapter(lookup_,session);
         require(held&&peer&&peer->ready&&peer->session==session,"Owned bank context missing");
         const auto& before=held->expected;const auto opened_peer=held->peer;
@@ -163,6 +170,7 @@ OwnedMixedBankService::Result OwnedMixedBankService::handle(std::uint64_t sessio
         if(const auto found=contexts_.find(session);found!=contexts_.end()){retired.emplace(std::move(found->second));contexts_.erase(found);}
         if(callbacks_.invalidated()){result.batches.clear();return result;} // No recovery on a poisoned operation.
         if(retired)try {
+            if(retired->lease)callbacks_.depend_on([source=*retired->lease]{return source.current();});
             const auto live=invoke_adapter(lookup_,session);const auto& expected=retired->expected;
             if(live&&live->ready&&live->session==session&&live->account==expected.base.bag.account&&live->character==expected.base.bag.character&&
                live->area==retired->peer.area&&live->scene==retired->peer.scene)

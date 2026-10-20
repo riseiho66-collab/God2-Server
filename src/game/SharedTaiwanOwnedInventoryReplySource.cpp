@@ -129,9 +129,14 @@ bool SharedTaiwanOwnedInventoryReplySource::local(Session& session) const {
 }
 std::shared_ptr<SharedTaiwanOwnedInventoryReplySource> SharedTaiwanOwnedInventoryReplySource::prepare(
     std::shared_ptr<SqliteOwnedEquipmentTransaction> transaction,std::shared_ptr<SharedTaiwanOwnedItemSelectionSource> reader,
-    Session& session,const Session::NativeWorldSelectionInput& input,
-    const SharedTaiwanOwnedItemSelectionSource::Selection& selection,SqliteOwnedEquipmentTransaction::Before before,
+    Session& session,const Session::NativeWorldSelectionInput& borrowed_input,
+    const SharedTaiwanOwnedItemSelectionSource::Selection& borrowed_selection,SqliteOwnedEquipmentTransaction::Before before,
     State after,std::vector<Operation> operations,Budgets budgets) {
+    // Qualification calls virtual presence observers before the result owns
+    // these values. Keep caller-owned optionals and the Session alive first.
+    const auto connection=session.shared_from_this();
+    const auto input=borrowed_input;
+    const auto selection=borrowed_selection;
     if(!transaction || !reader || !reader->owns_repository(transaction->inventory_writer()) ||
        !before.inventory || !before.equipment || *before.inventory!=selection.snapshot() || !shape(after) ||
        !NativeEquipmentSnapshot::same_root(selection.snapshot().root,after.inventory.root) ||
@@ -156,12 +161,21 @@ void SharedTaiwanOwnedInventoryReplySource::invalidate() {owner();invalidated_=t
 std::optional<SharedTaiwanOwnedInventoryReplySource::Component> SharedTaiwanOwnedInventoryReplySource::take(
     Session& session,const SqliteOwnedEquipmentTransaction::Committed& committed) {
     owner();
+    // Match the entry-aware path: an actual presence observer may release
+    // the caller's last source, receipt or Session owner during qualification.
+    const auto self=shared_from_this();
+    const auto receipt=committed;
+    const auto connection=connection_.lock();
+    if(!connection || connection.get()!=&session) {invalidated_=true;return std::nullopt;}
     if(consumed_) {invalidated_=true;return std::nullopt;}
     consumed_=true;
     if(!local(session) || !reader_->ready_current(session,selection_) || !local(session) ||
-       committed.inventory().snapshot()!=after_.inventory || committed.equipment().snapshot()!=after_.equipment ||
-       !transaction_->committed_current(committed) || !local(session) ||
-       !reader_->ready_current(session,selection_) || !local(session)) {invalidated_=true;return std::nullopt;}
+       receipt.inventory().snapshot()!=after_.inventory || receipt.equipment().snapshot()!=after_.equipment ||
+       !transaction_->committed_current(receipt) || !local(session) ||
+       !reader_->ready_current(session,selection_) || !local(session) ||
+       // The last presence observer can change saved material while leaving
+       // the Session/lease intact. Qualify both durable tuples again afterward.
+       !transaction_->committed_current(receipt) || !local(session)) {invalidated_=true;return std::nullopt;}
     return Component(std::move(wire_));
 }
 bool SharedTaiwanOwnedInventoryReplySource::entry_current(

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 using namespace god2;
 namespace {
 void require(bool yes,const char* message){if(!yes)throw std::runtime_error(message);}
@@ -45,7 +46,7 @@ struct Fixture {
     SqliteBankItemsRepository::PrepareProof bank_proof(){return [this](const auto& before,const auto& after){require(sqlite3_get_autocommit(raw)!=0,"Proof factory was not before BEGIN");trace.push_back("capture");const auto proof=projector->capture_proof(before.account,before.character);const auto changed=changes(before,after);
         return SqliteBankItemsRepository::CommitProof{[this,proof]{trace.push_back("pre");projector->verify_proof_in_transaction(proof);},[this,proof,changed]{trace.push_back("post");projector->verify_planned_in_transaction(proof,changed);}};};}
     std::unique_ptr<RecoveredTradeService> trade_service(){return std::make_unique<RecoveredTradeService>(*trades,[this](auto session)->std::optional<RecoveredTradeService::Peer>{if(session<1||session>2)return {};return RecoveredTradeService::Peer{session,session,ids[session-1],4,3,true};},[this](std::uint16_t character)->std::optional<RecoveredTradeService::Peer>{for(unsigned n=0;n<2;++n)if(ids[n]==character)return RecoveredTradeService::Peer{n+1,n+1,ids[n],4,3,true};return {};},[](const auto&,const auto& actor){RecoveredTrade::Name name{};name[0]=static_cast<std::uint8_t>('A'+actor.account);return name;},eligible,plain,[this]{return next_receipt();},owned(),trade_proof());}
-    std::unique_ptr<RecoveredBankItemsService> bank_service(){return std::make_unique<RecoveredBankItemsService>(*banks,[this](auto session)->std::optional<RecoveredBankService::Peer>{if(session<1||session>2)return {};return RecoveredBankService::Peer{session,session,ids[session-1],4,3,50,50,true};},[](auto,std::uint16_t target,auto){return target==531;},[](auto,auto){},eligible,plain,[this]{return next_receipt();},owned(),bank_proof());}
+    std::unique_ptr<RecoveredBankItemsService> bank_service(RecoveredBankService::CaptureLease capture={}){return std::make_unique<RecoveredBankItemsService>(*banks,[this](auto session)->std::optional<RecoveredBankService::Peer>{if(session<1||session>2)return {};return RecoveredBankService::Peer{session,session,ids[session-1],4,3,50,50,true};},[](auto,std::uint16_t target,auto){return target==531;},[](auto,auto){},eligible,plain,[this]{return next_receipt();},owned(),bank_proof(),std::move(capture));}
     auto proof(unsigned n){return projector->capture_proof(n+1,ids[n]);}
     void check_render(unsigned n,const std::vector<std::uint8_t>& logical){const auto saved=trades->load(n+1,ids[n]);for(std::uint8_t slot=10;slot<=12;++slot)require(contains(logical,projector->project(n+1,ids[n],slot,saved.bag[slot])),"Actual service reply flattened/lost another owner's full instance");}
     std::uint64_t receipts(const char* table){sqlite_detail::Statement read(raw,(std::string("SELECT count(*) FROM ")+table).c_str());require(read.row(),"Count missing");return read.number<std::uint64_t>(0);}
@@ -87,6 +88,32 @@ void final_readback_after_callback(){Fixture f;const auto a=f.trades->load(1,f.i
     rejects([&]{f.trades->prepare_proof({a,b},SqliteTradeRepository::plan(sides),[](const auto&,const auto&){return SqliteTradeRepository::CommitProof{};});});
 }
 // Source regressions only in PHASE1: no fixture/test was executed.
+void scalar_bank_shared_source(){
+    using B=RecoveredBankItemsService;using Q=RecoveredBankItems::Request;const auto now=B::Clock::now();
+    for(unsigned mode=0;mode<5;++mode){
+        Fixture f;SqliteBankRepository money_repo(f.raw);money_repo.install_schema();
+        RecoveredBankService money(money_repo,[&](auto session)->std::optional<RecoveredBankService::Peer>{return session==1?std::optional{RecoveredBankService::Peer{1,1,f.ids[0],4,3,50,50,true}}:std::nullopt;},[](const auto&,auto target){return target==531;},[]{return std::string(64,'a');});
+        require(money.open(1,531,now).has_value(),"Scalar money source setup failed");
+        const auto old=money.capture_lease(1,531,now);
+        auto bank=f.bank_service([&](auto session,auto target,auto clock){return money.capture_lease(session,target,clock);});bank->open(1,531,now);
+        const auto before=f.banks->load(1,f.ids[0]);const auto owner=f.proof(0).snapshot();
+        if(mode!=2)money.disconnect(1);
+        if(mode==1||mode==4)require(money.open(1,531,now).has_value(),"Scalar identical owner reopen");
+        const std::array<Q,1> one{{{RecoveredBankItems::Kind::Deposit,531,0,5,2,3}}};
+        const std::array<Q,2> two{{one[0],one[0]}};
+        struct Trace{RecoveredBankService* money;bool hit=false;} trace{&money};
+        if(mode==2)sqlite3_trace_v2(f.raw,SQLITE_TRACE_STMT,[](unsigned,void* context,void*,void* text)->int{auto& t=*static_cast<Trace*>(context);if(!t.hit&&std::string_view(static_cast<const char*>(text)).find("SELECT account_id,character_id,operation")!=std::string_view::npos){t.hit=true;t.money->disconnect(1);}return 0;},&trace);
+        const auto denied=bank->handle(1,mode>=3?std::span<const Q>(two):std::span<const Q>(one),now);sqlite3_trace_v2(f.raw,0,nullptr,nullptr);
+        require(denied.rejected&&!denied.committed&&denied.batches.empty()&&!old.current()&&f.banks->load(1,f.ids[0])==before&&f.proof(0).snapshot()==owner&&f.receipts("character_bank_item_receipts")==0,"Scalar shared source rejection changed custody or leaked output");
+        if(mode==2)require(trace.hit,"Scalar late receipt observer not reached");
+        require(money.open(1,531,now).has_value(),"Scalar fresh source reopen failed");bank->open(1,531,now);require(bank->handle(1,one,now).committed,"Scalar new source could not commit");
+    }
+    // The actual typed Application preallocation uses this SAME pure source cut.
+    {Fixture f;SqliteBankRepository money_repo(f.raw);money_repo.install_schema();
+        RecoveredBankService money(money_repo,[&](auto)->std::optional<RecoveredBankService::Peer>{return RecoveredBankService::Peer{1,1,f.ids[0],4,3,50,50,true};},[](const auto&,auto){return true;},[]{return std::string(64,'a');});
+        require(money.open(1,531,now).has_value(),"Allocation source setup");const auto source=money.capture_lease(1,531,now);const auto before=f.banks->load(1,f.ids[0]);money.disconnect(1);
+        rejects([&]{f.banks->provision_empty(1,f.ids[0],[&]{source.require_current();});});require(f.banks->load(1,f.ids[0])==before,"Retired preallocation source escaped final pure cut");}
+}
 void bank_callback_lifecycle(){
     using B=RecoveredBankItemsService;using Q=RecoveredBankItems::Request;
     const auto now=B::Clock::now();
@@ -144,4 +171,4 @@ void bank_callback_lifecycle(){
         require(reached&&f.banks->load(1,f.ids[0])==before,"Provision bypassed final current check");}
 }
 }
-int main(){try{bank_callback_lifecycle();trade_routes();bank_routes();trade_trigger_rollback();bank_vault_trigger_rollback();final_readback_after_callback();std::cout<<"Actual owner-aware trade/bank full-instance restoration, unchanged scalar eligibility, pre-projection immutable proofs, in-transaction dual-owner trigger rollback and postcallback receipt/scalar readback passed\n";}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
+int main(){try{scalar_bank_shared_source();bank_callback_lifecycle();trade_routes();bank_routes();trade_trigger_rollback();bank_vault_trigger_rollback();final_readback_after_callback();std::cout<<"Actual owner-aware trade/bank full-instance restoration, unchanged scalar eligibility, pre-projection immutable proofs, in-transaction dual-owner trigger rollback and postcallback receipt/scalar readback passed\n";}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

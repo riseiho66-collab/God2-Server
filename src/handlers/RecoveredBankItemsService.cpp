@@ -37,6 +37,12 @@ RecoveredBankItemsService::Batches RecoveredBankItemsService::open(std::uint64_t
             "Bank item opening has no current owner");
         const bool permitted=permit_(session,target,now);callbacks_.require_current();
         require(permitted,"Bank item opening has no qualified lease");
+        std::optional<RecoveredBankService::LeaseSource> lease;
+        if(capture_lease_) {
+            lease=capture_lease_(session,target,now);callbacks_.require_current();
+            require(lease->matches(*peer,target),"Bank dependency owner changed during capture");
+            callbacks_.depend_on([source=*lease]{return source.current();});
+        }
         repo_.provision_empty(peer->account,peer->character,[&]{callbacks_.require_current();});
         callbacks_.require_current();
         auto saved=repo_.load(peer->account,peer->character);callbacks_.require_current();
@@ -48,7 +54,7 @@ RecoveredBankItemsService::Batches RecoveredBankItemsService::open(std::uint64_t
         require(live && live->ready && live->session==session && live->account==peer->account &&
             live->character==peer->character && live->area==peer->area && live->scene==peer->scene,
             "Bank item opening owner changed");
-        contexts_.insert_or_assign(session,Context{target,*peer,std::move(saved)});return projected;
+        contexts_.insert_or_assign(session,Context{target,*peer,std::move(saved),std::move(lease)});return projected;
     }catch(...) {contexts_.erase(session);throw;}
 }
 RecoveredBankItemsService::Result RecoveredBankItemsService::handle(std::uint64_t session,
@@ -57,10 +63,12 @@ RecoveredBankItemsService::Result RecoveredBankItemsService::handle(std::uint64_
     Result result;
     try {
         const auto at=contexts_.find(session);
-        require(at!=contexts_.end() && requests.size()==1,"Bank item lease/batch missing");
+        require(at!=contexts_.end(),"Bank item lease missing");
         // Both copies precede lookup/permit/projection. No borrowed iterator,
         // request span or slot can be destroyed by a synchronous adapter.
-        const auto context=at->second;const auto r=requests.front();
+        const auto context=at->second;
+        if(context.lease)callbacks_.depend_on([source=*context.lease]{return source.current();});
+        require(requests.size()==1,"Bank item batch missing");const auto r=requests.front();
         const auto peer=lookup_(session);callbacks_.require_current();
         require(peer && peer->ready && peer->session==session && session &&
             peer->account==context.expected.account && peer->character==context.expected.character &&
@@ -126,6 +134,7 @@ RecoveredBankItemsService::Result RecoveredBankItemsService::handle(std::uint64_
             static_assert(std::is_nothrow_move_constructible_v<Context>);
             const auto context=std::move(at->second);contexts_.erase(at);
             try {
+                if(context.lease)callbacks_.depend_on([source=*context.lease]{return source.current();});
                 const auto live=lookup_(session);callbacks_.require_current();
                 if(live && live->ready && live->session==session && live->account==context.expected.account && live->character==context.expected.character &&
                     live->area==context.peer.area && live->scene==context.peer.scene) {
