@@ -2,6 +2,8 @@
 #include "db/GuildSuccessionSqliteMigrationsDraft.h"
 #include "db/GuildOfficerSqliteMigrations.h"
 #include "core/Application.h"
+#include "core/WebMainOptions.h"
+#include "net/WebServerPlanConfig.h"
 #include "core/TaiwanSkillImportOperator.h"
 #include "core/OwnedBankCapacityOperator.h"
 #include "core/Logger.h"
@@ -13,6 +15,17 @@
 #include <charconv>
 int main(int argc,char** argv) {
     try {
+        // Explicit Web mode is classified before every DB/schema/import mode.
+        // Valid startup retains Application's existing DB initialization; this
+        // parser/help branch never probes listeners, creates schema or guesses G.
+        if(const auto web=god2::WebMainOptions::parse_if_requested(argc,argv)) {
+            if(web->help){god2::WebMainOptions::write_help(std::cout);return 0;}
+            const auto plan=god2::WebServerPlanConfig::load(web->web_config_path);
+            const auto config=god2::Config::load(web->config_path);
+            god2::validate_web_main_host(config,plan);
+            god2::initialize_logger(config.log_file,config.log_level);
+            return god2::run_server(config,plan,web->run_for_seconds);
+        }
         if(const auto capacity=god2::OwnedBankCapacityOperator::parse_if_requested(argc,argv))
             return god2::OwnedBankCapacityOperator::run(*capacity);
         if(const auto skill_import=god2::TaiwanSkillImportOperator::parse_if_requested(argc,argv))
@@ -48,6 +61,7 @@ int main(int argc,char** argv) {
                     "  Requires --migrate-only, forbids any --run-for (including 0), and is mutually exclusive with --native-delivery-schema.\n"
                     "  Creates all 5 tables in one transaction; existing feature tables cause failure. No item grants, import or gameplay activation.\n";
                 std::cout<<"--owned-blacklist-schema: fresh CUSTOM-0096 storage only; requires --migrate-only, forbids any --run-for; mutually exclusive with other schema flags. No population or gameplay activation.\n";
+                god2::WebMainOptions::write_help(std::cout);
                 god2::TaiwanSkillImportOperator::write_help(std::cout);
                 god2::OwnedBankCapacityOperator::write_help(std::cout);
                 return 0;

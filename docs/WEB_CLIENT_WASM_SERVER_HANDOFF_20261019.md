@@ -1,5 +1,7 @@
 # C++／WASM 網頁客戶端與台服服務端核對（2026-10-19）
 
+本文件各日期段落保留當時快照；最新服務端入口以末節「限定登入源碼整合」及 WEB_LOGIN_GATEWAY_CONTRACT_20261021.md 為準。
+
 本文件來自實際源碼核查；客戶端由 God2-WebClient-Main 持續修改，本輪只讀、不凍結也不修改對方工作樹。核查快照及每檔雜湊保存在外部 client-source-observation-v2.json；不能把快照當成整個移動中工作樹的建置驗收。
 
 ## 改寫與 JS 退役
@@ -64,3 +66,33 @@ bridge。沒有本輪部署或實際 listener／TLS 檢查可證明測試 endpoi
 掛載與 endpoint 發行、選線及角色占用來源，並另行進入獲准的集中驗證階段。
 之後才測真正 L/G、半包／合包、原生編碼、多分頁、背壓／關閉／重連、分流及
 原版體感。未使用正式帳密；沒有因交接啟動服務、DB、codec、遊戲或部署。
+
+## 2026-10-21 限定登入源碼整合：pass1
+
+使用者本人在客戶端聊天對限定問題回答「恢復登入串接源碼整合（建議）」，
+已用真正userMessage核實；只恢復gateway／可信L→所選G的源碼接線，不恢復
+完整目標或heartbeat。PC預設CLI不變，普通Main新增明確 `--web-config` opt-in，
+以獨立完整policy檔進既有WebServerPlan overload；缺資料／混用操作旗標先拒絕。
+早期「Main尚無任何Web掛載入口」為歷史快照，已由這項源碼入口取代。
+
+真正三世界typed宿主現在由已持有的三G bound endpoint展開固定
+`/tw/native-game/0..2`；單G保留 `/tw/native-game`，L保留 `/tw/native`。
+精確GET `/tw/native-routes`提供public routing metadata，供前端對照真正L的
+native destination後選唯一固定path；不是新的選線權限或任意TCP代理。
+真正綁定三G的既有native handoff仍核實寫L名單／選擇、獨立G auth、exactlocal
+endpoint及world binding；錯URL不能繞過，A6／07／Origin不授權。
+
+[具體設定與前端契約](WEB_LOGIN_GATEWAY_CONTRACT_20261021.md)記錄完整JSON欄位、
+Main入口、manifest schema、來源／生命週期及失敗界線。前端仍需實作這項schema的
+C++消費。Main尚無完整ThreeChannelPlan Live／Authority／world plan供應者；
+單G opt-in不把舊候選功能升格為完整native entry，也未改既有149c來源資格pin。
+
+客戶端後續回報提交 `6e7cbc0f539eb3c0ce11b0720f1e71e022c17dd2`，初次2A的
+Login／Session／constructor-state／EntryPort唯讀借用有所進展，但完整Main GUI、
+actor／EntryPort與正式瀏覽器登入仍未完成；此為對方交接回報，本服務端未重測。
+
+本輪只做source/static修改與修改後獨審，沒有編譯、測試、開服務、game SQL、
+schema／migration／codec或部署。有效啟動仍沿原有DB初始化生命周期，未執行。
+目前仍沒有可確認可用的L/G URL；local bind後的port/catalog只由未來真正啟動
+取得，不能以path或source案例宣稱已登入。持久save／recovery／target admission、
+六向切換、公開WSS／部署及集中台服聯合驗收仍OPEN。

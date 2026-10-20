@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -19,7 +21,22 @@ struct WebGatewayPolicy {
     std::size_t frames_per_second=0, bytes_per_second=0;
     std::chrono::seconds handshake_timeout{0}, idle_timeout{0}, message_timeout{0}, close_timeout{0};
 };
-struct WebNativeRoute {std::string path;asio::ip::tcp::endpoint endpoint;};
+struct WebNativeRoute {
+    std::string path;
+    asio::ip::tcp::endpoint endpoint;
+    // Host observation only, not a native selection/authentication grant.
+    // Indexed routes require both and the complete actual three-channel map.
+    std::optional<std::uint8_t> group={},subgroup={};
+};
+// Pure structural checks: no bind, DNS, database, callbacks or native I/O.
+// Throw std::invalid_argument for an incomplete/invalid supplied policy/map.
+// Passing these checks does not prove that a route owns a native listener;
+// Application must obtain endpoints from its actual held listener objects.
+void validate_web_gateway_policy(const WebGatewayPolicy&);
+void validate_web_native_routes(std::span<const WebNativeRoute>);
+// Small public transport metadata only. No credentials, native packets or
+// gameplay rights. Uses version1/account:{path}|null/games as the fixed schema.
+std::string web_native_routes_manifest(std::span<const WebNativeRoute>);
 // One WS peer owns one TCP peer into an Application-owned native listener.
 // It never authenticates, decrypts, selects gameplay or changes packet bytes.
 class WebClientGateway {

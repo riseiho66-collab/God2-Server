@@ -13,6 +13,7 @@
 #include "game/OwnedTaiwanGuildChatDispatch.h"
 #include "game/OwnedTaiwanGuildActionsDispatch.h"
 #include "core/SharedWorldHostPlan.h"
+#include "core/WebApplicationPlan.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "game/LegacyTaiwanOwnedDeitySelectionRegistry.h"
@@ -926,6 +927,7 @@ static void validate_application_world_plan(const Config& config,const SharedWor
 static int run_server_impl(const Config& config,const WebServerPlan* web_plan,unsigned run_for_seconds,
                            const SharedWorldHostPlan* world_plan=nullptr,const TaiwanThreeChannelPlan* channels=nullptr) {
     if(channels&&world_plan)throw std::invalid_argument("Select a single world plan or a three-channel recipe");
+    if(web_plan)validate_web_application_plan(config,*web_plan,channels!=nullptr);
     if(config.owned_pve_rooms_enabled&&channels)
         throw std::invalid_argument("Normal PvE source cannot manufacture a three-channel common-world source bridge");
     if(channels) {
@@ -945,8 +947,6 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
         if((config.owned_initial_player_enabled&&!config.owned_skillbook_learning_enabled)||
            (config.owned_pk_invitation_enabled&&(!config.owned_initial_player_enabled||!config.owned_skillbook_learning_enabled)))
             throw std::invalid_argument("Three-channel initial player/PK requires complete actual player/deity sources");
-        if(web_plan)for(const auto& route:web_plan->routes)if(route.role==WebServerPlan::Role::TwWorld)
-            throw std::invalid_argument("Three-channel Web G selection requires an explicit selected-channel bridge");
     }else validate_application_world_plan(config,world_plan);
     asio::io_context game;
     // The network context can retain queued session/acceptor callbacks containing
@@ -11317,8 +11317,8 @@ if(guild_officer_runtime && player_guild(session) &&
             auto& server=*account_server;
             if(web_plan) {
                 std::vector<WebNativeRoute> routes;
-                // Wildcard listeners are reached locally. No DNS/destination
-                // supplied by the browser, and dynamic TW G uses its bound port.
+                // Exact Application-held endpoints only. These transport paths
+                // grant no L selection, character ownership or G admission.
                 auto reachable=[](asio::ip::tcp::endpoint endpoint) {
                     if(endpoint.address().is_unspecified())endpoint.address(endpoint.address().is_v4()?
                         asio::ip::address(asio::ip::address_v4::loopback()):asio::ip::address(asio::ip::address_v6::loopback()));
@@ -11326,15 +11326,19 @@ if(guild_officer_runtime && player_guild(session) &&
                 };
                 for(const auto& request:web_plan->routes) {
                     using Role=WebServerPlan::Role;
-                    if(request.role==Role::TwAccount||request.role==Role::TwWorld) {
-                        if(!config.recovered_account_auth||!is_credential_mode(config.protocol_mode)||
-                           config.protocol_mode==ProtocolMode::God2CharacterConnection)
-                            throw std::invalid_argument("WEB TW requires hosted native authentication and role");
-                        if(request.role==Role::TwWorld&&!character_server)
-                            throw std::invalid_argument("WEB TW world listener missing");
-                        routes.push_back({request.role==Role::TwAccount?"/tw/native":"/tw/native-game",
-                            reachable({asio::ip::make_address(config.host),request.role==Role::TwAccount?server.port():character_server->port()})});
-                    } else throw std::invalid_argument("WEB native role invalid");
+                    if(request.role==Role::TwAccount) {
+                        routes.push_back({"/tw/native",reachable(server.bound_endpoint())});
+                    }else if(request.role==Role::TwWorld&&channels) {
+                        if(!channel_servers)throw std::logic_error("WEB native channel listeners missing");
+                        // G's existing private listener binding and true L-issued
+                        // handoff still reject a route to the wrong native world.
+                        for(std::uint8_t k=0;k<3;++k)
+                            routes.push_back({"/tw/native-game/"+std::to_string(k),
+                                reachable(channel_servers->endpoint(k)),channels->group,k});
+                    }else if(request.role==Role::TwWorld) {
+                        if(!character_server)throw std::invalid_argument("WEB TW world listener missing");
+                        routes.push_back({"/tw/native-game",reachable(character_server->bound_endpoint())});
+                    }else throw std::invalid_argument("WEB native role invalid");
                 }
                 web_gateway=std::make_unique<WebClientGateway>(network.context(),web_plan->policy,std::move(routes));
             }
@@ -11392,7 +11396,13 @@ if(guild_officer_runtime && player_guild(session) &&
                 spdlog::info("Character connection listening on {}:{}; independent authentication; 1F candidate unverified",config.host,character_server->port());
             }
             server.start();
-            if(web_gateway)web_gateway->start();
+            if(web_gateway) {
+                web_gateway->start();
+                const auto address=web_plan->policy.listen.address();
+                const auto host=address.is_v6()?"["+address.to_string()+"]":address.to_string();
+                spdlog::info("Local WEB native route catalog http://{}:{}/tw/native-routes; native authentication unchanged",
+                    host,web_gateway->port());
+            }
             for(std::size_t k=0;k<channel_count;++k)channel_sources[k]->start();
             spdlog::info("{} listening on {}:{} [protocol={}; mock_login={}]",config.name,config.host,server.port(),
                 config.protocol_mode==ProtocolMode::Fixture?"PLACEHOLDER":config.protocol_mode==ProtocolMode::God2LegacyCharacterListCandidate?"GOD2_LEGACY_CHARACTER_LIST_CANDIDATE_UNVERIFIED":config.protocol_mode==ProtocolMode::God2PostServerSelect?"GOD2_POST_SERVER_SELECT_LAB":config.protocol_mode==ProtocolMode::God2ServerList?"GOD2_SERVER_LIST_LAB":config.protocol_mode==ProtocolMode::God2LoginTerminal?"GOD2_LOGIN_TERMINAL_LAB":config.protocol_mode==ProtocolMode::God2C2S0002?"GOD2_C2S0002_LAB":config.protocol_mode==ProtocolMode::God2PostSeed?"GOD2_POST_SEED_LAB":"GOD2_RECOVERED_SEED_ONLY",config.mock_login);

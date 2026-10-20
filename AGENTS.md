@@ -138,3 +138,20 @@ archives; they are not active dependencies or runtime capabilities.
 - PHASE1 source/static restrictions still apply. Regression test source is
   not a passed test; do not build, execute tests/game/SQL or deploy in this
   scope. The separately paused full goal and4-discord heartbeat stay paused.
+
+## Owner scoped web-login source resume (2026-10-21)
+
+- The human explicitly answered "恢復登入串接源碼整合（建議）" in the
+  God2-WebClient-Main chat to the narrow question about notifying this server
+  chat to resume Main gateway mounting and trustworthy L-to-selected-G source
+  integration only. The actual userMessage was verified with read_thread:
+  turn01a15b39-d1bc-75d1-a31c-e987823ef080, not merely a peer quotation.
+- Implement only the explicit opt-in WebServerPlan/Main path and actual-held
+  native endpoint routing, retaining PC defaults, real L-issued provenance,
+  independent G authentication, character exclusivity and failure quarantine.
+  No guessed ports, arbitrary TCP proxy, or authority from A6/07/Origin/URL.
+- PHASE1 SOURCE_STATIC_ONLY remains: no compile/tests/server/game/VM/codec,
+  game SQL/schema/migration or deployment. Missing native providers stay OPEN;
+  route catalogs and mock fixtures are not actual login/world acceptance.
+- This scoped source resume does not resume the separately paused full goal
+  or4-discord heartbeat, and does not authorize changes in the client tree.

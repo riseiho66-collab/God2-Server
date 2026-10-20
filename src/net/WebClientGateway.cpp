@@ -8,6 +8,7 @@
 #include <span>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 #ifdef _WIN32
 #include <windows.h>
@@ -39,6 +40,101 @@ bool valid_close(const Bytes& p) {
     if(!((code>=1000&&code<=1014&&code!=1004&&code!=1005&&code!=1006)||(code>=3000&&code<=4999)))return false;
     return utf8(std::span<const std::uint8_t>(p).subspan(2));
 }
+std::optional<std::uint8_t> indexed_channel(std::string_view path) {
+    constexpr std::string_view prefix="/tw/native-game/";
+    if(path.size()==prefix.size()+1&&path.starts_with(prefix)&&path.back()>='0'&&path.back()<='2')
+        return static_cast<std::uint8_t>(path.back()-'0');
+    return {};
+}
+std::string json_string(std::string_view text) {
+    std::string result="\"";
+    constexpr char digits[]="0123456789abcdef";
+    for(const unsigned char c:text) {
+        if(c=='\"'||c=='\\'){result.push_back('\\');result.push_back(static_cast<char>(c));}
+        else if(c<32){result+="\\u00";result.push_back(digits[c>>4]);result.push_back(digits[c&15]);}
+        else result.push_back(static_cast<char>(c));
+    }
+    result.push_back('\"');return result;
+}
+bool set_deadline(asio::steady_timer& timer,std::chrono::seconds duration) {
+    // Policy validation guarantees the conversion. A later clock near its
+    // representable end still must not overflow when adding that duration.
+    const auto delta=std::chrono::duration_cast<Clock::duration>(duration);
+    const auto now=Clock::now();
+    if(now.time_since_epoch().count()>Clock::duration::max().count()-delta.count())return false;
+    timer.expires_at(now+delta);return true;
+}
+}
+void validate_web_gateway_policy(const WebGatewayPolicy& policy) {
+    constexpr auto largest_timeout=std::chrono::duration_cast<std::chrono::seconds>(Clock::duration::max());
+    if(!policy.listen.address().is_loopback()||policy.origins.empty()||
+       !policy.max_sessions||!policy.sessions_per_address||!policy.accepts_per_second||
+       !policy.message_bytes||policy.message_bytes>16*1024*1024||policy.queue_bytes<65546||
+       !policy.queue_frames||!policy.frames_per_second||!policy.bytes_per_second||
+       policy.handshake_timeout.count()<=0||policy.idle_timeout.count()<=0||
+       policy.message_timeout.count()<=0||policy.close_timeout.count()<=0||
+       policy.handshake_timeout>largest_timeout||policy.idle_timeout>largest_timeout||
+       policy.message_timeout>largest_timeout||policy.close_timeout>largest_timeout)
+        throw std::invalid_argument("Web gateway requires explicit loopback/origin/budgets");
+    std::set<std::string> origins;
+    for(const auto& origin:policy.origins)
+        if((!origin.starts_with("http://")&&!origin.starts_with("https://"))||
+           origin.find_first_of("\r\n \t")!=std::string::npos||
+           std::any_of(origin.begin(),origin.end(),[](unsigned char c){return c<32||c==127;})||
+           !origins.insert(origin).second)
+            throw std::invalid_argument("Web gateway Origin must be explicit and unique");
+}
+void validate_web_native_routes(std::span<const WebNativeRoute> routes) {
+    if(routes.empty()||routes.size()>4)
+        throw std::invalid_argument("Web gateway requires bounded actual native routes");
+    std::set<std::string> paths;
+    std::vector<Tcp::endpoint> endpoints;
+    std::optional<std::uint8_t> group;
+    std::array<bool,3> indexed{};
+    bool account=false,legacy=false,has_indexed=false;
+    for(const auto& route:routes) {
+        const auto channel=indexed_channel(route.path);
+        if((route.path!="/tw/native"&&route.path!="/tw/native-game"&&!channel)||
+           !route.endpoint.port()||route.endpoint.address().is_unspecified()||
+           !paths.insert(route.path).second||
+           std::find(endpoints.begin(),endpoints.end(),route.endpoint)!=endpoints.end())
+            throw std::invalid_argument("Web gateway requires unique fixed assigned native routes");
+        endpoints.push_back(route.endpoint);
+        if(channel) {
+            if(!route.group||!route.subgroup||*route.group>=10||*route.subgroup!=*channel||
+               (group&&group!=route.group))
+                throw std::invalid_argument("Web channel metadata must match its actual fixed route");
+            group=route.group;indexed[*channel]=true;has_indexed=true;
+        } else {
+            if(route.group||route.subgroup)
+                throw std::invalid_argument("Legacy web paths cannot invent channel metadata");
+            if(route.path=="/tw/native")account=true;else legacy=true;
+        }
+    }
+    if(has_indexed&&(!account||legacy||routes.size()!=4||
+       !std::all_of(indexed.begin(),indexed.end(),[](bool value){return value;})))
+        throw std::invalid_argument("Web channels require account and all three actual G endpoints");
+}
+std::string web_native_routes_manifest(std::span<const WebNativeRoute> routes) {
+    validate_web_native_routes(routes);
+    const bool account=std::any_of(routes.begin(),routes.end(),[](const auto& route){return route.path=="/tw/native";});
+    std::vector<const WebNativeRoute*> games;
+    for(const auto& route:routes)if(route.path!="/tw/native")games.push_back(&route);
+    std::sort(games.begin(),games.end(),[](const auto* a,const auto* b){return a->path<b->path;});
+    std::string result="{\"version\":1,\"account\":";
+    result+=account?"{\"path\":\"/tw/native\"}":"null";
+    result+=",\"games\":[";
+    bool comma=false;
+    for(const auto* route:games) {
+        if(comma)result.push_back(',');comma=true;
+        result+="{\"path\":"+json_string(route->path)+",\"native_address\":"+
+            json_string(route->endpoint.address().to_string())+",\"native_port\":"+std::to_string(route->endpoint.port());
+        if(route->group)result+=",\"group\":"+std::to_string(*route->group)+",\"subgroup\":"+std::to_string(*route->subgroup);
+        result.push_back('}');
+    }
+    result+="]}";
+    if(result.size()>4096)throw std::invalid_argument("Web native route metadata exceeds its fixed budget");
+    return result;
 }
 struct WebClientGateway::State:std::enable_shared_from_this<State> {
     struct Peer;
@@ -47,6 +143,7 @@ struct WebClientGateway::State:std::enable_shared_from_this<State> {
     asio::steady_timer retry;
     const WebGatewayPolicy policy;
     const std::vector<WebNativeRoute> routes;
+    const std::string manifest;
     std::set<std::shared_ptr<Peer>> peers;
     std::map<asio::ip::address,std::size_t> addresses;
     Clock::time_point accept_window=Clock::now();
@@ -54,25 +151,11 @@ struct WebClientGateway::State:std::enable_shared_from_this<State> {
     std::uint16_t bound_port=0;
     bool started=false,stopping=false;
     State(asio::io_context& io,WebGatewayPolicy p,std::vector<WebNativeRoute> r)
-        :strand(asio::make_strand(io)),acceptor(strand),retry(strand),policy(std::move(p)),routes(std::move(r)) {
-        if(!policy.listen.address().is_loopback()||policy.origins.empty()||routes.empty()||
-           !policy.max_sessions||!policy.sessions_per_address||!policy.accepts_per_second||
-           !policy.message_bytes||policy.message_bytes>16*1024*1024||policy.queue_bytes<65546||
-           !policy.queue_frames||!policy.frames_per_second||!policy.bytes_per_second||
-           policy.handshake_timeout.count()<=0||policy.idle_timeout.count()<=0||
-           policy.message_timeout.count()<=0||policy.close_timeout.count()<=0)
-            throw std::invalid_argument("Web gateway requires explicit loopback/origin/budgets");
-        std::set<std::string> paths,origins;
-        for(const auto& origin:policy.origins)
-            if((!origin.starts_with("http://")&&!origin.starts_with("https://"))||
-               origin.find_first_of("\r\n \t")!=std::string::npos||!origins.insert(origin).second)
-                throw std::invalid_argument("Web gateway Origin must be explicit and unique");
-        for(const auto& route:routes) {
-            if((route.path!="/tw/native"&&route.path!="/tw/native-game")||
-               !route.endpoint.port()||route.endpoint.address().is_unspecified()||
-               !paths.insert(route.path).second||route.endpoint==policy.listen)
-                throw std::invalid_argument("Web gateway requires registered native paths/endpoints");
-        }
+        :strand(asio::make_strand(io)),acceptor(strand),retry(strand),policy(std::move(p)),routes(std::move(r)),
+         manifest(web_native_routes_manifest(routes)) {
+        validate_web_gateway_policy(policy);
+        for(const auto& route:routes)if(route.endpoint==policy.listen)
+            throw std::invalid_argument("Web/native listener endpoint conflict");
         acceptor.open(policy.listen.protocol());acceptor.bind(policy.listen);acceptor.listen();
         bound_port=acceptor.local_endpoint().port();
         for(const auto& route:routes)
@@ -100,7 +183,9 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
          timeout(s->strand),message_deadline(s->strand) {}
     void close() {
         if(closed)return;closed=true;
-        asio::error_code ec;timeout.cancel();message_deadline.cancel();
+        asio::error_code ec;
+        try{timeout.cancel();}catch(...){}
+        try{message_deadline.cancel();}catch(...){}
         browser.cancel(ec);browser.close(ec);native.cancel(ec);native.close(ec);
         writes.clear();fragment.clear();queued=0;
         if(auto s=owner.lock()){
@@ -108,12 +193,16 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
             s->peers.erase(shared_from_this());
         }
     }
-    void arm(std::chrono::seconds duration) {
-        timeout.expires_after(duration);
-        timeout.async_wait([self=shared_from_this()](const asio::error_code& ec){if(!ec)self->close();});
+    bool arm(std::chrono::seconds duration) {
+        try {
+            if(!set_deadline(timeout,duration)){close();return false;}
+            timeout.async_wait([self=shared_from_this()](const asio::error_code& ec){if(!ec)self->close();});
+            return true;
+        }catch(...){close();return false;}
     }
     void begin() {
-        arm(policy.handshake_timeout);asio::error_code ec;browser.set_option(Tcp::no_delay(true),ec);
+        if(!arm(policy.handshake_timeout))return;
+        asio::error_code ec;browser.set_option(Tcp::no_delay(true),ec);
         asio::async_read_until(browser,input,"\r\n\r\n",[self=shared_from_this()](const asio::error_code& ec,std::size_t n){
             if(self->closed)return;if(ec){self->close();return;}
             try{self->request(n);}catch(...){self->close();}
@@ -124,6 +213,16 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
         auto data=std::make_shared<std::string>("HTTP/1.1 "+std::to_string(status)+" "+label+
             "\r\nContent-Length: 0\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n");
         asio::async_write(browser,asio::buffer(*data),[self=shared_from_this(),data](const asio::error_code&,std::size_t){self->close();});
+    }
+    void send_manifest(const std::shared_ptr<State>& state,const std::optional<std::string>& origin) {
+        closing=true;if(!arm(policy.close_timeout))return;
+        auto reply=std::make_shared<std::string>("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n"
+            "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: "+std::to_string(state->manifest.size())+"\r\n");
+        if(origin)*reply+="Access-Control-Allow-Origin: "+*origin+"\r\nVary: Origin\r\n";
+        *reply+="\r\n"+state->manifest;
+        // Metadata never opens a native socket. The small immutable response
+        // is retained through its one write and then the browser peer closes.
+        asio::async_write(browser,asio::buffer(*reply),[self=shared_from_this(),reply](const asio::error_code&,std::size_t){self->close();});
     }
     void request(std::size_t n) {
         auto s=owner.lock();if(!s){close();return;}
@@ -139,10 +238,27 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
             const auto key=lower(line.substr(0,colon));
             if(key.find_first_of(" \t\r\n")!=std::string::npos||!fields.emplace(key,trim(line.substr(colon+1))).second){reject(400,"Bad Request");return;}
         }
-        if(fields["host"].empty()||lower(fields["upgrade"])!="websocket"||
-           !token(fields["connection"],"upgrade")||fields["sec-websocket-version"]!="13"||
-           !nonce(fields["sec-websocket-key"])||fields.contains("transfer-encoding")||
+        if(fields["host"].empty()||fields.contains("transfer-encoding")||
            (fields.contains("content-length")&&fields["content-length"]!="0")) {reject(400,"Bad Request");return;}
+        if(path=="/tw/native-routes") {
+            if(input.size()||fields.contains("upgrade")||fields.contains("sec-websocket-key")||
+               fields.contains("sec-websocket-version")||fields.contains("sec-websocket-protocol")||
+               fields.contains("sec-websocket-extensions")||token(fields["connection"],"upgrade")) {
+                reject(400,"Bad Request");return;
+            }
+            std::optional<std::string> origin;
+            if(const auto found=fields.find("origin");found!=fields.end()) {
+                if(std::find(policy.origins.begin(),policy.origins.end(),found->second)==policy.origins.end()){
+                    reject(403,"Forbidden");return;
+                }
+                origin=found->second;
+            }
+            send_manifest(s,origin);return;
+        }
+        if(lower(fields["upgrade"])!="websocket"||!token(fields["connection"],"upgrade")||
+           fields["sec-websocket-version"]!="13"||!nonce(fields["sec-websocket-key"])) {
+            reject(400,"Bad Request");return;
+        }
         if(std::find(policy.origins.begin(),policy.origins.end(),fields["origin"])==policy.origins.end()){reject(403,"Forbidden");return;}
         // Exact targets only: no query host/port, redirects, DNS or path decoding.
         auto route=std::find_if(s->routes.begin(),s->routes.end(),[&](const auto& r){return r.path==path;});
@@ -155,7 +271,8 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
                 auto reply=std::make_shared<std::string>("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "+accept_key(key)+"\r\n\r\n");
                 asio::async_write(self->browser,asio::buffer(*reply),[self,reply](const asio::error_code& error,std::size_t){
                     if(self->closed)return;if(error){self->close();return;}
-                    self->arm(self->policy.idle_timeout);self->read_header();self->read_native();
+                    if(!self->arm(self->policy.idle_timeout))return;
+                    self->read_header();self->read_native();
                 });
             }catch(...){self->close();}
         });
@@ -177,7 +294,7 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
     }
     void finish(Bytes payload) {
         if(closed||closing)return;closing=true;fragment.clear();message_deadline.cancel();
-        asio::error_code ec;native.cancel(ec);native.close(ec);arm(policy.close_timeout);
+        asio::error_code ec;native.cancel(ec);native.close(ec);if(!arm(policy.close_timeout))return;
         enqueue(8,std::move(payload),true);
     }
     void fail(std::uint16_t code) {finish(Bytes{static_cast<std::uint8_t>(code>>8),static_cast<std::uint8_t>(code)});}
@@ -206,11 +323,14 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
         if(op<8&&(n>policy.message_bytes-fragment.size())){fail(1009);return;}
         if(!charge(n))return;
         if(op==2) {
-            message_deadline.expires_after(policy.message_timeout);
-            message_deadline.async_wait([self=shared_from_this()](const asio::error_code& ec){if(!ec)self->fail(1008);});
+            try {
+                if(!set_deadline(message_deadline,policy.message_timeout)){close();return;}
+                message_deadline.async_wait([self=shared_from_this()](const asio::error_code& ec){if(!ec)self->fail(1008);});
+            }catch(...){close();return;}
         }
         take(n+4,[self=shared_from_this(),op,fin,n](auto raw){
-            self->arm(self->policy.idle_timeout);Bytes payload(n);
+            if(!self->arm(self->policy.idle_timeout))return;
+            Bytes payload(n);
             for(std::size_t i=0;i<n;++i)payload[i]=(*raw)[i+4]^(*raw)[i&3];
             if(op==8){if(!valid_close(payload)){self->fail(1002);return;}self->finish(std::move(payload));return;}
             if(op==9){self->enqueue(10,std::move(payload));self->read_header();return;}
@@ -251,7 +371,7 @@ struct WebClientGateway::State::Peer:std::enable_shared_from_this<Peer> {
         native_reading=true;
         native.async_read_some(asio::buffer(native_input),[self=shared_from_this()](const asio::error_code& ec,std::size_t n){
             self->native_reading=false;if(self->closed||self->closing)return;
-            if(n){self->enqueue(2,Bytes(self->native_input.begin(),self->native_input.begin()+n));self->arm(self->policy.idle_timeout);}
+            if(n){self->enqueue(2,Bytes(self->native_input.begin(),self->native_input.begin()+n));if(!self->arm(self->policy.idle_timeout))return;}
             if(ec){self->fail(ec==asio::error::eof?1001:1011);return;}self->read_native();
         });
     }
@@ -273,8 +393,11 @@ void WebClientGateway::State::accept() {
     });
 }
 void WebClientGateway::State::stop() {
-    if(stopping)return;stopping=true;asio::error_code ec;acceptor.close(ec);retry.cancel();
-    const auto copy=peers;for(const auto& peer:copy)peer->close();
+    if(stopping)return;stopping=true;asio::error_code ec;acceptor.close(ec);
+    try{retry.cancel();}catch(...){}
+    // close() removes its exact peer. Avoid allocating a second peer set while
+    // retiring an already resource-bounded listener.
+    while(!peers.empty()){const auto peer=*peers.begin();peer->close();}
 }
 WebClientGateway::WebClientGateway(asio::io_context& io,WebGatewayPolicy p,std::vector<WebNativeRoute> r)
     :state_(std::make_shared<State>(io,std::move(p),std::move(r))) {}
