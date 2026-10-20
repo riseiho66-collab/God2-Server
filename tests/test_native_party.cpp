@@ -11,6 +11,40 @@ int main(){try{
     NativeParty p;for(unsigned n=1;n<=7;++n)p.observe(member(n));
     auto now=std::chrono::steady_clock::now();
     using K=RecoveredParty::Kind;
+    // An observation cannot silently hand a previous role's consent or group
+    // to a new account/character on the same transport identity.
+    {
+        NativeParty identities;for(unsigned n=1;n<=4;++n)identities.observe(member(n));
+        const auto reject_rebind=[&](unsigned session) {
+            const auto before=identities;
+            for(unsigned field=0;field<2;++field) {
+                auto replacement=*identities.member(session);
+                if(field==0)replacement.account=100;else replacement.character=100;
+                bool rejected=false;
+                try{identities.observe(replacement);}catch(const std::invalid_argument&){rejected=true;}
+                require(rejected&&identities.same_state(before),"Role rebind inherited party state or changed consent");
+            }
+        };
+        reject_rebind(1); // An ungrouped cached owner also has an incarnation.
+        identities.handle(2,{K::Join,2,1},now);
+        reject_rebind(1);reject_rebind(2); // Both sides of pending consent.
+        require(!identities.handle(1,{K::Answer,0,2,1},now).empty(),"Rejected rebind destroyed valid consent");
+        reject_rebind(1);reject_rebind(2); // Leader and member after acceptance.
+        const auto before=*identities.member(2);auto refreshed=before;
+        refreshed.x+=1;refreshed.resources[0]-=1;identities.observe(refreshed);
+        require(!identities.refresh(2,before).empty()&&identities.party_size(2)==2,
+            "Same owner resource refresh was rejected by identity fence");
+        identities.handle(3,{K::Join,3,1},now);
+        identities.disconnect(1); // Retire membership and every predecessor offer.
+        auto replacement=member(1);replacement.account=100;replacement.character=100;
+        identities.observe(replacement);
+        require(!identities.party_size(1)&&!identities.party_size(2)&&
+            identities.handle(1,{K::Answer,0,3,1},now).empty(),"Retired leader consent survived identity replacement");
+        identities.disconnect(2);
+        replacement=member(2);replacement.account=101;replacement.character=101;identities.observe(replacement);
+        require(identities.handle(2,{K::Join,101,100},now).size()==1&&
+            !identities.handle(1,{K::Answer,0,101,1},now).empty(),"Fresh explicitly retired owners cannot create a new party");
+    }
     require(p.handle(2,{K::Join,3,1},now).empty(),"Forged source joined");
     require(p.handle(2,{K::Join,2,2},now).empty(),"Self join");
     require(p.handle(2,{K::Join,2,1},now).size()==1,"Preview missing");

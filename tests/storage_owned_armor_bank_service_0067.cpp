@@ -6,6 +6,7 @@
 #include "protocol/RecoveredWorldFrame.h"
 #include <iomanip>
 #include <sstream>
+#include "BankCallbackRegression.h"
 
 namespace {
 using Service=OwnedArmorBankService;
@@ -14,13 +15,15 @@ struct Harness {
     std::optional<RecoveredBankService::Peer> peer;
     bool permit=true,fail_projection=false;unsigned renews{},serial{};
     std::optional<std::string> fixed_receipt;
+    std::function<void(std::string_view)> callback;
+    void observe(std::string_view stage){const auto hook=callback;if(hook)hook(stage);}
     Service service;
     explicit Harness(unsigned slots=50,bool file=false):fixture(slots,file),repository(fixture.repo()),plain_repo(fixture.raw),
         peer(RecoveredBankService::Peer{77,1,fixture.ids[0],1,1,1,1,true}),
-        service(repository,plain_repo,[this](auto session){return session==77?peer:std::nullopt;},[this](auto,auto target,auto){return permit&&target==279;},
-            [this](auto,auto){++renews;},[](const auto& row){return row.item_id==3107&&row.count&&row.source_sha256==SqliteArmorSlotRepository::source_sha256;},
-            [this](auto slot,const auto& row){if(fail_projection)throw DatabaseError("injected projection failure");RecoveredInventoryProjection::Metadata bytes{};bytes[0]=static_cast<std::uint8_t>(row.item_id);bytes[1]=static_cast<std::uint8_t>(row.item_id>>8);return RecoveredInventoryProjection::encode({slot,row.count,bytes}).value();},
-            [this]{if(fixed_receipt)return *fixed_receipt;std::ostringstream stream;stream<<std::string(56,'e')<<std::hex<<std::setw(8)<<std::setfill('0')<<serial++;return stream.str();},[](auto key){return key==60010;}){fixture.install();}
+        service(repository,plain_repo,[this](auto session){observe("lookup");return session==77?peer:std::nullopt;},[this](auto,auto target,auto){observe("permit");return permit&&target==279;},
+            [this](auto,auto){observe("renew");++renews;},[this](const auto& row){observe("eligible");return row.item_id==3107&&row.count&&row.source_sha256==SqliteArmorSlotRepository::source_sha256;},
+            [this](auto slot,const auto& row){observe("plain");if(fail_projection)throw DatabaseError("injected projection failure");RecoveredInventoryProjection::Metadata bytes{};bytes[0]=static_cast<std::uint8_t>(row.item_id);bytes[1]=static_cast<std::uint8_t>(row.item_id>>8);return RecoveredInventoryProjection::encode({slot,row.count,bytes}).value();},
+            [this]{observe("receipt");if(fixed_receipt)return *fixed_receipt;std::ostringstream stream;stream<<std::string(56,'e')<<std::hex<<std::setw(8)<<std::setfill('0')<<serial++;return stream.str();},[this](auto key){observe("weapon");return key==60010;}){fixture.install();}
     static auto now(){return Service::Clock::now();}
     auto open(){return service.open(77,279,now());}
     auto handle(RecoveredBankItems::Kind kind,std::uint8_t source,std::uint8_t destination,std::uint8_t quantity=1,std::uint8_t page=0,std::uint16_t target=279){const std::array requests{RecoveredBankItems::Request{kind,target,page,source,destination,quantity}};return service.handle(77,requests,now());}
@@ -70,5 +73,16 @@ void foreign_admission(){
         else f.scalar(7,60010,1,3);
         const auto before=f.rows();rejects([&]{h.open();});require(f.rows()==before,"Foreign qualification failure changed saved rows");}
 }
+void callback_lifecycle_regression(){
+    for(bool full:{false,true}){
+        Harness h;h.fixture.add(0,1001,0xa1,7);h.fixture.scalar(5,3107,7,3);h.open();const auto before=h.fixture.rows();
+        const auto result=god2_test::bank_revoke_on_receipt(h.fixture.raw,h.service,[&]{return h.handle(RecoveredBankItems::Kind::Deposit,full?0:5,2,full?1:2);});
+        require(result.rejected&&!result.committed&&result.batches.empty()&&h.fixture.rows()==before,"Armor/plain bank postwrite callback escaped rollback");
+    }
+    god2_test::bank_callback_regressions<Harness>([](auto& h){h.fixture.add(0,1001,0xa1,7);h.fixture.scalar(5,3107,7,3);},[](auto& h){return h.fixture.rows();},[](auto& h){return h.handle(RecoveredBankItems::Kind::Deposit,5,2,2);});
+    Harness h;h.fixture.add(0,1001,0xa1,7);const auto before=h.fixture.rows();unsigned cuts=0;bool refused=false;
+    try{h.repository.commit(std::string(64,'f'),{h.fixture.load(),Op::Deposit,0,0,2,1},[](const auto&){},{},[&]{if(++cuts==2)throw DatabaseError("final current cut");});}catch(const DatabaseError&){refused=true;}
+    require(refused&&cuts==2&&h.fixture.rows()==before,"Armor final postverify lifecycle cut did not rollback");
 }
-int main(){try{unified_full_projection();sparse_and_access();failures_mixed_and_receipts();foreign_admission();std::cout<<"PASS CUSTOM0067 unified armor bank service: owner-bound full48/3B41, same-ID whole20 swap, mixed-vault MED quantity path, sparse30, foreign instance qualification, context/lease/pending/CAS, two-way receipts, projection failure and actual mutation/late-pending trigger rollback; no schema/grants or live routing\n";return 0;}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
+}
+int main(){try{callback_lifecycle_regression();unified_full_projection();sparse_and_access();failures_mixed_and_receipts();foreign_admission();std::cout<<"PASS CUSTOM0067 unified armor bank service: owner-bound full48/3B41, same-ID whole20 swap, mixed-vault MED quantity path, sparse30, foreign instance qualification, context/lease/pending/CAS, two-way receipts, projection failure and actual mutation/late-pending trigger rollback; no schema/grants or live routing\n";return 0;}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

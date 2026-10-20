@@ -159,9 +159,12 @@ public:
     StoredDeitySelection select_deity(std::uint64_t account,std::uint64_t character,
         std::uint8_t key,const std::optional<StoredDeitySelection>& expected);
     // Explicit trusted acquisition/import API. Network requests cannot grant.
+    // Own inputs before observers. Status-only changes preserve only an exact
+    // current CUSTOM-0148 activation lineage in this SAME transaction; changed
+    // declaration/ordered skills/provenance never adopt an old activation.
     StoredDeity store_deity(std::uint64_t account,std::uint64_t character,
-        const RecoveredDeityState::Snapshot& snapshot,std::optional<std::uint64_t> expected_revision,
-        const CompanionProvenance& provenance);
+        RecoveredDeityState::Snapshot snapshot,std::optional<std::uint64_t> expected_revision,
+        CompanionProvenance provenance);
     std::vector<StoredPet2Slot> load_pet2_slots(std::uint64_t account,std::uint64_t character);
     // Explicitly allocate three empty instance cells without acquiring a pet.
     std::size_t provision_pet2_slots(std::uint64_t account,std::uint64_t character);

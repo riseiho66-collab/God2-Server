@@ -131,6 +131,12 @@ public:
     // all activation headers/events and full inventory/equipment provenance.
     bool plan_matches_restoration(const Plan&,const Restoration&) const noexcept;
 private:
+    friend class SqliteCompanionRepository;
+    // Existing trusted import writer only; no public grant/factory. The caller
+    // owns its transaction and full before/after rows. Retain the original book
+    // events/links exactly, advancing only a matching status-only witness.
+    static bool preserve_status_only_activation(sqlite3*,std::uint64_t account,
+        std::uint64_t character,const StoredDeity& before,const StoredDeity& after);
     void owner() const;
     void namespaces() const;
     std::shared_ptr<State> read_state(OwnedDeityRosterReadset);

@@ -20,6 +20,50 @@ void validate_reply(std::span<const std::uint8_t> reply) {
     }
 }
 }
+class RecoveredBattleService::BindingOperation final {
+public:
+    BindingOperation(RecoveredBattleService& service,Session& session,Bound& bound)
+        :service_(service),session_(session),bound_(bound),id_(session.id()),
+         generation_(session.battle_generation()){
+        if(bound_.owned_skill_operating){
+            bound_.owned_skill_reentered=true;
+            throw std::invalid_argument("Battle binding operation reentry rejected");
+        }
+        bound_.owned_skill_reentered=false;
+        require_current();
+        bound_.owned_skill_operating=true;
+    }
+    ~BindingOperation(){
+        // A callback that returned after a durable boundary cannot make its
+        // now-stale model retryable. Retire custody; never claim SQL rollback.
+        if(persistence_entered_ && !current())bound_.owned_skill_remove_pending=true;
+        bound_.owned_skill_operating=false;
+        bound_.owned_skill_reentered=false;
+        if(bound_.owned_skill_remove_pending)service_.remove(id_);
+    }
+    BindingOperation(const BindingOperation&)=delete;
+    BindingOperation& operator=(const BindingOperation&)=delete;
+    void begin_persistence(){require_current();persistence_entered_=true;}
+    void require_current()const{
+        // remove() retains this node until the outer operation unwinds. Check
+        // poison/identity before another callback, persistence or publication.
+        if(!current())
+            throw std::invalid_argument("Battle binding changed during callback");
+    }
+private:
+    bool current()const noexcept{
+        return !bound_.owned_skill_reentered && !bound_.owned_skill_remove_pending &&
+            bound_.session==&session_ && !session_.closing() &&
+            session_.state()==SessionState::InBattle && session_.account_id==bound_.account &&
+            session_.character_id==bound_.character && session_.battle_generation()==generation_ &&
+            generation_==bound_.native_delta_battle_generation;
+    }
+    RecoveredBattleService& service_;
+    Session& session_;
+    Bound& bound_;
+    const std::uint64_t id_,generation_;
+    bool persistence_entered_=false;
+};
 RecoveredBattleService::RecoveredBattleService(Battle::Rule rule) : rule_(std::move(rule)) {
     if (!rule_) throw std::invalid_argument("Missing battle rule");
 }
@@ -212,6 +256,10 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
     auto& bound=found->second;
     if (bound.session!=&session || bound.account!=session.account_id ||
         bound.character!=session.character_id) return std::nullopt;
+    BindingOperation operation(*this,session,bound);
+    const Battle::Rule guarded_rule=[&](const CombatRuleInput& input){
+        auto result=rule_(input);operation.require_current();return result;
+    };
     if(records.size()==1) {
         if(const auto* pose=std::get_if<RecoveredWorldRecords::ClientPoseNotification>(&records.front())) {
             // CUSTOM-0103: standalone native battle symbol echo, never a combat
@@ -304,15 +352,19 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
             // is unknown; do not fabricate a zero-damage defense or victory.
             auto staged=bound.battle;
             const auto& retaliation=*bound.policy.diagnostic_retaliation;
-            const auto reply=staged.act(0,staged.inspect().revision,retaliation,rule_,
+            const auto reply=staged.act(0,staged.inspect().revision,retaliation,guarded_rule,
                 [&](const auto& state,const auto& result) {
                     auto wire=bound.encode(state,result);
+                    operation.require_current();
                     validate_reply(wire);
                     return wire;
                 });
-            if(bound.commit) bound.commit(bound.battle.inspect(),staged.inspect());
-            if(bound.checkpoint_commit)
+            if(bound.commit){operation.begin_persistence();bound.commit(bound.battle.inspect(),staged.inspect());operation.require_current();}
+            if(bound.checkpoint_commit){
+                operation.begin_persistence();
                 bound.checkpoint_commit(bound.battle.checkpoint(),staged.checkpoint());
+                operation.require_current();
+            }
             static_assert(std::is_nothrow_move_assignable_v<Battle>);
             bound.battle=std::move(staged);
             bound.action_received=true;
@@ -363,13 +415,17 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
             const auto target=static_cast<std::uint8_t>(side*14+std::countr_zero(skill->target_masks[side]));
             auto staged=bound.battle;
             auto reply=staged.revive(bound.character,staged.inspect().revision,bound.policy.actor_position,
-                target,bound.policy.diagnostic_revival->rule,[&](const auto& state,const auto& result) {
+                target,[&](const RevivalInput& input){
+                    auto result=bound.policy.diagnostic_revival->rule(input);
+                    operation.require_current();return result;
+                },[&](const auto& state,const auto& result) {
                     auto wire=bound.policy.diagnostic_revival->encode(state,result);
+                    operation.require_current();
                     validate_reply(wire);
                     return wire;
                 });
-            if(bound.commit) bound.commit(bound.battle.inspect(),staged.inspect());
-            if(bound.checkpoint_commit) bound.checkpoint_commit(bound.battle.checkpoint(),staged.checkpoint());
+            if(bound.commit){operation.begin_persistence();bound.commit(bound.battle.inspect(),staged.inspect());operation.require_current();}
+            if(bound.checkpoint_commit){operation.begin_persistence();bound.checkpoint_commit(bound.battle.checkpoint(),staged.checkpoint());operation.require_current();}
             static_assert(std::is_nothrow_move_assignable_v<Battle>);
             bound.battle=std::move(staged);
             bound.action_received=true;
@@ -476,12 +532,15 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
         std::vector<std::uint8_t> initial_reply;
         if(initial_control_received && bound.policy.diagnostic_initial_control_reply) {
             initial_reply=bound.policy.diagnostic_initial_control_reply();
+            operation.require_current();
             validate_reply(initial_reply);
         }
         if(control_received && bound.phase_commit && bound.battle.active()) {
             const auto previous=checkpoint_revival(session);
             auto next=previous;next.control_received=true;
+            operation.begin_persistence();
             bound.phase_commit(previous,next);
+            operation.require_current();
         }
         if(initial_control_received) bound.initial_control_received=true;
         if(control_received) bound.control_received=true;
@@ -515,15 +574,9 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
     // CUSTOM-0139: after full authenticated key/sequence/target selection, own
     // a fresh saved observation through this one staged action and persistence.
     std::optional<SelectedDeitySkillReadset> owned_skill;
-    struct OperationExit {
-        RecoveredBattleService& service;std::uint64_t id;bool& active;bool& remove_pending;
-        OperationExit(RecoveredBattleService& owner,std::uint64_t key,bool& value,bool& pending) noexcept
-            :service(owner),id(key),active(value),remove_pending(pending){}
-        ~OperationExit(){active=false;if(remove_pending)service.remove(id);}
-    };
-    std::optional<OperationExit> owned_operation;
     const auto generation=session.battle_generation();
     const auto current_owned=[&] {
+        operation.require_current();
         if(bound.owned_skill_reentered || bound.session!=&session || session.closing() ||
            session.state()!=SessionState::InBattle || session.account_id!=bound.account ||
            session.character_id!=bound.character || session.battle_generation()!=generation ||
@@ -533,8 +586,6 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
             throw std::invalid_argument("Owned skill session changed");
     };
     if(first && bound.policy.saved_owned_skills.contains(skill_key(first->selection_kind_byte,first->selection_id_byte))) {
-        bound.owned_skill_operating=true;bound.owned_skill_reentered=false;
-        owned_operation.emplace(*this,session.id(),bound.owned_skill_operating,bound.owned_skill_remove_pending);
         // CUSTOM-0140 local-write prerequisite for this supplied bootstrap
         // only. Pending early-arrival/native timing remains an acceptance gap;
         // absent receipts preserve existing explicitly trusted other bindings.
@@ -550,6 +601,7 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
     // native turn/ack admission and replay detection remain separate work.
     const auto encode=[&](const auto& state,const auto& result) {
             auto reply=bound.encode(state,result);
+            operation.require_current();
             validate_reply(reply); // Validation must occur before Battle commits.
             return reply;
         };
@@ -561,6 +613,7 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
                 skill_key(first->selection_kind_byte,first->selection_id_byte));
             if(found!=bound.policy.skill_encoders.end()) {
                 auto wire=found->second(state,result);
+                operation.require_current();
                 validate_reply(wire);
                 return wire;
             }
@@ -570,14 +623,16 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
     auto staged=bound.battle;
     std::vector<std::uint8_t> reply;
     try {
-        reply=staged.act(bound.character,staged.inspect().revision,*action,rule_,encode_skill);
+        reply=staged.act(bound.character,staged.inspect().revision,*action,guarded_rule,encode_skill);
     } catch(const InsufficientBattleMp& refusal) {
+        operation.require_current();
         const auto& source=*bound.battle.inspect().actors[action->source];
         if(!bound.policy.diagnostic_mp_refusal || control_received || initial_control_received ||
            !first || records.size()!=1 || action->targets.size()!=1 ||
            source.mp>=action->mp_cost || refusal.available!=source.mp || refusal.required!=action->mp_cost)
             throw;
         auto refused=bound.policy.diagnostic_mp_refusal(bound.battle.inspect(),*action,refusal);
+        operation.require_current();
         validate_reply(refused);
         if(owned_skill)current_owned();
         return refused;
@@ -585,7 +640,7 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
     if(bound.policy.diagnostic_retaliation && staged.active()) {
         const auto& retaliation=*bound.policy.diagnostic_retaliation;
         if(staged.inspect().actors[retaliation.source]->hp) {
-            const auto counter=staged.act(0,staged.inspect().revision,retaliation,rule_,encode);
+            const auto counter=staged.act(0,staged.inspect().revision,retaliation,guarded_rule,encode);
             reply.insert(reply.end(),counter.begin(),counter.end());
         }
     }
@@ -596,12 +651,14 @@ std::optional<std::vector<std::uint8_t>> RecoveredBattleService::handle(
             throw std::invalid_argument("Owned skill saved selection changed during staging");
         current_owned();
     }
-    if(bound.commit) bound.commit(bound.battle.inspect(),staged.inspect());
+    if(bound.commit){operation.begin_persistence();bound.commit(bound.battle.inspect(),staged.inspect());operation.require_current();}
     if(bound.checkpoint_commit) {
+        operation.begin_persistence();
         const auto before=bound.battle.checkpoint();
         const auto after=staged.checkpoint();
         if(owned_skill)bound.owned_checkpoint_commit(before,after,*owned_skill);
         else bound.checkpoint_commit(before,after);
+        operation.require_current();
     }
     // Persistence must obey the existing no-reentry/no-send callback contract.
     // This fence prevents stale in-memory publication; it cannot undo COMMIT.
@@ -624,7 +681,17 @@ std::vector<std::uint8_t> RecoveredBattleService::apply_native_deltas(Session& s
     if(bound.session!=&session || bound.account!=session.account_id || bound.character!=session.character_id ||
        session.state()!=SessionState::InBattle || bound.action_received || records.empty())
         throw std::invalid_argument("Native result session or phase mismatch");
-    for(const auto& record:records)if(record.source()!=bound.policy.actor_position)
+    BindingOperation operation(*this,session,bound);
+    // Same representation bound as Battle::apply_native_deltas, before any
+    // allocation. Own the records and callable before an encoder can clear
+    // its caller's vector/function while still reading the supplied view.
+    if(records.size()>bound.battle.inspect().actors.size()*RecoveredBattleDelta::indexed_capacity)
+        throw std::invalid_argument("Invalid native result exchange");
+    const std::vector<RecoveredBattleDelta::Record> owned_records(records.begin(),records.end());
+    const auto serialize=encode;
+    operation.require_current();
+    if(!serialize)throw std::invalid_argument("Missing native result encoder");
+    for(const auto& record:owned_records)if(record.source()!=bound.policy.actor_position)
         throw std::invalid_argument("Native result source differs from authorized actor");
     const auto generation=session.battle_generation();
     const auto account=session.account_id,character=session.character_id;
@@ -644,15 +711,14 @@ std::vector<std::uint8_t> RecoveredBattleService::apply_native_deltas(Session& s
     }
     auto staged=bound.battle;
     const auto validated=[&](const BattleSnapshot& state,std::span<const RecoveredBattleDelta::Record> deltas) {
-        if(!encode)throw std::invalid_argument("Missing native result encoder");
-        auto wire=encode(state,deltas);validate_reply(wire);
+        auto wire=serialize(state,deltas);operation.require_current();validate_reply(wire);
         if(!view_current())throw std::invalid_argument("Native result receiver view retired during encoding");
         return wire;
     };
-    auto reply=staged.apply_native_deltas(session.character_id,revision,records,validated,native_view);
+    auto reply=staged.apply_native_deltas(session.character_id,revision,owned_records,validated,native_view);
     if(!view_current())throw std::invalid_argument("Native result receiver view retired before commit");
-    if(bound.commit)bound.commit(bound.battle.inspect(),staged.inspect());
-    if(bound.checkpoint_commit)bound.checkpoint_commit(bound.battle.checkpoint(),staged.checkpoint());
+    if(bound.commit){operation.begin_persistence();bound.commit(bound.battle.inspect(),staged.inspect());operation.require_current();}
+    if(bound.checkpoint_commit){operation.begin_persistence();bound.checkpoint_commit(bound.battle.checkpoint(),staged.checkpoint());operation.require_current();}
     bound.battle=std::move(staged);bound.action_received=true;
     return reply;
 }
@@ -670,10 +736,13 @@ void RecoveredBattleService::rearm_diagnostic(Session& session,std::uint64_t exp
        bound.reconnect_notice==Bound::ReconnectNotice::Pending ||
        bound.reconnect_notice==Bound::ReconnectNotice::Consumed)
         throw std::invalid_argument("Diagnostic rearm preconditions failed");
+    BindingOperation operation(*this,session,bound);
     if(bound.phase_commit) {
         const auto previous=checkpoint_revival(session);
         auto next=previous;next.action_received=false;next.control_received=false;
+        operation.begin_persistence();
         bound.phase_commit(previous,next);
+        operation.require_current();
     }
     bound.action_received=false;
     bound.control_received=false;

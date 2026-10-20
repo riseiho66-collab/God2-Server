@@ -1,4 +1,7 @@
 #pragma once
+#include "handlers/SynchronousCallbackFence.h"
+#include <type_traits>
+#include <utility>
 #include "db/SqliteBankRepository.h"
 #include "protocol/RecoveredBank.h"
 #include <chrono>
@@ -25,10 +28,10 @@ public:
     std::optional<std::vector<std::uint8_t>> open(std::uint64_t session,std::uint16_t target,Clock::time_point now);
     Result handle(std::uint64_t session,std::span<const RecoveredBank::Request> requests,Clock::time_point now);
     // CUSTOM-0065 composes the already qualified money lease for item banking.
-    // Pure access query; no money/context mutation or NPC-role inference.
-    bool permits_items(std::uint64_t session,std::uint16_t target,Clock::time_point now) const;
+    // Access query grants no money or NPC role. A callback failure retires the lease.
+    bool permits_items(std::uint64_t session,std::uint16_t target,Clock::time_point now);
     void renew_items(std::uint64_t session,Clock::time_point now);
-    void disconnect(std::uint64_t session){contexts_.erase(session);}
+    void disconnect(std::uint64_t session){callbacks_.invalidate_if_running();contexts_.erase(session);}
 private:
     struct Context {Peer peer;std::uint16_t target;SqliteBankRepository::Snapshot expected;Clock::time_point expires;};
     static std::vector<std::uint8_t> synchronization(const SqliteBankRepository::Snapshot& snapshot);
@@ -37,5 +40,17 @@ private:
     Access access_;
     Receipt receipt_;
     std::map<std::uint64_t,Context> contexts_;
+    template<class F,class... Args>
+    auto invoke_adapter(const F& function,Args&&... args) const {
+        callbacks_.require_current();
+        if constexpr(std::is_void_v<std::invoke_result_t<const F&,Args...>>) {
+            function(std::forward<Args>(args)...);callbacks_.require_current();
+        } else {
+            auto result=function(std::forward<Args>(args)...);
+            callbacks_.require_current();return result;
+        }
+    }
+    SynchronousCallbackFence callbacks_;
+
 };
 }

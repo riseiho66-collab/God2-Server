@@ -38,13 +38,13 @@ CREATE TABLE IF NOT EXISTS character_bank_receipts(
 )");
     transaction.commit();
 }
-SqliteBankRepository::Balance SqliteBankRepository::provision_bank(std::uint64_t account,std::uint64_t character) {
-    sqlite_detail::Transaction transaction(db_);owner(db_,account,character);
+SqliteBankRepository::Balance SqliteBankRepository::provision_bank(std::uint64_t account,std::uint64_t character,const Current& current) {
+    sqlite_detail::Transaction transaction(db_);owner(db_,account,character);if(current)current();
     sqlite_detail::Statement insert(db_,"INSERT INTO character_bank_balances(character_id,amount,revision,design_id) "
         "VALUES(?,0,1,'CUSTOM-0064') ON CONFLICT(character_id) DO NOTHING");
     insert.bind_id(1,character);insert.done();
     const auto result=load_bank(account,character);require(result.has_value(),"Bank provision readback missing");
-    transaction.commit();return *result;
+    if(current)current();transaction.commit();return *result;
 }
 std::optional<SqliteBankRepository::Balance> SqliteBankRepository::load_bank(std::uint64_t account,std::uint64_t character) {
     owner(db_,account,character);
@@ -81,7 +81,7 @@ SqliteBankRepository::Snapshot SqliteBankRepository::plan(const Request& request
     } else throw DatabaseError("Bank operation invalid");
     ++result.wallet.revision;++result.bank.revision;return result;
 }
-SqliteBankRepository::Snapshot SqliteBankRepository::commit(const std::string& server_receipt,const Request& request) {
+SqliteBankRepository::Snapshot SqliteBankRepository::commit(const std::string& server_receipt,const Request& request,const Current& current) {
     require(server_receipt.size()==64 && server_receipt.find_first_not_of("0123456789abcdef")==std::string::npos,"Bank receipt invalid");
     const auto next=plan(request);const auto& expected=request.expected;
     sqlite_detail::Transaction transaction(db_);
@@ -91,6 +91,7 @@ SqliteBankRepository::Snapshot SqliteBankRepository::commit(const std::string& s
     sqlite_detail::Statement battle(db_,"SELECT 1 FROM battle_reservations r LEFT JOIN battle_settlements s "
         "ON s.battle_id=r.id WHERE r.character_id=? AND s.battle_id IS NULL LIMIT 1");
     battle.bind_id(1,expected.character);require(!battle.row(),"Bank during pending battle");
+    if(current)current(); // Final pure source cut after all before-read observers.
     sqlite_detail::Statement purse(db_,"UPDATE character_trade_wallets SET amount=?,revision=? "
         "WHERE character_id=? AND amount=? AND revision=? AND design_id='CUSTOM-0063'");
     purse.bind(1,next.wallet.amount);purse.bind_id(2,next.wallet.revision);purse.bind_id(3,next.character);
@@ -116,6 +117,7 @@ SqliteBankRepository::Snapshot SqliteBankRepository::commit(const std::string& s
         recorded.number<std::uint32_t>(6)==next.bank.amount && recorded.number<std::uint64_t>(7)==next.bank.revision &&
         recorded.text(8)=="CUSTOM-0064","Bank receipt readback mismatch");
     require(load(next.account,next.character)==next,"Bank balances readback mismatch");
+    if(current)current(); // No game observer follows this cut before COMMIT.
     transaction.commit();return next;
 }
 }

@@ -29,7 +29,12 @@ public:
     struct Settlement {std::array<Snapshot,2> sides;};
     // Capture immutable owner evidence before reply preparation; both checks
     // run in the same mutation transaction, after BEGIN and before COMMIT.
-    struct CommitProof {std::function<void()> before_write,after_write;};
+    struct CommitProof {
+        std::function<void()> before_write,after_write;
+        // Pure no-SQL/provider observation immediately before COMMIT, after
+        // all original readback/proof callbacks. Independent of paired proofs.
+        std::function<bool()> current;
+    };
     using PrepareProof=std::function<CommitProof(const std::array<Snapshot,2>&,const Settlement&)>;
     explicit SqliteTradeRepository(sqlite3* db,PrepareProof proof={}):db_(db),proof_(std::move(proof)) {}
     // Explicit LEGACY installation only; its historical CHECK is unchanged.

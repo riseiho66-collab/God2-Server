@@ -29,12 +29,15 @@ public:
     struct Plan {std::array<Snapshot,2> sides;std::vector<Transfer> transfers;bool operator==(const Plan&) const=default;};
     using PreparePlan=std::function<void(const Plan&)>;
     using CheckPlan=std::function<void(const Plan&)>;
+    // Last no-allocation/no-provider/no-SQL observation after the final full
+    // readback. The actual service supplies only its operation latch/deadline.
+    using FinalCurrent=std::function<bool()>;
     static constexpr const char* design_id="CUSTOM-0069";
     static std::string schema(); // Explicit caller installation only; no DDL in constructor/load.
     SqliteOwnedInstanceTradeRepository(sqlite3*,QualifyArmor,QualifyInstance,LookupWeapon,EligiblePlain,SqliteBeastSnapshotRepository* beasts=nullptr);
     Snapshot load(std::uint64_t account,std::uint64_t character);
     Plan plan(const std::array<Side,2>&) const;
-    Plan commit(const std::string& receipt,const std::array<Side,2>&,const PreparePlan&,const CheckPlan& check={});
+    Plan commit(const std::string& receipt,const std::array<Side,2>&,const PreparePlan&,const CheckPlan& check={},const FinalCurrent& current={});
     bool receipt_exists(const std::string&);
 private:
     void validate(const Snapshot&) const;

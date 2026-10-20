@@ -94,11 +94,12 @@ bool SqliteOwnedMixedBankRepository::receipt_exists(const std::string& receipt,R
 void SqliteOwnedMixedBankRepository::verify_snapshot_in_transaction(const Snapshot& expected){
     require(sqlite3_get_autocommit(db_)==0,"Mixed bank proof requires mutation transaction");foreign_.verify_snapshot_in_transaction(expected);
 }
-SqliteOwnedMixedBankRepository::Plan SqliteOwnedMixedBankRepository::commit(const std::string& receipt,const Request& request,const Prepare& prepare,const Check& check){
+SqliteOwnedMixedBankRepository::Plan SqliteOwnedMixedBankRepository::commit(const std::string& receipt,const Request& request,const Prepare& prepare,const Check& check,const std::function<void()>& current){
     static_assert(std::is_nothrow_move_constructible_v<Plan>,"Committed mixed plan must return without allocation exceptions");
     require(hash(receipt)&&bool(prepare)&&sqlite3_get_autocommit(db_)!=0,"Mixed bank preparation/receipt/transaction invalid");auto next=plan(request);const auto before=state(request.expected),after=state(next.after),immutable=immutable_rows(db_,request.expected.base.bag.character,receipt);prepare(next);
     sqlite_detail::Transaction transaction(db_);verify_snapshot_in_transaction(request.expected);require(!receipt_exists(receipt),"Mixed bank duplicate receipt");require(immutable_rows(db_,request.expected.base.bag.character,receipt)==immutable,"Mixed bank immutable prewrite conflict");
     const auto character=request.expected.base.bag.character;
+    if(current)current(); // Pure lifecycle check after before-read observers.
     // Both occupied overlays are removed before either scalar is exchanged,
     // so the frozen reverse collision triggers remain authoritative.
     for(const auto slot:{next.source,next.destination}){
@@ -124,6 +125,6 @@ SqliteOwnedMixedBankRepository::Plan SqliteOwnedMixedBankRepository::commit(cons
     const auto verify=[&]{
         sqlite_detail::Statement read(db_,"SELECT account_id,character_id,operation,page,source,destination,quantity,before_state,after_state,design_id FROM character_bank_mixed_receipts WHERE receipt=?");read.bind(1,receipt);require(read.row()&&read.number<std::uint64_t>(0)==request.expected.base.bag.account&&read.number<std::uint64_t>(1)==character&&read.number<std::uint8_t>(2)==101&&read.number<std::uint8_t>(3)==request.page&&read.number<std::uint8_t>(4)==request.source&&read.number<std::uint8_t>(5)==request.destination&&read.number<std::uint8_t>(6)==request.quantity&&read.text(7)==before&&read.text(8)==after&&read.text(9)==design_id&&!read.row(),"Mixed bank exact receipt readback conflict");
         verify_snapshot_in_transaction(next.after);require(!foreign_.receipt_exists(receipt),"Mixed bank late old-ledger receipt conflict");require(immutable_rows(db_,character,receipt)==immutable,"Mixed bank other-owner/money/receipt history readback conflict");
-    };verify();if(check){check(next);verify();}transaction.commit();return next;
+    };verify();if(check){check(next);verify();}if(current)current();transaction.commit();return next;
 }
 }

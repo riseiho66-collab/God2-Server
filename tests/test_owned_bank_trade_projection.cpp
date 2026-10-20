@@ -86,5 +86,62 @@ void final_readback_after_callback(){Fixture f;const auto a=f.trades->load(1,f.i
     rejects([&]{f.banks->commit(std::string(64,'b'),deposit,bank_proof);});require(post&&f.banks->load(1,f.ids[0])==bank&&f.receipts("character_bank_item_receipts")==0,"Bank failed to reread receipt after post callback or rollback330 cells");
     rejects([&]{f.trades->prepare_proof({a,b},SqliteTradeRepository::plan(sides),[](const auto&,const auto&){return SqliteTradeRepository::CommitProof{};});});
 }
+// Source regressions only in PHASE1: no fixture/test was executed.
+void bank_callback_lifecycle(){
+    using B=RecoveredBankItemsService;using Q=RecoveredBankItems::Request;
+    const auto now=B::Clock::now();
+    // Every adapter is tested against explicit retirement and caught nested
+    // open/handle. A caught inner exception must still poison the outer call.
+    for(unsigned lane=0;lane<8;++lane)for(unsigned mode=0;mode<3;++mode){
+        Fixture f;std::unique_ptr<B> service;bool armed=false,fired=false;
+        const std::array<Q,1> deposit{{{RecoveredBankItems::Kind::Deposit,531,0,5,2,3}}};
+        const auto interrupt=[&](unsigned at){if(!armed||fired||at!=lane)return;fired=true;
+            if(mode==0)service->disconnect(1);
+            else if(mode==1){try{service->open(1,531,now);}catch(const DatabaseError&){}}
+            else {try{service->handle(1,deposit,now);}catch(const DatabaseError&){}}
+        };
+        const auto owned=f.owned();const auto factory=f.bank_proof();
+        service=std::make_unique<B>(*f.banks,[&](auto session)->std::optional<RecoveredBankService::Peer>{interrupt(0);return RecoveredBankService::Peer{session,1,f.ids[0],4,3,50,50,true};},
+            [&](auto,auto,auto){interrupt(1);return true;},[](auto,auto){},
+            [&](const auto& slot){interrupt(2);return eligible(slot);},plain,
+            [&]{interrupt(4);return f.next_receipt();},
+            [&](auto a,auto c,auto slot,const auto& before,const auto& after){interrupt(3);return owned(a,c,slot,before,after);},
+            [&](const auto& before,const auto& after){interrupt(5);auto proof=factory(before,after);
+                return SqliteBankItemsRepository::CommitProof{
+                    [&,check=proof.before_write]{interrupt(6);check();},
+                    [&,check=proof.after_write]{interrupt(7);check();}};});
+        service->open(1,531,now);const auto before=f.banks->load(1,f.ids[0]),other=f.banks->load(2,f.ids[1]);
+        const auto owner=f.proof(0).snapshot();armed=true;const auto rejected=service->handle(1,deposit,now);armed=false;
+        require(fired&&rejected.rejected&&!rejected.committed&&rejected.batches.empty(),"Revoked bank callback continued transfer/reply");
+        require(f.banks->load(1,f.ids[0])==before&&f.banks->load(2,f.ids[1])==other&&f.proof(0).snapshot()==owner&&f.receipts("character_bank_item_receipts")==0,
+            "Bank callback rejection did not rollback cells/receipt/full metadata");
+        require(service->handle(1,deposit,now).rejected,"Revoked bank lease survived");
+        service->open(1,531,now);require(service->handle(1,deposit,now).committed,"Fresh explicit open failed after callback retirement");
+    }
+    // Renewal occurs after durable commit. Its exception cannot reverse the
+    // receipt result or retain the previous lease; response was prepared first.
+    {Fixture f;B service(*f.banks,[&](auto session)->std::optional<RecoveredBankService::Peer>{return RecoveredBankService::Peer{session,1,f.ids[0],4,3,50,50,true};},
+        [](auto,auto,auto){return true;},[](auto,auto){throw std::runtime_error("renew failed");},eligible,plain,[&]{return f.next_receipt();},f.owned(),f.bank_proof());
+        service.open(1,531,now);const std::array<Q,1> deposit{{{RecoveredBankItems::Kind::Deposit,531,0,5,2,3}}};const auto done=service.handle(1,deposit,now);
+        require(done.committed&&!done.rejected&&!done.batches.empty()&&f.receipts("character_bank_item_receipts")==1&&f.banks->load(1,f.ids[0]).vault[2].count==3,
+            "Renewal exception falsely rejected committed transfer");require(service.handle(1,deposit,now).rejected,"Failed renewal retained bank lease");}
+    for(unsigned nested=0;nested<2;++nested){Fixture f;std::unique_ptr<B> service;
+        service=std::make_unique<B>(*f.banks,[&](auto session)->std::optional<RecoveredBankService::Peer>{return RecoveredBankService::Peer{session,1,f.ids[0],4,3,50,50,true};},
+            [](auto,auto,auto){return true;},[&](auto,auto){
+                if(!nested)service->disconnect(1);else {try{service->open(1,531,now);}catch(const DatabaseError&){}}
+                throw std::runtime_error("renew revoked and failed");},eligible,plain,[&]{return f.next_receipt();},f.owned(),f.bank_proof());
+        service->open(1,531,now);const std::array<Q,1> deposit{{{RecoveredBankItems::Kind::Deposit,531,0,5,2,3}}};const auto done=service->handle(1,deposit,now);
+        require(done.committed&&!done.rejected&&done.batches.empty()&&f.receipts("character_bank_item_receipts")==1&&f.banks->load(1,f.ids[0]).vault[2].count==3,
+            "Revoked renewal published stale owner output or denied committed transfer");require(service->handle(1,deposit,now).rejected,"Revoked renewal retained lease");}
+    // The last pure fence follows postproof rereads; no partial write escapes.
+    {Fixture f;const auto before=f.banks->load(1,f.ids[0]);bool reached=false;
+        const SqliteBankItemsRepository::CommitProof proof{[]{},[]{},[&]{reached=true;throw DatabaseError("late revoke");}};
+        rejects([&]{f.banks->commit(std::string(64,'d'),{before,SqliteBankItemsRepository::Operation::Deposit,0,5,2,3},proof);});
+        require(reached&&f.banks->load(1,f.ids[0])==before&&f.receipts("character_bank_item_receipts")==0,"Final bank revocation did not rollback durable cells");}
+    // Provision is also fenced, including its existing-vault fast path.
+    {Fixture f;const auto before=f.banks->load(1,f.ids[0]);bool reached=false;
+        rejects([&]{f.banks->provision_empty(1,f.ids[0],[&]{reached=true;throw DatabaseError("provision revoked");});});
+        require(reached&&f.banks->load(1,f.ids[0])==before,"Provision bypassed final current check");}
 }
-int main(){try{trade_routes();bank_routes();trade_trigger_rollback();bank_vault_trigger_rollback();final_readback_after_callback();std::cout<<"Actual owner-aware trade/bank full-instance restoration, unchanged scalar eligibility, pre-projection immutable proofs, in-transaction dual-owner trigger rollback and postcallback receipt/scalar readback passed\n";}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
+}
+int main(){try{bank_callback_lifecycle();trade_routes();bank_routes();trade_trigger_rollback();bank_vault_trigger_rollback();final_readback_after_callback();std::cout<<"Actual owner-aware trade/bank full-instance restoration, unchanged scalar eligibility, pre-projection immutable proofs, in-transaction dual-owner trigger rollback and postcallback receipt/scalar readback passed\n";}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

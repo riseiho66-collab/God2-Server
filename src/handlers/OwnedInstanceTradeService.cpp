@@ -2,6 +2,7 @@
 #include "db/DbTypes.h"
 #include <algorithm>
 #include <exception>
+#include <type_traits>
 
 namespace god2 {
 namespace {
@@ -26,16 +27,19 @@ void OwnedInstanceTradeService::append(Deliveries& out,std::uint64_t session,con
 OwnedInstanceTradeService::Contexts::iterator OwnedInstanceTradeService::find(std::uint64_t session){return std::find_if(contexts_.begin(),contexts_.end(),[&](const auto& value){return value.second.peers[0].session==session||value.second.peers[1].session==session;});}
 bool OwnedInstanceTradeService::active(std::uint64_t session) const{return std::any_of(contexts_.begin(),contexts_.end(),[&](const auto& value){return value.second.peers[0].session==session||value.second.peers[1].session==session;});}
 bool OwnedInstanceTradeService::lease_current(const Context& context) const{
-    const auto a=lookup_(context.peers[0].session),b=lookup_(context.peers[1].session);
-    if(!a||!b||!compatible(*a,*b))return false;
+    if(operation_invalid_)return false;
+    const auto a=lookup_(context.peers[0].session);
+    if(operation_invalid_)return false;
+    const auto b=lookup_(context.peers[1].session);
+    if(operation_invalid_||!a||!b||!compatible(*a,*b))return false;
     for(unsigned n=0;n<2;++n){const auto& live=n==0?*a:*b;const auto& saved=context.peers[n];
         if(live.session!=saved.session||live.account!=saved.account||live.character!=saved.character||live.area!=saved.area||live.scene!=saved.scene)return false;}
-    return true;
+    return !operation_invalid_;
 }
 bool OwnedInstanceTradeService::current(const Context& context) const{
     if(!lease_current(context))return false;
     for(unsigned n=0;n<2;++n)if(repo_.load(context.peers[n].account,context.peers[n].character)!=context.sides[n].expected)return false;
-    return true;
+    return !operation_invalid_;
 }
 bool OwnedInstanceTradeService::whole(const Repo::Snapshot& saved,std::uint8_t slot){
     require(slot<30&&saved.bag.scalar[slot],"Owned trade ordinary scalar absent");
@@ -61,32 +65,52 @@ std::vector<std::uint8_t> OwnedInstanceTradeService::project(const Repo::Snapsho
     if(!at(saved.bag.armor,slot)&&!at(saved.bag.weapons,slot)&&!at(saved.bag.gems,slot)&&!beast_at(saved.beasts,slot))require(plain_(slot,scalar)==*encoded,"Owned trade plain projection must be canonical");
     return *encoded;
 }
+OwnedInstanceTradeService::Deliveries OwnedInstanceTradeService::close_only(const Context& context){
+    Deliveries out;for(const auto& peer:context.peers)if(peer.session)append(out,peer.session,RecoveredTrade::rollback_close());return out;
+}
 OwnedInstanceTradeService::Deliveries OwnedInstanceTradeService::restore(const Context& context) const{
+    if(operation_invalid_)return close_only(context);
     Deliveries out;
-    for(const auto& peer:context.peers){const auto live=lookup_(peer.session);if(!live||!live->ready||live->session!=peer.session||live->account!=peer.account||live->character!=peer.character)continue;
-        const auto saved=repo_.load(peer.account,peer.character);append(out,peer.session,RecoveredTrade::rollback_close());
-        retire_beast_presentation(out,peer.session,saved);
-        for(std::uint8_t slot=0;slot<30;++slot)append(out,peer.session,project(saved,slot));
-        append(out,peer.session,RecoveredTrade::wallet(saved.wallet.amount));}
+    for(const auto& peer:context.peers){
+        if(!peer.session)continue;
+        const auto live=lookup_(peer.session);if(operation_invalid_)return close_only(context);
+        if(!live||!live->ready||live->session!=peer.session||live->account!=peer.account||live->character!=peer.character)continue;
+        const auto saved=repo_.load(peer.account,peer.character);if(operation_invalid_)return close_only(context);
+        append(out,peer.session,RecoveredTrade::rollback_close());retire_beast_presentation(out,peer.session,saved);
+        for(std::uint8_t slot=0;slot<30;++slot){const auto bytes=project(saved,slot);if(operation_invalid_)return close_only(context);append(out,peer.session,bytes);}
+        append(out,peer.session,RecoveredTrade::wallet(saved.wallet.amount));
+        const auto current=lookup_(peer.session);if(operation_invalid_)return close_only(context);
+        if(!current||!current->ready||current->session!=peer.session||current->account!=peer.account||current->character!=peer.character)out.erase(peer.session);
+    }
     return out;
 }
-OwnedInstanceTradeService::Deliveries OwnedInstanceTradeService::disconnect(std::uint64_t session){const auto found=find(session);if(found==contexts_.end())return {};const auto context=found->second;contexts_.erase(found);return restore(context);}
+OwnedInstanceTradeService::Deliveries OwnedInstanceTradeService::disconnect(std::uint64_t session){
+    Operation operation(*this);if(!operation)return {};return disconnect_impl(session);
+}
+OwnedInstanceTradeService::Deliveries OwnedInstanceTradeService::disconnect_impl(std::uint64_t session){const auto found=find(session);if(found==contexts_.end())return {};static_assert(std::is_nothrow_move_constructible_v<Context>);auto context=std::move(found->second);contexts_.erase(found);return restore(context);}
 OwnedInstanceTradeService::Deliveries OwnedInstanceTradeService::refresh(Clock::time_point now){
-    Deliveries out;for(auto found=contexts_.begin();found!=contexts_.end();){bool valid=false;try{valid=now<found->second.expires&&current(found->second);}catch(const std::exception&){valid=false;}
-        if(valid){++found;continue;}const auto context=found->second;found=contexts_.erase(found);const auto restored=restore(context);for(const auto& [session,bytes]:restored)append(out,session,bytes);}
+    Operation operation(*this);if(!operation)return {};
+    Deliveries out;for(auto found=contexts_.begin();found!=contexts_.end();){bool valid=false;try{valid=now<found->second.expires&&current(found->second);}catch(...){valid=false;}
+        if(valid){++found;continue;}static_assert(std::is_nothrow_move_constructible_v<Context>);auto context=std::move(found->second);found=contexts_.erase(found);const auto restored=restore(context);for(const auto& [session,bytes]:restored)append(out,session,bytes);if(operation_invalid_)break;}
+    if(operation_invalid_)for(auto& [id,bytes]:out)bytes=RecoveredTrade::rollback_close();
     return out;
 }
 OwnedInstanceTradeService::Result OwnedInstanceTradeService::handle(std::uint64_t session,std::span<const RecoveredTrade::Request> requests,Clock::time_point now){
     Result result;
+    Operation operation(*this);if(!operation){result.rejected=true;return result;}
     const auto reject=[&](){result.rejected=true;
         try{
-            if(active(session))result.deliveries=disconnect(session);
-            else if(const auto peer=lookup_(session);peer&&peer->ready&&peer->session==session){const auto saved=repo_.load(peer->account,peer->character);append(result.deliveries,session,RecoveredTrade::rollback_close());retire_beast_presentation(result.deliveries,session,saved);for(std::uint8_t slot=0;slot<30;++slot)append(result.deliveries,session,project(saved,slot));append(result.deliveries,session,RecoveredTrade::wallet(saved.wallet.amount));}
-        }catch(const std::exception&){result.deliveries.clear();}
+            if(active(session))result.deliveries=disconnect_impl(session);
+            else if(operation_invalid_)append(result.deliveries,session,RecoveredTrade::rollback_close());
+            else if(const auto peer=lookup_(session);operation_invalid_)append(result.deliveries,session,RecoveredTrade::rollback_close());
+            else if(peer&&peer->ready&&peer->session==session){Context context{};context.peers[0]=*peer;result.deliveries=restore(context);}
+        }catch(...){result.deliveries.clear();}
         return result;};
     using K=RecoveredTrade::Kind;
     if(requests.empty()||requests.size()>2||(requests.size()==2&&(requests[0].kind!=K::OfferMoney||requests[1].kind!=K::Confirm)))return reject();
     try{
+        const std::vector<RecoveredTrade::Request> owned_requests(requests.begin(),requests.end());
+        requests=std::span<const RecoveredTrade::Request>(owned_requests);
         auto found=find(session);
         if(requests.front().kind==K::Open){require(!active(session),"Owned trade participant busy");const auto own=lookup_(session),peer=resolve_(requests.front().target);require(own&&peer&&own->session==session&&peer->character==requests.front().target&&compatible(*own,*peer)&&!active(peer->session),"Owned trade peer unavailable");
             Context context{{*own,*peer},{},{},{},now+std::chrono::seconds(60)};
@@ -106,18 +130,28 @@ OwnedInstanceTradeService::Result OwnedInstanceTradeService::handle(std::uint64_
             }else if(request.kind==K::Confirm){require(request.control==0,"Unknown owned trade confirm control");next.confirmed[own]=true;append(result.deliveries,next.peers[peer].session,RecoveredTrade::peer_confirmation(1));}
             else throw DatabaseError("Invalid owned trade state operation");
         }
+        // Eligibility, names, full20 projection, receipt and lookup callbacks
+        // may synchronously attempt another mutation. Requalify BOTH peers
+        // before publishing an offer/confirmation or entering the writer.
+        require(!operation_invalid_&&lease_current(next)&&!operation_invalid_,"Owned trade original operation retired by adapter");
         next.expires=now+std::chrono::seconds(60);
         if(next.confirmed[0]&&next.confirmed[1]){
             const auto receipt=receipt_();
+            require(!operation_invalid_&&lease_current(next)&&!operation_invalid_,"Owned trade receipt retired original operation");
             repo_.commit(receipt,next.sides,[&](const Repo::Plan& planned){
                 // Prepare both complete replies from the immutable Plan before
                 // BEGIN. No postwrite reads or metadata reconstruction here.
                 for(unsigned n=0;n<2;++n){append(result.deliveries,next.peers[n].session,RecoveredTrade::close_without_refund());retire_beast_presentation(result.deliveries,next.peers[n].session,planned.sides[n]);for(std::uint8_t slot=0;slot<30;++slot)append(result.deliveries,next.peers[n].session,project(planned.sides[n],slot));append(result.deliveries,next.peers[n].session,RecoveredTrade::wallet(planned.sides[n].wallet.amount));}
                 require(lease_current(next)&&Clock::now()<next.expires,"Owned trade lease changed during preparation");
-            },[&](const Repo::Plan&){require(lease_current(next)&&Clock::now()<next.expires,"Owned trade late live lease changed");});
+            },[&](const Repo::Plan&){require(lease_current(next)&&Clock::now()<next.expires,"Owned trade late live lease changed");},
+                [&]{return !operation_invalid_&&Clock::now()<next.expires;});
             contexts_.erase(found);result.committed=true;
+            // COMMIT trace callbacks can still retire the operation after its
+            // final precommit fence. Durable success is retained; suppress the
+            // original response rather than pretending to refund/roll back.
+            if(operation_invalid_)result.deliveries.clear();
         }else found->second=std::move(next);
         return result;
-    }catch(const std::exception&){result.deliveries.clear();return reject();}
+    }catch(...){result.deliveries.clear();return reject();}
 }
 }

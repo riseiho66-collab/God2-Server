@@ -35,7 +35,7 @@ public:
     bool shares_connection(sqlite3* db) const noexcept{return db_==db;}
     Snapshot load(std::uint64_t account,std::uint64_t character);
     Plan plan(const Request&) const;
-    Plan commit(const std::string& receipt,const Request&,const Prepare&,const Check& check={});
+    Plan commit(const std::string& receipt,const Request&,const Prepare&,const Check& check={},const std::function<void()>& current={});
     bool receipt_exists(const std::string&,ReceiptLedger ledger=ReceiptLedger::Any);
     void verify_snapshot_in_transaction(const Snapshot&);
 private:

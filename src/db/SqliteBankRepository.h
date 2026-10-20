@@ -1,5 +1,6 @@
 #pragma once
 #include "db/SqliteTradeRepository.h"
+#include <functional>
 
 namespace god2 {
 // CUSTOM-0064: owned, per-character bank authority. Original shared-account
@@ -26,7 +27,10 @@ public:
     // Explicit installation/provisioning; constructor and readers perform no DDL.
     void install_schema();
     // New bank default0. Existing balance and revision are preserved.
-    Balance provision_bank(std::uint64_t account,std::uint64_t character);
+    // Optional pure lifecycle fence: no callbacks/SQL; invoked before writes
+    // and after all persisted readback, immediately before COMMIT.
+    using Current=std::function<void()>;
+    Balance provision_bank(std::uint64_t account,std::uint64_t character,const Current& current={});
     std::optional<Balance> load_bank(std::uint64_t account,std::uint64_t character);
     Snapshot load(std::uint64_t account,std::uint64_t character);
     // Pure, conserved transfer; reject zero/high-bit native signed amounts,
@@ -34,7 +38,7 @@ public:
     static Snapshot plan(const Request& request);
     // BEGIN IMMEDIATE, ownership/pending-battle checks, CAS both revisions,
     // unique server receipt and actual persisted readback before COMMIT.
-    Snapshot commit(const std::string& server_receipt,const Request& request);
+    Snapshot commit(const std::string& server_receipt,const Request& request,const Current& current={});
 private:
     sqlite3* db_;
 };

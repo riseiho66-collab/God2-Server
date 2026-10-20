@@ -248,7 +248,7 @@ bool SqliteOwnedInstanceTradeRepository::receipt_exists(const std::string& recei
     require(hash(receipt),"Owned trade receipt malformed");sqlite_detail::Statement read(db_,"SELECT 1 FROM character_owned_instance_trade_receipts WHERE receipt=? UNION ALL SELECT 1 FROM character_trade_receipts WHERE receipt=? LIMIT 1");read.bind(1,receipt);read.bind(2,receipt);return read.row();
 }
 void SqliteOwnedInstanceTradeRepository::no_battle(std::uint64_t character){sqlite_detail::Statement read(db_,"SELECT 1 FROM battle_reservations r LEFT JOIN battle_settlements s ON s.battle_id=r.id WHERE r.character_id=? AND s.battle_id IS NULL LIMIT 1");read.bind_id(1,character);require(!read.row(),"Owned trade pending battle");}
-SqliteOwnedInstanceTradeRepository::Plan SqliteOwnedInstanceTradeRepository::commit(const std::string& receipt,const std::array<Side,2>& sides,const PreparePlan& prepare,const CheckPlan& check){
+SqliteOwnedInstanceTradeRepository::Plan SqliteOwnedInstanceTradeRepository::commit(const std::string& receipt,const std::array<Side,2>& sides,const PreparePlan& prepare,const CheckPlan& check,const FinalCurrent& current){
     static_assert(std::is_nothrow_move_constructible_v<Plan>,"Committed plan must return without allocation or exceptions");
     require(hash(receipt)&&bool(prepare),"Owned trade requires receipt and prepared replies");auto next=plan(sides);const auto before=state({sides[0].expected,sides[1].expected}),after=state(next.sides),operation=offers(sides,next);
     require(sqlite3_get_autocommit(db_)!=0,"Owned trade must own mutation transaction");prepare(next);
@@ -305,6 +305,10 @@ SqliteOwnedInstanceTradeRepository::Plan SqliteOwnedInstanceTradeRepository::com
         sqlite_detail::Statement duplicate(db_,"SELECT 1 FROM character_trade_receipts WHERE receipt=?");duplicate.bind(1,receipt);require(!duplicate.row(),"Owned trade late CUSTOM0063 receipt conflict");
         for(const auto& side:next.sides){require(load(side.bag.account,side.bag.character)==side,"Owned trade complete after readback conflict");no_battle(side.bag.character);}
         if(beasts_){require(guard(db_,permitted,&preserved)==preserved,"PET trade changed unrelated rows/schema/history/protected equipment");sqlite_detail::Statement fk(db_,"PRAGMA foreign_key_check");require(!fk.row(),"PET trade foreign key mismatch");}
-    };verify();if(check){check(next);verify();}transaction.commit();return next;
+    };verify();if(check){check(next);verify();}
+    // A final qualifier/readback may itself retire the original caller. Nothing
+    // that invokes providers or reconstructs metadata may follow this fence.
+    if(current){const auto changes=sqlite3_total_changes64(db_);const bool valid=current();require(valid&&sqlite3_get_autocommit(db_)==0&&sqlite3_total_changes64(db_)==changes,"Owned trade final pure current retired or mutated transaction");}
+    transaction.commit();return next;
 }
 }

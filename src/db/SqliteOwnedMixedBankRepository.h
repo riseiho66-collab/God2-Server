@@ -22,7 +22,7 @@ public:
     SqliteOwnedMixedBankRepository(sqlite3*,SqliteOwnedForeignBankRepository&,EligiblePlain);
     Snapshot load(std::uint64_t account,std::uint64_t character);
     Plan plan(const Request&) const;
-    Plan commit(const std::string& receipt,const Request&,const Prepare&,const Check& check={});
+    Plan commit(const std::string& receipt,const Request&,const Prepare&,const Check& check={},const std::function<void()>& current={});
     enum class ReceiptLedger {Any,Mixed,Foreign,Armor,Plain};
     bool receipt_exists(const std::string&,ReceiptLedger ledger=ReceiptLedger::Any);
     void verify_snapshot_in_transaction(const Snapshot&);

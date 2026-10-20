@@ -157,13 +157,14 @@ bool SqliteOwnedArmorBankRepository::receipt_exists(const std::string& receipt,R
 void SqliteOwnedArmorBankRepository::verify_snapshot_in_transaction(const Snapshot& expected){
     require(sqlite3_get_autocommit(db_)==0,"Owned armor bank proof requires shared mutation transaction");require(load(expected.bag.account,expected.bag.character)==expected,"Owned armor bank full snapshot proof conflict");no_battle(db_,expected.bag.character);
 }
-SqliteOwnedArmorBankRepository::Plan SqliteOwnedArmorBankRepository::commit(const std::string& receipt,const Request& request,const Prepare& prepare,const Check& check){
+SqliteOwnedArmorBankRepository::Plan SqliteOwnedArmorBankRepository::commit(const std::string& receipt,const Request& request,const Prepare& prepare,const Check& check,const std::function<void()>& current){
     require(hash(receipt)&&bool(prepare),"Owned armor bank receipt/preparation invalid");require(sqlite3_get_autocommit(db_)!=0,"Owned armor bank must own mutation transaction");
     auto next=plan(request);const auto pair=cells(request);const auto before=state(request.expected),after=state(next.after);
     prepare(next); // Serialization/projection can fail before any database write.
     sqlite_detail::Transaction transaction(db_);
     require(load(request.expected.bag.account,request.expected.bag.character)==request.expected,"Owned armor bank complete before snapshot conflict");no_battle(db_,request.expected.bag.character);
     sqlite_detail::Statement duplicate(db_,"SELECT 1 FROM character_bank_armor_receipts WHERE receipt=? UNION ALL SELECT 1 FROM character_bank_item_receipts WHERE receipt=?");duplicate.bind(1,receipt);duplicate.bind(2,receipt);require(!duplicate.row(),"Owned armor bank duplicate receipt");
+    if(current)current(); // Pure lifecycle check after before-read observers.
     for(const auto cell:pair)if(const auto value=instance(request.expected,cell)){
         sqlite_detail::Statement erase(db_,cell.vault?
             "DELETE FROM character_bank_armor_metadata WHERE character_id=? AND slot=? AND logical20=? AND revision=? AND origin=? AND provenance=? AND source_sha256=? AND client_sha256=? AND instance_design_id='CUSTOM-0066' AND storage_design_id='CUSTOM-0067'":
@@ -190,6 +191,6 @@ SqliteOwnedArmorBankRepository::Plan SqliteOwnedArmorBankRepository::commit(cons
         require(read.row()&&read.number<std::uint64_t>(0)==request.expected.bag.account&&read.number<std::uint64_t>(1)==request.expected.bag.character&&read.number<std::uint8_t>(2)==static_cast<std::uint8_t>(request.operation)&&read.number<std::uint8_t>(3)==request.page&&read.number<std::uint8_t>(4)==request.source&&read.number<std::uint8_t>(5)==request.destination&&read.number<std::uint8_t>(6)==1&&read.text(7)==before&&read.text(8)==after&&read.text(9)==design_id&&!read.row(),"Owned armor bank receipt readback failed");
         require(load(request.expected.bag.account,request.expected.bag.character)==next.after,"Owned armor bank full actual readback failed");no_battle(db_,request.expected.bag.character);
     };
-    verify();if(check){check(next);verify();}transaction.commit();return next;
+    verify();if(check){check(next);verify();}if(current)current();transaction.commit();return next;
 }
 }

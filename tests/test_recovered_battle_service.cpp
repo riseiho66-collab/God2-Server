@@ -20,11 +20,173 @@ std::vector<RecoveredWorldRecords::Record> command(std::uint8_t action,std::uint
     auto records=RecoveredWorldRecords::decode(bytes);
     require(records.has_value(),"Diagnostic command did not parse");return *records;
 }
+void callback_binding_lifecycle_source_cases(asio::io_context& io) {
+    // Synthetic service transactions only. No database or native-rule claims.
+    const std::array<BattleActor,3> team{{
+        {0,9,100,100,20,20,31,40,8,10},{1,9,100,100,20,20,31,40,8,10},
+        {14,0,100,100,0,0,20,25,13,6}}};
+    auto initial=Battle(301,team,987).checkpoint();initial.snapshot.actors[1]->hp=0;
+    const auto record=[](std::uint8_t action,std::uint16_t friendly,std::uint16_t enemy,
+                         std::uint8_t id=0,std::uint8_t kind=0){
+        std::array<std::uint8_t,17> bytes{0x35,0,action,0,0,
+            static_cast<std::uint8_t>(friendly),static_cast<std::uint8_t>(friendly>>8),
+            static_cast<std::uint8_t>(enemy),static_cast<std::uint8_t>(enemy>>8),0,0,0,0,id,kind};
+        const auto parsed=RecoveredWorldRecords::decode(bytes);
+        require(parsed.has_value(),"Callback fixture command did not parse");return *parsed;
+    };
+    const auto basic=record(1,0,1),revive=record(3,2,0,8,3);
+    const auto initial_control=record(0x0b,0,0),control=record(0x0b,1,0);
+    RecoveredBattleDelta::Bytes raw{};raw[0]=0x83;raw[1]=0x0d;raw[7]=1;
+    raw[9]=raw[10]=0xff;raw[11]=1;raw[14]=28;
+    const auto delta=RecoveredBattleDelta::parse(raw);
+    require(delta.has_value(),"Callback fixture delta did not parse");
+    const std::array<RecoveredBattleDelta::Record,1> deltas{*delta};
+    const std::array<std::uint8_t,17> grant{0x86,5,0,1};
+    const auto wire=RecoveredWorldFrame::encode(grant);
+    // Hook lanes: rule, encoder, commit, checkpoint, native encoder/checkpoint,
+    // initial grant, revival rule/encoder, control/rearm phase persistence,
+    // timeout encoder, selected skill encoder, MP refusal, native/revival commit.
+    for(unsigned lane=0;lane<16;++lane)
+    for(unsigned fault=0;fault<8;++fault){
+        auto session=std::make_shared<Session>(asio::ip::tcp::socket(io),io.get_executor(),
+            1000+lane*8+fault,false,Session::PacketHandler{},Session::DisconnectHandler{});
+        session->account_id=7;session->character_id=9;session->set_state(SessionState::InBattle);
+        bool armed=false,inner_refused=false;unsigned hooks=0,writes=0;
+        std::function<void()> disturb;
+        RecoveredBattleService subject([&](const CombatRuleInput& input){
+            if(armed&&lane==0)disturb();return CombatRuleResult{2,input.mp_cost,false};
+        });
+        RecoveredBattleService::Policy policy{0,0,0,0,
+            BattleAction{0,{},false,100,100,0,0,150},{}};
+        if(lane>=6&&lane<=11)policy.diagnostic_single_action=true;
+        if(lane==6||lane==11)policy.diagnostic_player_initial_control=true;
+        if(lane==6)policy.diagnostic_initial_control_reply=[&]{if(armed)disturb();return wire;};
+        if((lane>=7&&lane<=10)||lane==15){
+            policy.diagnostic_single_action=true;
+            policy.diagnostic_revival=RecoveredBattleService::DiagnosticRevival{
+                [&](const RevivalInput&){if(armed&&lane==7)disturb();return RevivalResult{25,8};},
+                [&](const auto&,const auto&){if(armed&&lane==8)disturb();return wire;},false};
+        }
+        if(lane==11){policy.diagnostic_timeout_action2=true;
+            policy.diagnostic_retaliation=BattleAction{14,{0},false,100,100,0,0,150};}
+        if(lane==12||lane==13){
+            auto skill=policy.basic;if(lane==13)skill.mp_cost=99;
+            policy.skills.emplace(5,skill);
+            if(lane==12)policy.skill_encoders.emplace(5,[&](const auto&,const auto&){if(armed)disturb();return wire;});
+            else{policy.diagnostic_single_action=true;
+                policy.diagnostic_mp_refusal=[&](const auto&,const auto&,const auto&){if(armed)disturb();return wire;};}
+        }
+        const auto encoder=[&](const auto&,const auto&){if(armed&&(lane==1||lane==11))disturb();return wire;};
+        const auto native_encoder=[&](const auto&,const auto&){if(armed&&lane==4)disturb();return wire;};
+        RecoveredBattleService::Commit commit;
+        RecoveredBattleService::CheckpointCommit checkpoint;
+        if(lane==2||lane==14||lane==15)commit=[&](const auto&,const auto&){++writes;if(armed)disturb();};
+        if(lane==3||lane==5||lane==9||lane==10)checkpoint=[&](const auto&,const auto&){
+            ++writes;if(armed&&(lane==3||lane==5))disturb();};
+        subject.bind(*session,Battle::restore(initial),policy,encoder,commit,checkpoint);
+        disturb=[&]{
+            ++hooks;
+            try{
+                switch(fault){
+                case 0:subject.remove(session->id());break;
+                case 1:(void)subject.handle(*session,basic);break;
+                case 2:(void)subject.apply_native_deltas(*session,subject.inspect(session->id()).revision,deltas,native_encoder);break;
+                case 3:subject.rearm_diagnostic(*session,subject.inspect(session->id()).revision);break;
+                case 4:subject.bind(*session,Battle::restore(initial),policy,encoder,commit,checkpoint);break;
+                case 5:session->set_state(SessionState::InWorld);session->set_state(SessionState::InBattle);break;
+                case 6:++session->character_id;break;
+                case 7:session->set_state(SessionState::Disconnected);break;
+                }
+            }catch(const std::invalid_argument&){inner_refused=true;}
+        };
+        if(lane==9||lane==10){
+            subject.set_revival_phase_commit(*session,[&](const auto&,const auto&){++writes;if(armed)disturb();});
+            require(subject.handle(*session,revive).has_value(),"Phase callback fixture revival failed");
+            if(lane==10)require(subject.handle(*session,control).has_value(),"Rearm callback fixture control failed");
+        }
+        if(lane==11)require(subject.handle(*session,initial_control).has_value(),"Timeout callback fixture initialization failed");
+        const auto before=subject.inspect(session->id());writes=0;armed=true;
+        const auto invoke=[&]{
+            if(lane==4||lane==5||lane==14)return !subject.apply_native_deltas(*session,
+                subject.inspect(session->id()).revision,deltas,native_encoder).empty();
+            if(lane==6)return subject.handle(*session,initial_control).has_value();
+            if(lane==7||lane==8||lane==15)return subject.handle(*session,revive).has_value();
+            if(lane==9)return subject.handle(*session,control).has_value();
+            if(lane==10){subject.rearm_diagnostic(*session,before.revision);return !subject.diagnostic_round_ready(*session);}
+            if(lane==11)return subject.handle(*session,record(2,1,0)).has_value();
+            if(lane==12||lane==13)return subject.handle(*session,record(3,0,1,5)).has_value();
+            return subject.handle(*session,basic).has_value();
+        };
+        rejects(invoke);
+        require(hooks==1&&((fault>=1&&fault<=4)?inner_refused:!inner_refused),
+            "Callback lifecycle fixture missed its exact mutation or caught reentry");
+        const bool persisted=lane==2||lane==3||lane==5||lane==9||lane==10||lane==14||lane==15;
+        require(writes==(persisted?1u:0u),"Callback failure crossed an unexpected persistence boundary");
+        if(fault==0||persisted){
+            rejects([&]{(void)subject.inspect(session->id());}); // Deferred erase completed on outer unwind.
+            require(!subject.handle(*session,basic),"Retired binding admitted an old result retry");
+        }else{
+            require(subject.inspect(session->id())==before,"Rejected callback published stale battle resources");
+            if(fault>=1&&fault<=4){armed=false;require(invoke(),"Pre-store callback refusal blocked a clean retry");}
+        }
+    }
+    for(const bool retire:{false,true}){
+        auto session=std::make_shared<Session>(asio::ip::tcp::socket(io),io.get_executor(),1900,false,
+            Session::PacketHandler{},Session::DisconnectHandler{});
+        session->account_id=7;session->character_id=9;session->set_state(SessionState::InBattle);
+        RecoveredBattleService subject([](const CombatRuleInput& input){return CombatRuleResult{2,input.mp_cost,false};});
+        RecoveredBattleService::Policy policy{0,0,0,0,BattleAction{0,{},false,100,100,0,0,150},{}};
+        unsigned writes=0,encodes=0;
+        subject.bind(*session,Battle::restore(initial),policy,[&](const auto&,const auto&){return wire;},
+            [&](const auto&,const auto& after){++writes;require(after.actors[14]->hp==99,"Native copy lost its exact delta");});
+        std::vector<RecoveredBattleDelta::Record> caller_records{*delta};
+        Battle::NativeDeltaEncode caller_encoder;
+        caller_encoder=[&](const BattleSnapshot&,std::span<const RecoveredBattleDelta::Record> received){
+            ++encodes;caller_records.clear();caller_records.shrink_to_fit();caller_encoder={};
+            if(retire)subject.remove(session->id());
+            require(received.size()==1&&RecoveredBattleDelta::encode(received.front())==raw,
+                "Encoder's owned native view depended on a cleared caller vector");return wire;
+        };
+        // Reject above the existing native indexed-storage representation
+        // bound before copying or invoking the supplied function.
+        const std::vector<RecoveredBattleDelta::Record> oversized(
+            initial.snapshot.actors.size()*RecoveredBattleDelta::indexed_capacity+1,*delta);
+        rejects([&]{subject.apply_native_deltas(*session,1,oversized,caller_encoder);});
+        require(encodes==0&&writes==0&&subject.inspect(1900)==initial.snapshot,
+            "Oversized native input reached its encoder or changed the owner");
+        if(retire){
+            rejects([&]{subject.apply_native_deltas(*session,1,caller_records,caller_encoder);});
+            rejects([&]{(void)subject.inspect(1900);});
+        }else require(!subject.apply_native_deltas(*session,1,caller_records,caller_encoder).empty()&&
+            subject.inspect(1900).revision==2&&subject.inspect(1900).actors[14]->hp==99,
+            "Owned native records/function failed normal single settlement");
+        require(encodes==1&&writes==(retire?0u:1u)&&caller_records.empty()&&!caller_encoder,
+            "Caller input/callable replacement escaped native lifetime or retirement checks");
+    }
+    {
+        auto first=std::make_shared<Session>(asio::ip::tcp::socket(io),io.get_executor(),2001,false,
+            Session::PacketHandler{},Session::DisconnectHandler{});
+        auto second=std::make_shared<Session>(asio::ip::tcp::socket(io),io.get_executor(),2002,false,
+            Session::PacketHandler{},Session::DisconnectHandler{});
+        first->account_id=7;first->character_id=9;first->set_state(SessionState::InBattle);
+        second->account_id=8;second->character_id=10;second->set_state(SessionState::InBattle);
+        auto others=team;others[0].controller=others[1].controller=10;
+        RecoveredBattleService distinct([](const CombatRuleInput& input){return CombatRuleResult{2,input.mp_cost,false};});
+        RecoveredBattleService::Policy policy{0,0,0,0,BattleAction{0,{},false,100,100,0,0,150},{}};
+        distinct.bind(*second,Battle(303,others,987),policy,[&](const auto&,const auto&){return wire;});
+        distinct.bind(*first,Battle(302,team,987),policy,[&](const auto&,const auto&){
+            require(distinct.handle(*second,basic).has_value(),"Independent Session callback was incorrectly rejected");return wire;
+        });
+        require(distinct.handle(*first,basic).has_value()&&distinct.inspect(2001).revision==2&&
+            distinct.inspect(2002).revision==2,"Independent Session actions lost their distinct bindings");
+    }
+}
 }
 int main() {
     try {
         using R=RecoveredWorldRecords::Record;
         asio::io_context io;
+        callback_binding_lifecycle_source_cases(io);
         auto session=std::make_shared<Session>(asio::ip::tcp::socket(io),io.get_executor(),1,false,
             Session::PacketHandler{},Session::DisconnectHandler{});
         session->account_id=7;session->character_id=9;session->set_state(SessionState::InBattle);

@@ -1,6 +1,7 @@
 #pragma once
 #include "db/SqliteBankItemsRepository.h"
 #include "handlers/RecoveredBankService.h"
+#include "handlers/SynchronousCallbackFence.h"
 #include "protocol/RecoveredBankItems.h"
 #include <functional>
 #include <map>
@@ -25,9 +26,10 @@ public:
         projection_(std::move(projection)),receipt_(std::move(receipt)),owned_projection_(std::move(owned_projection)),proof_(std::move(proof)){}
     Batches open(std::uint64_t session,std::uint16_t target,Clock::time_point now);
     Result handle(std::uint64_t session,std::span<const RecoveredBankItems::Request> requests,Clock::time_point now);
-    void disconnect(std::uint64_t session){contexts_.erase(session);}
+    void disconnect(std::uint64_t session){callbacks_.invalidate_if_running();contexts_.erase(session);}
 private:
-    struct Context {std::uint16_t target;SqliteBankItemsRepository::Snapshot expected;};
+    SynchronousCallbackFence callbacks_;
+    struct Context {std::uint16_t target;RecoveredBankService::Peer peer;SqliteBankItemsRepository::Snapshot expected;};
     static void append(Batches& batches,std::span<const std::uint8_t> logical);
     std::array<std::uint8_t,29> bank_slot(std::size_t flat,const StoredInventorySlot& slot) const;
     Batches synchronization(const SqliteBankItemsRepository::Snapshot& current,

@@ -44,6 +44,20 @@ private:
     };
     using Contexts=std::map<std::uint64_t,Context>;
     Contexts contexts_;
+    // Serialized callbacks can still reenter this same service synchronously.
+    bool operation_running_=false,operation_invalid_=false;
+    class Operation {
+        RecoveredTradeService& owner_;const bool entered_;
+    public:
+        explicit Operation(RecoveredTradeService& owner) noexcept
+            :owner_(owner),entered_(!owner.operation_running_){
+            if(entered_){owner_.operation_running_=true;owner_.operation_invalid_=false;}
+            else owner_.operation_invalid_=true;
+        }
+        Operation(const Operation&)=delete;Operation& operator=(const Operation&)=delete;
+        ~Operation(){if(entered_){owner_.operation_running_=false;owner_.operation_invalid_=false;}}
+        explicit operator bool() const noexcept{return entered_;}
+    };
     SqliteTradeRepository& repo_;
     Lookup lookup_;Resolve resolve_;Name name_;Eligible eligible_;Projection projection_;Receipt receipt_;
     OwnedProjection owned_projection_;SqliteTradeRepository::PrepareProof proof_;
@@ -51,7 +65,10 @@ private:
     static bool compatible(const Peer&,const Peer&);
     static void append(Deliveries&,std::uint64_t,const std::vector<std::uint8_t>&);
     Contexts::iterator find(std::uint64_t session);
+    bool lease_current(const Context&) const;
     bool current(const Context&) const;
+    Deliveries disconnect_impl(std::uint64_t);
+    static Deliveries close_only(const Context&);
     Deliveries restore(const Context&) const;
 };
 }

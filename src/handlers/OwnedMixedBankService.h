@@ -1,4 +1,7 @@
 #pragma once
+#include "handlers/SynchronousCallbackFence.h"
+#include <type_traits>
+#include <utility>
 #include "db/SqliteOwnedMixedBankRepository.h"
 #include "db/SqliteBeastBankRepository.h"
 #include "handlers/RecoveredBankService.h"
@@ -28,10 +31,11 @@ public:
         Lookup,Permit,Renew,Eligible,PlainProjection,Receipt,QualifyWeapon,SqliteBeastBankRepository* beasts=nullptr,EligibleBeast beast_eligible={});
     Batches open(std::uint64_t session,std::uint16_t target,Clock::time_point now);
     Result handle(std::uint64_t session,std::span<const RecoveredBankItems::Request>,Clock::time_point now);
-    void disconnect(std::uint64_t session){contexts_.erase(session);}
+    void disconnect(std::uint64_t session){callbacks_.invalidate_if_running();contexts_.erase(session);}
 private:
     using Snapshot=SqliteBeastBankRepository::Snapshot;
     struct Context {std::uint16_t target;RecoveredBankService::Peer peer;Snapshot expected;};
+    void require_live(std::uint64_t,const RecoveredBankService::Peer&,std::uint16_t,Clock::time_point) const;
     static void append(Batches&,std::span<const std::uint8_t>);
     Batches synchronization(const Snapshot&,const Snapshot* before,bool bags) const;
     std::array<std::uint8_t,29> vault_slot(const Snapshot&,std::size_t) const;
@@ -45,5 +49,17 @@ private:
     Lookup lookup_;Permit permit_;Renew renew_;Eligible eligible_;PlainProjection plain_;Receipt receipt_;QualifyWeapon weapon_;
     SqliteBeastBankRepository* beasts_;EligibleBeast beast_eligible_;
     std::map<std::uint64_t,Context> contexts_;
+    template<class F,class... Args>
+    auto invoke_adapter(const F& function,Args&&... args) const {
+        callbacks_.require_current();
+        if constexpr(std::is_void_v<std::invoke_result_t<const F&,Args...>>) {
+            function(std::forward<Args>(args)...);callbacks_.require_current();
+        } else {
+            auto result=function(std::forward<Args>(args)...);
+            callbacks_.require_current();return result;
+        }
+    }
+    SynchronousCallbackFence callbacks_;
+
 };
 }

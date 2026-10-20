@@ -29,14 +29,19 @@ public:
     };
     // Capture immutable owner evidence before reply preparation; both checks
     // run in the same mutation transaction, after BEGIN and before COMMIT.
-    struct CommitProof {std::function<void()> before_write,after_write;};
+    struct CommitProof {
+        std::function<void()> before_write,after_write;
+        // Pure no-SQL revocation check after ALL verification, before COMMIT.
+        // Independent of paired owner proofs; cannot grant new eligibility.
+        std::function<void()> current;
+    };
     using PrepareProof=std::function<CommitProof(const Snapshot&,const Snapshot&)>;
     explicit SqliteBankItemsRepository(sqlite3* db,PrepareProof proof={}):db_(db),proof_(std::move(proof)) {}
     void install_schema();
     // Explicit qualified-bank-open allocation only. Returns300 on new vault,
     // zero for an existing complete vault. Partial/invalid vaults reject;
     // existing values are never upgraded, reset or supplemented.
-    std::size_t provision_empty(std::uint64_t account,std::uint64_t character);
+    std::size_t provision_empty(std::uint64_t account,std::uint64_t character,const std::function<void()>& current={});
     // Borrowed read only; no DDL or automatic provisioning.
     Snapshot load(std::uint64_t account,std::uint64_t character);
     // Deposit/withdraw require an empty destination and permit partial stacks.

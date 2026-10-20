@@ -199,6 +199,61 @@ SqliteSkillBookLearningRepository::SqliteSkillBookLearningRepository(SqliteOwned
        !books_.uses_connection(inventory_.db_)||!skills_.uses_connection(inventory_.db_))
         throw DatabaseError("Skill book learning requires the same actual common sources");
 }
+bool SqliteSkillBookLearningRepository::preserve_status_only_activation(sqlite3* db,
+    std::uint64_t account,std::uint64_t character,const StoredDeity& before,const StoredDeity& after) {
+    // CUSTOM-0148 storage continuation, not a new learned entitlement. Only
+    // status bytes/revision may change; a reimported declaration, skill order
+    // or provenance must not revive a prior grant. Missing/stale headers stay
+    // absent/stale, and every original event/link remains byte-exact.
+    if(!db || !account || !character || sqlite3_get_autocommit(db))
+        throw DatabaseError("Deity activation continuation requires the actual writer transaction");
+    if(before.revision>=revision_limit || after.revision!=before.revision+1 ||
+       before.provenance!=after.provenance ||
+       before.snapshot.declaration.encode()!=after.snapshot.declaration.encode() ||
+       before.snapshot.status.key_raw()!=after.snapshot.status.key_raw() ||
+       skill_bytes(before)!=skill_bytes(after))return false;
+    auto changes=sqlite3_total_changes64(db);
+    const auto fence=[&] {
+        if(sqlite3_get_autocommit(db) || sqlite3_total_changes64(db)!=changes)
+            throw DatabaseError("Deity activation continuation changed during observation");
+    };
+    const auto namespaces=[&] {
+        constexpr const char* names="('skill_book_learning_events','deity_skill_activation_headers','deity_skill_activation_links')";
+        const auto shadows=std::string("SELECT 1 FROM temp.sqlite_master WHERE name COLLATE NOCASE IN ")+names+" OR tbl_name COLLATE NOCASE IN "+names;
+        Statement shadow(db,shadows.c_str());if(shadow.row())throw DatabaseError("Deity activation continuation TEMP shadow");
+        const auto query=std::string("SELECT count(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE NOCASE IN ")+names;
+        Statement tables(db,query.c_str());if(!tables.row())throw DatabaseError("Deity activation continuation schema unreadable");
+        const auto count=tables.number<unsigned>(0);if(tables.row() || (count!=0 && count!=3))
+            throw DatabaseError("Deity activation continuation partial schema");
+        const auto triggers=std::string("SELECT 1 FROM main.sqlite_master WHERE type='trigger' AND tbl_name COLLATE NOCASE IN ")+names;
+        Statement trigger(db,triggers.c_str());if(trigger.row())throw DatabaseError("Deity activation continuation trigger");
+        fence();return count==3;
+    };
+    if(!namespaces())return false; // Earlier schema has no activations to carry.
+    auto expected=headers(db,account,character);fence();
+    const auto key=before.snapshot.status.key_raw();
+    const auto found=std::find_if(expected.begin(),expected.end(),[&](const auto& h){return h.subject==key;});
+    if(found==expected.end() || found->revision!=before.revision || found->provenance!=before.provenance ||
+       found->raw!=row_bytes(before))return false; // Never rebase stale witnesses.
+    if(changes==std::numeric_limits<sqlite3_int64>::max())
+        throw DatabaseError("Deity activation continuation change counter exhausted");
+    const auto prior=*found;
+    found->revision=after.revision;found->raw=row_bytes(after);
+    Statement update(db,"UPDATE main.deity_skill_activation_headers SET deity_revision=?,raw_row=? WHERE character_id=? AND row_key=? AND deity_revision=? AND raw_row=? AND source_sha256=? AND authority=? AND evidence_id=? AND design='CUSTOM-0148'");
+    update.bind_id(1,found->revision);update.bind_blob(2,found->raw);
+    update.bind_id(3,character);update.bind(4,key);update.bind_id(5,prior.revision);update.bind_blob(6,prior.raw);
+    update.bind(7,prior.provenance.source_sha256);update.bind(8,prior.provenance.authority);update.bind(9,prior.provenance.evidence_id);
+    fence();update.done();if(sqlite3_changes(db)!=1)throw DatabaseError("Deity activation continuation full-header CAS");
+    ++changes;fence();
+    // Original immutable book event IDs, inputs, order and links are not
+    // rewritten. Normal restore still requalifies their exact native book
+    // definitions, ownership, current roster AND selected-deity source.
+    const auto actual=headers(db,account,character);fence();
+    if(actual!=expected)throw DatabaseError("Deity activation continuation changed event/link lineage");
+    if(!namespaces())throw DatabaseError("Deity activation continuation schema disappeared");
+    fence();return true;
+}
+
 void SqliteSkillBookLearningRepository::owner() const {
     if(std::this_thread::get_id()!=thread_)throw DatabaseError("Skill book learning requires its game thread");
     inventory_.owner();equipment_.owner();

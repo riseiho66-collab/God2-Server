@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 namespace {
 using namespace god2;
@@ -158,6 +159,160 @@ struct LearningSelectionFixture:Fixture {
         while(links.row())result.push_back(links.text(0));return result;
     }
 };
+// Synthetic book events from LearningSelectionFixture remain test-only.
+// This exercises the actual trusted import -> existing activation persistence
+// -> fresh restoration chain, not a fabricated first-skill/native-growth grant.
+void status_activation_lineage_regression() {
+    const auto changed_status=[](RecoveredDeityState::Snapshot row) {
+        auto status=row.status.encode();status[8]^=0x51;
+        row.status=*RecoveredDeityState::Status::parse(status);return row;
+    };
+    for(const bool selected:{true,false}) {
+        LearningSelectionFixture f;
+        if(!selected)require(f.helper.select_deity_with_source(1,f.character,{2}).has_value(),"Alternate selection failed");
+        const auto before=f.learning.restore(1,f.character);
+        const auto old=before.roster().rows().front();
+        const auto selection=f.companions.load_deity_selection(1,f.character);
+        const auto original=f.activation_storage();
+        require(before.activations().size()==1,"Initial book activation missing");
+        const auto chosen=f.companions.load_selected_deity_skill(1,f.character,0,1);
+        require(chosen.has_value(),"Selected learned source missing");
+        const auto imported=f.companions.store_deity(1,f.character,changed_status(old.snapshot),old.revision,old.provenance);
+        require(imported.revision==old.revision+1,"Status-only import did not advance revision");
+        require(!f.learning.restoration_current(before),"Old full learning source revived after status import");
+        if(selected)require(!f.companions.selected_deity_skill_current(*chosen),"Old selected skill source survived changed row");
+        const auto after=f.learning.restore(1,f.character);
+        const auto actual=f.activation_storage();
+        require(after.activations()==before.activations() && after.inventory()==before.inventory() &&
+            after.equipment()==before.equipment(),"Status-only import lost book events or altered inventory/equipment");
+        require(actual.size()==original.size() && actual.front()!=original.front() &&
+            std::equal(original.begin()+1,original.end(),actual.begin()+1),"Status continuation rewrote original book event/link inputs");
+        require(f.companions.load_deity_selection(1,f.character)==selection,"Status import silently selected another deity");
+        const auto saved=f.helper.restore_with_source(1,f.character,f.learning);
+        require(saved.learning_source() && saved.learning_source()->activations()==before.activations() &&
+            f.helper.restoration_current(saved),"Fresh owned restoration did not carry exact activation");
+        rejects([&]{f.companions.store_deity(1,f.character,old.snapshot,old.revision,old.provenance);});
+        require(f.activation_storage()==actual,"Stale reimport changed activation lineage");
+        // An idempotent trusted reimport still advances its epoch, preserving
+        // the original event once without duplicating or granting a new skill.
+        f.companions.store_deity(1,f.character,imported.snapshot,imported.revision,imported.provenance);
+        const auto twice=f.learning.restore(1,f.character);
+        require(twice.activations()==before.activations(),"Repeated status import duplicated or lost activation");
+    }
+    for(unsigned fault=0;fault<8;++fault) {
+        LearningSelectionFixture f;
+        const auto old=f.companions.load_deities(1,f.character).front();
+        auto next=changed_status(old.snapshot);auto origin=old.provenance;
+        switch(fault) {
+        case 0:f.sql("UPDATE deity_skill_activation_headers SET deity_revision=2 WHERE row_key=1");break;
+        case 1:{
+            std::vector<std::uint8_t> raw;
+            const auto append=[&](const auto& bytes){raw.insert(raw.end(),bytes.begin(),bytes.end());};
+            append(old.snapshot.declaration.encode());append(old.snapshot.status.encode());
+            for(const auto& skill:old.snapshot.skills)append(skill.encode());raw[21]^=0x31;
+            sqlite_detail::Statement update(f.db.get(),"UPDATE deity_skill_activation_headers SET raw_row=? WHERE row_key=1");
+            update.bind_blob(1,raw);update.done();break;
+        }
+        case 2:origin.evidence_id+=";different-import";break;
+        case 3:{auto d=next.declaration.encode();d[2]='B';next.declaration=*RecoveredDeityState::Declaration::parse(d);break;}
+        case 4:next.skills.push_back(*RecoveredDeityState::Skill::parse(std::array<std::uint8_t,4>{0x34,1,0,2}));break;
+        case 5:next.skills.clear();break;
+        case 6:f.sql("DELETE FROM deity_skill_activation_links WHERE row_key=1;DELETE FROM deity_skill_activation_headers WHERE row_key=1");break;
+        default:f.sql("UPDATE deity_skill_activation_headers SET evidence_id='foreign-header-provenance' WHERE row_key=1");break;
+        }
+        const auto original=f.activation_storage();
+        auto imported=f.companions.store_deity(1,f.character,next,old.revision,origin);
+        require(f.activation_storage()==original,"Changed or stale header was adopted by an import");
+        require(f.learning.restore(1,f.character).activations().empty(),"Import fabricated or revived inactive book entitlement");
+        // Putting an old snapshot back with the CURRENT revision cannot rebase
+        // a stale header, even after another same-status revision change.
+        imported=f.companions.store_deity(1,f.character,old.snapshot,imported.revision,old.provenance);
+        f.companions.store_deity(1,f.character,changed_status(imported.snapshot),imported.revision,imported.provenance);
+        require(f.learning.restore(1,f.character).activations().empty() && f.activation_storage()==original,
+            "Reimported prior deity revived an old activation header");
+    }
+    {
+        LearningSelectionFixture f;
+        const auto before=f.learning.restore(1,f.character),old=before;
+        const auto deity_before=before.roster().rows().front();const auto original=f.activation_storage();
+        rejects([&]{f.companions.store_deity(2,f.character,changed_status(deity_before.snapshot),deity_before.revision,deity_before.provenance);});
+        require(f.activation_storage()==original && f.learning.restoration_current(old),"Foreign account changed book entitlement");
+        // Reject the header UPDATE after the deity row has been staged. Both
+        // writes must roll back together; no repaired source token is issued.
+        sqlite3_set_authorizer(f.db.get(),[](void*,int action,const char* table,const char*,const char*,const char*) {
+            return action==SQLITE_UPDATE && table && std::string_view(table)=="deity_skill_activation_headers"?SQLITE_DENY:SQLITE_OK;
+        },nullptr);
+        rejects([&]{f.companions.store_deity(1,f.character,changed_status(deity_before.snapshot),deity_before.revision,deity_before.provenance);});
+        sqlite3_set_authorizer(f.db.get(),nullptr,nullptr);
+        require(f.activation_storage()==original && f.learning.restoration_current(before) &&
+            f.companions.load_deities(1,f.character).front().revision==deity_before.revision,
+            "Header rejection committed only the deity half of the status update");
+    }
+    {
+        LearningSelectionFixture f;auto old=f.companions.load_deities(1,f.character).front();
+        auto pair=old.snapshot;pair.skills.push_back(*RecoveredDeityState::Skill::parse(std::array<std::uint8_t,4>{0x34,1,0,2}));
+        old=f.companions.store_deity(1,f.character,pair,old.revision,old.provenance);
+        // Explicit synthetic header setup isolates an ordered-skill rejection.
+        std::vector<std::uint8_t> raw;
+        const auto append=[&](const auto& bytes){raw.insert(raw.end(),bytes.begin(),bytes.end());};
+        append(old.snapshot.declaration.encode());append(old.snapshot.status.encode());
+        for(const auto& skill:old.snapshot.skills)append(skill.encode());
+        sqlite_detail::Statement header(f.db.get(),"UPDATE deity_skill_activation_headers SET raw_row=?,deity_revision=? WHERE row_key=1");
+        header.bind_blob(1,raw);header.bind_id(2,old.revision);header.done();
+        require(f.learning.restore(1,f.character).activations().size()==1,"Ordered-skill fixture has no activation");
+        const auto storage=f.activation_storage();std::swap(pair.skills[0],pair.skills[1]);
+        f.companions.store_deity(1,f.character,pair,old.revision,old.provenance);
+        require(f.activation_storage()==storage && f.learning.restore(1,f.character).activations().empty(),
+            "Skill order change carried a different full-row witness");
+    }
+    {
+        LearningSelectionFixture f;const auto old=f.companions.load_deities(1,f.character).front();
+        const auto before=f.learning.restore(1,f.character);const auto storage=f.activation_storage();
+        struct Probe {LearningSelectionFixture* f;const StoredDeity* row;bool attempted=false,rejected=false;} probe{&f,&old};
+        sqlite3_set_authorizer(f.db.get(),[](void* context,int action,const char* table,const char*,const char*,const char*) {
+            auto& p=*static_cast<Probe*>(context);
+            if(!p.attempted && action==SQLITE_READ && table && std::string_view(table)=="native_companion_metadata") {
+                p.attempted=true;
+                try {p.f->companions.store_deity(1,p.f->character,p.row->snapshot,p.row->revision,p.row->provenance);}
+                catch(...) {p.rejected=true;}
+            }
+            return SQLITE_OK;
+        },&probe);
+        rejects([&]{f.companions.store_deity(1,f.character,changed_status(old.snapshot),old.revision,old.provenance);});
+        sqlite3_set_authorizer(f.db.get(),nullptr,nullptr);
+        require(probe.attempted && probe.rejected && f.activation_storage()==storage && f.learning.restoration_current(before),
+            "Caught nested writer reentry did not invalidate the outer import");
+    }
+    {
+        LearningSelectionFixture f;const auto old=f.companions.load_deities(1,f.character).front();
+        auto input=changed_status(old.snapshot);auto origin=old.provenance;
+        struct Probe {RecoveredDeityState::Snapshot* input;CompanionProvenance* origin;bool changed=false;} probe{&input,&origin};
+        sqlite3_set_authorizer(f.db.get(),[](void* context,int action,const char* table,const char*,const char*,const char*) {
+            auto& p=*static_cast<Probe*>(context);
+            if(!p.changed && action==SQLITE_READ && table && std::string_view(table)=="native_companion_metadata") {
+                p.changed=true;p.input->skills.clear();p.origin->evidence_id="observer-replaced-caller";
+            }
+            return SQLITE_OK;
+        },&probe);
+        const auto saved=f.companions.store_deity(1,f.character,input,old.revision,origin);
+        sqlite3_set_authorizer(f.db.get(),nullptr,nullptr);
+        require(probe.changed && input.skills.empty() && saved.snapshot.skills.size()==old.snapshot.skills.size() &&
+            saved.provenance==old.provenance && f.learning.restore(1,f.character).activations().size()==1,
+            "Import adopted callback-mutated caller inputs instead of its owned values");
+    }
+    for(const bool shadow:{true,false}) {
+        LearningSelectionFixture f;const auto old=f.companions.load_deities(1,f.character).front();
+        const auto original=f.activation_storage();
+        if(shadow)f.sql("CREATE TEMP TABLE deity_skill_activation_headers(dummy)");
+        else f.sql("CREATE TRIGGER activation_import_effect AFTER UPDATE ON deity_skill_activation_headers BEGIN SELECT 1; END");
+        rejects([&]{f.companions.store_deity(1,f.character,changed_status(old.snapshot),old.revision,old.provenance);});
+        if(shadow)f.sql("DROP TABLE temp.deity_skill_activation_headers");
+        else f.sql("DROP TRIGGER activation_import_effect");
+        require(f.activation_storage()==original && f.companions.load_deities(1,f.character).front().revision==old.revision,
+            "Shadow/trigger refusal left a partial status update");
+    }
+}
+
 void learning_selection_source_regression() {
     // Each after-state fault owns an isolated source; none is repaired in order
     // to revive a stale token. No test-only constructor mints private receipts.
@@ -322,6 +477,7 @@ int main() {
     try {
         selection_source_regression();
         learning_selection_source_regression();
+        status_activation_lineage_regression();
         Fixture f;auto repo=f.repo();RecoveredOwnedCompanions service(repo);const auto c=f.character;
         require(service.restore(1,c).empty(),"Absent ownership emitted packets");
         require(!repo.selected_deity_has_skill(1,c,0,126),"Absent ownership granted custom skill");

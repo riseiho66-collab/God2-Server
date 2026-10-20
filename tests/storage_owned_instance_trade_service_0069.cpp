@@ -4,6 +4,7 @@
 #include "storage_owned_foreign_bank_0068.cpp"
 #undef main
 #include "handlers/OwnedInstanceTradeService.h"
+#include <string_view>
 
 namespace {
 using InstanceService=OwnedInstanceTradeService;
@@ -15,19 +16,23 @@ struct InstanceServiceFixture {
     std::map<std::uint64_t,InstanceService::Peer> peers;
     bool fail_prepare_once=false,late_lease=false;unsigned prepare_failures{},late_checks{};
     std::optional<std::string> fixed_receipt;
+    std::function<void()> on_lookup,on_resolve,on_name,on_eligible,on_plain,on_receipt,on_late_lookup,on_definition;
+    void hook(std::function<void()>& source){auto once=std::move(source);source={};if(once)once();}
     InstanceService service;
-    InstanceServiceFixture():f(50),repo(f.db,armor,armor_exact,[this](auto id)->std::optional<NativeWeaponRecord>{const auto at=f.definitions.find(id);return at==f.definitions.end()?std::nullopt:std::optional(at->second);},[](auto id){return id==3107;}),
+    InstanceServiceFixture():f(50),repo(f.db,armor,armor_exact,[this](auto id)->std::optional<NativeWeaponRecord>{hook(on_definition);const auto at=f.definitions.find(id);return at==f.definitions.end()?std::nullopt:std::optional(at->second);},[](auto id){return id==3107;}),
         service(repo,[this](auto session)->std::optional<InstanceService::Peer>{
+            hook(on_lookup);if(sqlite3_get_autocommit(f.db)==0)hook(on_late_lookup);
             if(late_lease&&sqlite3_get_autocommit(f.db)==0){++late_checks;peers.at(22).scene=9;}
             const auto at=peers.find(session);return at==peers.end()?std::nullopt:std::optional(at->second);},
-            [this](auto character)->std::optional<InstanceService::Peer>{for(const auto& [id,peer]:peers)if(peer.character==character)return peer;return {};},
-            [](const auto&,const auto& peer){RecoveredTrade::Name name{};name[0]=static_cast<std::uint8_t>('A'+peer.character);return name;},
-            [](const auto& scalar){return scalar.item_id==3107&&scalar.count&&scalar.source_sha256==SqliteArmorSlotRepository::source_sha256;},
+            [this](auto character)->std::optional<InstanceService::Peer>{hook(on_resolve);for(const auto& [id,peer]:peers)if(peer.character==character)return peer;return {};},
+            [this](const auto&,const auto& peer){hook(on_name);RecoveredTrade::Name name{};name[0]=static_cast<std::uint8_t>('A'+peer.character);return name;},
+            [this](const auto& scalar){hook(on_eligible);return scalar.item_id==3107&&scalar.count&&scalar.source_sha256==SqliteArmorSlotRepository::source_sha256;},
             [this](auto slot,const auto& scalar){
+                hook(on_plain);
                 if(fail_prepare_once){fail_prepare_once=false;++prepare_failures;throw DatabaseError("CUSTOM_TEST genuine prepare projection failure");}
                 RecoveredInventoryProjection::Metadata bytes{};bytes[0]=static_cast<std::uint8_t>(scalar.item_id);bytes[1]=static_cast<std::uint8_t>(scalar.item_id>>8);
                 return RecoveredInventoryProjection::encode({slot,scalar.count,bytes}).value();},
-            [this]{return fixed_receipt?*fixed_receipt:f.receipt();}){
+            [this]{hook(on_receipt);return fixed_receipt?*fixed_receipt:f.receipt();}){
         f.install();f.sql(InstanceRepo::schema());SqliteTradeRepository wallets(f.db);wallets.install_schema();
         for(unsigned owner=0;owner<2;++owner){wallets.provision_wallet(owner+1,f.ids[owner]);peers.emplace(owner?22:11,InstanceService::Peer{owner?22u:11u,owner+1,f.ids[owner],4,3,true});}
         f.sql("UPDATE character_trade_wallets SET amount=1000,revision=1");
@@ -51,6 +56,7 @@ std::vector<std::uint8_t> expected_owner_reply(const InstanceRepo::Snapshot& sav
     const auto wallet=RecoveredTrade::wallet(saved.wallet.amount);bytes.insert(bytes.end(),wallet.begin(),wallet.end());return bytes;
 }
 void exact_restore(const InstanceService::Deliveries& deliveries,InstanceServiceFixture& h){for(unsigned owner=0;owner<2;++owner){const auto id=owner?22u:11u;require(deliveries.contains(id)&&deliveries.at(id)==expected_owner_reply(h.load(owner),true),"Owned trade rollback/cancel did not return exact30 authoritative slots and absolute wallet");}}
+void only_close(const InstanceService::Deliveries& deliveries){require(!deliveries.empty(),"Retired trade must close its UI");for(const auto& [id,bytes]:deliveries)require(id&&bytes==RecoveredTrade::rollback_close(),"Retired operation leaked old owner metadata or wallet");}
 void protected_equal(const ArmorSnapshot& before,const ArmorSnapshot& after){
     for(unsigned slot=30;slot<50;++slot)require(before.scalar[slot]==after.scalar[slot],"Owned trade changed protected/equipped scalar");
     const auto filtered=[](const auto& rows){auto values=rows;std::erase_if(values,[](const auto& row){return row.slot<30;});return values;};
@@ -96,5 +102,60 @@ void empty_tail_and_offer_rules(){
     for(unsigned slot=1;slot<9;++slot)h.f.scalar(slot,3107,1,3);
     h.open();const auto capacity_state=h.f.rows();h.offer(0,0);for(unsigned slot=1;slot<8;++slot)require(!h.offer(0,slot).rejected,"Valid first8 native offer entries refused");require(h.offer(0,8).rejected&&h.f.rows()==capacity_state&&!h.service.active(11),"Ninth native offer exceeded8 cap or changed durable state");
 }
+// Synchronous callback cancellation must retire only the ORIGINAL operation;
+// it cannot erase an iterator still in use or revive it after a caught nested call.
+void adapter_reentry_retires_original_operation(){
+    for(unsigned adapter=0;adapter<8;++adapter)for(unsigned mutation=0;mutation<3;++mutation){
+        InstanceServiceFixture h;seed_mixed(h);unsigned nested=0;
+        const auto attempt=[&]{++nested;
+            if(mutation==0){const auto denied=h.act(0,{TradeRequest{TradeKind::Cancel}});require(denied.rejected&&!denied.committed&&denied.deliveries.empty(),"Nested trade handle must deny without mutating original context");}
+            else if(mutation==1)require(h.service.disconnect(11).empty(),"Nested disconnect must defer original cleanup");
+            else require(h.service.refresh(InstanceServiceFixture::now()+std::chrono::seconds(61)).empty(),"Nested refresh must not erase the original iterator");
+        };
+        const bool opening=adapter==1||adapter==2;
+        if(!opening){require(!h.open().rejected,"Reentry setup open");if(adapter!=3){h.offer(0,1);h.offer(1,1);h.confirm(0);}}
+        const auto before=h.f.rows();
+        switch(adapter){case 0:h.on_lookup=attempt;break;case 1:h.on_resolve=attempt;break;case 2:h.on_name=attempt;break;case 3:h.on_eligible=attempt;break;case 4:h.on_plain=attempt;break;case 5:h.on_receipt=attempt;break;case 6:h.on_late_lookup=attempt;break;case 7:h.on_late_lookup=[&]{h.on_definition=attempt;};break;}
+        const auto result=opening?h.open():(adapter==3?h.offer(0,4,2):h.confirm(1));
+        require(nested==1&&result.rejected&&!result.committed&&!h.service.active(11)&&!h.service.active(22)&&h.f.rows()==before,
+            "Caught adapter reentry resumed/committed a retired full20 trade or changed durable state");
+        only_close(result.deliveries);
+        // A poisoned or throwing operation must not poison the next legitimate one.
+        require(!h.open().rejected,"Reentry scope did not restore admission after cleanup");
+        h.service.disconnect(11);
+    }
+    InstanceServiceFixture throwing;seed_mixed(throwing);throwing.open();throwing.offer(0,1);throwing.confirm(0);
+    const auto before=throwing.f.rows();throwing.on_receipt=[]{throw DatabaseError("Injected receipt exception");};
+    require(throwing.confirm(1).rejected&&throwing.f.rows()==before&&!throwing.service.active(11),"Throwing receipt did not retire original trade");
+    require(!throwing.open().rejected,"Exception left operation fence permanently locked");
 }
-int main(){try{two_owner_mixed_settlement_and_replay();cancel_timeout_disconnect_and_mutated_peer();preparation_latelease_and_fullbag_refusal();empty_tail_and_offer_rules();std::cout<<"PASS CUSTOM0069 owned instance trade service: real two-owner armor/WPN/TWP/Gem full20+MED/money; exact peer50 prefix; same-ID distinct-tail custody; pure prepared replies; original60s custom policy/cancel/disconnect; stale peer, replay, actual prepare/latelease/fullbag rollback; native5byte empty clear and stored opaque-tail preservation; no live activation/grants/stat claims\n";return 0;}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
+void disconnect_and_refresh_adapter_reentry(){
+    for(const bool refresh:{false,true}){
+        InstanceServiceFixture h;seed_mixed(h);h.open();h.offer(0,1);const auto before=h.f.rows();unsigned nested=0;
+        h.on_lookup=[&]{++nested;require(h.service.disconnect(22).empty(),"Nested disconnect escaped active lifecycle operation");const auto denied=h.act(0,{TradeRequest{TradeKind::Open}});require(denied.rejected&&!denied.committed,"Nested open escaped active lifecycle operation");require(h.service.refresh(InstanceServiceFixture::now()).empty(),"Nested refresh escaped active lifecycle operation");};
+        const auto restored=refresh?h.service.refresh(InstanceServiceFixture::now()):h.service.disconnect(11);
+        require(nested==1&&!h.service.active(11)&&!h.service.active(22)&&h.f.rows()==before,"Lifecycle callback reused stale context or changed full20 storage");
+        only_close(restored);require(!h.open().rejected,"Lifecycle operation fence failed to reset");
+    }
+}
+
+void owned_request_lifetime_and_commit_trace(){
+    InstanceServiceFixture h;seed_mixed(h);
+    TradeRequest open{TradeKind::Open};open.target=static_cast<std::uint16_t>(h.f.ids[1]);
+    std::vector<TradeRequest> input{open};h.on_resolve=[&]{input.clear();input.shrink_to_fit();};
+    require(!h.service.handle(11,input,InstanceServiceFixture::now()).rejected&&input.empty(),"Resolver invalidated borrowed open span");
+    TradeRequest item{TradeKind::OfferItem};item.target=open.target;item.slot=4;item.item=3107;item.quantity=2;
+    input={item};h.on_eligible=[&]{input.clear();input.shrink_to_fit();};
+    require(!h.service.handle(11,input,InstanceServiceFixture::now()).rejected&&input.empty(),"Eligibility invalidated borrowed offer span");
+    h.service.disconnect(11);
+    h.open();h.offer(0,1);h.confirm(0);const auto before=h.f.rows();
+    struct Trace{InstanceService* service;unsigned fired{};bool denied{},armed{};}trace{&h.service};
+    h.on_late_lookup=[&]{trace.armed=true;};
+    sqlite3_trace_v2(h.f.db,SQLITE_TRACE_STMT,[](unsigned,void* ctx,void*,void* text)->int{
+        auto& value=*static_cast<Trace*>(ctx);if(std::string_view(static_cast<const char*>(text))=="COMMIT"&&value.armed&&!value.fired){++value.fired;value.denied=value.service->disconnect(11).empty();}return 0;
+    },&trace);
+    const auto settled=h.confirm(1);sqlite3_trace_v2(h.f.db,0,nullptr,nullptr);
+    require(trace.fired==1&&trace.denied&&settled.committed&&!settled.rejected&&settled.deliveries.empty()&&!h.service.active(11)&&h.f.rows()!=before,"COMMIT callback retired response but was falsely reported as rollback");
+}
+}
+int main(){try{two_owner_mixed_settlement_and_replay();cancel_timeout_disconnect_and_mutated_peer();preparation_latelease_and_fullbag_refusal();empty_tail_and_offer_rules();adapter_reentry_retires_original_operation();disconnect_and_refresh_adapter_reentry();owned_request_lifetime_and_commit_trace();std::cout<<"PASS CUSTOM0069 owned instance trade service: real two-owner armor/WPN/TWP/Gem full20+MED/money; exact peer50 prefix; same-ID distinct-tail custody; pure prepared replies; original60s custom policy/cancel/disconnect; stale peer, replay, actual prepare/latelease/fullbag rollback; native5byte empty clear and stored opaque-tail preservation; no live activation/grants/stat claims\n";return 0;}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

@@ -119,6 +119,7 @@ public:
     bool release_finished_diagnostic(Session& session);
     void remove(std::uint64_t session) noexcept;
 private:
+    class BindingOperation;
     struct Bound {
         const Session* session;
         std::uint64_t account, character;
@@ -143,6 +144,8 @@ private:
         std::optional<std::chrono::steady_clock::time_point> pose_last_sent;
         std::optional<std::uint8_t> pose_last_symbol;
         OwnedCheckpointCommit owned_checkpoint_commit;
+        // Shared callback lifetime fence for every operation, including the
+        // original saved-skill path. Remove defers erase until the outer exit.
         bool owned_skill_operating{},owned_skill_reentered{},owned_skill_remove_pending{};
         std::optional<Session::WorldResponseWrite> owned_bootstrap_write;
         // CUSTOM-0140: separate opt-in actual bootstrap identity; not cosmetic.

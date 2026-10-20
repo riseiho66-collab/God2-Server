@@ -7,6 +7,8 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string_view>
+#include "BankCallbackRegression.h"
 using namespace god2;
 void require(bool ok,const char* text){if(!ok)throw std::runtime_error(text);}
 int main(){try {
@@ -26,9 +28,11 @@ int main(){try {
     sqlite_detail::execute(raw,"INSERT INTO world_bank_service_points VALUES(4,3,114,531,'ISOLATED_TEST_ONLY','explicit test banker','CUSTOM-0064')");
     require(!access.lookup(4,3,531) && access.lookup(4,3,531,true).has_value(),"Test banker escaped lab or missing role");
     RecoveredBankService::Peer peer{7,1,role.id,4,3,126,126,true};unsigned receipts=0;bool allowed=true;
-    RecoveredBankService service(bank,[&](std::uint64_t s)->std::optional<RecoveredBankService::Peer>{if(s==7)return peer;return {};},
-        [&](const auto& p,std::uint16_t target){return allowed && p.area==4 && p.scene==3 && access.lookup(p.area,p.scene,target,true).has_value();},
-        [&]{return std::string(64,static_cast<char>('a'+receipts++));});
+    std::function<void(std::string_view)> callback;
+    const auto observe=[&](std::string_view stage){const auto hook=callback;if(hook)hook(stage);};
+    RecoveredBankService service(bank,[&](std::uint64_t s)->std::optional<RecoveredBankService::Peer>{observe("lookup");if(s==7)return peer;return {};},
+        [&](const auto& p,std::uint16_t target){observe("access");return allowed && p.area==4 && p.scene==3 && access.lookup(p.area,p.scene,target,true).has_value();},
+        [&]{observe("receipt");return std::string(64,static_cast<char>('a'+receipts++));});
     const auto now=RecoveredBankService::Clock::now();
     require(!service.open(7,999,now) && !bank.load_bank(1,role.id),"Unknown banker created a balance");
     const auto opened=service.open(7,531,now);require(opened && opened->size()==27 && (*opened)[0]==0x46 && (*opened)[13]==0x47 && (*opened)[22]==0x27,"Native bank projection layout");
@@ -39,8 +43,9 @@ int main(){try {
     auto result=service.handle(7,std::span(&deposit,1),now);
     require(result.committed && result.logical==std::vector<std::uint8_t>{0x47,100,0,0,0,0,0,0,0,0x27,0x84,3,0,0},"Native bank/purse commit projection");
     auto current=bank.load(1,role.id);require(current.wallet.amount==900 && current.bank.amount==100,"Bank money not conserved");
+    const auto absolute=result.logical;
     const std::array duplicate{deposit,deposit};result=service.handle(7,duplicate,now);
-    require(result.rejected && !result.committed && bank.load(1,role.id)==current,"Duplicated batch spent money");
+    require(result.rejected && !result.committed && result.logical==absolute && bank.load(1,role.id)==current,"Duplicated batch spent money or lost absolute rollback sync");
     service.open(7,531,now);peer.scene=2;result=service.handle(7,std::span(&deposit,1),now);
     require(result.rejected && bank.load(1,role.id)==current,"Cross-scene lease spent money");peer.scene=3;
     service.open(7,531,now);result=service.handle(7,std::span(&deposit,1),now+std::chrono::seconds(61));
@@ -53,5 +58,48 @@ int main(){try {
     service.open(7,531,now);const RecoveredBank::Request withdraw{RecoveredBank::Kind::Withdraw,100,531,0xffff};
     result=service.handle(7,std::span(&withdraw,1),now);require(result.committed,"Native withdrawal failed");
     current=bank.load(1,role.id);require(current.wallet.amount==initial.wallet.amount && current.bank.amount==initial.bank.amount && bank.load(2,other.id)==unrelated,"Withdrawal or unrelated save changed");
+    {
+        service.open(7,531,now);const auto before=bank.load(1,role.id);
+        const auto denied=god2_test::bank_revoke_on_receipt(raw,service,[&]{return service.handle(7,std::span(&deposit,1),now);},7);
+        require(denied.rejected&&!denied.committed&&denied.logical.empty()&&bank.load(1,role.id)==before,"Money postwrite observer escaped rollback");
+    }
+    // PHASE1 source-only regression: caught nested entry still poisons the outer lease.
+    for(const auto stage:{"lookup","access","receipt"})for(unsigned failure=0;failure<5;++failure){
+        service.open(7,531,now);const auto before=bank.load(1,role.id);unsigned hits=0;
+        callback=[&](std::string_view at){if(at!=stage)return;++hits;callback={};
+            if(failure==0)service.disconnect(7);
+            else if(failure==1){try{service.open(7,531,now);}catch(...){} }
+            else if(failure==2){try{service.permits_items(7,531,now);}catch(...){} }
+            else if(failure==3){try{service.renew_items(7,now);}catch(...){} }
+            else throw 7;
+        };
+        const auto denied=service.handle(7,std::span(&deposit,1),now);callback={};
+        require(hits==1&&denied.rejected&&!denied.committed&&bank.load(1,role.id)==before,"Money callback spent after retirement");
+        if(failure!=4)require(denied.logical.empty(),"Poisoned money callback emitted stale rows");
+        require(service.handle(7,std::span(&deposit,1),now).rejected,"Money callback retained lease");
+    }
+    for(const auto stage:{"lookup","access"}){
+        unsigned hits=0;bool refused=false;const auto before=bank.load(1,role.id);
+        callback=[&](std::string_view at){if(at!=stage)return;++hits;callback={};service.disconnect(7);};
+        try{service.open(7,531,now);}catch(...){refused=true;}callback={};
+        require(refused&&hits==1&&bank.load(1,role.id)==before&&service.handle(7,std::span(&deposit,1),now).rejected,"Money open revived revoked lease");
+        service.open(7,531,now);hits=0;
+        callback=[&](std::string_view at){if(at!=stage)return;++hits;callback={};service.disconnect(7);};
+        require(!service.permits_items(7,531,now),"Money permit survived callback revocation");callback={};
+        require(hits==1&&service.handle(7,std::span(&deposit,1),now).rejected,"Money permit retained revoked lease");
+    }
+    service.open(7,531,now);++peer.session;require(!service.open(7,531,now),"Money open accepted mismatching returned session");--peer.session;
+    require(service.handle(7,std::span(&deposit,1),now).rejected,"Rejected replacement open retained old lease");
+    {
+        const auto before=bank.load(1,role.id);unsigned cuts=0;bool refused=false;
+        try{bank.commit(std::string(64,'f'),{before,SqliteBankRepository::Operation::Deposit,1},[&]{if(++cuts==2)throw DatabaseError("final lifecycle cut");});}catch(const DatabaseError&){refused=true;}
+        require(refused&&cuts==2&&bank.load(1,role.id)==before,"Money final readback lifecycle cut failed rollback");
+        profile[0]='C';const auto fresh=characters.create(1,profile);
+        for(bool existing:{false,true}){
+            if(existing)bank.provision_bank(1,fresh.id);cuts=0;refused=false;const auto original=bank.load_bank(1,fresh.id);
+            try{bank.provision_bank(1,fresh.id,[&]{if(++cuts==2)throw DatabaseError("final provision cut");});}catch(const DatabaseError&){refused=true;}
+            require(refused&&cuts==2&&bank.load_bank(1,fresh.id)==original,"Money new/existing provision escaped final lifecycle cut");
+        }
+    }
     std::cout<<"Bank typed native framing, lease/access, test isolation, cancel and canonical sync passed\n";
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

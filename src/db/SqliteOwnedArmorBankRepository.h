@@ -45,7 +45,7 @@ public:
     bool receipt_exists(const std::string& receipt,ReceiptLedger ledger=ReceiptLedger::Any);
     void verify_snapshot_in_transaction(const Snapshot& expected);
     Plan plan(const Request&) const;
-    Plan commit(const std::string& receipt,const Request&,const Prepare&,const Check& check={});
+    Plan commit(const std::string& receipt,const Request&,const Prepare&,const Check& check={},const std::function<void()>& current={});
 private:
     void validate(const Snapshot&) const;
     sqlite3* db_;

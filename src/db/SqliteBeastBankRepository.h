@@ -40,7 +40,7 @@ public:
     static void require_schema(sqlite3*);
     Snapshot load(std::uint64_t account,std::uint64_t character);
     Plan plan(const Request&) const;
-    Plan commit(const std::string&,const Request&,const Prepare&,const Check&);
+    Plan commit(const std::string&,const Request&,const Prepare&,const Check&,const std::function<void()>& current={});
     void verify_snapshot_in_transaction(const Snapshot&);
     bool receipt_exists(const std::string&,bool own_only=false);
 private:

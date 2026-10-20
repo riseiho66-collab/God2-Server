@@ -7,6 +7,7 @@
 #include "protocol/RecoveredWorldFrame.h"
 #include <iomanip>
 #include <sstream>
+#include "BankCallbackRegression.h"
 
 namespace {
 using ForeignService=OwnedForeignBankService;
@@ -16,17 +17,19 @@ struct ServiceHarness {
     std::optional<RecoveredBankService::Peer> peer;
     bool permit=true,fail_projection=false;unsigned renews{},serial{},projection_failures{};
     std::optional<std::string> fixed_receipt;
+    std::function<void(std::string_view)> callback;
+    void observe(std::string_view stage){const auto hook=callback;if(hook)hook(stage);}
     ForeignService service;
     explicit ServiceHarness(unsigned slots=50,bool file=false):fixture(slots,file),repository(fixture.repo()),
         armor_repo(fixture.db,armor,armor_exact),plain_repo(fixture.db),
         peer(RecoveredBankService::Peer{77,1,fixture.ids[0],1,1,1,1,true}),
-        service(repository,armor_repo,plain_repo,[this](auto id){return id==77?peer:std::nullopt;},
-            [this](auto,auto target,auto){return permit&&target==279;},[this](auto,auto){++renews;},
-            [](const auto& row){return row.item_id==3107&&row.count&&row.source_sha256==SqliteArmorSlotRepository::source_sha256;},
-            [this](auto slot,const auto& row){if(fail_projection){++projection_failures;throw DatabaseError("CUSTOM_TEST plain prepare projection failed");}
+        service(repository,armor_repo,plain_repo,[this](auto id){observe("lookup");return id==77?peer:std::nullopt;},
+            [this](auto,auto target,auto){observe("permit");return permit&&target==279;},[this](auto,auto){observe("renew");++renews;},
+            [this](const auto& row){observe("eligible");return row.item_id==3107&&row.count&&row.source_sha256==SqliteArmorSlotRepository::source_sha256;},
+            [this](auto slot,const auto& row){observe("plain");if(fail_projection){++projection_failures;throw DatabaseError("CUSTOM_TEST plain prepare projection failed");}
                 RecoveredInventoryProjection::Metadata metadata{};metadata[0]=static_cast<std::uint8_t>(row.item_id);metadata[1]=static_cast<std::uint8_t>(row.item_id>>8);return RecoveredInventoryProjection::encode({slot,row.count,metadata}).value();},
-            [this]{if(fixed_receipt)return *fixed_receipt;std::ostringstream out;out<<std::string(56,'d')<<std::hex<<std::setw(8)<<std::setfill('0')<<serial++;return out.str();},
-            [this](auto id){if(fail_projection){++projection_failures;throw DatabaseError("CUSTOM_TEST full prepare projection failed");}return fixture.definitions.contains(id);}){fixture.install();}
+            [this]{observe("receipt");if(fixed_receipt)return *fixed_receipt;std::ostringstream out;out<<std::string(56,'d')<<std::hex<<std::setw(8)<<std::setfill('0')<<serial++;return out.str();},
+            [this](auto id){observe("weapon");if(fail_projection){++projection_failures;throw DatabaseError("CUSTOM_TEST full prepare projection failed");}return fixture.definitions.contains(id);}){fixture.install();}
     static auto now(){return ForeignService::Clock::now();}
     auto open(){return service.open(77,279,now());}
     auto handle(Kind kind,std::uint8_t source,std::uint8_t destination,std::uint8_t quantity=1,std::uint8_t page=0,std::uint16_t target=279){const std::array requests{RecoveredBankItems::Request{kind,target,page,source,destination,quantity}};return service.handle(77,requests,now());}
@@ -119,5 +122,16 @@ void service_receipts_preparation_and_real_triggers(){
         require(triggered&&result.rejected&&!result.committed&&f.rows()==rows,"Service late cross-ledger insertion skipped or committed");f.sql("DROP TRIGGER injected");
     }
 }
+void callback_lifecycle_regression(){
+    for(unsigned route=0;route<3;++route){
+        ServiceHarness h;h.fixture.add(0,1,0xa1,7);h.fixture.add_armor(4,1001);h.fixture.scalar(5,3107,7,3);h.open();const auto before=h.fixture.rows();
+        const auto result=god2_test::bank_revoke_on_receipt(h.fixture.db,h.service,[&]{return h.handle(Kind::Deposit,route==0?0:route==1?4:5,2,route==2?2:1);});
+        require(result.rejected&&!result.committed&&result.batches.empty()&&h.fixture.rows()==before,"Foreign/armor/plain postwrite callback escaped rollback");
+    }
+    god2_test::bank_callback_regressions<ServiceHarness>([](auto& h){h.fixture.add(0,1,0xa1,7);h.fixture.add_armor(4,1001);h.fixture.scalar(5,3107,7,3);},[](auto& h){return h.fixture.rows();},[](auto& h){return h.handle(Kind::Deposit,5,2,2);});
+    ServiceHarness h;h.fixture.add(0,1,0xa1,7);const auto before=h.fixture.rows();unsigned cuts=0;bool refused=false;
+    try{h.repository.commit(std::string(64,'f'),{h.fixture.load(),Op::Deposit,0,0,2,1},[](const auto&){},{},[&]{if(++cuts==2)throw DatabaseError("final current cut");});}catch(const DatabaseError&){refused=true;}
+    require(refused&&cuts==2&&h.fixture.rows()==before,"Foreign final postverify lifecycle cut did not rollback");
 }
-int main(){try{service_transport_and_original_routes();service_empty_tail_destination_regression();service_access_and_cross_refusal();service_receipts_preparation_and_real_triggers();std::cout<<"PASS CUSTOM0068 unified foreign bank service: qualified WPN1/TWP25/Gem8 exact48/3B41 full20 custody, same-ID distinct-tail65, armor/MED original routes, owner/lease/disconnect/batch/sparse-CAS, 9 all3-ledger replays, 3 preparation failures, actual armor/MED SQL UPDATE triggers and6 late cross-ledger rollback; no live activation/grants/stat formula\n";return 0;}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
+}
+int main(){try{callback_lifecycle_regression();service_transport_and_original_routes();service_empty_tail_destination_regression();service_access_and_cross_refusal();service_receipts_preparation_and_real_triggers();std::cout<<"PASS CUSTOM0068 unified foreign bank service: qualified WPN1/TWP25/Gem8 exact48/3B41 full20 custody, same-ID distinct-tail65, armor/MED original routes, owner/lease/disconnect/batch/sparse-CAS, 9 all3-ledger replays, 3 preparation failures, actual armor/MED SQL UPDATE triggers and6 late cross-ledger rollback; no live activation/grants/stat formula\n";return 0;}catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

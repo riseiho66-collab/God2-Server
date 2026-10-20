@@ -23,6 +23,12 @@ void no_battle(sqlite3* db,std::uint64_t character) {
         "ON s.battle_id=r.id WHERE r.character_id=? AND s.battle_id IS NULL LIMIT 1");
     read.bind_id(1,character);require(!read.row(),"Bank items during pending battle");
 }
+void final_current(sqlite3* db,const std::function<void()>& current) {
+    if(!current)return;
+    const auto changes=sqlite3_total_changes64(db);current();
+    require(sqlite3_get_autocommit(db)==0 && sqlite3_total_changes64(db)==changes,
+        "Bank item final current changed transaction");
+}
 void valid(const StoredInventorySlot& slot) {
     require(slot.count<=127 && (slot.count==0)==(slot.item_id==0) && slot.revision && slot.revision<=max_revision &&
         slot.source_sha256.size()==64 && slot.source_sha256.find_first_not_of("0123456789abcdef")==std::string::npos,
@@ -103,12 +109,12 @@ CREATE TABLE IF NOT EXISTS character_bank_item_receipts(
  design_id TEXT NOT NULL CHECK(design_id='CUSTOM-0065'));
 )");transaction.commit();
 }
-std::size_t SqliteBankItemsRepository::provision_empty(std::uint64_t account,std::uint64_t character) {
+std::size_t SqliteBankItemsRepository::provision_empty(std::uint64_t account,std::uint64_t character,const std::function<void()>& current) {
     sqlite_detail::Transaction transaction(db_);owner(db_,account,character);
     sqlite_detail::Statement count(db_,"SELECT count(*) FROM character_bank_item_slots WHERE character_id=?");
     count.bind_id(1,character);require(count.row(),"Bank item allocation query missing");
     if(count.integer(0)) {
-        read_slots<vault_size>(db_,character,true);transaction.commit();return 0;
+        read_slots<vault_size>(db_,character,true);final_current(db_,current);transaction.commit();return 0;
     }
     no_battle(db_,character);
     for(std::size_t index=0;index<vault_size;++index) {
@@ -120,7 +126,7 @@ std::size_t SqliteBankItemsRepository::provision_empty(std::uint64_t account,std
     }
     const auto actual=read_slots<vault_size>(db_,character,true);
     for(const auto& value:actual)require(value==BankSlot{0,0,1,empty_source_sha256},"Bank empty item readback mismatch");
-    transaction.commit();return vault_size;
+    final_current(db_,current);transaction.commit();return vault_size;
 }
 SqliteBankItemsRepository::Snapshot SqliteBankItemsRepository::load(std::uint64_t account,std::uint64_t character) {
     ReadScope scope(db_);
@@ -191,6 +197,6 @@ SqliteBankItemsRepository::Snapshot SqliteBankItemsRepository::commit(const std:
         read.number<std::uint8_t>(4)==request.source && read.number<std::uint8_t>(5)==request.destination &&
         read.number<std::uint8_t>(6)==request.quantity && read.text(7)==before && read.text(8)==after && read.text(9)=="CUSTOM-0065",
         "Bank item receipt readback mismatch");
-    require(load(next.account,next.character)==next,"Bank item complete readback mismatch");};verify();if(proof.after_write){proof.after_write();verify();}transaction.commit();return next;
+    require(load(next.account,next.character)==next,"Bank item complete readback mismatch");};verify();if(proof.after_write){proof.after_write();verify();}final_current(db_,proof.current);transaction.commit();return next;
 }
 }

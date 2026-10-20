@@ -33,6 +33,12 @@ public:
     void observe(Member member) {
         if(!member.session || !member.account || !member.character || member.character>0x3fff || member.name.empty())
             throw std::invalid_argument("Party owner snapshot invalid");
+        // CUSTOM-0062: a session's party and pending consent belong to this
+        // exact account/character. Rebinding must disconnect the predecessor
+        // first; refreshing stats must not transfer its membership or offers.
+        if(const auto old=members_.find(member.session);old!=members_.end() &&
+           (old->second.account!=member.account || old->second.character!=member.character))
+            throw std::invalid_argument("Party session owner changed without retirement");
         for(const auto& [sid,peer]:members_)if(sid!=member.session && peer.character==member.character)
             throw std::invalid_argument("Party duplicate character lease");
         members_.insert_or_assign(member.session,std::move(member));

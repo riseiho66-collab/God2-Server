@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <set>
+#include <type_traits>
 
 namespace god2 {
 namespace {
@@ -111,7 +112,8 @@ SqliteTradeRepository::CommitProof SqliteTradeRepository::prepare_proof(const st
 }
 SqliteTradeRepository::Settlement SqliteTradeRepository::commit(const std::string& receipt,const std::array<Side,2>& sides,const std::optional<CommitProof>& prepared) {
     require(receipt.size()==64 && receipt.find_first_not_of("0123456789abcdef")==std::string::npos,"Trade receipt invalid");
-    const auto result=plan(sides);
+    static_assert(std::is_nothrow_move_constructible_v<Settlement>,"Committed settlement must return without allocation or exceptions");
+    auto result=plan(sides);
     const auto proof=prepared?*prepared:prepare_proof({sides[0].expected,sides[1].expected},result);
     require(bool(proof.before_write)==bool(proof.after_write),"Trade transaction proof incomplete");
     sqlite_detail::Transaction transaction(db_);
@@ -147,6 +149,7 @@ SqliteTradeRepository::Settlement SqliteTradeRepository::commit(const std::strin
         recorded.number<std::uint64_t>(1)==result.sides[1].character && recorded.text(2)=="CUSTOM-0063","Trade receipt readback mismatch");
     for(const auto& next:result.sides)require(load(next.account,next.character)==next,"Trade readback mismatch");
     };verify();if(proof.after_write){proof.after_write();verify();}
+    if(proof.current){const auto changes=sqlite3_total_changes64(db_);const bool valid=proof.current();require(valid&&sqlite3_get_autocommit(db_)==0&&sqlite3_total_changes64(db_)==changes,"Trade final pure current retired or mutated transaction");}
     transaction.commit();return result;
 }
 }

@@ -1,4 +1,5 @@
 #include "db/SqliteCompanionRepository.h"
+#include "db/SqliteSkillBookLearningRepository.h"
 #include "db/SqliteSupport.h"
 #include <limits>
 #include <algorithm>
@@ -548,11 +549,35 @@ StoredDeitySelection SqliteCompanionRepository::select_deity(std::uint64_t accou
     transaction.commit();return next;
 }
 StoredDeity SqliteCompanionRepository::store_deity(std::uint64_t account,std::uint64_t character,
-        const RecoveredDeityState::Snapshot& snapshot,std::optional<std::uint64_t> expected_revision,
-        const CompanionProvenance& provenance) {
+        RecoveredDeityState::Snapshot snapshot,std::optional<std::uint64_t> expected_revision,
+        CompanionProvenance provenance) {
+    if(readset_reading_) {
+        readset_reentered_=true;throw DatabaseError("Deity import source reentry rejected");
+    }
+    readset_reading_=true;readset_reentered_=false;
+    struct Exit {bool& active;~Exit(){active=false;}} exit{readset_reading_};
+    if(!db_)throw DatabaseError("Deity import requires actual connection");
     require_provenance(provenance);
+    sqlite_detail::Transaction transaction(db_);
+    auto changes=sqlite3_total_changes64(db_);
+    if(changes>std::numeric_limits<sqlite3_int64>::max()-3)throw DatabaseError("Deity import change counter exhausted");
+    const auto fence=[&] {
+        if(readset_reentered_ || sqlite3_get_autocommit(db_) || sqlite3_total_changes64(db_)!=changes)
+            throw DatabaseError("Deity import source changed during transaction");
+    };
+    for(const auto* name:{"accounts","recovered_characters","native_companion_metadata",
+                         "character_deities","character_deity_selection","battle_reservations","battle_settlements"}) {
+        sqlite_detail::Statement shadow(db_,"SELECT 1 FROM temp.sqlite_master WHERE name=? COLLATE NOCASE OR tbl_name=? COLLATE NOCASE LIMIT 1");
+        shadow.bind(1,std::string(name));shadow.bind(2,std::string(name));
+        if(shadow.row())throw DatabaseError("Deity import TEMP shadow rejected");
+        sqlite_detail::Statement base(db_,"SELECT 1 FROM main.sqlite_master WHERE type='table' AND name=? COLLATE NOCASE");
+        base.bind(1,std::string(name));if(!base.row() || base.row())throw DatabaseError("Deity import main table missing");
+        sqlite_detail::Statement trigger(db_,"SELECT 1 FROM main.sqlite_master WHERE type='trigger' AND tbl_name=? COLLATE NOCASE LIMIT 1");
+        trigger.bind(1,std::string(name));if(trigger.row())throw DatabaseError("Deity import trigger rejected");
+        fence();
+    }
     if(!RecoveredDeityState::valid(snapshot,deity_template_keys())) throw DatabaseError("Invalid deity import snapshot");
-    sqlite_detail::Transaction transaction(db_);const auto owned=load_deities(account,character);
+    const auto owned=load_deities(account,character);fence();
     const auto key=snapshot.status.key_raw();
     const auto found=std::find_if(owned.begin(),owned.end(),[&](const auto& value){return value.snapshot.status.key_raw()==key;});
     const auto revision=found==owned.end()?std::optional<std::uint64_t>{}:std::optional{found->revision};
@@ -566,21 +591,28 @@ StoredDeity SqliteCompanionRepository::store_deity(std::uint64_t account,std::ui
     write.bind_blob(3,skills_blob(snapshot));write.bind_id(4,next);write.bind(5,provenance.source_sha256);
     write.bind(6,provenance.authority);write.bind(7,provenance.evidence_id);write.bind_id(8,character);write.bind(9,key);
     if(revision) write.bind_id(10,*revision);
-    write.done();if(sqlite3_changes(db_)!=1) throw DatabaseError("Deity import write rejected");
+    fence();write.done();if(sqlite3_changes(db_)!=1) throw DatabaseError("Deity import write rejected");
+    ++changes;fence();
     const auto after=load_deities(account,character);
     const auto saved=std::find_if(after.begin(),after.end(),[&](const auto& value){return value.snapshot.status.key_raw()==key;});
     if(saved==after.end() || saved->revision!=next || saved->provenance!=provenance ||
        saved->snapshot.declaration.encode()!=snapshot.declaration.encode() || saved->snapshot.status.encode()!=snapshot.status.encode() ||
        skills_blob(saved->snapshot)!=skills_blob(snapshot)) throw DatabaseError("Deity import readback mismatch");
+    fence();
+    if(found!=owned.end() && SqliteSkillBookLearningRepository::preserve_status_only_activation(
+            db_,account,character,*found,*saved))++changes;
+    fence();
     // CUSTOM-0039: the first explicit acquisition also establishes an owned
     // initial selection. Later acquisitions must not change the player's choice.
     if(!load_deity_selection(account,character)) {
         sqlite_detail::Statement select(db_,"INSERT INTO character_deity_selection(character_id,row_key,revision) VALUES(?,?,1)");
         select.bind_id(1,character);select.bind(2,key);select.done();
-        if(sqlite3_changes(db_)!=1 || load_deity_selection(account,character)!=std::optional{StoredDeitySelection{key,1}})
+        if(sqlite3_changes(db_)!=1)throw DatabaseError("Initial deity selection write rejected");
+        ++changes;fence();
+        if(load_deity_selection(account,character)!=std::optional{StoredDeitySelection{key,1}})
             throw DatabaseError("Initial deity selection readback mismatch");
     }
-    auto result=*saved;transaction.commit();return result;
+    auto result=*saved;fence();transaction.commit();return result;
 }
 std::vector<StoredPet2Slot> SqliteCompanionRepository::load_pet2_slots(std::uint64_t account,std::uint64_t character) {
     require_owner(account,character);

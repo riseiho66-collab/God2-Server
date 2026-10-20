@@ -37,6 +37,23 @@ private:
     Repo& repo_;Lookup lookup_;Resolve resolve_;Name name_;Eligible eligible_;PlainProjection plain_;Receipt receipt_;
     EligibleBeast beast_eligible_;
     Contexts contexts_;
+    // Serialized execution does not exclude synchronous adapter reentry.
+    // A nested mutation poisons its original operation without erasing the
+    // context whose iterator/snapshot is still in use by that operation.
+    bool operation_running_=false,operation_invalid_=false;
+    class Operation {
+        OwnedInstanceTradeService& owner_;const bool entered_;
+    public:
+        explicit Operation(OwnedInstanceTradeService& owner) noexcept
+            :owner_(owner),entered_(!owner.operation_running_) {
+            if(entered_){owner_.operation_running_=true;owner_.operation_invalid_=false;}
+            else owner_.operation_invalid_=true;
+        }
+        Operation(const Operation&)=delete;Operation& operator=(const Operation&)=delete;
+        ~Operation(){if(entered_){owner_.operation_running_=false;owner_.operation_invalid_=false;}}
+        explicit operator bool() const noexcept{return entered_;}
+    };
+    Deliveries disconnect_impl(std::uint64_t);
     static bool compatible(const Peer&,const Peer&);
     static void append(Deliveries&,std::uint64_t,const std::vector<std::uint8_t>&);
     Contexts::iterator find(std::uint64_t);
@@ -47,6 +64,7 @@ private:
     static bool whole(const Repo::Snapshot&,std::uint8_t);
     static RecoveredInventoryProjection::Metadata metadata(const Repo::Snapshot&,std::uint8_t);
     std::vector<std::uint8_t> project(const Repo::Snapshot&,std::uint8_t) const;
+    static Deliveries close_only(const Context&);
     Deliveries restore(const Context&) const;
 };
 }
