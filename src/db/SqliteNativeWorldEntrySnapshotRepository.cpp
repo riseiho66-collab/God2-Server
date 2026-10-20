@@ -110,7 +110,7 @@ void SqliteNativeWorldEntrySnapshotRepository::stage_replace(
     if(result!=std::optional{next})throw DatabaseError("Native world entry staged readback differs");
 }
 std::optional<SqliteNativeWorldEntrySnapshotRepository::Snapshot>
-SqliteNativeWorldEntrySnapshotRepository::replace_from_issuer(std::optional<Snapshot> expected,Snapshot next,Issuer issuer) {
+SqliteNativeWorldEntrySnapshotRepository::replace_from_issuer(std::optional<Snapshot> expected,Snapshot next,Issuer issuer,PureCurrent pure_current) {
     owner();
     if(writing_) {reentered_=true;throw DatabaseError("Native world entry writer reentered");}
     if(!issuer || !owns_sources(accounts_,characters_) || !sqlite3_get_autocommit(db_))
@@ -170,6 +170,9 @@ SqliteNativeWorldEntrySnapshotRepository::replace_from_issuer(std::optional<Snap
     check(result);
     if(!issuer(expected,next,WriteCheck::BeforeCommit))return std::nullopt;
     check(result);
+    // The preceding SQL/read observers can retire the Session AFTER issuer.
+    // No new provider/SQL call belongs between this pure fence and COMMIT.
+    if(reentered_ || (pure_current && !pure_current()) || reentered_)return std::nullopt;
     tx.commit();return result;
 }
 std::string SqliteNativeWorldEntrySnapshotRepository::schema() {

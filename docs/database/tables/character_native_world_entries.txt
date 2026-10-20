@@ -54,3 +54,19 @@ y | SQLite 宣告型別：INTEGER | 來源宣告：1
 限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
 本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
 原始客戶端封包、快照、編碼與原列位元組不改寫。
+
+CUSTOM-0142 明確使用者前後排顯示選擇（獨立種類，不覆寫原 2A）：
+record_kind = tw_b4_row_choice_e8_v1。
+record 固定 2 bytes：第一個 byte 為 E8，第二個 byte 為使用者實際 B4 選擇。
+第二個 byte：0 = 前排（原 UI control 18）；1 = 後排（原 UI control 19）。
+只保存真實已驗證的 B4 選擇；沒有保存就不產生預設 0 或 1。
+這是經使用者授權的 CUSTOM 顯示設定保存／重登入回放，並非已復原的原服保存規則。
+不代表戰鬥人物／戰寵初始 slot、前後排戰鬥部署、技能權限或戰後重置規則。
+client_sha256/source_sha256 固定為已分析 aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48。
+此 pin 是來源／協定分析範圍，不能當成遠端客戶端 EXE 的實際驗證。
+source_record 為可讀 CUSTOM-0142 B4→E8 來源與函數位址說明，不接受其他種類冒用。
+account_id/character_id/client_sha256/record_kind 組成獨立保存鍵；revision 是正整數遞增 CAS 版本。
+root_* 及 area/scene/x/y/position_revision 是保存當下的共同角色／位置來源見證。
+回放時只取真實保存的 E8 選擇資料；歷史 root／位置不授權目前 Session、不移動人物、不是 NPC／怪物座標設定。
+每次保存重新核對目前共同角色完整資料與位置；回放另由目前真正 normal-entry／response owner 驗證。
+讀取錯誤與沒有保存不同；缺少此明確擴充表時不能聲稱保存／重登入驗收通過，程式不會自行安裝表。

@@ -21,10 +21,14 @@ public:
     // pumping, SQL writes or borrowed captures. BeforeCommit sees staged next.
     // A raw blob, geometry match or always-true predicate is not an issuer.
     using Issuer=std::function<bool(const std::optional<Snapshot>&,const Snapshot&,WriteCheck)>;
+    // Optional final in-memory authority fence. No SQL/provider callbacks,
+    // allocation, pumping or state mutation; runs after the final readset check
+    // and immediately before COMMIT. Existing callers retain their old path.
+    using PureCurrent=std::function<bool()>;
     // Own BEGIN IMMEDIATE; exact expected tuple and unchanged common roots.
     // Caller supplies actual positive increasing revision, bytes and origin.
     // Does not mutate character/save, invent first material, or activate release.
-    std::optional<Snapshot> replace_from_issuer(std::optional<Snapshot> expected,Snapshot next,Issuer);
+    std::optional<Snapshot> replace_from_issuer(std::optional<Snapshot> expected,Snapshot next,Issuer,PureCurrent={});
 private:
     friend class SqliteOwnedEquipmentTransaction;
     // Internal only: the joint owner guards this writer and owns the outer

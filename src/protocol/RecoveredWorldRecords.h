@@ -2,6 +2,7 @@
 #include "protocol/TaiwanNativeBlacklist.h"
 #include "protocol/TaiwanNativePartyMenu.h"
 #include "protocol/TaiwanNativeClientOptions.h"
+#include "protocol/RecoveredBattleRowPreference.h"
 #include "protocol/TaiwanNativeSkillCommand.h"
 #include "protocol/RecoveredWorldSkillRequest.h"
 #include "protocol/RecoveredSkillSelectionRequest.h"
@@ -127,7 +128,7 @@ struct RecoveredWorldRecords {
                                 RecoveredC2Control::Request,
                                 RecoveredSpectator6E::Request,RecoveredMapPanelControl68::Request,
                                 RecoveredSpectatorClose::Request,TaiwanNativeSkillCommand::WireRecord,TaiwanNativeBlacklist::Request,TaiwanNativePartyMenu::Request,TaiwanNativeClientOptions::Control,RecoveredWorldSkillRequest::Request,RecoveredPrebornChoiceRequest::Mask,RecoveredPrebornChoiceRequest::Words,
-                                RecoveredSkillSelectionRequest::Request>;
+                                RecoveredSkillSelectionRequest::Request,RecoveredBattleRowPreference::Request>;
     static constexpr std::size_t max_logical_size = RecoveredWorldFrame::max_logical_size;
 
     // C2S 9A is a client diagnostic/log record, not a gameplay action. Keep
@@ -150,7 +151,7 @@ struct RecoveredWorldRecords {
         bool e4_controls=false,bool bf_requests=false,bool spectator6e=false,bool map_panel68=false,
         bool c2_controls=false,bool spectator_close=false,bool native_skill_commands=false,bool owned_blacklist=false,bool owned_party_directory=false,
         bool owned_client_options=false,bool native_world_skill_requests=false,bool native_preborn_requests=false,
-        bool native_skill_selection_requests=false) {
+        bool native_skill_selection_requests=false,bool owned_battle_row_preference=false) {
         if(unsupported) unsupported->reset();
         if (logical.empty() || logical.size() > max_logical_size)
             return std::nullopt;
@@ -158,6 +159,14 @@ struct RecoveredWorldRecords {
         for (std::size_t offset = 0; offset < logical.size();) {
             const auto remaining = logical.subspan(offset);
             switch (remaining[0]) {
+            case RecoveredBattleRowPreference::opcode: {
+                if(!owned_battle_row_preference){if(unsupported)*unsupported=UnsupportedRecord{offset,remaining[0]};return {};}
+                constexpr auto size=RecoveredBattleRowPreference::logical_size;
+                if(remaining.size()<size)return {};
+                const auto request=RecoveredBattleRowPreference::decode(remaining.first(size));
+                if(!request)return {};
+                records.emplace_back(*request);offset+=size;break;
+            }
             case TaiwanNativeClientOptions::control_opcode: {
                 if(!owned_client_options){if(unsupported)*unsupported=UnsupportedRecord{offset,remaining[0]};return {};}
                 constexpr auto size=TaiwanNativeClientOptions::control_size;
@@ -644,13 +653,13 @@ struct RecoveredWorldRecords {
         bool e4_controls=false,bool bf_requests=false,bool spectator6e=false,bool map_panel68=false,
         bool c2_controls=false,bool spectator_close=false,bool native_skill_commands=false,bool owned_blacklist=false,bool owned_party_directory=false,
         bool owned_client_options=false,bool native_world_skill_requests=false,bool native_preborn_requests=false,
-        bool native_skill_selection_requests=false) {
+        bool native_skill_selection_requests=false,bool owned_battle_row_preference=false) {
         if(unsupported) unsupported->reset();
         const auto logical = RecoveredWorldFrame::decode(wire);
         if (!logical) return std::nullopt;
         return decode(*logical,unsupported,guild_relations53,beast_views,pk_invitations,companion_controls6b,
             beast_activity9e,e4_controls,bf_requests,spectator6e,map_panel68,c2_controls,spectator_close,native_skill_commands,owned_blacklist,owned_party_directory,
-            owned_client_options,native_world_skill_requests,native_preborn_requests,native_skill_selection_requests);
+            owned_client_options,native_world_skill_requests,native_preborn_requests,native_skill_selection_requests,owned_battle_row_preference);
     }
 };
 }

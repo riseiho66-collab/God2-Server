@@ -2223,6 +2223,11 @@ struct Session::Impl {
             throw std::invalid_argument("Normal movement custody requires exclusive actual normal world owner");
         if(character_handlers.movement && character_handlers.world_records)
             throw std::invalid_argument("Recovered world handlers are mutually exclusive");
+        if(character_handlers.owned_battle_row_preference &&
+           (!character_handlers.owned_normal_movement_response_custody ||
+            !character_handlers.world_entry || !character_handlers.world_ready || !character_handlers.world_records ||
+            character_handlers.common_world_lifecycle || character_handlers.common_world_lifecycle_factory))
+            throw std::invalid_argument("B4 preference requires the actual exclusive normal-entry owner");
         if((character_handlers.world_ready || has_world_handler()) &&
            (!character_handlers.world_entry || !character_handlers.world_ready || !has_world_handler()))
             throw std::invalid_argument("Recovered world routing requires world entry and complete handlers");
@@ -4266,7 +4271,7 @@ struct Session::Impl {
                 character_handlers.map_panel68,character_handlers.c2_controls,character_handlers.spectator_close,
                 character_handlers.native_skill_commands,character_handlers.owned_blacklist,character_handlers.owned_party_directory,
                 character_handlers.owned_client_options,character_handlers.native_world_skill_requests,character_handlers.native_preborn_requests,
-                character_handlers.native_skill_selection_requests);
+                character_handlers.native_skill_selection_requests,character_handlers.owned_battle_row_preference);
             if(!batch) {
                 // Local protocol diagnosis: never log payloads, names, or chat.
                 if(unsupported)

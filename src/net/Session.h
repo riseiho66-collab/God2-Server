@@ -776,6 +776,7 @@ public:
         // LAST: separate default-off D5 grammar from an actual whole-batch
         // world owner. It grants no C35/C56, learning or selection authority.
         bool native_skill_selection_requests=false;
+        bool owned_battle_row_preference=false; // LAST: CUSTOM-0142 actual final B4/save/E8 host installed.
     };
 
     Session(asio::ip::tcp::socket socket, asio::any_io_executor game_executor,

@@ -31,6 +31,8 @@
 #include "handlers/OwnedPartyDirectoryService.h"
 #include "game/OwnedPartyPreviewTransport.h"
 #include "game/OwnedClientOptions.h"
+#include "game/OwnedBattleRowPreference.h"
+#include "protocol/RecoveredBattleRowPreferenceRuns.h"
 #include "protocol/RecoveredWorldEntryView.h"
 #include "text/OwnedCharacterNameText.h"
 #include "auth/RecoveredAccountLogin.h"
@@ -1957,6 +1959,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             if(config.owned_party_directory_enabled)owned_party_directory=std::make_unique<OwnedPartyDirectory>();
             std::unique_ptr<OwnedClientOptions> owned_client_options; // CUSTOM-0100, never gameplay permissions.
             if(config.owned_client_options_enabled)owned_client_options=std::make_unique<OwnedClientOptions>();
+            std::unique_ptr<OwnedBattleRowPreference> battle_row_preferences; // CUSTOM-0142 actual normal-entry host below.
             std::map<std::uint64_t,std::weak_ptr<Session>> party_sessions;
             std::unique_ptr<OwnedPartyPreviewTransport> party_preview_transport;
             if(owned_party_directory)party_preview_transport=std::make_unique<OwnedPartyPreviewTransport>(config.max_sessions);
@@ -10312,6 +10315,67 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(failure)std::rethrow_exception(failure);
                     };
                 }
+                // CUSTOM-0142 is the LAST world wrapper: prevalidate the whole
+                // B4 mixed batch before any inner callback can mutate storage.
+                // Requires the real normal-entry/ready/response owner; fixed
+                // analysis pin is not a peer-provided executable identity.
+                if(whole_bag_moves && game_handlers.owned_normal_movement_response_custody &&
+                   !game_handlers.common_world_lifecycle && !game_handlers.common_world_lifecycle_factory &&
+                   game_handlers.world_entry && game_handlers.world_ready && game_handlers.world_records) {
+                    battle_row_preferences=std::make_unique<OwnedBattleRowPreference>(
+                        database.native_world_entry_writer(),database.accounts(),database.recovered_characters(),config.max_sessions);
+                    game_handlers.owned_battle_row_preference=true;
+                    const auto ready=game_handlers.world_ready;
+                    game_handlers.world_ready=[&,ready](Session& session) {
+                        battle_row_preferences->ready(session); // Pending only; INIT is not published yet.
+                        ready(session);
+                    };
+                    const auto previous_disconnect=on_disconnect;
+                    on_disconnect=[&,previous_disconnect](std::shared_ptr<Session> session) {
+                        // Revoke BEFORE every older, possibly throwing observer.
+                        if(session)battle_row_preferences->disconnect(*session);
+                        if(previous_disconnect)previous_disconnect(std::move(session));
+                    };
+                    const auto original=game_handlers.world_records;
+                    game_handlers.world_records=[&,original](Session& session,
+                            std::span<const RecoveredWorldRecords::Record> borrowed)->std::optional<std::vector<std::uint8_t>> {
+                        if(!battle_row_preferences->begin())return {};
+                        struct End {OwnedBattleRowPreference& host;~End(){host.end();}} end{*battle_row_preferences};
+                        const auto held=session.shared_from_this(); // Across every original/SQL callback.
+                        // Session owns its actual original vector for this
+                        // synchronous GAME callback. Old receipt paths require
+                        // exact record addresses; own only our B4 values/plan.
+                        const auto plan=RecoveredBattleRowPreferenceRuns::prepare(borrowed);
+                        if(!plan)return {};
+                        std::vector<std::uint8_t> wire;
+                        const bool dispatched=plan->dispatch([&](std::span<const RecoveredWorldRecords::Record> actual_run) {
+                            const auto reply=[&] {
+                                const auto movement=session.movement_response_output_offset(wire.size());
+                                const auto causal=session.callback_reply_output_offset(wire.size());
+                                return original(session,actual_run);
+                            }();
+                            if(!reply || !battle_row_preferences->current())return false;
+                            wire.insert(wire.end(),reply->begin(),reply->end());
+                            return true;
+                        },[&](RecoveredBattleRowPreference::Request choice) {
+                            return battle_row_preferences->synchronize(session,choice.row,wire);
+                        });
+                        if(!dispatched)return {};
+                        // No B4 means original behavior remains available when
+                        // the explicit snapshot extension is not installed.
+                        // Such a read failure is not 'no saved choice'; no empty
+                        // default is cached, and the real B4 never uses this catch.
+                        if(!plan->has_row() && !borrowed.empty())try {
+                            if(!battle_row_preferences->synchronize(session,{},wire))return {};
+                        } catch(const DatabaseError& error) {
+                            if(!battle_row_preferences->current())return {};
+                            battle_row_preferences->defer_unavailable_replay(session);
+                            spdlog::warn("BATTLE_ROW_REPLAY_SOURCE_UNAVAILABLE reason={}",error.what());
+                        }
+                        if(!battle_row_preferences->current())return {};
+                        return wire;
+                    };
+                }
                 game_character_sources.emplace(std::move(game_handlers));
             }
             if(config.recovered_account_auth) character_handlers.authenticate_async=async_login;
@@ -10360,6 +10424,7 @@ if(guild_officer_runtime && player_guild(session) &&
             bool gameplay_retired=false;
             auto retire_gameplay=[&] {
                 if(gameplay_retired)return;gameplay_retired=true;
+                if(battle_row_preferences)battle_row_preferences->stop(); // Before other retirement observers.
                 if(ordinary_policy_reloads)ordinary_policy_reloads->stop();
                 if(hosted_pk)hosted_pk_lifetime.stop();
                 if(party_preview_transport)party_preview_transport->stop();
