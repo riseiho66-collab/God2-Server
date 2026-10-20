@@ -1,5 +1,6 @@
 // PHASE1 regression SOURCE ONLY. No test/build/SQLite/codec execution was run.
 #include "game/OwnedPveRoomState.h"
+#include "game/OwnedPveTimeoutPair.h"
 #include "game/OwnedBattleRowPreference.h"
 #include "db/SqliteAccountRepository.h"
 #include "db/SqliteMigrationManager.h"
@@ -315,5 +316,55 @@ void individual_return_excludes_later_room_cleanup_outputs(){
         "Concurrent cleanup stopped exact all-written individual claim release/continuation");
     room.retire_closed(t);
 }
+void native_timeout_pair_preflight_and_saved_boundaries(){
+    Fixture f;auto& input=f.inputs[0];StoredPet2Slot pet{};pet.slot=44;pet.revision=1;
+    pet.provenance={SqliteCompanionRepository::source_sha256,"CUSTOM_TEST_NOT_NATIVE","pass6:timeout-active44"};
+    std::array<std::uint8_t,20> meta{};meta[0]=0x91;meta[1]=0x33;meta[2]=32;
+    RecoveredPet1Stats::LogicalRecord stats{};stats[0]=0xe3;stats[1]=stats[3]=100;stats[5]=stats[7]=20;
+    stats[0x1d]=0x91;stats[0x1e]=0x33;stats[0x27]=44;
+    const auto parsed_pet=RecoveredPet1Stats::parse_logical(stats);require(bool(parsed_pet),"Timeout fixture pet grammar failed");
+    pet.pet1=RecoveredPet1Lifecycle::Snapshot{{input.identity.account,input.identity.character},meta,*parsed_pet};
+    sqlite_detail::Statement insert(f.db,"INSERT INTO character_pet2_slots VALUES(?,44,?,?,1,?,'CUSTOM_TEST_NOT_NATIVE','pass6:timeout-active44')");
+    insert.bind_id(1,input.identity.character);insert.bind_blob(2,meta);insert.bind_blob(3,stats);insert.bind(4,SqliteCompanionRepository::source_sha256);insert.done();
+    input.pet=T::PetInput{1,pet};OwnedPveRoomState room(*f.repository);auto ticket=room.create(f.encounter(2),project,current);written_all(room,ticket);
+    const auto before=room.inspect(ticket);const auto id=input.identity;
+    std::vector<std::uint8_t> wire;
+    const auto append_command=[&](std::uint8_t action,std::uint8_t actor,std::uint8_t side,std::uint16_t mask,std::uint32_t opaque){
+        std::array<std::uint8_t,17> b{};b[0]=0x35;b[1]=actor;b[2]=action;b[3]=side;b[4]=0xa5;
+        b[5]=std::uint8_t(mask);b[6]=std::uint8_t(mask>>8);
+        for(unsigned n=0;n<4;++n){b[9+n]=std::uint8_t(input.command_context>>(8*n));b[13+n]=std::uint8_t(opaque>>(8*n));}
+        wire.insert(wire.end(),b.begin(),b.end());
+    };
+    append_command(2,0,0,1,0xfedcba98u);append_command(2,1,1,2,0x89abcdefu);
+    // Native512620 retains count1; second action2 leaves the pet target mask
+    // for a coalesced auto0B whose SOURCE is still primary B51.
+    append_command(0x0b,0,0,2,0x76543210u);
+    const auto records=RecoveredWorldRecords::read(wire);require(bool(records),"Actual parser rejected native two-role timeout payload");
+    const auto batch=OwnedPveTimeoutPair::read(*records);require(batch&&OwnedPveTimeoutPair::current(*batch,before->members.at(id.character),*before),"Native timeout pair did not qualify exact living owner roles");
+    require(batch->roles[0].unwritten_byte3==0xa5&&batch->roles[0].unwritten_parameter==0xfedcba98u&&
+        batch->roles[1].unwritten_parameter==0x89abcdefu&&batch->progress&&batch->progress->target_masks[0]==2,
+        "Timeout pair normalized original opaque bits or rejected genuine nonzero progress mask");
+    auto invalid=*records;std::swap(invalid[0],invalid[1]);rejects([&]{OwnedPveTimeoutPair::read(invalid);});
+    invalid=*records;invalid.push_back((*records)[0]);rejects([&]{OwnedPveTimeoutPair::read(invalid);});
+    invalid=*records;invalid.push_back((*records)[2]);rejects([&]{OwnedPveTimeoutPair::read(invalid);});
+    invalid=*records;invalid.emplace_back(RecoveredWorldRecords::ContextNotification{{1,2,3,4}});rejects([&]{OwnedPveTimeoutPair::read(invalid);});
+    invalid=*records;invalid.emplace_back(batch->roles[0]);rejects([&]{OwnedPveTimeoutPair::read(invalid);});
+    auto wrong=*before;wrong.members.at(id.character).primary_grant=false;
+    require(!OwnedPveTimeoutPair::current(*batch,wrong.members.at(id.character),wrong),"Timeout pair manufactured a consumed primary grant");
+    wrong=*before;wrong.checkpoint.snapshot.actors[1]->controller=f.inputs[1].identity.character;
+    require(!OwnedPveTimeoutPair::current(*batch,wrong.members.at(id.character),wrong),"Timeout pair borrowed another owner's actor");
+    wrong=*before;wrong.members.at(id.character).assignment=T::Assignment{1,0,2};
+    require(!OwnedPveTimeoutPair::current(*batch,wrong.members.at(id.character),wrong),"Old native timeout pair was relabelled after a row swap");
+    room.pass(ticket,id,1,batch->roles[0].actor_position,project,current);
+    auto first=room.inspect(ticket);require(!first->members.at(id.character).primary_grant&&first->members.at(id.character).secondary_grant&&
+        first->animation_sequence==before->animation_sequence+1&&first->grant_epoch==1,"First timeout pass consumed both roles or minted a round");
+    rejects([&]{room.pass(ticket,id,1,batch->roles[1].actor_position,project,current);});
+    written_all(room,ticket);room.pass(ticket,id,1,batch->roles[1].actor_position,project,current);written_all(room,ticket);
+    const auto after=room.inspect(ticket);require(!after->members.at(id.character).primary_grant&&!after->members.at(id.character).secondary_grant&&
+        after->animation_sequence==before->animation_sequence+2&&after->grant_epoch==1&&after->checkpoint==before->checkpoint&&
+        after->members.at(id.character).input.resources==before->members.at(id.character).input.resources,
+        "Two native timeout roles lost separate progress boundaries or changed HP/RNG/round");
+    require(f.repository->read_retained(ticket.id()).animation_sequence==after->animation_sequence,"Timeout publication sequence was only transient");
 }
-int main(){try{shared_admission_and_claims();rollback_and_postcommit_truth();individual_return_and_no_reset();both_pet_generations_save_full_blobs();failed_multiframe_entry_and_return();full_choice_and_absent_active_pet_readsets();simultaneous_disconnect_is_one_room_commit();configured_empty_swap_is_canonical_and_durable();individual_return_excludes_later_room_cleanup_outputs();std::cout<<"owned PvE room0161 source cases passed\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+}
+int main(){try{native_timeout_pair_preflight_and_saved_boundaries();shared_admission_and_claims();rollback_and_postcommit_truth();individual_return_and_no_reset();both_pet_generations_save_full_blobs();failed_multiframe_entry_and_return();full_choice_and_absent_active_pet_readsets();simultaneous_disconnect_is_one_room_commit();configured_empty_swap_is_canonical_and_durable();individual_return_excludes_later_room_cleanup_outputs();std::cout<<"owned PvE room0161 source cases passed\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

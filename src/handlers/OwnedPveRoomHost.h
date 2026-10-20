@@ -80,6 +80,8 @@ private:
     void admit_prepared(const std::shared_ptr<Room>&,const std::shared_ptr<Peer>&,RecoveredSosSupportRequest::Request);
     void cancel_pending(const std::shared_ptr<Room>&)noexcept;
     void cancel_prepared(const std::shared_ptr<Room>&,const std::shared_ptr<Peer>&)noexcept;
+    bool process_timeout_pair(const std::shared_ptr<Room>&,Session&,
+        std::span<const RecoveredWorldRecords::Record>,bool allow_queue);
     bool process(const std::shared_ptr<Room>&,Session&,
         std::span<const RecoveredWorldRecords::Record>,bool allow_queue);
     void fail(const std::shared_ptr<Room>&)noexcept;

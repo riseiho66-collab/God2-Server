@@ -5,6 +5,7 @@
 #include "protocol/RecoveredDeitySelection.h"
 #include "protocol/RecoveredDeityActivation.h"
 #include "protocol/RecoveredWorldFrame.h"
+#include "protocol/RecoveredWorldRecords.h"
 #include "protocol/TaiwanNativeDeityRosterPrefix.h"
 #include <thread>
 namespace god2 {
@@ -120,8 +121,17 @@ public:
         std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request);
     std::optional<std::vector<std::uint8_t>> select_deity(
         std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request);
+    struct PetSelectionBatch {
+        enum class Kind {Absent,Rejected,Selection};
+        Kind kind=Kind::Absent;
+        std::optional<RecoveredSelectionItemRequest::Request> request;
+    };
+    // Whole original callback only: one actual42..44 C28, idle ticks and at
+    // most one later1F00. Classification grants neither metadata nor a pet.
+    static PetSelectionBatch pet_selection_batch(std::span<const RecoveredWorldRecords::Record>);
     std::optional<std::vector<std::uint8_t>> select_pet2(
-        std::uint64_t account,std::uint64_t character,const RecoveredSelectionItemRequest::Request& request);
+        std::uint64_t account,std::uint64_t character,const RecoveredSelectionItemRequest::Request& request,
+        std::function<bool()> current={});
     // Actual committed fullafter plus genuine immutable wire history only.
     // No fresh restore/reset, original stale Current or public raw constructor.
     std::optional<Restoration> learning_successor_from_committed(const Restoration&,

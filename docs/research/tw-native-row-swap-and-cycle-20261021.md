@@ -1,5 +1,10 @@
 # 台服 action9、動畫邊界與返回資源：2026-10-21
 
+補充：本文件保留 pass5 當時的證據與未知清單。pass6 已追到 K 的真正 manager
+初始化／模式脈衝來源、雙角色逾時合併封包及戰寵 action9 操作列；請以
+[後續研究](tw-native-role-timeout-k-pulse-20261021.md) 更新相應結論。
+原服回合／counter producer 及配對授權仍未恢復，不能由客戶端 gate 反推。
+
 本輪是 PHASE1 靜態研究，沒有建置、測試、遊戲／VM、codec、遊戲 SQL 或部署。
 下文的 client consumer 不是原服 producer，也不能證明原服的配對、回合或權限政策。
 

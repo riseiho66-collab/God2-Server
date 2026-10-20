@@ -47,7 +47,7 @@ CREATE TABLE native_pet2_category_rows (
 std::vector<NativePet2Category> NativePet2CategoryCatalog::read_all() const {
     if(!db_)throw DatabaseError("Null pet category database");
     ReadScope scope(db_);
-    sqlite_detail::Statement source(db_,"SELECT id,source_sha256,decoded_sha256,image_sha256,client_sha256,dataset_sha256,authority FROM native_pet2_category_source");
+    sqlite_detail::Statement source(db_,"SELECT id,source_sha256,decoded_sha256,image_sha256,client_sha256,dataset_sha256,authority FROM main.native_pet2_category_source");
     const bool present=source.row();
     if(present && (source.integer(0)!=1 || source.text(1)!="80c2b7d366d2ef0264df78f20de1b20fa21e14f6592f56676b090f83ddc064c6" ||
        source.text(2)!="f8d1a1c22e8fc9195dd625ffc244e2ebbcee07492116976feece0bd9d26b813b" ||
@@ -56,7 +56,7 @@ std::vector<NativePet2Category> NativePet2CategoryCatalog::read_all() const {
        source.text(5)!=dataset_sha256 || source.text(6)!="NATIVE_PARSED_DISPLAY_ONLY"))
         throw DatabaseError("Pet category source identity differs");
     if(present && source.row())throw DatabaseError("Multiple pet category sources");
-    sqlite_detail::Statement rows(db_,"SELECT group_id,category_index,source_line,raw_record,name_encoded FROM native_pet2_category_rows ORDER BY group_id,category_index");
+    sqlite_detail::Statement rows(db_,"SELECT group_id,category_index,source_line,raw_record,name_encoded FROM main.native_pet2_category_rows ORDER BY group_id,category_index");
     std::vector<NativePet2Category> records;std::vector<std::uint8_t> canonical;
     const auto number=[&](std::uint32_t n,unsigned width){for(unsigned i=0;i<width;++i)canonical.push_back(static_cast<std::uint8_t>(n>>(8*i)));};
     while(rows.row()) {

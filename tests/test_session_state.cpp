@@ -577,7 +577,7 @@ void recovered_callback_output_transport() {
 // declares a synthetic acquisition and obtains actual learning events through
 // repository issuers. Neither mode proves a native grant or gameplay formula.
 // The actual Session writes the original restoration and learning responses.
-void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned material_case=0) {
+void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned material_case=0,unsigned first_book_case=0) {
     using Source=LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource;
     using Restoration=RecoveredOwnedCompanions::Restoration;
     struct Close {void operator()(sqlite3* value)const {sqlite3_close_v2(value);}};
@@ -704,10 +704,35 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
     unsigned material_supplier_calls=0;
     bool material_nested_attempted=false,material_nested_rejected=false,material_bootstrap_rejected=false;
     const auto material_wire=RecoveredWorldFrame::encode(*RecoveredInventory::clear_slot(0));
+    const RecoveredWorldRecords::Record* original_book_record=nullptr;
+    unsigned original_book_passes=0;
     RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
-        if(with_book&&records.size()==1)if(const auto* request=std::get_if<RecoveredInventoryItemRequest::Request>(&records.front())) {
-            require(bootstrapped&&applied&&applied->current(session),"Book use lost the actual prior Written legacy selection");
-            auto result=learning.use_with_source(session,*request);
+        std::optional<OwnedSkillBookLearningService::UseRequest> book;
+        if(with_book&&records.size()==1) {
+            if(const auto* request=std::get_if<RecoveredInventoryItemRequest::Request>(&records.front()))book=*request;
+            if(const auto* request=std::get_if<RecoveredTargetItemRequest::Request>(&records.front()))book=*request;
+        }
+        if(book) {
+            if(first_book_case) {
+                ++original_book_passes;
+                if(!original_book_record)original_book_record=&records.front();
+                require(original_book_record==&records.front(),"Deferred book request was copied into a new input occurrence");
+                if(!bootstrapped) {
+                    const auto bootstrap=learning.bootstrap(session,{},[&](Session& actual){
+                        for(const auto& written:restoration_writes)require(written.status()==Session::WorldRecordsWriteStatus::Written&&
+                            actual.world_records_write_current(written),"First book bypassed original Written companion output");return original;});
+                    require(bootstrap&&!bootstrap->empty()&&inventory.load(7,character)->cells.front().instance->quantity==2,
+                        "First bootstrap debited a book or skipped its real output");
+                    bootstrap_response=session.observe_world_response(*bootstrap);session.hold_world_input_until_response_written(*bootstrap_response);
+                    learning.bind_bootstrap_response(session,*bootstrap_response);learning.defer_bootstrap_use(session,*book,*bootstrap_response);bootstrapped=true;
+                    if(first_book_case==3)learning.release(session);
+                    if(first_book_case==4)learning.defer_bootstrap_use(session,*book,*bootstrap_response);
+                    return *bootstrap;
+                }
+                require(original_book_passes==2&&bootstrap_response&&bootstrap_response->status()==Session::WorldResponseWriteStatus::Written,
+                    "Original book job resumed before real bootstrap Written or more than once");
+            } else require(bootstrapped&&applied&&applied->current(session),"Book use lost the actual prior Written legacy selection");
+            auto result=std::visit([&](const auto& request){return learning.use_with_source(session,request);},*book);
             require(result&&result->publication(),"Actual CUSTOM-0148 learning did not issue its private committed publication");
             const auto publication=*result->publication();
             auto response=std::move(*result).take_wire();
@@ -844,7 +869,13 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
     const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
     peer.send(tick);
     for(const auto& batch:original->batches())peer.expect(RecoveredWorldFrame::encode(batch));
-    peer.silent();peer.send(tick);
+    peer.silent();
+    if(first_book_case) {
+        if(first_book_case==2)peer.send(RecoveredWorldFrame::encode(RecoveredTargetItemRequest::encode({actor,6501,0,0xa5})));
+        else peer.send(RecoveredWorldFrame::encode(RecoveredInventoryItemRequest::encode({6501,0,0xa5})));
+        if(first_book_case==4){peer.closed();require(learning_callbacks==0&&inventory.load(7,character)->cells.front().instance->quantity==2,
+            "Duplicate bootstrap deferral replayed/debited the original book input");return;}
+    }else peer.send(tick);
     if(material_case) {
         peer.expect(material_wire);peer.silent();
         require(material_response && material_response->status()==Session::WorldResponseWriteStatus::Written,
@@ -861,6 +892,26 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
         const auto absolute=RecoveredInventory::encode_slot_update({6501,0,2});require(absolute.has_value(),"Fixture absolute book count invalid");
         logical.insert(logical.end(),absolute->begin(),absolute->end());
         peer.expect(RecoveredWorldFrame::encode(logical));
+    }
+    if(first_book_case) {
+        if(first_book_case==3){peer.closed();require(original_book_passes==1&&learning_callbacks==0&&
+            inventory.load(7,character)->cells.front().instance->quantity==2,"Retired bootstrap service replayed the original input/debit");return;}
+        const std::array<std::uint8_t,13> delta{0x34,1,0,1,0x35,1,0,1,0x41,0x65,0x19,0,1};
+        peer.expect(RecoveredWorldFrame::encode(delta));peer.silent();
+        require(original_book_passes==2&&learning_callbacks==1&&latest_learning&&bootstrap_response&&
+            bootstrap_response->status()==Session::WorldResponseWriteStatus::Written,"First book did not resume exactly once after Written bootstrap");
+        const auto learned=learning.written_learning_source(*peer.session,*latest_learning);require(learned.has_value(),"Deferred book lost its actual Written publication");
+        auto history=canonical->batches();history.emplace_back(delta.begin(),delta.end());
+        const auto successor=helper.learning_successor_from_committed(*canonical,learned->committed(),std::move(history));
+        require(successor.has_value(),"Deferred book failed full material successor");canonical=std::make_shared<const Restoration>(*successor);
+        const auto rows=companions.load_deities(7,character);const auto selected=std::find_if(rows.begin(),rows.end(),[](const auto& d){return d.snapshot.status.key_raw()==2;});
+        require(selected!=rows.end(),"Deferred book selection fixture lacks second owned deity");
+        peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x67,2}));peer.expect(RecoveredWorldFrame::encode(selected->snapshot.status.encode()));peer.silent();
+        const auto selection=registry.observe(*peer.session);require(selection.has_value(),"C67 after first deferred book lost its real output source");
+        const auto after=helper.selection_successor_from_committed(*canonical,selection->publications());require(after.has_value(),"C67 after deferred book lost full predecessor");
+        require(learning.reanchor_selection(*peer.session,canonical,std::make_shared<const Restoration>(*after),*selection)&&
+            !learned->current(*peer.session),"C67 after deferred book revived old Current or failed Entry succession");
+        return;
     }
     peer.silent();
     if(with_book)require(bootstrap_response&&bootstrap_response->status()==Session::WorldResponseWriteStatus::Written,
@@ -2416,6 +2467,7 @@ void test_session_state() {
     recovered_legacy_selection_learning_reanchor(true);
     recovered_legacy_selection_learning_reanchor(false,1);
     recovered_legacy_selection_learning_reanchor(false,2);
+    for(const unsigned first_book_case:{1u,2u,3u,4u})recovered_legacy_selection_learning_reanchor(true,0,first_book_case);
     recovered_written_deity_selection_transport();
     recovered_logout_cleanup_barrier();
     recovered_owned_pve_transport_source_cases();

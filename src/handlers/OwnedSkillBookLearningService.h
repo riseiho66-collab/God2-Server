@@ -153,6 +153,9 @@ public:
     std::optional<std::vector<std::uint8_t>> bootstrap(Session&,
         const std::shared_ptr<SharedWorldPresence>& presence,const RestorationSupplier& restored);
     void bind_bootstrap_response(Session&,const Session::WorldResponseWrite&);
+    // Actual first C25/C26 waits behind its own nonempty bootstrap Write;
+    // Session retains the original job once, not a copied gameplay request.
+    void defer_bootstrap_use(Session&,UseRequest,const Session::WorldResponseWrite&);
     // Actual Written S31 continuation only. Preserve the last real learning
     // chronology while retiring its Current; selection is never learning.
     // No existing Entry is an explicit no-op, not a new source/publication.

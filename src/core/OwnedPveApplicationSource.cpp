@@ -22,8 +22,10 @@ bool same_population(const std::vector<RecoveredVisibility::Presence>& a,const s
     return true;
 }
 bool same_pet(const StoredPet2Slot& a,const StoredPet2Slot& b) {
-    if(a.slot!=b.slot||a.revision!=b.revision||a.provenance!=b.provenance||a.display_category!=b.display_category||
+    if(a.slot!=b.slot||a.revision!=b.revision||a.provenance!=b.provenance||bool(a.display_category)!=bool(b.display_category)||
        bool(a.pet)!=bool(b.pet)||bool(a.pet1)!=bool(b.pet1))return false;
+    if(a.display_category&&(a.display_category->group!=b.display_category->group||a.display_category->index!=b.display_category->index||
+       a.display_category->source_line!=b.display_category->source_line||a.display_category->name!=b.display_category->name))return false;
     if(a.pet&&(a.pet->owner.account!=b.pet->owner.account||a.pet->owner.character!=b.pet->owner.character||
        a.pet->inventory!=b.pet->inventory||RecoveredPet2Stats::encode_logical(a.pet->stats)!=RecoveredPet2Stats::encode_logical(b.pet->stats)))return false;
     return !a.pet1||(a.pet1->owner.account==b.pet1->owner.account&&a.pet1->owner.character==b.pet1->owner.character&&

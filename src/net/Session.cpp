@@ -1420,6 +1420,15 @@ struct Session::Impl {
     std::atomic<bool> owned_input_retired{false}; // Persistent opt-in-only failure ingress latch.
     std::shared_ptr<OwnedInputLease> owned_input_callback_lease; // Serial GAME only.
     std::shared_ptr<WorldResponseAttempt> world_response_callback_capture; // Serial game callback ONLY.
+    struct DeferredBookWork {
+        std::shared_ptr<std::function<void()>> work;
+        std::shared_ptr<OwnedInputLease> input;
+        NormalWorldInitialization initialization;
+        std::function<bool(Session&)> current;
+    };
+    std::atomic<std::shared_ptr<DeferredBookWork>> deferred_book_work;
+    std::weak_ptr<std::function<void()>> active_original_world_work; // GAME only, original posted body.
+    std::shared_ptr<bool> active_book_deferred; // GAME only, once for that original body.
     struct NormalOutputPending {
         const std::shared_ptr<NormalWorldOutputAttempt::Data> data;
         explicit NormalOutputPending(std::shared_ptr<NormalWorldOutputAttempt::Data> value):data(std::move(value)) {}
@@ -4257,6 +4266,7 @@ struct Session::Impl {
             !native_pk_terminal.load() && !native_pk_pending.load() && !native_battle_pending.load();
     }
     void retire_owned_input() noexcept {
+        deferred_book_work.store({}); // Drop original work/callback captures on every terminal exit.
         if(const auto cohort=callback_output_input_hold.exchange({})){
             owned_input_retired.store(true);cohort->fail();close_requested.store(true);closing=true;
             asio::error_code ignored;socket.close(ignored);
@@ -4328,6 +4338,27 @@ struct Session::Impl {
             return;
         }
         if(owned_input_paused())return;
+        if(const auto deferred=deferred_book_work.load()) {
+            if(game_busy||read_inflight)return;
+            const auto attempt=deferred->input->attempt;
+            if(close_requested.load()||owned_input_retired.load()||normal_initialization.load()!=deferred->initialization.data_||
+               attempt->receipt->status.load()!=WorldResponseWriteStatus::Written||
+               attempt->input_phase.load()!=WorldResponseAttempt::InputPhase::Released||
+               owner.state()!=attempt->receipt->phase||owner.battle_generation()!=attempt->receipt->battle) {
+                fail_owned_input("Book bootstrap original work lost Written/current owner");return;
+            }
+            auto expected=deferred;if(!deferred_book_work.compare_exchange_strong(expected,{}))return;
+            game_busy=true;
+            try{post_status_work(game,[self=owner.shared_from_this(),deferred]{
+                try{
+                    if(!self->normal_world_initialization_current_on_game(deferred->initialization)||
+                       !deferred->current||!deferred->current(*self)||self->closing()){
+                        self->close();return;}
+                    (*deferred->work)(); // SAME original job, records, ticket and receive epoch; never a copied request.
+                }catch(...){self->close();}
+            });}catch(...){fail_owned_input("Book bootstrap original work post failed");}
+            return;
+        }
         if(const auto final=native_pk_return_finalisation.load();final&&
            final->phase.load()==NativePkReturnFinalisationStatus::Returned){
             const auto index=final->sessions[0].lock().get()==&owner?0u:1u;
@@ -4558,8 +4589,9 @@ struct Session::Impl {
         auto work_ticket=std::make_shared<WorldGameWorkTicket>(owner.weak_from_this());
         const std::weak_ptr<std::function<void()>> weak_work=work;
         auto delayed=std::make_shared<bool>(false); // GAME only, shared by this one original work body.
+        auto book_deferred=std::make_shared<bool>(false); // One bootstrap pause, never another receive/TTL.
         const auto parsed_battle=owner.battle_generation();const auto parsed_phase=owner.state();
-        *work=[weak_session=owner.weak_from_this(),weak_work,work_ticket,delayed,parsed_battle,parsed_phase,
+        *work=[weak_session=owner.weak_from_this(),weak_work,work_ticket,delayed,book_deferred,parsed_battle,parsed_phase,
                records=std::move(records),requests=std::move(requests),native_batch_generation] {
             (void)work_ticket; // Its last retained work release ends ONLY this pending lifetime.
             const auto self=weak_session.lock();if(!self)return;
@@ -4607,6 +4639,7 @@ struct Session::Impl {
                 });}catch(...) {} // No executor-abort convergence claim.
                 return;
             }
+            s.active_original_world_work=weak_work;s.active_book_deferred=book_deferred;
             s.native_pk_terminal_callback_capture.reset(); // This exact serial input callback only.
             s.owned_input_callback_lease.reset(); // Retire an unhanded opt-in independently of the strong hold.
             if(s.reply_push_capture||(s.callback_reply_window&&!s.callback_reply_window->pushes.empty()))s.fail_reply_pushes();
@@ -4620,6 +4653,7 @@ struct Session::Impl {
             struct ResponseCaptureEnd {
                 Impl& state;
                 ~ResponseCaptureEnd(){
+                    state.active_original_world_work.reset();state.active_book_deferred.reset();
                     state.owned_input_callback_lease.reset();
                     if(state.reply_push_capture||(state.callback_reply_window&&!state.callback_reply_window->pushes.empty()))state.fail_reply_pushes();
                     if(state.reply_push_capture)state.reply_push_capture->profile={};state.reply_push_capture.reset();
@@ -6265,6 +6299,41 @@ bool Session::battle_self_view_current(const BattleSelfView& view) const {
        battle_generation()!=data->battle || data->slot>=14)return false;
     return impl_->battle_self_view_source.load()==data && impl_->battle_self_view_fence.current(data->epoch) &&
         impl_->battle_self_view_intents.current(data->intent) && data->completion.written();
+}
+void Session::defer_current_book_bootstrap(
+        const std::variant<RecoveredInventoryItemRequest::Request,RecoveredTargetItemRequest::Request>& request,
+        const WorldResponseWrite& write,std::function<bool(Session&)> current) {
+    if(observed_world_callback!=this||!impl_->active_book_deferred||*impl_->active_book_deferred||
+       !current||!impl_->owned_input_callback_lease||!impl_->world_response_callback_capture||
+       impl_->world_response_callback_capture->receipt!=write.data_||
+       impl_->owned_input_callback_lease->attempt!=impl_->world_response_callback_capture||
+       impl_->owned_response_input_hold.load()!=impl_->world_response_callback_capture||
+       write.status()!=WorldResponseWriteStatus::Pending||!world_response_write_current(write))
+        throw std::logic_error("Book bootstrap deferral requires one actual original pending callback Write");
+    bool seen=false;
+    for(std::size_t n=0;n<observed_world_records.size();++n) {
+        const auto& record=observed_world_records[n];
+        if(std::holds_alternative<RecoveredWorldRecords::Tick>(record))continue;
+        if(const auto* input=std::get_if<RecoveredInventoryItemRequest::Request>(&record)) {
+            const auto* supplied=std::get_if<RecoveredInventoryItemRequest::Request>(&request);
+            if(seen||!supplied||RecoveredInventoryItemRequest::encode(*input)!=RecoveredInventoryItemRequest::encode(*supplied))
+                throw std::logic_error("Book bootstrap changed its original C25 occurrence");seen=true;
+        }else if(const auto* input=std::get_if<RecoveredTargetItemRequest::Request>(&record)) {
+            const auto* supplied=std::get_if<RecoveredTargetItemRequest::Request>(&request);
+            if(seen||!supplied||RecoveredTargetItemRequest::encode(*input)!=RecoveredTargetItemRequest::encode(*supplied))
+                throw std::logic_error("Book bootstrap changed its original C26 occurrence");seen=true;
+        }else if(!seen||n+1!=observed_world_records.size()||!std::holds_alternative<RecoveredWorldRecords::ClientControl1F>(record))
+            throw std::logic_error("Book bootstrap cannot defer a mixed original mutation");
+    }
+    const auto initialization=normal_world_initialization();const auto work=impl_->active_original_world_work.lock();
+    if(!seen||!initialization||!work||!normal_world_initialization_current_on_game(*initialization))
+        throw std::logic_error("Book bootstrap lost its actual original work/INIT");
+    auto deferred=std::make_shared<Impl::DeferredBookWork>(Impl::DeferredBookWork{
+        work,impl_->owned_input_callback_lease,*initialization,std::move(current)});
+    std::shared_ptr<Impl::DeferredBookWork> absent;
+    if(!impl_->deferred_book_work.compare_exchange_strong(absent,deferred))
+        throw std::logic_error("Book bootstrap original work already deferred");
+    *impl_->active_book_deferred=true;
 }
 void Session::hold_world_input_until_response_written(const WorldResponseWrite& write) {
     if(observed_world_callback!=this || (observed_response_poison && *observed_response_poison)) {

@@ -32,6 +32,9 @@ public:
     const nlohmann::json& actor_profile(std::uint64_t character)const;
     // Select one complete explicitly supplied native pet profile by actual
     // active44 material. No species/name/default lookup or SQL is performed.
+    // Optional per-variant CUSTOM owned_saved_vitals_level_v1 projects only
+    // already-saved HP/MP maxima/current and level; other stats/metadata/source
+    // bits remain pinned. Omitted policy retains legacy current-only matching.
     RecoveredPveRoomProjection::ActorProfile pet_profile(std::uint64_t character,
         const StoredPet2Slot&)const;
     bool has_actor_profile(std::uint64_t character)const noexcept{return actors_.contains(character);}

@@ -94,7 +94,9 @@ struct StoredPet2Slot {
     std::optional<RecoveredPet1Lifecycle::Snapshot> pet1;
     bool occupied() const noexcept {return pet.has_value() || pet1.has_value();}
 };
-struct Pet2TransferCommit { StoredPet2Slot source,destination; };
+// Owning data only, never a downstream entitlement token. Returned only after
+// actual COMMIT; current=false means durable but no success publication/retry.
+struct Pet2TransferCommit { StoredPet2Slot source,destination; bool current=true; };
 class SqliteCompanionRepository {
 public:
     explicit SqliteCompanionRepository(sqlite3* db):db_(db) {}
@@ -175,14 +177,20 @@ public:
         const RecoveredPet1Lifecycle::Snapshot& pet,std::uint64_t expected_revision,
         const CompanionProvenance& provenance);
     Pet2TransferCommit transfer_pet2(std::uint64_t account,std::uint64_t character,
-        const StoredPet2Slot& source,const StoredPet2Slot& destination);
+        const StoredPet2Slot& source,const StoredPet2Slot& destination,
+        std::function<bool()> current={});
     // CUSTOM-0039: explicit native24 reserve42/43 reorder. Both owned cells
     // must exist; active44 and existing28 selection policy are not involved.
     // Prepare the complete reply before COMMIT; failure rolls back both cells.
     Pet2TransferCommit move_pet_reserves(std::uint64_t account,std::uint64_t character,
         const StoredPet2Slot& source,const StoredPet2Slot& destination,
-        const std::function<void(const Pet2TransferCommit&)>& prepare);
+        const std::function<void(const Pet2TransferCommit&)>& prepare,std::function<bool()> current={});
 private:
+    // Shared connection owner, full population CAS and durable/current cut for
+    // both native28 activation and native24 reserve reorder.
+    Pet2TransferCommit swap_pet_cells(std::uint64_t account,std::uint64_t character,
+        StoredPet2Slot source,StoredPet2Slot destination,
+        std::function<void(const Pet2TransferCommit&)> prepare,std::function<bool()> current);
     friend class OwnedTaiwanPkCompanionSource;
     friend class SqliteSkillBookLearningRepository;
     friend class SqliteRecoveredCharacterRepository;

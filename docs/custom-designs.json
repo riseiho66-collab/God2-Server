@@ -9,6 +9,7 @@
       "authority": "OWNER_AUTHORIZED_CUSTOM_SERVER_POLICY_WITH_QUALIFIED_CURRENT_TAIWAN_WIRE",
       "implementation": [
         "src/game/OwnedPveRoomTypes.h",
+        "src/game/OwnedPveTimeoutPair.h",
         "src/game/OwnedPveRoomState.cpp",
         "src/db/SqliteOwnedPveRoomRepository.cpp",
         "src/handlers/OwnedPveRoomHost.cpp",
@@ -21,9 +22,9 @@
       "rules": {
         "room": "One canonical Battle checkpoint and RNG, exact full64 private Session bindings, late admission without resetting enemies/resources/grants, complete existing active Pet1/Pet2 slot44 material.",
         "save": "One room/member/outbox/return-ledger transaction and all still-owned actual player/pet resource CAS before output. Released members retain historical tuples and may continue independently. Commit ambiguity retains durable recovery claims.",
-        "turn": "Explicit server primary/secondary grants and one enemy action each per round. Serialize native publication boundaries, actual whole-room Written and original qualified untrusted0B per current assignment. Native queued83 then fixed-profile88 starts deferred playback; labels0..254 are separate from grant epochs. Automatic0B names primary B51 even when sideflag1 and consumes a native control; refresh only still-owned same-epoch grants. No animation ACK, authenticated turn nonce or recovered original scheduling claim.",
+        "turn": "Explicit server primary/secondary grants and one enemy action each per round. Serialize native publication boundaries, actual whole-room Written and original qualified untrusted0B per current assignment. Native queued83 then fixed-profile88 starts deferred playback; labels0..254 are separate from grant epochs. Automatic0B names primary B51 even when sideflag1 and may retain a secondary one-hot target mask. Whole native timeout batches preflight both real role grants before CUSTOM pass; retain the original second action across the first publication boundary and suppress already-submitted controls. A coalesced0B can observe an existing edge, never either newly created effect. No animation ACK, authenticated turn nonce or recovered original scheduling claim.",
         "return": "Native typed FLEE and original per-connection C1C. All split return frames Written and actual resource commit precede private per-person WORLD successor. Preserve exact pre-entry companion/learning lineage into new INIT, including actual Entry or originally absent Entry epoch; historical Written never becomes old Current. Send committed existing Pet1/Pet2 E3/FB incrementally, no S30/3B/login replay. Stop/release/replacement or changed complete material cannot renew eligibility.",
-        "catalog": "Mandatory versioned complete native material and trusted combat policies; no populated game DB or default profiles. Explicit custom_contiguous_batch_0_254 and fixed_complete_profile counter policies. Exact Pet1/Pet2 variants use complete metadata/stats/source, ignoring only known current HP/MP; maxima and family/key/slot remain validated.",
+        "catalog": "Mandatory versioned complete native material and trusted combat policies; no populated game DB or default profiles. Explicit custom_contiguous_batch_0_254 and fixed_complete_profile counter policies. Primary known level/resources project from actual role/resource/checkpoint equality. Pet variants retain legacy current-only matching unless explicitly opting into owned_saved_vitals_level_v1 for saved current/max HP/MP and level only; all opaque bits, metadata, family/key/slot and source remain pinned. Reject overlapping strict/projected domains. No growth formula or complete original material producer claim.",
         "lifecycle": "Bounded original-input deferral and prepared SOS admission wait; requalify actual target/material only at safe boundary and mark Fight only after durable binding. Independent disconnect retirement and individual Returning-only transport exclude later room battle output. A post-Returned continuation failure closes that person alone unless room authority/recovery itself fails. Save-only exact private cleanup and dispatch retirement preserve claims; no invented rollback/client acceptance. Actual normal one-channel host only; shared-common-world/three-channel mount refuses."
       },
       "native_gap": "Original encounter/reward/admission/formula/round scheduling and counter meaning, complete native material population, crash-recovery executor, shared three-channel mount and actual current-client acceptance remain OPEN. Source wiring and unexecuted regression cases do not establish playable acceptance.",
@@ -38,7 +39,8 @@
       "native_client_acceptance": false,
       "verification_status": "SOURCE_AND_POST_EDIT_INDEPENDENT_REVIEW_ONLY_REGRESSIONS_NOT_EXECUTED",
       "replacement_plan": "Recover missing original rules/material, preserve existing save history and claims, then complete separately authorized build/regression/current-native acceptance before activation.",
-      "continuation_document": "docs/research/tw-pve-return-continuation-source-20261021.md"
+      "continuation_document": "docs/research/tw-pve-return-continuation-source-20261021.md",
+      "followup_document": "docs/research/tw-native-material-rules-continuation-pass6-20261021.md"
     },
     {
       "id": "CUSTOM-0162",
@@ -59,7 +61,7 @@
         "formation": "Actual saved B4/E8 remains immutable admission provenance; explicit nonoverlapping configured pairs reserve endpoints even without pet. Live primary/pet assignment and revision are separate. Action9 moves whole optional Battle actors and all actor-owned resources/stats/controller, keeps RNG and exact existing grants, and persists one exact permutation CAS. No default+7 or phantom pet; inactive or dead acting role refuses, configured empty/dead partner is allowed.",
         "projection": "Appearance before identity, actual current resources, no incumbent/enemy1C reset on late join. Corrected actual native5140C0 queue defers88 until83 group playback completes: queued83 followed88 is required and safe for this path; directly invoking the eager consumer does not prove queue behavior. Server-private contiguous labels0..254 avoid native BYTE255 wrap. Fixed complete-profile DWORD88 is independent of grant epochs.",
         "flee": "Typed native17-byte action6 request preserves uninitialized native stack fields, validates private room context/masks and actual primary/secondary grant; side flag is role priority, not team.",
-        "row_swap": "Exact17-byte action9 preserves opaque stack bytes and requires count0/zero target masks; incoming request supplies no destination. Authorized configured pair produces complete successful15-byte83/9 with flat WORD positions, then queued88. Durable pending_swap blocks further mutations until private qualified publication progress, not Written alone; completion preserves same epoch and remaining actual grants."
+        "row_swap": "Exact17-byte action9 preserves opaque stack bytes and requires count0/zero target masks; incoming request supplies no destination. Native secondary UI also maps action9; no primary-only UI inference. Authorized configured pair produces complete successful15-byte83/9 with flat WORD positions, then queued88. Durable pending_swap blocks further mutations until private qualified publication progress, not Written alone; completion preserves same epoch and remaining actual grants."
       },
       "native_gap": "Original server lane allocation/pair authorization, original operation ordering policy, true counter semantics, other native mode effects and runtime multiplayer acceptance remain OPEN. Current-source action9 permutation and delayed continuation are implemented CUSTOM policies, not recovered original server rules.",
       "document": "docs/research/tw-native-row-swap-and-cycle-20261021.md",
@@ -1214,7 +1216,9 @@
         "tests/test_recovered_player_snapshot.cpp",
         "tools/strike_lab/private_owned_companions_ui.py"
       ],
-      "replacement": "Recover original production acquisition and numeric rules, and independently qualify full UI, reconnect and battle participation before claiming complete companion gameplay."
+      "replacement": "Recover original production acquisition and numeric rules, and independently qualify full UI, reconnect and battle participation before claiming complete companion gameplay.",
+      "pass6_source_followup": "Whole original C28 pet42..44 and C24 reserve42/43 batches route independently of item0092. One shared swap_pet_cells implementation provides complete saved cell/category/provenance CAS, actual host INIT/phase/pose PureCurrent, same-connection cross-entry reentry and retained PK/PvE claim guards. Native owner/metadata/category/cell readers and writes use main-qualified sources. Post-COMMIT source retirement means durable no-success/no-retry. This pass is SOURCE_STATIC_ONLY, not activation or executed regression acceptance.",
+      "pass6_document": "docs/research/tw-native-material-rules-continuation-pass6-20261021.md"
     },
     {
       "id": "CUSTOM-0038",
@@ -6322,7 +6326,7 @@
         "material": "Full common inventory/all regional aliases, actual TW20 and paired genuine full3B25, native1215 full witness, full roster/selection/revisions/provenance, book raw/parsed digests and owning common/native definition. Actual normalINIT nativeactor matches witness and optional exact fullLease; full64 database owner independent.",
         "transaction": "Same SQLite connection, own immediate transaction, complete before/after CAS, guarded namespaces/reentry/pending battle, one debit+saved34+durableevent+activationheader/links. Preserve opaque raw data; tag derived population/witness/deity CUSTOM0148 provenance.",
         "publication": "Preallocate full S34->S35->S41 wire and committed carrier before COMMIT; actual Main captures one whole original response and input hold. Local Written is not native ACK/adoption; postcommit failure terminal, no SQL retry/rollback.",
-        "restoration": "Single original activation-aware deity+pet projection, only exact legitimately retained events35. Service waits exact original Written source and adds book material only, never duplicateS30 or default35from34. Pending/missing source defers; stale epoch retires before genuine successor qualification. Empty extra output requires final actualWritten/source cut.",
+        "restoration": "Single original activation-aware deity+pet projection, only exact legitimately retained events35. Service waits exact original Written source and adds book material only, never duplicateS30 or default35from34. A first whole original C25/C26 may bootstrap before use; private Session custody retains the same original work/records/ticket/inputlease once until true Written and Released, then requalifies original Entry/INIT/material. No copied request, new receive occurrence or renewed TTL. Pending/missing source defers; stale epoch/release/close retires. Empty extra output requires final actualWritten/source cut.",
         "scope": "Default-off world.owned_skillbook_learning.enabled; explicit schema installer only, never Main DDL/import/backfill. Actual independently constructed CommonWorld/battle-return publisher and other legitimate deity-writer lineage remain OPEN.",
         "regional": "Common skill definitions/ownership/event storage retained."
       },

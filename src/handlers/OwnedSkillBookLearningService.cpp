@@ -468,6 +468,28 @@ void OwnedSkillBookLearningService::bind_bootstrap_response(Session& session,con
     }
     entry->bootstrap_response.emplace(response); // Private owning receipt copy, no allocation/second capture.
 }
+void OwnedSkillBookLearningService::defer_bootstrap_use(Session& session,UseRequest request,const Session::WorldResponseWrite& response) {
+    Operation operation(*this);
+    const auto at=entries_.find(session.id());const auto entry=at==entries_.end()?std::shared_ptr<Entry>{}:at->second;
+    const auto local=[&]{return ready(session,entry,false)&&!entry->bootstrap_wire.empty()&&entry->bootstrap_response&&
+        &entry->bootstrap_response->wire()==&response.wire()&&response.status()==Session::WorldResponseWriteStatus::Pending&&
+        session.world_response_write_current(response)&&!entry->latest_publication&&!entry->pending_publication&&
+        !entry->selection_anchor&&!entry->material_anchor&&!poisoned_&&live_;};
+    const auto key=std::visit([](const auto& input){return input.client_item_id;},request);
+    const auto slot=std::visit([](const auto& input){return input.raw_slot;},request);
+    if(!local()||slot>=30||!repository_.lookup_book(key)||!local())
+        throw std::logic_error("Book bootstrap deferral lost its actual claimed first-use source");
+    if(const auto* target=std::get_if<RecoveredTargetItemRequest::Request>(&request);target&&target->raw_target!=entry->actor)
+        throw std::logic_error("Book bootstrap C26 target is not the actual owned actor");
+    const auto material=entry->original_restoration;const auto life=std::weak_ptr<Lifetime>(lifetime_);
+    session.defer_current_book_bootstrap(request,response,[life,entry,material,response](Session& actual) {
+        const auto held=life.lock();if(!held||!held->owner)return false;auto& owner=*held->owner;
+        return owner.thread_==std::this_thread::get_id()&&owner.live_&&!owner.busy_&&!owner.poisoned_&&
+            owner.ready(actual,entry,true)&&entry->original_restoration==material&&!entry->latest_publication&&
+            !entry->pending_publication&&entry->bootstrap_response&& &entry->bootstrap_response->wire()==&response.wire()&&
+            response.status()==Session::WorldResponseWriteStatus::Written&&actual.world_response_write_current_on_game(response);
+    });
+}
 bool OwnedSkillBookLearningService::reanchor_selection(Session& session,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical,

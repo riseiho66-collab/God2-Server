@@ -4584,11 +4584,25 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         },RecoveredWorldService::Quest{},
                         [&](Session& session,const RecoveredSelectionItemRequest::Request& request)
                             ->std::optional<std::vector<std::uint8_t>> {
+                            const auto initialization=session.normal_world_initialization();
+                            const auto phase=session.state();const auto battle=session.battle_generation();
+                            const auto movement=recovered_movement.get();
+                            const auto position=movement?movement->current_location(session.id(),session.account_id,session.character_id):std::nullopt;
+                            const auto account=session.account_id,character=session.character_id;
+                            const auto current=[&]{return initialization&&movement&&recovered_movement.get()==movement&&
+                                initialization->entry_written()&&
+                                phase!=SessionState::InBattle&&(phase==SessionState::CharacterSelected||phase==SessionState::InWorld)&&
+                                session.state()==phase&&session.battle_generation()==battle&&!session.closing()&&session.recovered_world_ready()&&
+                                session.account_id==account&&session.character_id==character&&
+                                session.normal_world_initialization_current_on_game(*initialization)&&
+                                owned_player_and_companions_projected.contains(session.id())&&
+                                !diagnostic_town_scene_pending.contains(session.id())&&!diagnostic_island_return_pending.contains(session.id())&&
+                                position&&movement->current_world_location(session.id(),account,character)==position;};
                             if(!owned_player_and_companions_projected.contains(session.id()) ||
                                diagnostic_town_scene_pending.contains(session.id()) ||
-                               !recovered_movement->current_location(session.id(),session.account_id,session.character_id))
+                               !current())
                                 return std::nullopt;
-                            auto reply=owned_companions.select_pet2(session.account_id,session.character_id,request);
+                            auto reply=owned_companions.select_pet2(account,character,request,current);
                             if(reply) spdlog::info("OWNED_PET2_SELECTION_COMMITTED session_id={} character_id={} source={} key={} CUSTOM-0039",
                                 session.id(),session.character_id,request.raw_slot,request.client_item_id);
                             return reply;
@@ -4597,13 +4611,22 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         [&](Session& session,const RecoveredInventoryMoveRequest::Request& request)
                             ->std::optional<std::vector<std::uint8_t>> {
                             if(RecoveredOwnedPetReserveMove::handles(request)) {
-                                const auto empty=[](){return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});};
-                                if(!owned_player_and_companions_projected.contains(session.id()) ||
-                                   diagnostic_town_scene_pending.contains(session.id()) ||
-                                   diagnostic_island_return_pending.contains(session.id()) ||
-                                   !recovered_movement->current_location(session.id(),session.account_id,session.character_id))return empty();
-                                auto reply=RecoveredOwnedPetReserveMove::move(database.companions(),session.account_id,session.character_id,request);
-                                if(!reply)return empty();
+                                const auto initialization=session.normal_world_initialization();
+                                const auto phase=session.state();const auto battle=session.battle_generation();
+                                const auto movement=recovered_movement.get();
+                                const auto account=session.account_id,character=session.character_id;
+                                const auto position=movement?movement->current_location(session.id(),account,character):std::nullopt;
+                                const auto current=[&]{return initialization&&movement&&recovered_movement.get()==movement&&
+                                    initialization->entry_written()&&(phase==SessionState::CharacterSelected||phase==SessionState::InWorld)&&
+                                    session.state()==phase&&session.battle_generation()==battle&&!session.closing()&&session.recovered_world_ready()&&
+                                    session.account_id==account&&session.character_id==character&&
+                                    session.normal_world_initialization_current_on_game(*initialization)&&
+                                    owned_player_and_companions_projected.contains(session.id())&&
+                                    !diagnostic_town_scene_pending.contains(session.id())&&!diagnostic_island_return_pending.contains(session.id())&&
+                                    position&&movement->current_world_location(session.id(),account,character)==position;};
+                                if(!current())return std::nullopt;
+                                auto reply=RecoveredOwnedPetReserveMove::move(database.companions(),account,character,request,current);
+                                if(!reply)return std::nullopt;
                                 spdlog::info("OWNED_PET_RESERVE_MOVE session_id={} character_id={} source={} destination={} changed={} CUSTOM-0039",
                                     session.id(),session.character_id,request.source_slot,request.destination_slot,!reply->empty());
                                 return reply;
@@ -10005,6 +10028,16 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(host->bank)host->bank->invalidate_active();
                             throw std::logic_error("Owned mutation response facade reentered");
                         }
+                        // Pet cells42..44 belong to the actual companion store,
+                        // not the0092 item namespace. Classify their WHOLE
+                        // original batch before movement/bank can commit a prefix.
+                        const auto reserve_batch=RecoveredOwnedPetReserveMove::classify(records);
+                        if(reserve_batch==RecoveredOwnedPetReserveMove::Batch::Rejected)return {};
+                        if(reserve_batch==RecoveredOwnedPetReserveMove::Batch::Reserve)return original(session,records);
+                        const auto pet_batch=RecoveredOwnedCompanions::pet_selection_batch(records);
+                        if(pet_batch.kind==RecoveredOwnedCompanions::PetSelectionBatch::Kind::Rejected)return {};
+                        if(pet_batch.kind==RecoveredOwnedCompanions::PetSelectionBatch::Kind::Selection)
+                            return original(session,records); // Existing owned pet callback + its final transaction fence.
                         // Classify the whole original batch before any write. An
                         // item/money request or qualified NPC open is one bank
                         // operation, with Tick only; no prefix mutation on a mixed frame.
@@ -10287,6 +10320,19 @@ if(guild_officer_runtime && player_guild(session) &&
                                     return std::nullopt;
                             }
                             if(!use)return std::nullopt;
+                            // A valid first book input may arrive before any
+                            // idle Tick after Return (or first normal entry).
+                            // Publish its real bootstrap first, then let Session
+                            // retain/re-run this SAME original work after Written.
+                            auto bootstrap=learning->bootstrap(session,presence,restored);
+                            if(!bootstrap)return std::nullopt;
+                            if(!bootstrap->empty()) {
+                                const auto write=session.observe_world_response(*bootstrap);
+                                session.hold_world_input_until_response_written(write);
+                                learning->bind_bootstrap_response(session,write);
+                                learning->defer_bootstrap_use(session,*use,write);
+                                return bootstrap;
+                            }
                             // Dispatch the owning native type, never fabricate
                             // a C25 from C26 or bypass its complete target proof.
                             // Own the exact canonical holder BEFORE any observer.
@@ -10796,7 +10842,8 @@ if(guild_officer_runtime && player_guild(session) &&
                         // never restore it from the newer SQL tuple after COMMIT.
                         const bool material_request=std::any_of(records.begin(),records.end(),[](const auto& record){
                             return std::holds_alternative<RecoveredMovement::Request>(record) ||
-                                std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record) ||
+                                (std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record)&&
+                                 !RecoveredOwnedPetReserveMove::handles(std::get<RecoveredInventoryMoveRequest::Request>(record))) ||
                                 std::holds_alternative<RecoveredBankItems::Request>(record);
                         });
                         std::shared_ptr<OwnedCompanionRestorationSource> restoration;

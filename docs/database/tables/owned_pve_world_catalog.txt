@@ -41,15 +41,28 @@ character_profiles：各角色完整、已核對的顯示材料，character 是�
   root_profile：完整 40-byte 角色資料；entry_logical：完整 37-byte 2A 材料。
     比對僅排除已證明的 actor handle、地圖及 X/Y；保留世界 kind、外觀及未知位元。
   primary/pet：完整戰鬥 identity、appearance、hp、mp 材料；沒有材料不得補零。
+    primary 的已知等級及 HP/MP 由真正角色、資源與 canonical checkpoint
+    完整核對後投影，僅替換 identity BYTE2、vitals DWORD5/9；其餘位元保留。
+    超過原生 HP DWORD 可表示範圍會拒絕，不截斷。這不是成長或能力公式。
   active_pet_material：真實 active44 的 kind(Pet1/Pet2)、metadata、stats、
-    source_sha256。只排除已證明可更新的目前 HP/MP；其餘原始位元必須一致。
+    source_sha256。省略 projection_policy 時只排除已證明可更新的目前 HP/MP；
+    其餘原始位元必須一致，保留舊設定的嚴格比對。
     真正所有權、完整保存列、版本和來源仍由房間交易逐次 CAS 核對。
   pet_profiles：可省略的完整替代寵物材料陣列。每列都有 pet（完整原生外觀／
     identity／HP／MP）及 active_pet_material；沿用上面的欄位意義。
-    依真正 active44 的種類、完整 metadata、除目前 HP/MP 外的完整 stats、
+    未選 projection_policy 時，依真正 active44 的種類、完整 metadata、除目前 HP/MP 外的完整 stats、
     source_sha256 唯一比對。基礎 pet 也參與比對；重複或缺少材料一律拒絕，
-    不能用寵物名稱、種族、第一筆或舊出戰寵資料推算。HP/MP 上限也須一致。
+    不能用寵物名稱、種族、第一筆或舊出戰寵資料推算。省略政策時 HP/MP 上限也須一致。
     這讓已明列完整材料的寵物可在合法 C28 換寵後再次入戰，不新發寵物。
+  projection_policy：每份非空 pet 材料可選的明示 CUSTOM 政策，目前只接受
+    owned_saved_vitals_level_v1。從已保存完整實例投影目前/最大 HP/MP 及等級，
+    不推算成長、種族、名稱、狀態、技能或其他戰鬥能力。
+    Pet1 的排除位元為 stats BYTE1..8 和 BYTE0x24；Pet2 為 BYTE4、
+    DWORD5 與 DWORD13 的低25位，兩個 DWORD 的高7位仍須完全一致。
+    metadata、family/key/slot、source_sha256 和其餘 stats 都保持精確比對。
+    原型的 HP/MP 上限及顯示等級仍須等於該原型的已存實例；執行時改投影
+    實際 active44 的已存值，不以新數值冒充新的原型來源。
+    嚴格材料與此政策的比對範圍若重疊，整個版本拒絕，不能按第一筆選取。
   world_spawn/world_remove/world_move：完整原生世界外觀、移除及移動材料。
 
 未知原始位元保留為明列原生材料，不賦予未查明的遊戲意義。此來源只掛載

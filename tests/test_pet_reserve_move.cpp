@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 using namespace god2;
@@ -55,9 +56,79 @@ struct Fixture {
         }
     }
 };
+// SOURCE regression only. Exercise the actual shared C24/C28 transaction, not
+// a separate test-only save or a claimed socket/native acceptance.
+void reserve_source_fences() {
+    using Move=RecoveredOwnedPetReserveMove;using Batch=Move::Batch;
+    const auto batch=[](std::vector<RecoveredWorldRecords::Record> records){return Move::classify(records);};
+    const RecoveredInventoryMoveRequest::Request request{42,43};
+    require(batch({request,RecoveredWorldRecords::Tick{}})==Batch::Reserve,"Reserve with Tick rejected");
+    require(batch({RecoveredMovement::Request{},request})==Batch::Rejected,"Reserve movement prefix escaped");
+    require(batch({request,RecoveredSelectionItemRequest::Request{28001,42}})==Batch::Rejected,"C24/C28 mixed mutation escaped");
+    require(batch({request,RecoveredWorldRecords::ClientControl1F{}})==Batch::Rejected,"Unproven C24 control tail admitted");
+    require(batch({RecoveredInventoryMoveRequest::Request{0,42}})==Batch::Rejected,"Bag/pet namespace mixed move admitted");
+    require(batch({RecoveredInventoryMoveRequest::Request{42,44}})==Batch::Rejected,"C24 borrowed active44 activation");
+    require(batch({RecoveredInventoryMoveRequest::Request{0,1}})==Batch::Absent,"Ordinary bag borrowed companion custody");
+    for(unsigned mode=0;mode<6;++mode) {
+        Fixture f;auto repo=f.repo();repo.provision_pet2_slots(1,f.character);f.seed(42);f.seed(43,true);f.seed(44,false,28002);
+        const auto a=f.get(42),b=f.get(43),active=f.get(44);
+        struct Observe {sqlite3* db;SqliteCompanionRepository* repo;std::uint64_t character;StoredPet2Slot a,active;
+            unsigned mode,loads=0;bool live=true,wrote=false,fired=false,nested=false;int ddl=SQLITE_ERROR;
+        } observed{f.db.get(),&repo,f.character,a,active,mode};
+        const auto trace=[](unsigned type,void* context,void* statement,void*)->int {
+            auto& o=*static_cast<Observe*>(context);const auto* text=sqlite3_sql(static_cast<sqlite3_stmt*>(statement));
+            if(!text)return 0;const std::string_view sql(text);
+            if(type==SQLITE_TRACE_PROFILE) {
+                if((o.mode==1||o.mode==4)&&o.wrote&&!o.fired&&sql=="COMMIT") {
+                    o.fired=true;if(o.mode==1)o.live=false;
+                    else sqlite3_exec(o.db,"UPDATE main.character_pet2_slots SET evidence_id='late-profile-active-change' WHERE slot=44",nullptr,nullptr,nullptr);
+                }
+                return 0;
+            }
+            if(type!=SQLITE_TRACE_STMT)return 0;
+            if(sql.starts_with("SELECT slot,metadata,stats")) {
+                ++o.loads;if(o.mode==0&&o.loads==3){o.fired=true;o.live=false;}
+            }
+            if(o.mode==5&&o.wrote&&o.loads==2&&!o.fired&&sql.starts_with("SELECT 1 FROM main.recovered_characters")) {
+                o.fired=true;o.ddl=sqlite3_exec(o.db,"ALTER TABLE main.character_pet2_slots RENAME TO replaced_pet_cells; CREATE TEMP VIEW character_pet2_slots AS SELECT * FROM main.replaced_pet_cells",nullptr,nullptr,nullptr);
+            }
+            if(sql.starts_with("UPDATE main.character_pet2_slots")) {
+                o.wrote=true;
+                if((o.mode==2||o.mode==3)&&!o.fired) {
+                    o.fired=true;
+                    try{if(o.mode==2)(void)o.repo->transfer_pet2(1,o.character,o.a,o.active);
+                        else {SqliteCompanionRepository other(o.db);(void)other.transfer_pet2(1,o.character,o.a,o.active);}}
+                    catch(const std::exception&){o.nested=true;}
+                }
+            }
+            return 0;
+        };
+        struct TraceEnd {sqlite3* db;~TraceEnd(){sqlite3_trace_v2(db,0,nullptr,nullptr);}} end{f.db.get()};
+        require(sqlite3_trace_v2(f.db.get(),SQLITE_TRACE_STMT|SQLITE_TRACE_PROFILE,trace,&observed)==SQLITE_OK,"Reserve trace registration failed");
+        rejects([&]{(void)Move::move(repo,1,f.character,request,[&]{return observed.live;});});
+        sqlite3_trace_v2(f.db.get(),0,nullptr,nullptr);
+        require(observed.fired,"Reserve observer did not reach intended shared cut");
+        if(mode==1||mode==4) {
+            require(f.get(42).pet1.has_value()&&f.get(43).pet.has_value(),"Durable reserve swap was falsely rolled back");
+            if(mode==4)require(f.get(44).provenance.evidence_id=="late-profile-active-change","Late durable write was hidden");
+            else require(same(active,f.get(44)),"Reserve changed active44");
+        }else require(same(a,f.get(42))&&same(b,f.get(43))&&same(active,f.get(44)),"Rejected reserve transaction changed full population");
+        if(mode==2||mode==3)require(observed.nested,"C24/C28 shared-connection reentry was not rejected");
+        if(mode==5)require(observed.ddl==SQLITE_OK,"Reserve final owner-read namespace replacement was not reached");
+    }
+    for(const char* claim:{"owned_pk_room_members","owned_pve_character_claims"}) {
+        Fixture f;auto repo=f.repo();repo.provision_pet2_slots(1,f.character);f.seed(42);
+        const auto a=f.get(42),b=f.get(43);
+        const auto create=std::string("CREATE TABLE ")+claim+"(character INTEGER PRIMARY KEY)";f.sql(create.c_str());
+        const auto insert=std::string("INSERT INTO ")+claim+" VALUES("+std::to_string(f.character)+")";f.sql(insert.c_str());
+        rejects([&]{Move::move(repo,1,f.character,request,[]{return true;});});
+        require(same(a,f.get(42))&&same(b,f.get(43)),"Actual room claim allowed reserve mutation");
+    }
+}
 }
 int main() {
     try {
+        reserve_source_fences();
         using Move=RecoveredOwnedPetReserveMove;
         for(unsigned a=0;a<256;++a)for(unsigned b=0;b<256;++b)
             require(Move::handles({static_cast<std::uint8_t>(a),static_cast<std::uint8_t>(b)})==

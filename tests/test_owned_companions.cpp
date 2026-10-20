@@ -1,4 +1,5 @@
 #include "handlers/RecoveredOwnedCompanions.h"
+#include "handlers/RecoveredOwnedPetReserveMove.h"
 #include "db/SqliteMigrationManager.h"
 #include "db/SqliteRecoveredCharacterRepository.h"
 #include "db/SqliteSupport.h"
@@ -528,6 +529,88 @@ void selection_source_regression() {
     require(!helper.selection_successor_from_committed(before,publications),"Changed unselected full row escaped final restoration Current");
     require(repo.load_deity_selection(1,f.character)==std::optional{second->committed().after()},"Metadata refusal rolled back durable selection");
 }
+// SOURCE ONLY: exact pet namespace classification, actual two-cell CAS and
+// pre/post-COMMIT truth. No game DB or native execution is authorized here.
+void pet_selection_continuation_regression() {
+    using Batch=RecoveredOwnedCompanions::PetSelectionBatch;
+    const auto classify=[](std::vector<RecoveredWorldRecords::Record> records){return RecoveredOwnedCompanions::pet_selection_batch(records).kind;};
+    const RecoveredSelectionItemRequest::Request pet_request{28001,42};
+    require(classify({pet_request,RecoveredWorldRecords::Tick{},RecoveredWorldRecords::ClientControl1F{}})==Batch::Kind::Selection,"Pet batch with actual trailing control rejected");
+    require(classify({RecoveredWorldRecords::ClientControl1F{},pet_request})==Batch::Kind::Rejected,"Control prefix entered pet route");
+    require(classify({pet_request,pet_request})==Batch::Kind::Rejected,"Two pet writes entered one callback");
+    require(classify({pet_request,RecoveredSelectionItemRequest::Request{28001,0}})==Batch::Kind::Rejected,"Pet/item namespace mixed batch escaped");
+    require(classify({RecoveredMovement::Request{},pet_request})==Batch::Kind::Rejected,"Movement prefix entered pet route");
+    require(classify({RecoveredSelectionItemRequest::Request{28001,0}})==Batch::Kind::Absent,"Ordinary item selection borrowed pet route");
+    for(unsigned mode=0;mode<9;++mode) {
+        Fixture f;auto repo=f.repo();RecoveredOwnedCompanions helper(repo);repo.provision_pet2_slots(1,f.character);
+        repo.store_pet2(1,f.character,42,pet(f.character,42,28001),1,provenance());
+        const auto before42=f.slot(42),before44=f.slot(44),before43=f.slot(43);
+        struct Observe {sqlite3* db;SqliteCompanionRepository* repo;std::uint64_t character;StoredPet2Slot source,destination;
+            unsigned mode,loads=0;bool live=true,fired=false,nested_rejected=false,wrote=false;int ddl=SQLITE_ERROR;} observed{f.db.get(),&repo,f.character,before42,before44,mode};
+        const auto trace=[](unsigned type,void* context,void* statement,void*)->int {
+            auto& o=*static_cast<Observe*>(context);
+            const auto* raw_sql=sqlite3_sql(static_cast<sqlite3_stmt*>(statement));if(!raw_sql)return 0;const std::string_view sql(raw_sql);
+            if(type==SQLITE_TRACE_PROFILE) {
+                // PROFILE occurs after this COMMIT has finished; unlike STMT,
+                // these cases exercise the actual durable-return cut.
+                if((o.mode==6||o.mode==7)&&o.wrote&&sql=="COMMIT"&&!o.fired) {
+                    o.fired=true;if(o.mode==6)o.live=false;
+                    else sqlite3_exec(o.db,"UPDATE main.character_pet2_slots SET evidence_id='profile-observer-change' WHERE slot=43",nullptr,nullptr,nullptr);
+                }
+                return 0;
+            }
+            if(type!=SQLITE_TRACE_STMT)return 0;
+            if(o.mode==8&&o.wrote&&o.loads==2&&!o.fired&&sql.starts_with("SELECT 1 FROM main.recovered_characters")){
+                o.fired=true;
+                o.ddl=sqlite3_exec(o.db,"ALTER TABLE main.character_pet2_slots RENAME TO replaced_pet_cells; CREATE TEMP VIEW character_pet2_slots AS SELECT * FROM main.replaced_pet_cells",nullptr,nullptr,nullptr);
+            }
+            if(sql.starts_with("SELECT slot,metadata,stats")){
+                ++o.loads;if(o.loads==3&&(o.mode==0||o.mode==2)){
+                    o.fired=true;if(o.mode==0)o.live=false;
+                    else sqlite3_exec(o.db,"UPDATE character_pet2_slots SET evidence_id='unexpected-final-source' WHERE slot=43",nullptr,nullptr,nullptr);
+                }
+            }
+            if(sql.starts_with("UPDATE main.character_pet2_slots"))o.wrote=true;
+            if(o.mode==1&&o.wrote&&sql=="COMMIT"){o.live=false;o.fired=true;}
+            if(o.mode==5&&o.wrote&&sql=="COMMIT"&&!o.fired){o.fired=true;
+                sqlite3_exec(o.db,"UPDATE character_pet2_slots SET evidence_id='commit-observer-change' WHERE slot=43",nullptr,nullptr,nullptr);}
+            if((o.mode==3||o.mode==4)&&!o.fired&&sql.starts_with("UPDATE main.character_pet2_slots")){
+                o.fired=true;
+                try{if(o.mode==3)(void)o.repo->transfer_pet2(1,o.character,o.source,o.destination);
+                    else {SqliteCompanionRepository other(o.db);(void)other.transfer_pet2(1,o.character,o.source,o.destination);}}
+                catch(const std::exception&){o.nested_rejected=true;}
+            }
+            return 0;
+        };
+        struct TraceEnd {sqlite3* db;~TraceEnd(){sqlite3_trace_v2(db,0,nullptr,nullptr);}} trace_end{f.db.get()};
+        require(sqlite3_trace_v2(f.db.get(),SQLITE_TRACE_STMT|SQLITE_TRACE_PROFILE,trace,&observed)==SQLITE_OK,"Pet trace source installation failed");
+        rejects([&]{(void)helper.select_pet2(1,f.character,pet_request,[&]{return observed.live;});});
+        sqlite3_trace_v2(f.db.get(),0,nullptr,nullptr);
+        require(observed.fired,"Pet final/commit/reentry observer did not reach its intended cut");
+        if(mode==1||mode==5||mode==6||mode==7)require(!f.slot(42).occupied()&&f.slot(44).occupied(),"Post-COMMIT retirement falsely rolled back actual pet custody");
+        else require(raw(f.slot(42))==raw(before42)&&f.slot(42).revision==before42.revision&&
+            raw(f.slot(44))==raw(before44)&&f.slot(43).provenance==before43.provenance,"Pet precommit retirement leaked partial/cross-cell writes");
+        if(mode==3||mode==4)require(observed.nested_rejected,"Caught pet reentry failed to poison the outer actual connection operation");
+        if(mode==5)require(f.slot(43).provenance.evidence_id=="commit-observer-change","Durable COMMIT observer write was falsely described as rollback");
+        if(mode==7)require(f.slot(43).provenance.evidence_id=="profile-observer-change","Successful COMMIT PROFILE write lost durable truth");
+        if(mode==8)require(observed.ddl==SQLITE_OK,"Final owner-read DDL fixture did not reach its intended namespace replacement");
+    }
+    for(const char* claim:{"owned_pve_character_claims","owned_pk_room_members"}) {
+        Fixture f;auto repo=f.repo();RecoveredOwnedCompanions helper(repo);repo.provision_pet2_slots(1,f.character);
+        repo.store_pet2(1,f.character,42,pet(f.character,42,28001),1,provenance());
+        const auto table=std::string("CREATE TABLE ")+claim+"(character INTEGER PRIMARY KEY)";f.sql(table.c_str());
+        const auto insert=std::string("INSERT INTO ")+claim+" VALUES("+std::to_string(f.character)+")";f.sql(insert.c_str());
+        rejects([&]{(void)helper.select_pet2(1,f.character,pet_request,[]{return true;});});
+        require(f.slot(42).occupied()&&!f.slot(44).occupied(),"Retained room claim allowed pet ownership change");
+    }
+    LearningSelectionFixture f;const auto original=f.helper.restore_with_source(1,f.character,f.learning);
+    f.companions.provision_pet2_slots(1,f.character);f.companions.store_pet2(1,f.character,42,pet(f.character,42,28001),1,provenance());
+    require(f.helper.select_pet2(1,f.character,pet_request,[]{return true;}).has_value()&&
+        f.learning.restoration_current(*original.learning_source()),"Pet activation retired the unrelated complete learning/material graph");
+    f.companions.store_pet2(1,f.character,42,pet(f.character,42,28001),f.slot(42).revision,provenance());
+    require(RecoveredOwnedPetReserveMove::move(f.companions,1,f.character,{42,43},[]{return true;}).has_value()&&
+        f.learning.restoration_current(*original.learning_source()),"Pet reserve reorder retired the unrelated complete learning/material graph");
+}
 }
 int main() {
     try {
@@ -535,6 +618,7 @@ int main() {
         learning_selection_source_regression();
         joint_material_successor_regression();
         status_activation_lineage_regression();
+        pet_selection_continuation_regression();
         Fixture f;auto repo=f.repo();RecoveredOwnedCompanions service(repo);const auto c=f.character;
         require(service.restore(1,c).empty(),"Absent ownership emitted packets");
         require(!repo.selected_deity_has_skill(1,c,0,126),"Absent ownership granted custom skill");

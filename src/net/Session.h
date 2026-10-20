@@ -38,6 +38,7 @@ class SharedTaiwanMovement;
 class RecoveredMovementService;
 class NativeTaiwanChannelBinding;
 class OwnedPveRoomHost;
+class OwnedSkillBookLearningService;
 
 enum class SessionState {
     Connected, Handshaked, Authenticated, CharacterSelected,
@@ -1149,6 +1150,12 @@ public:
     std::uint64_t character_id = 0;
 
 private:
+    friend class OwnedSkillBookLearningService;
+    // Only the real learning owner may park this exact original C25/C26 job
+    // behind its bootstrap Write. No public raw wire or mutation replay API.
+    void defer_current_book_bootstrap(
+        const std::variant<RecoveredInventoryItemRequest::Request,RecoveredTargetItemRequest::Request>&,
+        const WorldResponseWrite&,std::function<bool(Session&)> current);
     friend class shared::SharedActorVisibility;
     friend class SharedTaiwanMovement;
     friend class RecoveredMovementService;

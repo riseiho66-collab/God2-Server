@@ -3,6 +3,10 @@
 #include "db/SqliteSupport.h"
 #include <limits>
 #include <algorithm>
+#include <atomic>
+#include <map>
+#include <mutex>
+#include <thread>
 namespace god2 {
 namespace {
 std::uint64_t next_revision(std::uint64_t value) {
@@ -27,13 +31,51 @@ bool same_deity(const StoredDeity& a,const StoredDeity& b) {
     return true;
 }
 bool same_pet(const StoredPet2Slot& a,const StoredPet2Slot& b) {
-    if(a.slot!=b.slot || a.revision!=b.revision || a.provenance!=b.provenance || bool(a.pet)!=bool(b.pet) || bool(a.pet1)!=bool(b.pet1)) return false;
+    if(a.slot!=b.slot || a.revision!=b.revision || a.provenance!=b.provenance || bool(a.pet)!=bool(b.pet) || bool(a.pet1)!=bool(b.pet1) ||
+       bool(a.display_category)!=bool(b.display_category)) return false;
+    if(a.display_category&&(a.display_category->group!=b.display_category->group||a.display_category->index!=b.display_category->index||
+       a.display_category->source_line!=b.display_category->source_line||a.display_category->name!=b.display_category->name))return false;
     if(a.pet1) return RecoveredPet2Lifecycle::same_owner(a.pet1->owner,b.pet1->owner) &&
         a.pet1->inventory==b.pet1->inventory &&
         RecoveredPet1Stats::encode_logical(a.pet1->stats)==RecoveredPet1Stats::encode_logical(b.pet1->stats);
     return !a.pet || (RecoveredPet2Lifecycle::same_owner(a.pet->owner,b.pet->owner) &&
         a.pet->inventory==b.pet->inventory &&
         RecoveredPet2Stats::encode_logical(a.pet->stats)==RecoveredPet2Stats::encode_logical(b.pet->stats));
+}
+struct PetTransferOperation {
+    struct State {std::thread::id thread=std::this_thread::get_id();std::atomic_bool busy=false,invalid=false;};
+    std::shared_ptr<State> state;
+    explicit PetTransferOperation(sqlite3* db) {
+        static std::mutex mutex;static std::map<sqlite3*,std::weak_ptr<State>> owners;
+        {std::lock_guard lock(mutex);
+            for(auto at=owners.begin();at!=owners.end();)if(at->second.expired())at=owners.erase(at);else ++at;
+            auto& value=owners[db];state=value.lock();if(!state){state=std::make_shared<State>();value=state;}}
+        if(state->thread!=std::this_thread::get_id()||state->busy.exchange(true)){
+            state->invalid.store(true);throw DatabaseError("Pet transfer actual connection reentry/owner rejected");}
+    }
+    ~PetTransferOperation(){state->busy.store(false);}
+    void current()const {if(state->invalid.load())throw DatabaseError("Pet transfer actual connection was retired by reentry");}
+};
+void pet_transfer_namespaces(sqlite3* db) {
+    for(const auto* name:{"accounts","recovered_characters","native_companion_metadata","native_pet1_metadata",
+            "native_pet2_category_source","native_pet2_category_rows","character_pet2_slots","battle_reservations",
+            "battle_settlements","owned_pk_room_members","owned_pve_character_claims"}) {
+        sqlite_detail::Statement shadow(db,"SELECT 1 FROM temp.sqlite_master WHERE name=? COLLATE NOCASE OR tbl_name=? COLLATE NOCASE LIMIT 1");
+        shadow.bind(1,std::string(name));shadow.bind(2,std::string(name));if(shadow.row())throw DatabaseError("Pet transfer TEMP source shadow rejected");
+        sqlite_detail::Statement table(db,"SELECT type FROM main.sqlite_master WHERE name=? COLLATE NOCASE");table.bind(1,std::string(name));
+        if(table.row()&&(table.text(0)!="table"||table.row()))throw DatabaseError("Pet transfer source is not its actual main table");
+        sqlite_detail::Statement trigger(db,"SELECT 1 FROM main.sqlite_master WHERE type='trigger' AND tbl_name=? COLLATE NOCASE LIMIT 1");
+        trigger.bind(1,std::string(name));if(trigger.row())throw DatabaseError("Pet transfer source trigger rejected");
+    }
+}
+void pet_transfer_room_claims(sqlite3* db,std::uint64_t character) {
+    for(const auto* name:{"owned_pk_room_members","owned_pve_character_claims"}) {
+        sqlite_detail::Statement table(db,"SELECT type FROM main.sqlite_master WHERE name=? COLLATE NOCASE");table.bind(1,std::string(name));
+        if(!table.row())continue;if(table.text(0)!="table"||table.row())throw DatabaseError("Pet transfer room claim source is not its main table");
+        // Names come solely from the fixed literals above, never client input.
+        sqlite_detail::Statement claim(db,std::string("SELECT 1 FROM main.")+name+" WHERE character=? LIMIT 1");
+        claim.bind_id(1,character);if(claim.row())throw DatabaseError("Pet transfer conflicts with an actual retained battle claim");
+    }
 }
 }
 struct SqliteCompanionRepository::CommittedDeitySelection::Data {
@@ -75,12 +117,12 @@ std::optional<OwnedDeityRosterReadset> SqliteCompanionRepository::selection_rost
 }
 void SqliteCompanionRepository::require_owner(std::uint64_t account,std::uint64_t character) {
     if(!account || !character) throw DatabaseError("Invalid companion owner");
-    sqlite_detail::Statement row(db_,"SELECT 1 FROM recovered_characters WHERE account_id=? AND id=?");
+    sqlite_detail::Statement row(db_,"SELECT 1 FROM main.recovered_characters WHERE account_id=? AND id=?");
     row.bind_id(1,account);row.bind_id(2,character);
     if(!row.row()) throw DatabaseError("Companion character ownership rejected");
 }
 void SqliteCompanionRepository::require_no_pending_battle(std::uint64_t character) {
-    sqlite_detail::Statement row(db_,"SELECT 1 FROM battle_reservations r LEFT JOIN battle_settlements s ON s.battle_id=r.id WHERE r.character_id=? AND s.battle_id IS NULL LIMIT 1");
+    sqlite_detail::Statement row(db_,"SELECT 1 FROM main.battle_reservations r LEFT JOIN main.battle_settlements s ON s.battle_id=r.id WHERE r.character_id=? AND s.battle_id IS NULL LIMIT 1");
     row.bind_id(1,character);
     if(row.row()) throw DatabaseError("Companion mutation during pending battle");
 }
@@ -102,7 +144,7 @@ std::vector<std::uint8_t> SqliteCompanionRepository::deity_template_keys() {
     return result;
 }
 bool SqliteCompanionRepository::resolves_pet2(std::uint16_t key) {
-    sqlite_detail::Statement row(db_,"SELECT source_sha256 FROM native_companion_metadata WHERE family='NCP' AND metadata_key=?");
+    sqlite_detail::Statement row(db_,"SELECT source_sha256 FROM main.native_companion_metadata WHERE family='NCP' AND metadata_key=?");
     row.bind(1,key);
     if(!row.row()) return false;
     if(row.text(0)!=source_sha256 || key<0x6d61 || key>=0x7f58)
@@ -110,7 +152,7 @@ bool SqliteCompanionRepository::resolves_pet2(std::uint16_t key) {
     return true;
 }
 bool SqliteCompanionRepository::resolves_pet1(std::uint16_t key) {
-    sqlite_detail::Statement row(db_,"SELECT source_sha256 FROM native_pet1_metadata WHERE family='COM' AND metadata_key=?");
+    sqlite_detail::Statement row(db_,"SELECT source_sha256 FROM main.native_pet1_metadata WHERE family='COM' AND metadata_key=?");
     row.bind(1,key);if(!row.row())return false;
     if(row.text(0)!=source_sha256 || key<24001 || key>26070)
         throw DatabaseError("Unqualified current COM catalog row");
@@ -616,7 +658,7 @@ StoredDeity SqliteCompanionRepository::store_deity(std::uint64_t account,std::ui
 }
 std::vector<StoredPet2Slot> SqliteCompanionRepository::load_pet2_slots(std::uint64_t account,std::uint64_t character) {
     require_owner(account,character);
-    sqlite_detail::Statement rows(db_,"SELECT slot,metadata,stats,revision,source_sha256,authority,evidence_id FROM character_pet2_slots WHERE character_id=? ORDER BY slot");
+    sqlite_detail::Statement rows(db_,"SELECT slot,metadata,stats,revision,source_sha256,authority,evidence_id FROM main.character_pet2_slots WHERE character_id=? ORDER BY slot");
     rows.bind_id(1,character);std::vector<StoredPet2Slot> result;
     while(rows.row()) {
         StoredPet2Slot value{rows.number<std::uint8_t>(0),{},rows.number<std::uint64_t>(3),{rows.text(4),rows.text(5),rows.text(6)}};
@@ -702,17 +744,39 @@ StoredPet2Slot SqliteCompanionRepository::store_pet1(std::uint64_t account,std::
     auto result=*saved;transaction.commit();return result;
 }
 Pet2TransferCommit SqliteCompanionRepository::transfer_pet2(std::uint64_t account,std::uint64_t character,
-        const StoredPet2Slot& source,const StoredPet2Slot& destination) {
-    if(!source.occupied() || (source.pet && source.pet1) || (destination.pet && destination.pet1) || source.slot==destination.slot ||
+        const StoredPet2Slot& supplied_source,const StoredPet2Slot& supplied_destination,std::function<bool()> current) {
+    // Retain both complete instances and the provider before any SQL callback.
+    const auto source=supplied_source,destination=supplied_destination;
+    if(source.slot==destination.slot ||
        (source.slot==44 ? destination.slot<42 || destination.slot>43 || destination.occupied() :
                          (source.slot<42 || source.slot>43 || destination.slot!=44)))
         throw DatabaseError("Invalid pet2 selection destination");
-    sqlite_detail::Transaction transaction(db_);const auto before=load_pet2_slots(account,character);
+    return swap_pet_cells(account,character,source,destination,{},std::move(current));
+}
+Pet2TransferCommit SqliteCompanionRepository::swap_pet_cells(std::uint64_t account,std::uint64_t character,
+        StoredPet2Slot source,StoredPet2Slot destination,
+        std::function<void(const Pet2TransferCommit&)> prepare,std::function<bool()> current) {
+    PetTransferOperation operation(db_);
+    if(readset_reading_){readset_reentered_=true;throw DatabaseError("Pet transfer cannot borrow an active companion readset");}
+    const auto pure=[&]{operation.current();if(current&&!current())throw DatabaseError("Pet transfer actual host source retired");operation.current();};
+    pure();
+    if(!db_||!account||!character||!sqlite3_get_autocommit(db_))throw DatabaseError("Pet transfer requires its own owner transaction");
+    if(!source.occupied() || (source.pet && source.pet1) || (destination.pet && destination.pet1) ||
+       source.slot==destination.slot || source.slot<42 || source.slot>44 || destination.slot<42 || destination.slot>44)
+        throw DatabaseError("Invalid complete pet-cell swap");
+    auto expected_changes=sqlite3_total_changes64(db_);
+    if(expected_changes<0||expected_changes>std::numeric_limits<sqlite3_int64>::max()-2)
+        throw DatabaseError("Pet transfer change counter exhausted");
+    sqlite_detail::Transaction transaction(db_);
+    const auto fence=[&]{pure();if(sqlite3_get_autocommit(db_)||sqlite3_total_changes64(db_)!=expected_changes)
+        throw DatabaseError("Pet transfer complete transaction source changed");};
+    pet_transfer_namespaces(db_);fence();
+    const auto before=load_pet2_slots(account,character);fence();
     const auto current_source=std::find_if(before.begin(),before.end(),[&](const auto& value){return value.slot==source.slot;});
     const auto current_destination=std::find_if(before.begin(),before.end(),[&](const auto& value){return value.slot==destination.slot;});
     if(current_source==before.end() || current_destination==before.end() || !same_pet(*current_source,source) || !same_pet(*current_destination,destination))
         throw DatabaseError("Pet2 transfer version conflict");
-    require_no_pending_battle(character);
+    require_no_pending_battle(character);pet_transfer_room_claims(db_,character);fence();
     Pet2TransferCommit next{destination,source};next.source.slot=source.slot;next.destination.slot=destination.slot;
     next.source.revision=next_revision(source.revision);next.destination.revision=next_revision(destination.revision);
     const auto reroute=[](StoredPet2Slot& value) {
@@ -725,21 +789,32 @@ Pet2TransferCommit SqliteCompanionRepository::transfer_pet2(std::uint64_t accoun
         value.pet->stats=RecoveredPet2Stats::parse_logical(bytes).value();
     };
     reroute(next.source);reroute(next.destination);
+    // All potentially throwing packet preparation precedes both durable writes.
+    if(prepare){prepare(next);fence();}
     const auto write=[&](const StoredPet2Slot& value,std::uint64_t expected) {
-        sqlite_detail::Statement update(db_,"UPDATE character_pet2_slots SET metadata=?,stats=?,revision=?,source_sha256=?,authority=?,evidence_id=? WHERE character_id=? AND slot=? AND revision=?");
+        sqlite_detail::Statement update(db_,"UPDATE main.character_pet2_slots SET metadata=?,stats=?,revision=?,source_sha256=?,authority=?,evidence_id=? WHERE character_id=? AND slot=? AND revision=?");
         if(value.pet1) {update.bind_blob(1,value.pet1->inventory);update.bind_blob(2,RecoveredPet1Stats::encode_logical(value.pet1->stats));}
         else if(value.pet) {update.bind_blob(1,value.pet->inventory);update.bind_blob(2,RecoveredPet2Stats::encode_logical(value.pet->stats));}
         else {update.bind_blob(1,{});update.bind_blob(2,{});}
         update.bind_id(3,value.revision);update.bind(4,value.provenance.source_sha256);update.bind(5,value.provenance.authority);
         update.bind(6,value.provenance.evidence_id);update.bind_id(7,character);update.bind(8,value.slot);update.bind_id(9,expected);update.done();
         if(sqlite3_changes(db_)!=1) throw DatabaseError("Pet2 transfer write rejected");
+        ++expected_changes;fence();
     };
     write(next.source,source.revision);write(next.destination,destination.revision);
-    const auto after=load_pet2_slots(account,character);
-    for(const auto* expected:{&next.source,&next.destination}) {
-        const auto saved=std::find_if(after.begin(),after.end(),[&](const auto& value){return value.slot==expected->slot;});
-        if(saved==after.end() || !same_pet(*saved,*expected)) throw DatabaseError("Pet2 transfer readback mismatch");
+    pet_transfer_namespaces(db_);require_no_pending_battle(character);pet_transfer_room_claims(db_,character);fence();
+    const auto after=load_pet2_slots(account,character);fence();
+    if(after.size()!=before.size())throw DatabaseError("Pet transfer changed the complete cell population");
+    for(const auto& old:before) {
+        const auto& expected=old.slot==source.slot?next.source:old.slot==destination.slot?next.destination:old;
+        const auto saved=std::find_if(after.begin(),after.end(),[&](const auto& value){return value.slot==expected.slot;});
+        if(saved==after.end() || !same_pet(*saved,expected)) throw DatabaseError("Pet transfer full readback mismatch");
     }
-    transaction.commit();return next;
+    fence();transaction.commit();
+    // COMMIT is already durable. A late observer cannot turn this into a
+    // rollback claim or authorize success output under a retired Session.
+    try{pure();next.current=sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==expected_changes;}
+    catch(...){next.current=false;}
+    return next;
 }
 }

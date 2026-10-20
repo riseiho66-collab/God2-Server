@@ -336,11 +336,32 @@ std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_deity(
     if(!result) return std::nullopt;
     return std::move(*result).take_wire();
 }
+RecoveredOwnedCompanions::PetSelectionBatch RecoveredOwnedCompanions::pet_selection_batch(
+        std::span<const RecoveredWorldRecords::Record> records) {
+    using Kind=PetSelectionBatch::Kind;
+    if(!std::any_of(records.begin(),records.end(),[](const auto& record){
+        const auto* p=std::get_if<RecoveredSelectionItemRequest::Request>(&record);return p&&p->raw_slot>=42&&p->raw_slot<=44;
+    }))return {};
+    std::optional<RecoveredSelectionItemRequest::Request> pet;bool control=false;
+    for(const auto& record:records) {
+        if(std::holds_alternative<RecoveredWorldRecords::Tick>(record))continue;
+        if(const auto* request=std::get_if<RecoveredSelectionItemRequest::Request>(&record)) {
+            if(pet||control||request->raw_slot<42||request->raw_slot>44||!request->client_item_id)return {Kind::Rejected,{}};
+            pet=*request;
+        }else if(pet&&!control&&std::holds_alternative<RecoveredWorldRecords::ClientControl1F>(record))control=true;
+        else return {Kind::Rejected,{}};
+    }
+    return {Kind::Selection,pet};
+}
 std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_pet2(std::uint64_t account,std::uint64_t character,
-        const RecoveredSelectionItemRequest::Request& request) {
+        const RecoveredSelectionItemRequest::Request& supplied_request,std::function<bool()> current) {
+    PrefixRead read(*this);const auto request=supplied_request;
+    const auto pure=[&]{return !prefix_reentered_&&(!current||current())&&!prefix_reentered_;};
+    if(!pure())return {};
     const auto native=RecoveredPet2Lifecycle::decode(RecoveredSelectionItemRequest::encode(request));
     if(!native) return std::nullopt;
     const auto slots=repository_.load_pet2_slots(account,character);
+    if(!pure())return {};
     const auto source=std::find_if(slots.begin(),slots.end(),[&](const auto& row){return row.slot==native->source;});
     if(source==slots.end() || !source->occupied()) return std::nullopt;
     // CUSTOM-0039: native request has no destination. Reserve selection always
@@ -356,11 +377,11 @@ std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_pet2(s
         return row.pet?RecoveredPet2Lifecycle::valid(context,*row.pet,[&](auto key){return repository_.resolves_pet2(key);}):
             (row.pet1?RecoveredPet1Lifecycle::valid(context,*row.pet1,[&](auto key){return repository_.resolves_pet1(key);}):true);
     };
-    if(!valid(*source) || !valid(*destination))return std::nullopt;
+    if(!valid(*source) || !valid(*destination)||!pure())return std::nullopt;
     const bool accepted=source->pet?
         RecoveredPet2Lifecycle::accepts(context,*native,*source->pet,[&](auto key){return repository_.resolves_pet2(key);}):
         RecoveredPet1Lifecycle::accepts(context,*native,*source->pet1,[&](auto key){return repository_.resolves_pet1(key);});
-    if(!accepted)return std::nullopt;
+    if(!accepted||!pure())return std::nullopt;
     std::vector<std::uint8_t> logical;
     // Clear BOTH previous families before replacing metadata: A2C90 selects
     // its52/72-byte cache using the old retained inventory type32/34.
@@ -371,7 +392,8 @@ std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_pet2(s
     };
     append(*destination,source->slot);append(*source,destination->slot);
     const auto wire=RecoveredWorldFrame::encode(logical);
-    const auto committed=repository_.transfer_pet2(account,character,*source,*destination);
+    const auto committed=repository_.transfer_pet2(account,character,*source,*destination,pure);
+    if(!committed.current||!pure())throw DatabaseError("Pet selection durably committed but source retired; no success/retry");
     if(committed.destination.display_category) spdlog::info("OWNED_PET2_CATEGORY_TRANSFERRED character_id={} slot={} group={} index={} NATIVE_PARSED_DISPLAY_ONLY",
         character,committed.destination.slot,committed.destination.display_category->group,committed.destination.display_category->index);
     return wire;

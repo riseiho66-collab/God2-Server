@@ -18,6 +18,7 @@ template<std::size_t N>std::array<std::uint8_t,N> raw(const J& j) {
 }
 template<class T>T present(std::optional<T> v){need(v.has_value(),"PvE catalog native record grammar invalid");return *v;}
 void put16(auto& b,std::size_t at,std::uint16_t n){b[at]=std::uint8_t(n);b[at+1]=std::uint8_t(n>>8);}
+void put32(auto& b,std::size_t at,std::uint32_t n){for(unsigned i=0;i<4;++i)b[at+i]=std::uint8_t(n>>(8*i));}
 P::ActorProfile actor(const J& j) {
     return {present(RecoveredBattleIdentity::parse_logical(raw<45>(j.at("identity")))),
         j.at("appearance").is_null()?std::nullopt:std::optional{present(RecoveredBattlePlayerAppearance::parse(raw<17>(j.at("appearance"))))},
@@ -34,6 +35,33 @@ P::ActorProfile positioned(P::ActorProfile p,std::uint8_t position,std::optional
     if(p.mp){auto mp=RecoveredBattleVitals::encode_logical(*p.mp);mp[2]=position;p.mp=present(RecoveredBattleVitals::parse_logical(mp));}
     return p;
 }
+void validate_friendly(const P::ActorProfile& p,bool pet) {
+    const auto slot=p.identity.position();
+    need(slot<14&&(p.identity.variant()&0x6000)==(pet?0x4000:0x2000)&&
+        bool(p.appearance)==!pet&&p.mp&&p.hp.position()==slot&&p.mp->position()==slot&&
+        p.hp.resource()==RecoveredBattleVitals::Resource::Hp&&p.mp->resource()==RecoveredBattleVitals::Resource::Mp&&
+        p.hp.maximum()&&p.hp.current()<=p.hp.maximum()&&p.mp->current()<=p.mp->maximum()&&
+        (!p.appearance||p.appearance->position()==slot),
+        "PvE friendly native variant/appearance/resource topology invalid");
+    const auto bytes=RecoveredBattleIdentity::encode_logical(p.identity);
+    const auto nul=[&](std::size_t first,std::size_t last){
+        return std::find(bytes.begin()+first,bytes.begin()+last,std::uint8_t(0))!=bytes.begin()+last;};
+    // The native player branch copies two16-byte strings, the pet branch one
+    //32-byte string. This is a complete-prototype safety check, not a name issuer.
+    need(pet?nul(9,41):(nul(9,25)&&nul(25,41)),"PvE native identity string lacks its bounded terminator");
+}
+P::ActorProfile saved_values(P::ActorProfile p,std::uint8_t level,std::uint64_t hp,
+        std::uint64_t max_hp,std::uint32_t mp,std::uint32_t max_mp) {
+    need(p.mp&&max_hp&&hp<=max_hp&&mp<=max_mp,"PvE saved resource projection invalid");
+    auto identity=RecoveredBattleIdentity::encode_logical(p.identity);identity[2]=level;
+    p.identity=present(RecoveredBattleIdentity::parse_logical(identity));
+    auto h=RecoveredBattleVitals::encode_logical(p.hp);
+    put32(h,5,RecoveredBattleBootstrap::native_hp_dword(max_hp));
+    put32(h,9,RecoveredBattleBootstrap::native_hp_dword(hp));
+    p.hp=present(RecoveredBattleVitals::parse_logical(h));
+    auto m=RecoveredBattleVitals::encode_logical(*p.mp);put32(m,5,max_mp);put32(m,9,mp);
+    p.mp=present(RecoveredBattleVitals::parse_logical(m));return p;
+}
 BattleAction policy(const J& j) {
     need(j.at("magical").is_boolean(),"PvE action must declare its stat family");
     BattleAction p{0,{},j.at("magical").get<bool>(),std::uint32_t(number(j.at("power_percent"),UINT32_MAX)),
@@ -41,7 +69,12 @@ BattleAction policy(const J& j) {
         std::uint32_t(number(j.at("critical_chance_bp"),10000)),std::uint32_t(number(j.at("critical_multiplier_percent"),UINT32_MAX))};
     need(p.critical_multiplier_percent>=100,"PvE critical multiplier must be explicit >=100 percent");return p;
 }
-J pet_material_key(const J& saved) {
+bool projects_saved_values(const J& variant) {
+    if(!variant.contains("projection_policy"))return false;
+    need(variant.at("projection_policy")=="owned_saved_vitals_level_v1","PvE unknown saved-pet projection policy");
+    return true;
+}
+J pet_material_key(const J& saved,bool project_values=false) {
     const auto kind=saved.at("kind").get<std::string>();
     need(kind=="Pet1"||kind=="Pet2","PvE pet source kind missing");
     const auto metadata=raw<20>(saved.at("metadata"));
@@ -53,13 +86,17 @@ J pet_material_key(const J& saved) {
         need((metadata[2]&0x3f)==34&&parsed.metadata_key()==metadata_key&&parsed.slot()==44,
             "PvE Pet2 metadata family/key/active slot differs from complete stats");
         // Proven packed HP14/MP11 only; preserve the high seven opaque bits.
-        bytes[5]=bytes[6]=bytes[7]=0;bytes[8]&=0xfe;stats=bytes;
+        bytes[5]=bytes[6]=bytes[7]=0;bytes[8]&=0xfe;
+        if(project_values){bytes[4]=0;bytes[13]=bytes[14]=bytes[15]=0;bytes[16]&=0xfe;}
+        stats=bytes;
     }else{
         auto bytes=raw<RecoveredPet1Stats::logical_size>(saved.at("stats"));
         const auto parsed=present(RecoveredPet1Stats::parse_logical(bytes));
         need((metadata[2]&0x3f)==32&&parsed.metadata_key()==metadata_key&&parsed.slot()==44,
             "PvE Pet1 metadata family/key/active slot differs from complete stats");
-        bytes[1]=bytes[2]=bytes[5]=bytes[6]=0;stats=bytes;
+        bytes[1]=bytes[2]=bytes[5]=bytes[6]=0;
+        if(project_values){bytes[3]=bytes[4]=bytes[7]=bytes[8]=0;bytes[0x24]=0;}
+        stats=bytes;
     }
     const auto source=saved.at("source_sha256").get<std::string>();
     need(source.size()==64&&source.find_first_not_of("0123456789abcdef")==std::string::npos,
@@ -68,20 +105,21 @@ J pet_material_key(const J& saved) {
 }
 J validate_pet_variant(const J& variant) {
     const auto p=actor(variant.at("pet"));
-    need(p.mp&&p.identity.position()<14&&p.hp.resource()==RecoveredBattleVitals::Resource::Hp&&
-        p.mp->resource()==RecoveredBattleVitals::Resource::Mp,
-        "PvE active pet requires complete native HP/MP profile");
+    validate_friendly(p,true);
     const auto& saved=variant.at("active_pet_material");
-    const auto key=pet_material_key(saved);
+    const bool project_values=projects_saved_values(variant);
+    const auto key=pet_material_key(saved,project_values);
     if(saved.at("kind")=="Pet2"){
         const auto stats=present(RecoveredPet2Stats::parse_logical(raw<RecoveredPet2Stats::logical_size>(saved.at("stats"))));
         const auto v=stats.vitals();need(v.maximum_hp&&v.current_hp<=v.maximum_hp&&v.current_mp<=v.maximum_mp&&
-            p.hp.maximum()==v.maximum_hp&&p.mp->maximum()==v.maximum_mp,
+            p.hp.maximum()==v.maximum_hp&&p.mp->maximum()==v.maximum_mp&&
+            (!project_values||p.identity.displayed_level()==stats.level()),
             "PvE Pet2 profile maxima differ from complete saved material");
     }else{
         const auto stats=present(RecoveredPet1Stats::parse_logical(raw<RecoveredPet1Stats::logical_size>(saved.at("stats"))));
         const auto v=stats.vitals();need(v.maximum_hp&&v.current_hp<=v.maximum_hp&&v.current_mp<=v.maximum_mp&&
-            p.hp.maximum()==v.maximum_hp&&p.mp->maximum()==v.maximum_mp,
+            p.hp.maximum()==v.maximum_hp&&p.mp->maximum()==v.maximum_mp&&
+            (!project_values||p.identity.displayed_level()==stats.level()),
             "PvE Pet1 profile maxima differ from complete saved material");
     }
     return key;
@@ -137,7 +175,7 @@ OwnedPveWorldCatalog::OwnedPveWorldCatalog(const nlohmann::json& j) {
                 std::uint32_t(number(e.at("physical_attack"),UINT32_MAX)),std::uint32_t(number(e.at("magical_attack"),UINT32_MAX)),
                 std::uint32_t(number(e.at("physical_defense"),UINT32_MAX)),std::uint32_t(number(e.at("magical_defense"),UINT32_MAX))};
             need(a.position>=14&&a.hp&&a.hp<=a.max_hp&&a.mp<=a.max_mp,"PvE enemy topology/resources invalid");
-            auto p=actor(e.at("native"));need(p.identity.position()==a.position&&p.hp.position()==a.position&&
+            auto p=actor(e.at("native"));need(p.identity.variant()==0x400&&p.identity.position()==a.position&&p.hp.position()==a.position&&
                 p.hp.resource()==RecoveredBattleVitals::Resource::Hp&&p.hp.maximum()==a.max_hp&&p.hp.current()==a.hp&&
                 !p.mp&&!p.appearance,"PvE enemy native profile differs from authoritative complete combat material");
             need(s.enemy_profiles.emplace(a.position,std::move(p)).second,"PvE duplicate enemy slot");s.enemies.push_back(a);
@@ -147,21 +185,33 @@ OwnedPveWorldCatalog::OwnedPveWorldCatalog(const nlohmann::json& j) {
     need(j.at("character_profiles").is_array()&&j.at("character_profiles").size()<=100000,"PvE character profile list invalid");
     for(const auto& a:j.at("character_profiles")) {
         const auto id=number(a.at("character"),INT64_MAX);need(id>0,"PvE full character ID missing");
-        (void)raw<40>(a.at("root_profile"));(void)raw<37>(a.at("entry_logical"));
+        (void)raw<40>(a.at("root_profile"));
+        need(raw<37>(a.at("entry_logical"))[0]==0x2a,"PvE complete entry material is not native2A");
         const auto spawn=raw<RecoveredRemoteActor::logical_size>(a.at("world_spawn"));
         const auto removal=raw<RecoveredRemoteActorRemove::logical_size>(a.at("world_remove"));
         (void)present(RecoveredRemoteActor::parse_logical(spawn));
         (void)present(RecoveredRemoteActorRemove::parse_logical(removal));
         (void)present(RecoveredRemoteActorMove::parse_logical(raw<13>(a.at("world_move"))));
-        const auto p=actor(a.at("primary"));need(p.appearance&&p.mp&&p.identity.position()<14,
-            "PvE player requires complete native appearance/identity/HP/MP profile");
-        std::set<std::string> pet_keys;
-        if(!a.at("pet").is_null())pet_keys.insert(validate_pet_variant(a).dump());
+        validate_friendly(actor(a.at("primary")),false);
+        std::set<std::string> strict_keys,all_relaxed_keys,projected_keys;
+        const auto add_variant=[&](const J& variant){
+            (void)validate_pet_variant(variant);
+            // A relaxed key is a superset of the strict key. The union domain
+            // detects overlap in either order without a quadratic pair scan.
+            const auto& saved=variant.at("active_pet_material");
+            const auto strict=pet_material_key(saved).dump(),relaxed=pet_material_key(saved,true).dump();
+            if(projects_saved_values(variant)){
+                need(!all_relaxed_keys.contains(relaxed),"PvE ambiguous overlapping active-pet material profiles");
+                projected_keys.insert(relaxed);
+            }else need(!strict_keys.contains(strict)&&!projected_keys.contains(relaxed),
+                "PvE ambiguous overlapping active-pet material profiles");
+            strict_keys.insert(strict);all_relaxed_keys.insert(relaxed);
+        };
+        if(!a.at("pet").is_null())add_variant(a);
         if(a.contains("pet_profiles")){
             const auto& variants=a.at("pet_profiles");
             need(variants.is_array()&&variants.size()<=1024,"PvE complete pet variant list exceeds source format");
-            for(const auto& variant:variants)need(pet_keys.insert(validate_pet_variant(variant).dump()).second,
-                "PvE ambiguous duplicate active-pet material profile");
+            for(const auto& variant:variants)add_variant(variant);
         }
         need(actors_.emplace(id,a).second,"PvE duplicate full character profile");
     }
@@ -180,17 +230,29 @@ RecoveredPveRoomProjection::ActorProfile OwnedPveWorldCatalog::pet_profile(
         {"stats",saved.pet?J(RecoveredPet2Stats::encode_logical(saved.pet->stats)):
             J(RecoveredPet1Stats::encode_logical(saved.pet1->stats))},
         {"source_sha256",saved.provenance.source_sha256}};
-    const auto key=pet_material_key(actual);const auto& root=actor_profile(character);
+    // Full actual source is validated before matching. Only an explicit per-
+    // variant CUSTOM adapter may exclude saved maxima/level from its key.
+    (void)pet_material_key(actual);const auto& root=actor_profile(character);
     const J* selected=nullptr;
     const auto consider=[&](const J& variant){
-        if(pet_material_key(variant.at("active_pet_material"))==key){
+        const bool projected=projects_saved_values(variant);
+        if(pet_material_key(variant.at("active_pet_material"),projected)==pet_material_key(actual,projected)){
             need(!selected,"PvE ambiguous actual active-pet native profile");selected=&variant;
         }
     };
     if(!root.at("pet").is_null())consider(root);
     if(root.contains("pet_profiles"))for(const auto& variant:root.at("pet_profiles"))consider(variant);
     if(!selected)throw P::ProfileRequired("profile_required: complete current active-pet native profile missing");
-    return actor(selected->at("pet"));
+    auto profile=actor(selected->at("pet"));
+    if(projects_saved_values(*selected)){
+        // This copies already-saved instance values. It neither computes growth
+        // nor derives identity/species/name/status from E3/FB or combat stats.
+        if(saved.pet){const auto v=saved.pet->stats.vitals();
+            profile=saved_values(std::move(profile),saved.pet->stats.level(),v.current_hp,v.maximum_hp,v.current_mp,v.maximum_mp);
+        }else{const auto v=saved.pet1->stats.vitals();
+            profile=saved_values(std::move(profile),saved.pet1->stats.level(),v.current_hp,v.maximum_hp,v.current_mp,v.maximum_mp);}
+    }
+    return profile;
 }
 bool OwnedPveWorldCatalog::same_entry_material(const nlohmann::json& prototype,std::span<const std::uint8_t> actual) {
     if(actual.size()!=37||actual.front()!=0x2a)return false;
@@ -216,8 +278,13 @@ RecoveredPveRoomProjection::Profiles OwnedPveWorldCatalog::profiles(const Scene&
                peer.status==Types::MemberStatus::Withdrawn||peer.disconnected)continue;
             const auto& a=actor_profile(other);auto primary=positioned(actor(a.at("primary")),peer.primary_position(),peer.input.identity.actor_handle);
             const auto role=present(RecoveredRoleLevel::parse(peer.input.role.logical));
-            auto identity=RecoveredBattleIdentity::encode_logical(primary.identity);identity[2]=role.level();
-            primary.identity=present(RecoveredBattleIdentity::parse_logical(identity));
+            const auto& resources=peer.input.resources;
+            const auto& canonical=room.checkpoint.snapshot.actors[peer.primary_position()];
+            need(role.max_hp()==resources.max_hp&&role.max_mp()==resources.max_mp&&canonical&&
+                canonical->controller==other&&canonical->hp==resources.hp&&canonical->max_hp==resources.max_hp&&
+                canonical->mp==resources.mp&&canonical->max_mp==resources.max_mp,
+                "PvE actual role/resource/checkpoint material differs");
+            primary=saved_values(std::move(primary),role.level(),resources.hp,resources.max_hp,resources.mp,resources.max_mp);
             p.actors.emplace(peer.primary_position(),std::move(primary));
             if(peer.input.pet) {
                 need(peer.pet_position().has_value(),"PvE saved pet has no current formation assignment");
@@ -278,7 +345,8 @@ RecoveredPveRoomProjection::Profiles OwnedPveWorldCatalog::profiles(const Scene&
 }
 nlohmann::json OwnedPveWorldCatalog::schema_description() {
     return {{"design_id","CUSTOM-0161"},{"encoding","UTF-8 JSON; all native arrays complete unsigned bytes"},
-        {"initial_material","No automatic producer; explicit complete source required"},
+        {"initial_material","Explicit complete root/2A/world/identity/appearance sources remain required; no generated opaque defaults"},
+        {"saved_values_adapter","CUSTOM-0161: actual primary role/resources; optional per-pet owned_saved_vitals_level_v1 preserves all other source bits"},
         {"version_rule","one immutable whole DB snapshot; invalid reload retains previous whole version"}};
 }
 }

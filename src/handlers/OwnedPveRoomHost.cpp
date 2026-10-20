@@ -1,5 +1,6 @@
 #include "handlers/OwnedPveRoomHost.h"
 #include "protocol/RecoveredWorldEntryView.h"
+#include "game/OwnedPveTimeoutPair.h"
 #include <algorithm>
 #include <set>
 #include <deque>
@@ -187,6 +188,9 @@ bool OwnedPveRoomHost::handle(Session& session,std::span<const RecoveredWorldRec
 bool OwnedPveRoomHost::process(const std::shared_ptr<Room>& room,Session& session,
         std::span<const RecoveredWorldRecords::Record> records,bool allow_queue){
     auto peer=room->peers.at(session.id());need(!peer->retired&&current(room)(),"PvE bound source is retired");
+    if(std::count_if(records.begin(),records.end(),[](const auto& r){return
+        std::holds_alternative<RecoveredBattleCommand::Action2Request>(r);})>1)
+        return process_timeout_pair(room,session,records,allow_queue);
     // Original context address stays borrowed only for Session's occurrence
     // check. All other request values are owned before provider/repository calls.
     std::optional<RecoveredBattleCommand::BasicAttackRequest> basic,control,timeout;
@@ -290,6 +294,67 @@ bool OwnedPveRoomHost::process(const std::shared_ptr<Room>& room,Session& sessio
             state_.refresh_grants(*room->ticket,peer->identity,projection(room),pure);
         drain(room);return true;
     }catch(...){if(published||state_.recovery_required(*room->ticket)||room->poisoned||peer->return_context)fail(room);throw;}
+}
+bool OwnedPveRoomHost::process_timeout_pair(const std::shared_ptr<Room>& room,Session& session,
+        std::span<const RecoveredWorldRecords::Record> records,bool allow_queue){
+    const auto batch=OwnedPveTimeoutPair::read(records);need(bool(batch),"PvE timeout pair route has no original pair");
+    const auto peer=room->peers.at(session.id());const auto snapshot=state_.inspect(*room->ticket);
+    const auto at=snapshot->members.find(peer->identity.character);
+    need(at!=snapshot->members.end()&&at->second.input.identity==peer->identity&&!finalized(at->second),
+        "PvE native timeout pair lost its actual member");
+    const auto member=at->second;const auto pure=current(room);need(pure(),"PvE timeout pair source retired");
+    if(snapshot->pending_swap&&snapshot->pending_swap->identity==peer->identity){
+        // An already sent pre-swap role pair cannot name the post-swap roles.
+        // A coalesced ORIGINAL current-primary progress report may still finish
+        // the existing edge; it never grants or executes either stale command.
+        if(batch->progress&&batch->progress->actor_position==member.primary_position()&&
+           batch->progress->context_storage==member.input.command_context&&batch->progress->side_flag<=1){
+            const std::array<RecoveredWorldRecords::Record,1> progress{RecoveredBattleCommand::ControlRequest{*batch->progress}};
+            return process(room,session,progress,false);
+        }
+        return true;
+    }
+    need(OwnedPveTimeoutPair::current(*batch,member,*snapshot),"PvE timeout pair lacks both current living role grants");
+    // CUSTOM-0161 interprets original action2 as a pass, not an inferred native
+    // defense formula. Resolve the ENTIRE original batch before any mutation.
+    for(const auto& request:batch->roles){
+        const auto decision=room->sources->control(*snapshot,member,true,request);
+        need(pure()&&decision==Sources::ControlDecision::Pass,"PvE timeout pair has no complete trusted pass policy");
+    }
+    if(batch->progress){const auto decision=room->sources->control(*snapshot,member,false,*batch->progress);
+        need(pure()&&decision==Sources::ControlDecision::ObserveOnly,"PvE timeout progress cannot authorize a turn");}
+    need(room->queued.size()<room->peers.size()&&
+        std::none_of(room->queued.begin(),room->queued.end(),[&](const auto& q){return q.peer==peer;}),
+        "PvE timeout pair exceeds one original queued batch per member");
+    const bool edge_control=batch->progress&&room->edge;
+    if(!state_.pending(*room->ticket).empty()||room->edge){
+        need(allow_queue,"PvE queued timeout pair resumed before prior output/edge drained");
+        std::vector<RecoveredWorldRecords::Record> owned(records.begin(),records.end());
+        if(edge_control)std::erase_if(owned,[](const auto& r){return std::holds_alternative<RecoveredBattleCommand::ControlRequest>(r);});
+        room->queued.push_back({peer,member.grant_epoch,member.positions().revision,std::move(owned)});
+        if(edge_control){const auto required=room->edge->required.find(session.id());
+            if(required!=room->edge->required.end()&&required->second==member.positions().revision)room->edge->observed.insert(session.id());
+            drain(room);}
+        return true;
+    }
+    // Retain the actual second role BEFORE publishing the first pass, so its
+    // already submitted native UI cannot be reopened by the first86/5. Both
+    // grants stay in the same epoch; the second waits for the first real88 edge.
+    std::vector<RecoveredWorldRecords::Record> remaining{RecoveredBattleCommand::Action2Request{batch->roles[1]}};
+    room->queued.push_back({peer,member.grant_epoch,member.positions().revision,std::move(remaining)});
+    bool published=false;
+    try{
+        state_.pass(*room->ticket,peer->identity,member.grant_epoch,batch->roles[0].actor_position,projection(room),pure);
+        published=state_.inspect(*room->ticket)->revision!=snapshot->revision;
+        need(!state_.recovery_required(*room->ticket)&&pure(),"PvE timeout pair retired after its first durable pass");
+        // A coalesced0B preceded this new output. Never relabel it as progress
+        // for the just-created edge or replay it with the second command.
+        animation_started(room,snapshot->animation_sequence);drain(room);return true;
+    }catch(...){
+        if(published||state_.recovery_required(*room->ticket)||room->poisoned)fail(room);
+        else std::erase_if(room->queued,[&](const auto& q){return q.peer==peer;});
+        throw;
+    }
 }
 void OwnedPveRoomHost::animation_started(const std::shared_ptr<Room>& room,std::uint64_t before){
     const auto snapshot=state_.inspect(*room->ticket);if(snapshot->animation_sequence==before)return;
