@@ -15,6 +15,7 @@
 #include "db/SqliteMigrationManager.h"
 #include "db/SqliteSupport.h"
 #include "db/NativeDeliverySnapshotSchema.h"
+#include "game/FruitVillageQuestRules.h"
 #include "game/OwnedTaiwanPkReturnRoleTextSource.h"
 #include "game/OwnedTaiwanReturnActorSavedSource.h"
 #include <utility>
@@ -239,7 +240,7 @@ void SqliteDatabase::initialize() {
         [raw](std::uint16_t item,const auto& bytes){const auto row=NativeArmorCatalog(raw).lookup(item);return row && RecoveredArmorSourceInstance::matches(row->item_id,row->family,bytes);},
         [raw](std::uint16_t item){return NativeWeaponCatalog(raw).lookup(item);});
     candidate->mixed_bank=std::make_unique<SqliteOwnedMixedBankRepository>(raw,*candidate->foreign_bank,
-        [raw](std::uint16_t item){return NativeSupplyCatalog(raw).lookup(item).has_value();});
+        [raw](std::uint16_t item){return (FruitVillageQuestRules::material(item) && NativeFruitQuestSources(raw).populated()) || NativeSupplyCatalog(raw).lookup(item).has_value();});
     candidate->instance_trades=std::make_unique<SqliteOwnedInstanceTradeRepository>(raw,
         [raw](std::uint16_t item){return NativeArmorCatalog(raw).equipment_slot(item);},
         [raw](std::uint16_t item,const auto& bytes){const auto row=NativeArmorCatalog(raw).lookup(item);return row && RecoveredArmorSourceInstance::matches(row->item_id,row->family,bytes);},
@@ -1111,7 +1112,7 @@ std::unique_ptr<SqliteBeastBankRepository> SqliteDatabase::make_beast_bank_repos
     auto* raw=impl_->connection.get();
     return std::make_unique<SqliteBeastBankRepository>(raw,foreign_bank(),beast_snapshots(),
         [raw](std::uint16_t item){return NativeWeaponCatalog(raw).lookup(item);},
-        [raw](std::uint16_t item){return NativeSupplyCatalog(raw).lookup(item).has_value();});
+        [raw](std::uint16_t item){return (FruitVillageQuestRules::material(item) && NativeFruitQuestSources(raw).populated()) || NativeSupplyCatalog(raw).lookup(item).has_value();});
 }
 SqliteBankRepository& SqliteDatabase::banks() {
     if(!migrated_)throw DatabaseError("Migrate before bank access");

@@ -25,7 +25,8 @@ int main() {
         const auto open=op({god2::RecoveredInventoryItemRequest::Request{16055,12,0xff}});
         const auto shortcut=op({god2::RecoveredTargetItemRequest::Request{4,16055,12,0xee}});
         const auto select=op({god2::RecoveredTeleport::Selection{0x99,16055,5,0xaa}});
-        const auto cancel=op({god2::RecoveredQuestClose::Request{4,0xffff}});
+        const auto cancel=op({god2::RecoveredQuestClose::Request{0x9abc,0xdef0}});
+        check(cancel.target==0x9abc && cancel.raw_close_high_word==0xdef0); // Both native words retained.
         Service service;
         const auto menu=service.open(owner,open,i,now);check(menu.has_value());
         const auto decoded=god2::RecoveredTeleport::decode_menu(*menu);
@@ -46,10 +47,37 @@ int main() {
         check(!service.select(foreign,select,i,now));check(!service.cancel(foreign,cancel,now));
         check(service.pending_slot(7).has_value());
         foreign=owner;foreign.character_id=5;
-        check(!service.select(foreign,select,i,now));
-        wrong=cancel;wrong.target=5;check(!service.cancel(owner,wrong,now));
+        check(!service.select(foreign,select,i,now));check(!service.cancel(foreign,cancel,now));
+        check(service.pending_slot(7).has_value());
+        foreign=owner;foreign.session_id=8;
+        check(!service.cancel(foreign,cancel,now));check(service.pending_slot(7).has_value());
+        wrong=cancel;wrong.kind=Service::Kind::Select;
+        check(!service.cancel(owner,wrong,now));check(service.pending_slot(7).has_value());
+        wrong=cancel;wrong.opcode=0x99;
+        check(!service.cancel(owner,wrong,now));check(service.pending_slot(7).has_value());
+        check(!service.open(owner,cancel,i,now));check(!service.select(owner,cancel,i,now));
+        check(service.pending_slot(7).has_value());
         check(service.cancel(owner,cancel,now));check(!service.pending_slot(7));
         check(!service.cancel(owner,cancel,now));
+
+        // CUSTOM-0057 revoke-only policy: opaque words cannot select a victim,
+        // debit the gem or transfer, even when a different owner has an offer.
+        auto other_owner=owner;other_owner.session_id=8;other_owner.account_id=99;other_owner.character_id=5;
+        check(service.open(other_owner,open,i,now).has_value());
+        for(const auto words:{god2::RecoveredQuestClose::Request{0,0},
+                              god2::RecoveredQuestClose::Request{5,0xffff},
+                              god2::RecoveredQuestClose::Request{0xffff,0x1234}}) {
+            const auto opaque_cancel=op({words});
+            check(opaque_cancel.target==words.source_low_word && opaque_cancel.raw_close_high_word==words.this_high_word);
+            check(service.open(owner,open,i,now).has_value());
+            check(service.cancel(owner,opaque_cancel,now));check(!service.pending_slot(7));
+            check(service.pending_slot(8).has_value());
+        }
+        check(service.cancel(other_owner,cancel,now));check(!service.pending_slot(8));
+        for(const auto invalid_time:{now-std::chrono::seconds(1),now+Service::lifetime}) {
+            check(service.open(owner,open,i,now).has_value());
+            check(!service.cancel(owner,cancel,invalid_time));check(!service.pending_slot(7));
+        }
 
         for(unsigned changed=0;changed<8;++changed) {
             auto unavailable=owner;
@@ -110,6 +138,7 @@ int main() {
         for(const auto& bad:std::vector<std::vector<Records::Record>>{
             {},{tick},{request,request},{request,other},{other,request},{control,request},
             {request,control,control},{targeted,control},{chosen,control},{close,control},
+            {close,close},{close,chosen},{chosen,close},{request,close},{close,other},
             {god2::RecoveredInventoryItemRequest::Request{16055,30,0}},
             {god2::RecoveredInventoryItemRequest::Request{16056,12,0}},
             {god2::RecoveredTeleport::Selection{0xa9,16055,5,0}},

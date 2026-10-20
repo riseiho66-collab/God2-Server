@@ -7,6 +7,36 @@
 #include <sstream>
 #include <locale>
 namespace god2 {
+namespace {
+// Enforce the existing single-executor, pure callback contract at its owner.
+// Keep transient execution state out of copyable Battle/checkpoint values: PK
+// legitimately stages an independent Battle copy before durable settlement.
+class BattleCallbackFence final {
+public:
+    explicit BattleCallbackFence(const Battle* battle):battle_(battle),previous_(current_){
+        for(auto* at=current_;at;at=at->previous_)
+            if(at->battle_==battle){
+                at->poisoned_=true;
+                throw std::logic_error("Battle callback reentered its active transaction");
+            }
+        current_=this;
+    }
+    ~BattleCallbackFence(){current_=previous_;}
+    BattleCallbackFence(const BattleCallbackFence&)=delete;
+    BattleCallbackFence& operator=(const BattleCallbackFence&)=delete;
+    void require_clean()const{
+        // Catching the nested refusal inside a rule/encoder must not allow the
+        // outer action to publish bytes or overwrite the resource/RNG state.
+        if(poisoned_)throw std::logic_error("Battle callback invalidated its active transaction");
+    }
+private:
+    const Battle* battle_;
+    BattleCallbackFence* previous_;
+    bool poisoned_=false;
+    static thread_local BattleCallbackFence* current_;
+};
+thread_local BattleCallbackFence* BattleCallbackFence::current_=nullptr;
+}
 Battle::Battle(std::uint64_t id, std::span<const BattleActor> actors, std::uint32_t seed,
         BattleNumericProfile profile)
     : snapshot_{id,1,BattleState::Active,{}}, rng_(seed) {
@@ -32,6 +62,7 @@ Battle::Battle(std::uint64_t id, std::span<const BattleActor> actors, std::uint3
 }
 std::vector<std::uint8_t> Battle::revive(std::uint64_t controller,std::uint64_t revision,
         std::uint8_t source,std::uint8_t target,const RevivalRule& rule,const RevivalEncode& encode) {
+    const BattleCallbackFence callback_fence(this);
     if(!active() || revision!=snapshot_.revision || revision==std::numeric_limits<std::uint64_t>::max() ||
        !rule || !encode || source>=28 || target>=28 || source==target || source/14!=target/14 ||
        !snapshot_.actors[source] || !snapshot_.actors[target] ||
@@ -39,6 +70,7 @@ std::vector<std::uint8_t> Battle::revive(std::uint64_t controller,std::uint64_t 
        snapshot_.actors[target]->hp)
         throw std::invalid_argument("Invalid, stale or unauthorized revival");
     const auto projected=rule({snapshot_.actors[target]->max_hp,snapshot_.numeric_profile});
+    callback_fence.require_clean();
     if(!projected.hp || !ExtendedHealthAmount::from(projected.hp) ||
        projected.hp>snapshot_.actors[target]->max_hp ||
        !projected.mp_cost || projected.mp_cost>1'000'000)
@@ -60,6 +92,7 @@ std::vector<std::uint8_t> Battle::revive(std::uint64_t controller,std::uint64_t 
     }
     ++staged.revision;
     auto wire=encode(staged,{source,target,projected.hp,projected.mp_cost});
+    callback_fence.require_clean();
     if(wire.empty()) throw std::invalid_argument("Revival encoder returned no response");
     static_assert(std::is_nothrow_copy_assignable_v<BattleSnapshot>);
     snapshot_=staged;
@@ -69,11 +102,13 @@ bool Battle::active() const noexcept { return snapshot_.state == BattleState::Ac
 
 PoisonShareResult Battle::poison_share(std::uint64_t revision,std::uint8_t target,
                                       const PoisonRule& rule) const {
+    const BattleCallbackFence callback_fence(this);
     if(!active() || revision!=snapshot_.revision || target>=snapshot_.actors.size() ||
        !snapshot_.actors[target] || !snapshot_.actors[target]->hp || !rule)
         throw std::invalid_argument("Poison share requires a current living battle target");
     const auto maximum=snapshot_.actors[target]->max_hp;
     const auto share=rule({maximum});
+    callback_fence.require_clean();
     if(!active() || snapshot_.revision!=revision || !snapshot_.actors[target] ||
        !snapshot_.actors[target]->hp || snapshot_.actors[target]->max_hp!=maximum)
         throw std::invalid_argument("Poison share target changed during observation");
@@ -145,6 +180,7 @@ Battle Battle::restore(const BattleCheckpoint& checkpoint) {
 
 std::vector<std::uint8_t> Battle::act(std::uint64_t controller, std::uint64_t revision,
         const BattleAction& action, const Rule& rule, const Encode& encode) {
+    const BattleCallbackFence callback_fence(this);
     if (!active() || revision!=snapshot_.revision || revision==std::numeric_limits<std::uint64_t>::max() ||
         !rule || !encode || action.source>=28 || !snapshot_.actors[action.source] ||
         action.targets.empty() || action.targets.size()>14 || action.power_percent>10000 ||
@@ -175,6 +211,7 @@ std::vector<std::uint8_t> Battle::act(std::uint64_t controller, std::uint64_t re
             action.power_percent,action.defense_percent,action.mp_cost,source.mp,
             action.critical_chance_bp,action.critical_multiplier_percent,roll,snapshot_.numeric_profile};
         const auto damage=rule(input);
+        callback_fence.require_clean();
         if (!damage.damage || !ExtendedHealthAmount::from(damage.damage) ||
             (snapshot_.numeric_profile==BattleNumericProfile::LegacyCustom && damage.damage>1'000'000) ||
             damage.mp_cost!=action.mp_cost)
@@ -203,6 +240,7 @@ std::vector<std::uint8_t> Battle::act(std::uint64_t controller, std::uint64_t re
         staged.victorious_side=static_cast<std::uint8_t>(living[0] ? 0 : 1);
     }
     auto wire=encode(staged,result);
+    callback_fence.require_clean();
     if (wire.empty()) throw std::invalid_argument("Battle encoder returned no response");
     // Every allocating or fallible operation is above this commit point.
     static_assert(std::is_nothrow_copy_assignable_v<BattleSnapshot>);
@@ -214,6 +252,7 @@ std::vector<std::uint8_t> Battle::act(std::uint64_t controller, std::uint64_t re
 std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,std::uint64_t revision,
         std::span<const RecoveredBattleDelta::Record> records,const NativeDeltaEncode& encode,
         std::optional<NativeDeltaView> view) {
+    const BattleCallbackFence callback_fence(this);
     if(snapshot_.numeric_profile!=BattleNumericProfile::LegacyCustom ||
        !controller || !active() || revision!=snapshot_.revision ||
        revision==std::numeric_limits<std::uint64_t>::max() || records.empty() ||
@@ -291,6 +330,7 @@ std::vector<std::uint8_t> Battle::apply_native_deltas(std::uint64_t controller,s
     }
     ++staged.revision;
     auto wire=encode(staged,records);
+    callback_fence.require_clean();
     if(wire.empty())throw std::invalid_argument("Native result encoder returned no response");
     snapshot_=staged;
     return wire;

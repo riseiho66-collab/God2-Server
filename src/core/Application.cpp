@@ -2083,6 +2083,14 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}
                     return result;
                 });
+            // CUSTOM-0037/0051: keep already-owned scalar quest materials bankable.
+            // Startup qualified the immutable fruit bundle when this feature is on.
+            // Full-instance overlays still go through the existing typed proofs.
+            const auto bank_scalar_eligible=[&](const StoredInventorySlot& slot) {
+                return slot.count && slot.count<=127 && slot.source_sha256==supply_source &&
+                    ((owner_bag_projector && config.fruit_village_quests_enabled && FruitVillageQuestRules::material(slot.item_id)) ||
+                     qualified_supply_policy(slot.item_id,1).has_value());
+            };
             RecoveredBankItemsService native_bank_items(database.bank_items(),
                 [&](std::uint64_t id)->std::optional<RecoveredBankService::Peer> {
                     const auto peer=trade_peer(id);if(!peer || !recovered_movement)return {};
@@ -2092,8 +2100,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                         static_cast<std::uint16_t>(where->x),static_cast<std::uint16_t>(where->y),peer->ready && !trade_active(id)};
                 },[&](std::uint64_t id,std::uint16_t target,auto now){return native_banks.permits_items(id,target,now);},
                 [&](std::uint64_t id,auto now){native_banks.renew_items(id,now);},
-                [&](const StoredInventorySlot& slot){return slot.count && slot.count<=127 &&
-                    slot.source_sha256==supply_source && qualified_supply_policy(slot.item_id,1).has_value();},
+                bank_scalar_eligible,
                 bag_slot_projection,[] {
                     std::random_device entropy;constexpr char digits[]="0123456789abcdef";std::string result;result.reserve(64);
                     for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}
@@ -2112,8 +2119,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                             static_cast<std::uint16_t>(where->x),static_cast<std::uint16_t>(where->y),peer->ready && !trade_active(id)};
                     },[&](std::uint64_t id,std::uint16_t target,auto now){return native_banks.permits_items(id,target,now);},
                     [&](std::uint64_t id,auto now){native_banks.renew_items(id,now);},
-                    [&](const StoredInventorySlot& slot){return slot.count && slot.count<=127 &&
-                        slot.source_sha256==supply_source && qualified_supply_policy(slot.item_id,1).has_value();},
+                    bank_scalar_eligible,
                     bag_slot_projection,[] {
                         std::random_device entropy;constexpr char digits[]="0123456789abcdef";std::string result;result.reserve(64);
                         for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}
@@ -2134,8 +2140,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                             static_cast<std::uint16_t>(where->x),static_cast<std::uint16_t>(where->y),peer->ready && !trade_active(id)};
                     },[&](std::uint64_t id,std::uint16_t target,auto now){return native_banks.permits_items(id,target,now);},
                     [&](std::uint64_t id,auto now){native_banks.renew_items(id,now);},
-                    [&](const StoredInventorySlot& slot){return slot.count && slot.count<=127 &&
-                        slot.source_sha256==supply_source && qualified_supply_policy(slot.item_id,1).has_value();},
+                    bank_scalar_eligible,
                     bag_slot_projection,[] {
                         std::random_device entropy;constexpr char digits[]="0123456789abcdef";std::string result;result.reserve(64);
                         for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}
@@ -2157,8 +2162,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                             static_cast<std::uint16_t>(where->x),static_cast<std::uint16_t>(where->y),peer->ready && !trade_active(id) && (!beast_bank_repository || owned_beasts_projected.contains(id))};
                     },[&](std::uint64_t id,std::uint16_t target,auto now){return native_banks.permits_items(id,target,now);},
                     [&](std::uint64_t id,auto now){native_banks.renew_items(id,now);},
-                    [&](const StoredInventorySlot& slot){return slot.count && slot.count<=127 &&
-                        slot.source_sha256==supply_source && qualified_supply_policy(slot.item_id,1).has_value();},
+                    bank_scalar_eligible,
                     bag_slot_projection,[] {
                         std::random_device entropy;constexpr char digits[]="0123456789abcdef";std::string result;result.reserve(64);
                         for(unsigned n=0;n<8;++n){auto value=entropy();for(unsigned i=0;i<8;++i)result.push_back(digits[(value>>(i*4))&15]);}

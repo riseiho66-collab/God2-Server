@@ -3,6 +3,7 @@
 #include "db/SqliteMigrationManager.h"
 #include "db/SqliteSupport.h"
 #include <iostream>
+#include <algorithm>
 #include <limits>
 #include <map>
 #include <memory>
@@ -284,6 +285,30 @@ int main() {try {
         "Occupied65 merged same-ID stacks instead of exchanging whole cells");
     require(items.load(2,ids[1])==unrelated && untouched_saves(raw,ids[0])==saves && original_schema(raw)==schema,
         "Successful occupied65 changed other player, money, unrelated saves or schema/history");
+    // Known scalar collection materials must use the same atomic 63/64/65
+    // path as MED items. No full-instance metadata is manufactured here.
+    for(unsigned i=0;i<3;++i) {
+        const auto receipt=[i](char step){auto value=std::string(64,'4');value[62]=static_cast<char>('5'+i);value[63]=step;return value;};
+        const auto item=std::array<std::uint16_t,3>{5098,5091,3464}[i];
+        seed_vault(10,{item,17,3,item_source});seed_vault(11,{0,0,7,item_source});
+        const auto before=items.load(1,ids[0]);
+        const auto empty=std::find_if(before.bag.begin(),before.bag.end(),[](const auto& value){return !value.count;});
+        require(empty!=before.bag.end(),"Material roundtrip needs one explicit empty bag cell");
+        const auto bag_slot=static_cast<std::uint8_t>(empty-before.bag.begin());
+        const auto take=items.commit(receipt('1'),{before,Operation::Withdraw,0,10,bag_slot,3});
+        require(take.bag[bag_slot].item_id==item && take.bag[bag_slot].count==3 && take.vault[10].count==14 && totals(take)==totals(before),
+            "Material partial64 lost key/count/source or changed total");
+        const auto put=items.commit(receipt('2'),{take,Operation::Deposit,0,bag_slot,11,3});
+        require(put.bag[bag_slot].count==0 && put.vault[11].item_id==item && put.vault[11].count==3 && totals(put)==totals(before),
+            "Material partial63 lost inventory/vault ownership");
+        const auto moved=items.commit(receipt('3'),{put,Operation::Move,0,10,11,1});
+        require(moved.vault[10].count==3 && moved.vault[11].count==14 && totals(moved)==totals(before),
+            "Material65 marker1 must swap whole stacks, not move one item");
+        auto same=SqliteBankItemsRepository::Request{moved,Operation::Move,0,10,10,1};
+        rejects([&]{SqliteBankItemsRepository::plan(same);});
+        require(items.load(1,ids[0])==moved && items.load(2,ids[1])==unrelated && untouched_saves(raw,ids[0])==saves,
+            "Material banking changed saved resources or another owner");
+    }
     rejects([&]{sqlite_detail::execute(raw,"UPDATE character_bank_item_slots SET design_id='CUSTOM-0000'");});
     rejects([&]{sqlite_detail::execute(raw,"UPDATE character_bank_item_slots SET item_design_id='CUSTOM-0000'");});
     sqlite_detail::Statement provenance(raw,"SELECT count(*) FROM character_bank_item_slots WHERE design_id='CUSTOM-0065' AND item_design_id='CUSTOM-0015'");

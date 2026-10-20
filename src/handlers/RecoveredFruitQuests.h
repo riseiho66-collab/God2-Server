@@ -23,7 +23,7 @@ class RecoveredFruitQuests {
 public:
     explicit RecoveredFruitQuests(SqliteFruitQuestRepository& repository):repository_(repository){}
     void remove(std::uint64_t session){pending_.erase(session);sequence_.erase(session);}
-    static bool material(std::uint16_t key){return key==5098 || key==5091 || key==3464;}
+    static bool material(std::uint16_t key){return FruitVillageQuestRules::material(key);}
     static bool nearby(const FruitVillageQuestRules::Descriptor& d,const RecoveredPosition& p){
         return p.area==13 && p.scene==12 && p.x+3>=d.source_x && p.x<=d.source_x+3 &&
             p.y+3>=d.source_y && p.y<=d.source_y+3;

@@ -122,3 +122,19 @@ archives; they are not active dependencies or runtime capabilities.
   thread goal and its4-discord heartbeat. Do not start round502 without an
   explicit human resume. Full Taiwan-only acceptance remains unchanged and
   incomplete; pause is not completion or a blocked-state assertion.
+
+## Owner scoped Discord prevention work (2026-10-20)
+
+- The owner separately authorized refreshing the complete designated Discord
+  bug history and proactively correcting applicable non-position defects in
+  our implementation. Exclude NPC/monster world placement and coordinates;
+  keep functional travel, battle formation and animation state in scope.
+- Each correction must include another source review after editing. Check the
+  related callers, authorization, state transitions, persistence, response
+  ordering, failure/rollback and equivalent entry points, not only the reported
+  line. Preserve review evidence and distinguish new fixes, existing guards,
+  unimplemented systems and unknown native rules. Use REA for unknown shipped
+  behavior; third-party reports do not establish our defect or an original rule.
+- PHASE1 source/static restrictions still apply. Regression test source is
+  not a passed test; do not build, execute tests/game/SQL or deploy in this
+  scope. The separately paused full goal and4-discord heartbeat stay paused.

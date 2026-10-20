@@ -27,6 +27,7 @@ public:
         Kind kind{};
         std::uint8_t opcode{},slot{},destination{};
         std::uint16_t target{},context{};
+        std::uint16_t raw_close_high_word{}; // Retained pointer residue, never authority.
     };
     struct Prepared {
         std::uint64_t token{};
@@ -60,8 +61,9 @@ public:
                     return std::nullopt;
                 operation=Operation{Kind::Select,0x99,0,selection->destination,0,selection->context};
             } else if(const auto* close=std::get_if<RecoveredQuestClose::Request>(&record)) {
-                // 4F6A00's lowWORD is own actor identity; highWORD is pointer residue.
-                operation=Operation{Kind::Cancel,0x86,0,0,close->source_low_word,0};
+                // Neither native word proves an actor identity. Preserve both;
+                // CUSTOM-0057 cancellation only revokes this owner's offer.
+                operation=Operation{Kind::Cancel,0x86,0,0,close->source_low_word,0,close->this_high_word};
             } else return std::nullopt;
         }
         return operation;
@@ -126,10 +128,14 @@ public:
         if(it==pending_.end() || it->second.token!=token)return false;
         pending_.erase(it);return true;
     }
+    // CUSTOM-0057: an authenticated owner may revoke only its own transient
+    // offer. Native86 words are opaque context, not actor IDs or permission.
+    // The caller admits Cancel only after whole-batch preflight; no item debit,
+    // movement, new offer or selection authority can result from this method.
     bool cancel(const Owner& owner,const Operation& operation,Time now=Clock::now()) {
         const auto it=pending_.find(owner.session_id);
         if(it==pending_.end() || !same_owner(owner,it->second) || operation.kind!=Kind::Cancel ||
-           operation.opcode!=0x86 || operation.target!=owner.character_id)return false;
+           operation.opcode!=0x86)return false;
         const bool valid=now>=it->second.opened && now<it->second.expires;
         pending_.erase(it);return valid;
     }

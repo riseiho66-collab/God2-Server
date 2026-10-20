@@ -101,11 +101,121 @@ void signed_hp_domain_transaction_test() {
         }
     }
 }
+void callback_fence_transaction_test() {
+    // Synthetic core transactions, not native combat rules or packet evidence.
+    const std::array<BattleActor,3> team{{
+        {0,7,100,100,20,20,31,40,8,10},
+        {1,7,100,100,20,20,31,40,8,10},
+        {14,0,100,100,30,30,20,25,13,6}}};
+    auto initial=Battle(36,team,987).checkpoint();
+    initial.snapshot.actors[1]->hp=0;
+    const BattleAction action{0,{14},false,100,100,8,0,150};
+    RecoveredBattleDelta::Bytes delta_bytes{};
+    delta_bytes[0]=0x83;delta_bytes[1]=0x0d;delta_bytes[7]=1;
+    delta_bytes[9]=0xff;delta_bytes[10]=0xff; // One HP loss, kind1/selector0/live.
+    delta_bytes[11]=1;delta_bytes[14]=28;
+    const auto delta=RecoveredBattleDelta::parse(delta_bytes);
+    require(delta.has_value(),"Callback fence fixture has an invalid native delta");
+    const std::array<RecoveredBattleDelta::Record,1> deltas{*delta};
+    // operation: attack, revival, native delta, read-only poison observation.
+    // Hook selection covers every external rule/encoder boundary in the core.
+    const auto invoke=[&](Battle& subject,unsigned operation,bool in_encoder,
+                         const std::function<void()>& hook){
+        const auto visit=[&]{if(hook)hook();};
+        switch(operation){
+        case 0:
+            (void)subject.act(7,subject.inspect().revision,action,
+                [&](const CombatRuleInput& input){
+                    if(!in_encoder)visit();
+                    return CombatRuleResult{1+input.roll%5,input.mp_cost,false};
+                },[&](const auto& state,const auto& result){
+                    if(in_encoder)visit();
+                    return encode(state,result);
+                });
+            break;
+        case 1:
+            (void)subject.revive(7,subject.inspect().revision,0,1,
+                [&](const auto&){if(!in_encoder)visit();return RevivalResult{25,8};},
+                [&](const auto& state,const auto&){
+                    if(in_encoder)visit();
+                    return encode(state,BattleActionResult{0,8,{}});
+                });
+            break;
+        case 2:
+            (void)subject.apply_native_deltas(7,subject.inspect().revision,deltas,
+                [&](const auto& state,const auto&){
+                    visit();return encode(state,BattleActionResult{0,0,{}});
+                });
+            break;
+        case 3:
+            (void)subject.poison_share(subject.inspect().revision,0,
+                [&](const PoisonShareInput& input){
+                    visit();return PoisonShareResult{input.target_current_max_hp/10,
+                        static_cast<std::uint8_t>(input.target_current_max_hp%10)};
+                });
+            break;
+        default:throw std::runtime_error("Unknown callback fence fixture operation");
+        }
+    };
+    const std::array<std::pair<unsigned,bool>,6> boundaries{{
+        {0,false},{0,true},{1,false},{1,true},{2,true},{3,false}}};
+    for(const auto [outer,in_encoder]:boundaries)
+    for(unsigned inner=0;inner<4;++inner)
+    for(const bool catch_inner:{false,true}){
+        auto subject=Battle::restore(initial),control=Battle::restore(initial);
+        unsigned visits=0;bool inner_refused=false,outer_refused=false;
+        try{
+            invoke(subject,outer,in_encoder,[&]{
+                ++visits;
+                try{invoke(subject,inner,false,{});}
+                catch(const std::logic_error&){inner_refused=true;if(!catch_inner)throw;}
+            });
+        }catch(const std::logic_error&){outer_refused=true;}
+        require(visits==1&&inner_refused&&outer_refused&&subject.checkpoint()==initial,
+            "Same Battle callback reentry committed, escaped outer poison or advanced RNG");
+        // A failed transaction must release its fence, and retry must use the
+        // exact unchanged checkpoint/RNG, including encoder-phase RNG draws.
+        invoke(subject,outer,in_encoder,{});invoke(control,outer,in_encoder,{});
+        require(subject.checkpoint()==control.checkpoint(),
+            "Callback refusal retained a fence or changed a subsequent transaction");
+    }
+    {
+        // Equal logical IDs are independent staged values, not a lock key.
+        auto subject=Battle::restore(initial),other=Battle::restore(initial);
+        auto subject_control=Battle::restore(initial),other_control=Battle::restore(initial);
+        invoke(subject,0,false,[&]{invoke(other,0,false,{});});
+        invoke(subject_control,0,false,{});invoke(other_control,0,false,{});
+        require(subject.checkpoint()==subject_control.checkpoint()&&
+                other.checkpoint()==other_control.checkpoint(),
+            "Independent Battle copies with equal IDs were incorrectly fenced");
+    }
+    {
+        auto first=Battle::restore(initial),second=Battle::restore(initial);
+        auto first_control=Battle::restore(initial),second_control=Battle::restore(initial);
+        bool nested_refused=false,outer_refused=false;
+        try{
+            invoke(first,0,false,[&]{
+                invoke(second,0,true,[&]{
+                    try{invoke(first,3,false,{});}
+                    catch(const std::logic_error&){nested_refused=true;}
+                });
+            });
+        }catch(const std::logic_error&){outer_refused=true;}
+        invoke(second_control,0,true,{});
+        require(nested_refused&&outer_refused&&first.checkpoint()==initial&&
+                second.checkpoint()==second_control.checkpoint(),
+            "A-to-B-to-A reentry missed the original owner or corrupted independent B");
+        invoke(first,0,false,{});invoke(first_control,0,false,{});
+        require(first.checkpoint()==first_control.checkpoint(),
+            "Nested reentry did not unwind both callback fences before retry");
+    }
+}
 }
 int main(int argc,char** argv) {
     try {
         signed_endpoint_transaction_test();
         signed_hp_domain_transaction_test();
+        callback_fence_transaction_test();
         LuaEngine lua(std::filesystem::path(GOD2_SOURCE_DIR)/"scripts",false);
         require(lua.initialize(),"Lua initialization failed");
         const Battle::Rule rule=[&](const CombatRuleInput& input){return lua.combat_damage(input);};

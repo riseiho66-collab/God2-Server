@@ -27,6 +27,11 @@ inline constexpr std::array<Descriptor,4> descriptors{{
     {237,2938,5098,10,5,1500,1,69,72,8900,8901,8902,8903,8904,1493,8074},
     {238,2939,3464,20,8,2000,1,68,116,8895,8896,8897,8898,8899,1495,6801}
 }};
+// Existing CUSTOM-0037 scalar material domain, shared by collection and banking.
+// This is not permission for arbitrary materials or full captured instances.
+inline constexpr bool material(std::uint16_t item) noexcept {
+    return item==5098 || item==5091 || item==3464;
+}
 inline constexpr const Descriptor* find(std::uint32_t id) noexcept {
     for(const auto& entry:descriptors)if(entry.mission_id==id)return &entry;
     return nullptr;
