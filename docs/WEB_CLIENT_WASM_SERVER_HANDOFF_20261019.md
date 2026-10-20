@@ -38,3 +38,29 @@
 5. 全來源接通後才依集中驗證階段聯測：L/G握手、非ASCII帳密、選角入場、多分頁帳號、半包合包、WS背壓／關閉／重連、六向切換及原版功能與體感。
 
 本輪遵守服務端PHASE1：未建置、執行測試、codec、遊戲、正式帳密、DB SQL、schema、migration或部署。只讀客戶端交接 integration/WASM_SERVER_HANDOFF_20261019.md；沒有向其他chat發送訊息。純源碼可確立的比對不製造REA執行，未知原生規則仍須依既定REA流程追查。
+
+## 2026-10-21 登入／WorldSession 來源交接增量
+
+客戶端提交 `253477a871a2402e5fb1bd0ddd5abdd83a0f3ed7` 的兩份交接文件與相關
+C++ 來源已只讀核對；來源快照位於服務端外部 pass8/coordination 存檔。
+Login ready 後有界非同步 FIFO 交 WorldPort，bound／pending 分離，首次 Main
+由 Login 私有同步一次性訪問發行。WorldSession 依既有原生長度表處理同 frame
+多記錄，73 保留 Remote→Enemy mirror，真正記錄邊界的 S03 退休後段；重入場2A
+不重建 Main。這些是來源接線，沒有變更台服原生 bytes、CP950 ready 或 L/G binary WS。
+
+客戶端回報 MSVC7/7、WASM3/3與55項契約檢查，但使用 mock account/game port、
+EntryPort與manager handler；服務端沒有重跑。完整真實 EntryPort、地圖／NPC／Main
+prefix、Application transaction及正式 host 組合仍未完成，不能宣稱實服登入入場。
+後續「接真實地圖／NPC／Main」要求不會把這些 mock 改標為真正來源。
+
+服務端目前只核對源碼：普通 Main 仍未選 WebServerPlan overload，TwWorld web
+route 仍只具單一已持有 G 目的地，三分流仍要求尚未完成的可信 selected-channel
+bridge。沒有本輪部署或實際 listener／TLS 檢查可證明測試 endpoint 存在，因此
+目前沒有可提供或可宣稱已驗收的 L/G WebSocket URL；不猜 port，也不掃描或借用
+正式服務。這不表示已證明其他程序沒有啟動，而是本輪沒有該執行證據。
+
+可信選線與完整角色占用、失敗隔離、目標入場和六向切換缺口繼續保留。
+集中聯測的前提是雙方完成實際宿主／EntryPort／Application、服務端受控 gateway
+掛載與 endpoint 發行、選線及角色占用來源，並另行進入獲准的集中驗證階段。
+之後才測真正 L/G、半包／合包、原生編碼、多分頁、背壓／關閉／重連、分流及
+原版體感。未使用正式帳密；沒有因交接啟動服務、DB、codec、遊戲或部署。

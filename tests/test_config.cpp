@@ -1003,6 +1003,28 @@ void test_config() {
     }
     appearance["development"]["diagnostic_owned_weapon_appearance"]=true;
     check(god2::Config::load(fixture.write(appearance)).diagnostic_owned_weapon_appearance,"Isolated diagnostic appearance opt-in");
+    // SOURCE ONLY: no DB/Session/native execution. This precise combination
+    // lacks a runtime DA -> complete retained entry/Fight material successor.
+    {
+        constexpr auto message="Owned PvE cannot combine runtime diagnostic weapon appearance without a complete native material successor";
+        auto pve=appearance;pve["world"]["owned_pve_rooms"]={{"enabled",true}};
+        auto initial_only=pve;initial_only["development"]["diagnostic_owned_weapon_appearance"]=false;
+        const auto accepted=god2::Config::load(fixture.write(initial_only));
+        check(accepted.owned_pve_rooms_enabled&&accepted.owned_player_appearance_enabled,
+            "PvE keeps complete initial appearance restoration without a runtime writer");
+        const auto path=fixture.write(pve);bool exact=false;
+        try{(void)god2::Config::load(path);}catch(const std::invalid_argument& error){exact=std::string(error.what())==message;}
+        check(exact,"JSON PvE/runtime appearance rejects through the shared material gate");
+        auto programmatic=god2::Config::load(fixture.write(appearance));
+        programmatic.owned_pve_rooms_enabled=true;exact=false;
+        try{programmatic.validate_owned_pve_material_sources();}
+        catch(const std::invalid_argument& error){exact=std::string(error.what())==message;}
+        check(exact,"Programmatic PvE/runtime appearance uses the same early gate");
+        programmatic.diagnostic_owned_weapon_appearance=false;programmatic.validate_owned_pve_material_sources();
+        check(programmatic.owned_player_appearance_enabled,"Pure gate preserves initial appearance source");
+        programmatic.owned_pve_rooms_enabled=false;programmatic.diagnostic_owned_weapon_appearance=true;
+        programmatic.validate_owned_pve_material_sources(); // Existing non-PvE diagnostic remains available.
+    }
     for(const char* field:{"diagnostic_remote_actor"}) {
         bad_appearance=appearance;bad_appearance["development"][field]=true;rejects(bad_appearance,"Diagnostic appearance must not publish stale peers");
     }

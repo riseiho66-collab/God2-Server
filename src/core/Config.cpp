@@ -4,6 +4,13 @@
 #include <asio/ip/address.hpp>
 #include <nlohmann/json.hpp>
 namespace god2 {
+void Config::validate_owned_pve_material_sources() const {
+    // CUSTOM-0047 changes runtime DA independently of the retained2A and the
+    // complete CUSTOM-0161 Fight profiles. No native after-state bridge owns
+    // that combination; reject before any DB/Session mutation, not after equip.
+    if(owned_pve_rooms_enabled&&diagnostic_owned_weapon_appearance)
+        throw std::invalid_argument("Owned PvE cannot combine runtime diagnostic weapon appearance without a complete native material successor");
+}
 void Config::validate_owned_whole_bag_moves() const {
     if(!owned_whole_bag_moves_enabled)return;
     if(protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate || !recovered_account_auth ||
@@ -780,6 +787,7 @@ Config Config::load(const std::filesystem::path& path) {
             c.world_transfer_catalog=resolve(option.at("catalog").get<std::string>());
         }
     }
+    c.validate_owned_pve_material_sources();
     c.validate_owned_whole_bag_moves();
     return c;
 }

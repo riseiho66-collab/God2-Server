@@ -45,7 +45,9 @@
       "pass7_document": "docs/research/tw-native-scheduling-material-pass7-20261021.md",
       "pass8_source_followup": "Actual normal WORLD identity assembly captures original Written INIT/movement incarnation/pose before saved observers and checks it before visibility publication; pending movement-Written admission retains that same observation. Complete player text terminators are checked at the direct Projection boundary using the existing Catalog source restriction; enemy/pet parameter layouts are not reinterpreted. Public malformed pet/assignment carriers reject before optional dereference; actual room storage already guards this relation. Current-client successful FIFO append preserves received order, but 5120-byte ring capacity/loss and unknown original initiative/counter/full identity producers forbid broader completeness claims. SOURCE_STATIC_ONLY with unexecuted source cases.",
       "pass8_visibility_cut": "Synchronous operation current survives every actual visibility send and late role-text observer. Each PvE-mounted6F separately retains sender and recipient Session registry bindings, full Presence and movement incarnation/scene/pose; an existing peer sent to a newcomer is not covered merely by that newcomer operation. Battle sender Fight uses its retained private PvE binding, while returned markers use fresh normal evidence. Legacy paths without that actual movement owner retain their original domain. Projection also preserves existing pet32 NUL and enemy variant/no-appearance/no-MP type qualifications; raw codecs remain lossless.",
-      "pass8_document": "docs/research/tw-native-scheduling-material-pass8-20261021.md"
+      "pass8_document": "docs/research/tw-native-scheduling-material-pass8-20261021.md",
+      "pass9_source_followup": "JSON and programmatic Application share one pure early rejection of owned_pve_rooms_enabled with diagnostic_owned_weapon_appearance. The CUSTOM0047 runtime DA writer has no complete retained entry/Catalog Fight successor and can leave old material in PvE; this unsupported composition must not enter storage/hosts. Initial complete owned_player_appearance restoration and standalone non-PvE diagnostics retain their existing scope. No native item-to-appearance mapping or transformation rule is invented. SOURCE_STATIC_ONLY, regression source unexecuted.",
+      "pass9_document": "docs/research/tw-native-scheduling-material-pass9-20261021.md"
     },
     {
       "id": "CUSTOM-0162",
@@ -1397,6 +1399,8 @@
     },
     {
       "id": "CUSTOM-0047",
+      "pass9_source_followup": "The two synthetic diagnostic weapon appearances remain CUSTOM_TEST_NOT_NATIVE. Actual runtime use cannot combine with CUSTOM0161 PvE until a complete retained entry/world/Fight material successor exists; one shared Config pure gate checks loaded JSON and direct Application startup. This does not change the frozen isolated mapping or recover native WPN/component generation.",
+      "pass9_document": "docs/research/tw-equipment-appearance-source-pass9-20261021.md",
       "name": "Owned ordinary player appearance snapshot and isolated weapon projection",
       "authority": "CUSTOM_DESIGNED",
       "implementation": [

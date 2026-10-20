@@ -137,6 +137,9 @@ struct Config {
     bool owned_initial_player_enabled=false;
     // Explicit source epoch only. Existing configurations retain historical448.
     NativeTaiwanSkillProfile taiwan_skill_profile=NativeTaiwanSkillProfile::Historical448;
+    // Pure configuration compatibility only, called after all JSON flags and
+    // again before Application storage/hosts. Not an appearance rule issuer.
+    void validate_owned_pve_material_sources() const;
     void validate_owned_whole_bag_moves() const;
     static Config load(const std::filesystem::path& path);
 };

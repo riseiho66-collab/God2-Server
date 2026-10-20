@@ -76,3 +76,8 @@ character_profiles：各角色完整、已核對的顯示材料，character 是�
 目前普通台服 Application；不能拿它代替三分流 common-world 的權威與交接。
 缺表、缺完整版本、缺角色/寵物材料都拒絕該遭遇；不產生首份能力、物品或
 自動怪物放置。enabled 預設關閉。本輪未開啟設定、執行 SQL、建置或驗收。
+
+目前 world.owned_pve_rooms.enabled 不能與 development.diagnostic_owned_weapon_appearance
+同時啟用：該 runtime 診斷 DA writer 尚無完整 entry／世界／Fight 材料 successor。
+JSON 與程式直接建立 Config 都在儲存／host 前共用早拒檢查；初次完整外觀還原
+不因這項檢查自動禁止。這不是原服裝備／變身生成規則，也沒有新增資料庫欄位。

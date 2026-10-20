@@ -870,6 +870,7 @@ static void validate_application_world_plan(const Config& config,const SharedWor
     if(config.world_transfers_enabled && world_plan &&
        (world_plan->make_taiwan_world_entry || world_plan->make_taiwan_movement))
         throw std::invalid_argument("World catalog transfer host requires its current dispatcher; actual native source transfer bridge unavailable");
+    config.validate_owned_pve_material_sources();
     config.validate_owned_whole_bag_moves();
     // Programmatic Config must obey the same gates as JSON loading, before
     // database initialization or any listener/source can be constructed.
