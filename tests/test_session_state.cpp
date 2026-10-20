@@ -2176,6 +2176,82 @@ void recovered_skill_sequence_transport() {
 }
 }
 
+// SOURCE ONLY until PHASE2: transport ownership, not native entry rendering or
+// room durability. Bindings come from real authenticated Written normal INIT.
+void recovered_owned_pve_transport_source_cases() {
+    using namespace god2;
+    struct Owner final:Session::OwnedPveOutputOwner {
+        std::vector<std::uint64_t> written;
+        void owned_pve_written(Session&,const Session::OwnedPveBinding&,
+                std::uint64_t sequence,bool success)override {
+            require(success,"PvE exact original frame failed");written.push_back(sequence);
+        }
+    };
+    auto owner=std::make_shared<Owner>();
+    std::optional<Session::OwnedPveBinding> binding;
+    bool terminal=false;
+    const std::vector<std::uint8_t> fixture{0xe8,0}; // Bounded S2C transport fixture only.
+    const auto wire=RecoveredWorldFrame::encode(fixture);
+    RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
+        if(!binding)require(session.owned_pve_entry_available_on_game(),
+            "An actual own WORLD callback incorrectly counted itself as a foreign queued job");
+        for(const auto& record:records)if(const auto* context=std::get_if<RecoveredWorldRecords::ContextNotification>(&record)){
+            require(binding.has_value()&&!terminal,"PvE repeated terminal source");terminal=true;
+            session.prepare_owned_pve_return(*binding,*context);
+            session.send_owned_pve_output(*binding,3,fixture,owner,true,false);
+        }
+        return std::vector<std::uint8_t>{};
+    });
+    peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0}));peer.silent();
+    const auto initialization=peer.session->normal_world_initialization_on_game();
+    const auto generation=peer.session->battle_generation();
+    require(initialization&&peer.session->owned_pve_entry_available_on_game(),"PvE quiet Written normal source missing");
+    binding=peer.session->prepare_owned_pve_entry();
+    require(binding->channel()==1&&peer.session->owned_pve_prepared_current(*binding)&&
+        peer.session->commit_owned_pve_entry(*binding),"PvE private entry failed");
+    peer.session->send_owned_pve_output(*binding,1,fixture,owner);peer.expect(wire);
+    const auto before_tick=peer.world_calls;
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0}));peer.silent();
+    require(peer.world_calls==before_tick,"PvE held raw Tick reached business");
+    // This second same-binding frame must accept bounded retained raw Tick.
+    peer.session->send_owned_pve_output(*binding,2,fixture,owner);peer.expect(wire);
+    require(owner->written==std::vector<std::uint64_t>({1,2})&&peer.session->owned_pve_current(*binding),
+        "PvE multi-frame Entry lost its actual output owner");
+    peer.session->release_owned_pve_input(*binding);peer.silent();
+    require(peer.world_calls==before_tick+1,"PvE raw suffix was discarded or replayed");
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,5>{0x1c,
+        static_cast<std::uint8_t>(RecoveredSessionPeer::character),
+        static_cast<std::uint8_t>(RecoveredSessionPeer::character>>8),1,0}));peer.expect(wire);
+    require(terminal&&!peer.session->complete_owned_pve_return(*binding)&&
+        peer.session->state()==SessionState::InBattle,"PvE nonfinal Return Write renewed WORLD");
+    peer.session->send_owned_pve_output(*binding,4,fixture,owner,true,true);peer.expect(wire);
+    require(peer.session->complete_owned_pve_return(*binding)&&
+        peer.session->state()==SessionState::CharacterSelected&&
+        peer.session->battle_generation()==generation+2&&
+        !peer.session->normal_world_initialization_current_on_game(*initialization),
+        "PvE final Return did not renew exactly the original WORLD owner");
+    const auto returned_calls=peer.world_calls;
+    peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0}));peer.silent();
+    require(peer.world_calls==returned_calls&&!peer.session->owned_pve_entry_available_on_game(),
+        "PvE resumed input before the returned source queued its WORLD catch-up");
+    peer.session->resume_owned_pve_return_input(*binding);peer.silent();
+    require(peer.world_calls==returned_calls+1&&peer.session->owned_pve_entry_available_on_game()&&
+        owner->written==std::vector<std::uint64_t>({1,2,3,4}),"PvE returned suffix lost or duplicated");
+    require(!peer.session->owned_pve_cleanup_current(*binding),"Returned old binding regained claim cleanup authority");
+    const auto cleanup=peer.session->prepare_owned_pve_entry();
+    require(peer.session->commit_owned_pve_entry(cleanup)&&peer.session->owned_pve_cleanup_current(cleanup),
+        "Actual retained room lost its save-only cleanup source");
+    peer.session->account_id^=std::uint64_t{1}<<32;
+    require(!peer.session->owned_pve_cleanup_current(cleanup),"PvE cleanup narrowed account identity");
+    peer.session->account_id^=std::uint64_t{1}<<32;
+    peer.session->close();
+    require(peer.session->owned_pve_cleanup_current(cleanup)&&!peer.session->owned_pve_current(cleanup),
+        "Closing room lost cleanup or retained output authority");
+    peer.closed();
+    require(peer.session->owned_pve_cleanup_current(cleanup),"Retired normal INIT erased physical Written cleanup history");
+}
+
 void test_session_state() {
     using namespace god2;
     if(!state_allows(Opcode::C2S_LoginRequest,SessionState::Connected) || !state_allows(Opcode::C2S_LoginRequest,SessionState::Handshaked)) throw std::runtime_error("Login state");
@@ -2195,6 +2271,7 @@ void test_session_state() {
     recovered_legacy_selection_learning_reanchor(false,2);
     recovered_written_deity_selection_transport();
     recovered_logout_cleanup_barrier();
+    recovered_owned_pve_transport_source_cases();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {
             return std::vector<std::uint8_t>{};

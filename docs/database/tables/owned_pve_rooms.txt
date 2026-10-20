@@ -1,0 +1,14 @@
+owned_pve_rooms — 共用 PvE／SOS 房間主表（CUSTOM-0161）
+
+id 房間流水號；不是原生封包 actor 身分，也不能自行恢復 Session 權限。
+incarnation SQLite 產生的隨機 128-bit 房間世代，配合程式私有 Ticket 使用。
+revision 整個房間保存版本。全員、資源、亂數、輸出、返回狀態在同一次交易 CAS。
+phase reserved 預留／active 戰鬥中／finished 已產生終局／closed 全員已返回或實際斷線退休／abandoned 未啟用預留。
+document version=1 的完整英文 JSON：唯一 canonical checkpoint、標準庫 RNG、成員完整讀集、個別 grant、尚待處理輸出。不是每位玩家各複製一場戰鬥。
+design_id 固定 CUSTOM-0161。遇敵、加入、回合順序、退出是明示自訂政策，不冒稱已恢復原服規則。
+
+members.input.row_preference 保存完整原始 B4／E8 選擇及來源、版本、共同角色根。讀回時比對實際同連線資料列；其中舊 position 只保留歷史來源，不授權當前世界座標。
+members.input.empty_active_pet 為 null 表示確實未觀測到 slot44；有值表示已配置的空 slot44 完整 revision／provenance。加入與保存均再比對，不能漏掉新增中的戰寵。
+members.input.pet 保存實際使用中的 slot44 原始 E3 或 FB、完整 metadata、revision 與 provenance。HP／MP 更新在同交易改真正 character_pet2_slots，其他 byte 保留。
+
+不自動建表、不補預設角色／怪物屬性、不安裝資料、不把 retained document 當登入續戰授權。本輪僅源碼；沒有執行 SQL、測試、部署或遊戲驗收。

@@ -1,0 +1,203 @@
+#include "game/OwnedPveWorldCatalog.h"
+#include "protocol/RecoveredTaiwanServerRecords.h"
+#include "protocol/RecoveredRemoteActor.h"
+#include <algorithm>
+#include <limits>
+#include <set>
+namespace god2 { namespace {
+using J=nlohmann::json;using P=RecoveredPveRoomProjection;
+void need(bool b,const char* m){if(!b)throw std::invalid_argument(m);}
+std::uint64_t number(const J& j,std::uint64_t max=UINT64_MAX) {
+    need(j.is_number_integer(),"PvE catalog integer required");
+    if(j.is_number_unsigned()){const auto n=j.get<std::uint64_t>();need(n<=max,"PvE catalog integer overflow");return n;}
+    const auto n=j.get<std::int64_t>();need(n>=0&&std::uint64_t(n)<=max,"PvE catalog negative/overflow");return std::uint64_t(n);
+}
+template<std::size_t N>std::array<std::uint8_t,N> raw(const J& j) {
+    need(j.is_array()&&j.size()==N,"PvE catalog complete native record required");
+    std::array<std::uint8_t,N> out;for(std::size_t i=0;i<N;++i)out[i]=std::uint8_t(number(j[i],255));return out;
+}
+template<class T>T present(std::optional<T> v){need(v.has_value(),"PvE catalog native record grammar invalid");return *v;}
+void put16(auto& b,std::size_t at,std::uint16_t n){b[at]=std::uint8_t(n);b[at+1]=std::uint8_t(n>>8);}
+void put32(auto& b,std::size_t at,std::uint64_t n){need(n<=UINT32_MAX,"PvE native DWORD requires explicit extended profile");for(unsigned i=0;i<4;++i)b[at+i]=std::uint8_t(n>>(8*i));}
+P::ActorProfile actor(const J& j) {
+    return {present(RecoveredBattleIdentity::parse_logical(raw<45>(j.at("identity")))),
+        j.at("appearance").is_null()?std::nullopt:std::optional{present(RecoveredBattlePlayerAppearance::parse(raw<17>(j.at("appearance"))))},
+        present(RecoveredBattleVitals::parse_logical(raw<17>(j.at("hp")))),
+        j.at("mp").is_null()?std::nullopt:std::optional{present(RecoveredBattleVitals::parse_logical(raw<17>(j.at("mp"))))}};
+}
+P::ActorProfile positioned(P::ActorProfile p,std::uint8_t position,std::optional<std::uint16_t> identity={}) {
+    auto b=RecoveredBattleIdentity::encode_logical(p.identity);b[1]=position;
+    if(identity)put16(b,3,*identity);
+    p.identity=present(RecoveredBattleIdentity::parse_logical(b));
+    if(p.appearance)p.appearance=RecoveredBattlePlayerAppearance::at_position(*p.appearance,position);
+    auto hp=RecoveredBattleVitals::encode_logical(p.hp);hp[2]=position;
+    p.hp=present(RecoveredBattleVitals::parse_logical(hp));
+    if(p.mp){auto mp=RecoveredBattleVitals::encode_logical(*p.mp);mp[2]=position;p.mp=present(RecoveredBattleVitals::parse_logical(mp));}
+    return p;
+}
+BattleAction policy(const J& j) {
+    need(j.at("magical").is_boolean(),"PvE action must declare its stat family");
+    BattleAction p{0,{},j.at("magical").get<bool>(),std::uint32_t(number(j.at("power_percent"),UINT32_MAX)),
+        std::uint32_t(number(j.at("defense_percent"),UINT32_MAX)),std::uint32_t(number(j.at("mp_cost"),UINT32_MAX)),
+        std::uint32_t(number(j.at("critical_chance_bp"),10000)),std::uint32_t(number(j.at("critical_multiplier_percent"),UINT32_MAX))};
+    need(p.critical_multiplier_percent>=100,"PvE critical multiplier must be explicit >=100 percent");return p;
+}
+void validate_templates(const J& j) {
+    need(j.at("animation_group_policy")=="custom_cyclic_byte_epoch","PvE explicit animation group policy required");
+    (void)present(RecoveredBattleVitalsBatch::parse_logical(raw<121>(j.at("bulk"))));
+    const auto grant=raw<17>(j.at("grant"));need(grant[0]==0x86&&grant[1]==5,"PvE grant template invalid");
+    const auto attack=present(RecoveredBattleAttackPresentation::parse(raw<15>(j.at("attack"))));
+    need(attack.basic(),"PvE basic-only action owner cannot accept a skill template without skill authority");
+    (void)present(RecoveredBattleAction08Control::parse(raw<15>(j.at("support"))));
+    const auto removal=raw<15>(j.at("withdrawal"));
+    need(removal[0]==0x83&&removal[1]==6&&removal[12]==2,"PvE native successful withdrawal template invalid");
+    const auto terminal=present(RecoveredBattleExperience::parse_logical(raw<57>(j.at("terminal"))));
+    // CUSTOM-0161 currently has no reward issuer. Never display an award which
+    // the same transaction has not granted to the actual participant.
+    need(!terminal.character_received_exp_display()&&!terminal.companion_received_exp_display()&&
+        !terminal.pet_received_exp_display()&&!terminal.cave_received_exp_display(),"PvE reward producer is not installed");
+    (void)number(j.at("entry_context_b"),UINT32_MAX);
+}
+}
+OwnedPveWorldCatalog::OwnedPveWorldCatalog(const nlohmann::json& j) {
+    need(j.is_object()&&j.at("design_id")=="CUSTOM-0161"&&j.at("native_client_sha256")==
+        "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48","PvE catalog source pin/design invalid");
+    version_=number(j.at("version"),INT64_MAX);need(version_>0,"PvE catalog version required");
+    source_sha256_=j.at("source_sha256").get<std::string>();source_record_=j.at("source_record").get<std::string>();
+    need(source_sha256_.size()==64&&source_sha256_.find_first_not_of("0123456789abcdef")==std::string::npos&&
+        !source_record_.empty(),"PvE catalog provenance missing");
+    need(j.at("scenes").is_array()&&!j.at("scenes").empty()&&j.at("scenes").size()<=4096,"PvE catalog scenes missing/too many");
+    std::set<std::pair<std::uint16_t,std::uint16_t>> places;std::set<std::uint64_t> ids;
+    for(const auto& entry:j.at("scenes")) {
+        Scene s;s.id=number(entry.at("id"),INT64_MAX);s.area=std::uint16_t(number(entry.at("area"),65535));
+        s.scene=std::uint16_t(number(entry.at("scene"),65535));s.movement_steps=std::uint32_t(number(entry.at("movement_steps"),UINT32_MAX));
+        need(s.id&&s.area&&s.movement_steps&&ids.insert(s.id).second&&places.emplace(s.area,s.scene).second,
+            "PvE scene policy duplicate/missing, never a monster coordinate placement");
+        const auto& topology=entry.at("formation");s.topology.source_record=topology.at("source_record").get<std::string>();
+        s.topology.version=number(topology.at("version"),INT64_MAX);
+        for(const auto& pair:topology.at("lanes")){need(pair.is_array()&&pair.size()==2,"PvE explicit row pair required");
+            s.topology.lanes.push_back({std::uint8_t(number(pair[0],13)),std::uint8_t(number(pair[1],13))});}
+        s.topology.validate();s.basic=policy(entry.at("basic"));s.ai=policy(entry.at("ai"));
+        need(entry.at("support_enabled").is_boolean(),"PvE support policy must be explicit");s.support_enabled=entry.at("support_enabled").get<bool>();
+        s.templates=entry.at("templates");validate_templates(s.templates);
+        need(entry.at("enemies").is_array()&&!entry.at("enemies").empty()&&entry.at("enemies").size()<=14,"PvE actual encounter enemies missing");
+        for(const auto& e:entry.at("enemies")) {
+            BattleActor a{std::uint8_t(number(e.at("position"),27)),0,number(e.at("hp")),number(e.at("max_hp")),
+                std::uint32_t(number(e.at("mp"),UINT32_MAX)),std::uint32_t(number(e.at("max_mp"),UINT32_MAX)),
+                std::uint32_t(number(e.at("physical_attack"),UINT32_MAX)),std::uint32_t(number(e.at("magical_attack"),UINT32_MAX)),
+                std::uint32_t(number(e.at("physical_defense"),UINT32_MAX)),std::uint32_t(number(e.at("magical_defense"),UINT32_MAX))};
+            need(a.position>=14&&a.hp&&a.hp<=a.max_hp&&a.mp<=a.max_mp,"PvE enemy topology/resources invalid");
+            auto p=actor(e.at("native"));need(p.identity.position()==a.position&&p.hp.position()==a.position&&
+                p.hp.resource()==RecoveredBattleVitals::Resource::Hp&&p.hp.maximum()==a.max_hp&&p.hp.current()==a.hp&&
+                !p.mp&&!p.appearance,"PvE enemy native profile differs from authoritative complete combat material");
+            need(s.enemy_profiles.emplace(a.position,std::move(p)).second,"PvE duplicate enemy slot");s.enemies.push_back(a);
+        }
+        scenes_.push_back(std::move(s));
+    }
+    need(j.at("character_profiles").is_array()&&j.at("character_profiles").size()<=100000,"PvE character profile list invalid");
+    for(const auto& a:j.at("character_profiles")) {
+        const auto id=number(a.at("character"),INT64_MAX);need(id>0,"PvE full character ID missing");
+        (void)raw<40>(a.at("root_profile"));(void)raw<37>(a.at("entry_logical"));
+        const auto spawn=raw<RecoveredRemoteActor::logical_size>(a.at("world_spawn"));
+        const auto removal=raw<RecoveredRemoteActorRemove::logical_size>(a.at("world_remove"));
+        (void)present(RecoveredRemoteActor::parse_logical(spawn));
+        (void)present(RecoveredRemoteActorRemove::parse_logical(removal));
+        (void)present(RecoveredRemoteActorMove::parse_logical(raw<13>(a.at("world_move"))));
+        const auto p=actor(a.at("primary"));need(p.appearance&&p.mp&&p.identity.position()<14,
+            "PvE player requires complete native appearance/identity/HP/MP profile");
+        if(!a.at("pet").is_null()){
+            const auto pet=actor(a.at("pet"));need(pet.mp.has_value(),"PvE active pet MP profile required");
+            const auto& saved=a.at("active_pet_material");
+            need(saved.at("kind")=="Pet1"||saved.at("kind")=="Pet2","PvE pet source kind missing");
+            (void)raw<20>(saved.at("metadata"));
+            if(saved.at("kind")=="Pet1")(void)present(RecoveredPet1Stats::parse_logical(raw<RecoveredPet1Stats::logical_size>(saved.at("stats"))));
+            else (void)present(RecoveredPet2Stats::parse_logical(raw<RecoveredPet2Stats::logical_size>(saved.at("stats"))));
+            const auto source=saved.at("source_sha256").get<std::string>();
+            need(source.size()==64&&source.find_first_not_of("0123456789abcdef")==std::string::npos,"PvE pet source pin invalid");
+        }
+        need(actors_.emplace(id,a).second,"PvE duplicate full character profile");
+    }
+}
+const OwnedPveWorldCatalog::Scene* OwnedPveWorldCatalog::scene(std::uint16_t area,std::uint16_t scene)const noexcept {
+    for(const auto& s:scenes_)if(s.area==area&&s.scene==scene)return &s;return nullptr;
+}
+const nlohmann::json& OwnedPveWorldCatalog::actor_profile(std::uint64_t character)const {
+    const auto at=actors_.find(character);if(at==actors_.end())throw P::ProfileRequired("profile_required: complete current saved-player native profile missing");return at->second;
+}
+bool OwnedPveWorldCatalog::same_entry_material(const nlohmann::json& prototype,std::span<const std::uint8_t> actual) {
+    if(actual.size()!=37||actual.front()!=0x2a)return false;
+    auto expected=raw<37>(prototype);std::array<std::uint8_t,37> current;
+    std::copy(actual.begin(),actual.end(),current.begin());
+    const auto normalize=[](auto& b) {
+        // Proven2A fields only: low14 actor handle, low16 map (area/scene),
+        // X15/Y15 position. Keep world kind, appearance and ALL opaque bits.
+        b[1]=0;b[2]&=0xc0;b[25]=0;b[26]=0;
+        b[29]&=3;b[30]=0;b[31]=0;b[32]=0;
+    };
+    normalize(expected);normalize(current);return expected==current;
+}
+RecoveredPveRoomProjection::Profiles OwnedPveWorldCatalog::profiles(const Scene& scene,const Types::Snapshot& room,const Types::Change& change)const {
+    P::Profiles out;
+    for(const auto& [id,m]:room.members) {
+        if(m.status==Types::MemberStatus::Returned||m.status==Types::MemberStatus::Retired||m.disconnected)continue;
+        P::RecipientProfile p;p.character=id;p.entry=RecoveredBattleEntry::Record{m.input.command_context,
+            std::uint32_t(number(scene.templates.at("entry_context_b"),UINT32_MAX))};
+        p.actors=scene.enemy_profiles;
+        for(const auto& [other,peer]:room.members) {
+            if(peer.status==Types::MemberStatus::Returned||peer.status==Types::MemberStatus::Retired||
+               peer.status==Types::MemberStatus::Withdrawn||peer.disconnected)continue;
+            const auto& a=actor_profile(other);auto primary=positioned(actor(a.at("primary")),peer.input.primary_slot,peer.input.identity.actor_handle);
+            const auto role=present(RecoveredRoleLevel::parse(peer.input.role.logical));
+            auto identity=RecoveredBattleIdentity::encode_logical(primary.identity);identity[2]=role.level();
+            primary.identity=present(RecoveredBattleIdentity::parse_logical(identity));
+            p.actors.emplace(peer.input.primary_slot,std::move(primary));
+            if(peer.input.pet) {
+                need(!a.at("pet").is_null(),"profile_required: current active pet native profile missing");
+                auto secondary=positioned(actor(a.at("pet")),peer.input.pet->actor_slot,
+                    std::uint16_t(peer.input.identity.actor_handle|0x4000));
+                p.actors.emplace(peer.input.pet->actor_slot,std::move(secondary));
+            }
+        }
+        if(change.kind==Types::Change::Kind::Entry||
+           (change.kind==Types::Change::Kind::Admission&&change.character==id)||
+           (change.kind==Types::Change::Kind::Grant&&change.cycle_progress_observed)) {
+            auto bulk=raw<121>(scene.templates.at("bulk"));put32(bulk,1,room.grant_epoch);
+            p.bulk=present(RecoveredBattleVitalsBatch::parse_logical(bulk));
+        }
+        p.grant=raw<17>(scene.templates.at("grant"));
+        if(change.result)for(std::size_t n=0;n<change.result->hits.size();++n) {
+            auto attack=raw<15>(scene.templates.at("attack"));
+            // Explicit CUSTOM cyclic BYTE label, never a truncated room ID,
+            // native turn credential or proof that an animation completed.
+            // The full grant epoch remains64-bit in the authoritative room.
+            need(scene.templates.at("animation_group_policy")=="custom_cyclic_byte_epoch",
+                "PvE animation grouping requires an explicit source policy");
+            attack[3]=std::uint8_t(room.grant_epoch%256);p.attacks.push_back(present(RecoveredBattleAttackPresentation::parse(attack)));
+        }
+        if(change.kind==Types::Change::Kind::Support) {
+            const auto changed=room.members.find(change.character);need(changed!=room.members.end(),"PvE support owner missing");
+            auto support=raw<15>(scene.templates.at("support"));
+            need(change.actor_position.has_value(),"PvE support requires its actual primary/secondary producer");
+            support[2]=*change.actor_position;
+            put16(support,9,room.support_enabled?1:0);p.support=present(RecoveredBattleAction08Control::parse(support));
+        } else if((change.kind==Types::Change::Kind::Entry||
+            (change.kind==Types::Change::Kind::Admission&&change.character==id))&&room.support_enabled) {
+            auto support=raw<15>(scene.templates.at("support"));support[2]=m.input.primary_slot;
+            put16(support,9,1);p.support=present(RecoveredBattleAction08Control::parse(support));
+        }
+        if(change.kind==Types::Change::Kind::Withdrawal) {
+            const auto changed=room.members.find(change.character);need(changed!=room.members.end(),"PvE withdrawal owner missing");
+            std::vector<std::uint8_t> slots{changed->second.input.primary_slot};if(changed->second.input.pet)slots.push_back(changed->second.input.pet->actor_slot);
+            for(const auto slot:slots){auto removal=raw<15>(scene.templates.at("withdrawal"));removal[2]=slot;p.withdrawal.push_back(removal);}
+        }
+        p.terminal=present(RecoveredBattleExperience::parse_logical(raw<57>(scene.templates.at("terminal"))));
+        out.emplace(id,std::move(p));
+    }
+    return out;
+}
+nlohmann::json OwnedPveWorldCatalog::schema_description() {
+    return {{"design_id","CUSTOM-0161"},{"encoding","UTF-8 JSON; all native arrays complete unsigned bytes"},
+        {"initial_material","No automatic producer; explicit complete source required"},
+        {"version_rule","one immutable whole DB snapshot; invalid reload retains previous whole version"}};
+}
+}

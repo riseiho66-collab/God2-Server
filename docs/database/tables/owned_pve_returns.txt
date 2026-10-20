@@ -1,0 +1,12 @@
+owned_pve_returns — 每人獨立返回屏障（CUSTOM-0161）
+
+room 所屬房間。
+character 返回的本人；與 room 合組主鍵並參照 owned_pve_members。
+sequence 本人這次完整返回 aggregate 的最後一個 Return 輸出序號。
+context 本人原始 C1C 的完整4-byte BLOB；不能用房間 ID 或人工生成值替代原 callback 權限。
+completed 0 尚未完成／1 全部返回列 Written 且已完成本人 claim 釋放。
+
+context 只有實際 Session 收到的原始 Record occurrence 可以交給 prepare_owned_pve_return；不能複製事件後當新原始回報重放。
+返回內容由當前真正 WORLD 來源新觀測，允許完整有界 aggregate，依原生 record 邊界分 frame；不重播最初2A／CF／30來冒充回到世界。
+釋放前同交易核完整 room／member／return ledger 與所有 Return Written。其他參與者的 claim、HP、RNG、返回權不一併清除。
+正常返回後才呼應用程式 returned callback 接回 movement／title／visibility。傳輸失敗與真斷線另走 Retired，不冒稱 completed=1。

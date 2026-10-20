@@ -1,0 +1,43 @@
+owned_pve_world_catalog：CUSTOM-0161/0162 完整、不可變的 PvE 來源版本。
+本表與安裝函數目前只提供源碼；本輪未安裝、未讀取實際遊戲資料庫。
+
+slot：唯一版本槽，固定 1；不是角色、怪物或房間編號。
+version：正整數設定版本，必須與 catalog_json.version 一致。
+source_sha256：來源材料 SHA-256，與文件中的來源一致；不是原服公式保證。
+source_record：來源說明；應說明 CUSTOM 政策與原生封包材料的出處。
+catalog_json：UTF-8 完整英文欄位文件；不是可執行程式或 SQL。
+
+文件共同欄位：design_id 固定 CUSTOM-0161；native_client_sha256 固定目前
+台服 aaf0...cd48；version/source_sha256/source_record 同表中版本。
+scenes：各場景的遭遇設定，不放 NPC 或怪物的世界座標。
+  id：遭遇定義；area/scene：遊戲區域/場景；movement_steps：已提交移動步數。
+  formation.version/source_record/lanes：明示前後位置對；每對 [row0,row1]，
+    兩端各為 0..13，不得重疊。角色實際 B4/E8 選擇決定主角與戰寵位置。
+    這是 CUSTOM-0162 設定，不是原服「位置加 7」公式。
+  support_enabled：明示是否開放 SOS；不是入場成功回覆。
+  basic/ai：magical 法術攻擊布林；power_percent 威力百分比；
+    defense_percent 防禦係數百分比；mp_cost MP 費用；
+    critical_chance_bp 暴擊萬分率；critical_multiplier_percent 暴擊倍率百分比。
+  enemies：完整戰鬥參數；position 為戰場位置 14..27，controller 固定服務端 AI。
+    hp/max_hp 為目前/最大 HP，mp/max_mp 為目前/最大 MP；
+    physical_attack/magical_attack 為物攻/法攻；
+    physical_defense/magical_defense 為物防/法防。此處不能用名稱表推算能力。
+    native：完整 identity/appearance/hp/mp 原生材料；敵方不假造 MP 寫入。
+  templates：完整 bulk/grant/attack/support/withdrawal/terminal 原生材料；
+    entry_context_b 為明示原始 DWORD；animation_group_policy 目前須明選
+    custom_cyclic_byte_epoch。BYTE 標記不是回合授權、房間 ID 或動畫完成證明。
+    attack 目前只接受基本攻擊；沒有技能權威時不能用 Type3 技能模板冒充。
+    terminal 的顯示獎勵必須為零；目前沒有安裝獎勵發放來源。
+character_profiles：各角色完整、已核對的顯示材料，character 是完整角色編號。
+  root_profile：完整 40-byte 角色資料；entry_logical：完整 37-byte 2A 材料。
+    比對僅排除已證明的 actor handle、地圖及 X/Y；保留世界 kind、外觀及未知位元。
+  primary/pet：完整戰鬥 identity、appearance、hp、mp 材料；沒有材料不得補零。
+  active_pet_material：真實 active44 的 kind(Pet1/Pet2)、metadata、stats、
+    source_sha256。只排除已證明可更新的目前 HP/MP；其餘原始位元必須一致。
+    真正所有權、完整保存列、版本和來源仍由房間交易逐次 CAS 核對。
+  world_spawn/world_remove/world_move：完整原生世界外觀、移除及移動材料。
+
+未知原始位元保留為明列原生材料，不賦予未查明的遊戲意義。此來源只掛載
+目前普通台服 Application；不能拿它代替三分流 common-world 的權威與交接。
+缺表、缺完整版本、缺角色/寵物材料都拒絕該遭遇；不產生首份能力、物品或
+自動怪物放置。enabled 預設關閉。本輪未開啟設定、執行 SQL、建置或驗收。

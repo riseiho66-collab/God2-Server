@@ -40,3 +40,10 @@ quantity | SQLite 宣告型別：INTEGER | 來源宣告：1
 - 目前一般整疊存取只接page0..2/local2..49及bag0..29；63/64數量必須等於整個實例數量，65的1是整格移動標記。其他頁／保留格、拆疊及合併仍待資格。
 - 入出倉沿用同一instance_id與acquisition來源，不另寫舊character_bank_item_slots副本；inventory與native equipment witness由同一交易提交。
 - 此為源碼契約，未讀取或變更實際遊戲資料庫，未驗收遊戲內行為。
+
+2026-10-20 明示離線容量來源（CUSTOM-0163）：
+- 新增專用 god2-server 操作入口，完整清單與欄位中文說明見 docs/database/owned_bank_capacity_manifest.txt。
+- 僅在實際檔案獨占離線擁有權、完整原inventory/native equipment比對與同一joint CAS成立時，加入清單逐一授權的bank空格。
+- 不新增資料表或欄位；新格仍是 instance_id=NULL、quantity=0、instance_revision=0。
+- 不會把schema存在當容量、不會自動補300格、不會初建道具或覆寫既存格。現用伺服器共享檔案鎖會拒絕離線操作。
+- 原服解鎖條件仍未知；此來源是使用者授權的明示CUSTOM容量政策。本輪沒有執行匯入或遊戲DB SQL。

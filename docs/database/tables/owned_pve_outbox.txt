@@ -1,0 +1,14 @@
+owned_pve_outbox — 全員輸出及實際寫入紀錄（CUSTOM-0161）
+
+room 房間 ID。
+sequence 同房間遞增序號；與 room 合組主鍵。
+character 原始收件角色 ID；完整 Session／世代保存於房間與成員原始讀集。
+kind 0 Entry／1 Roster／2 Action／3 Grant／4 Terminal／5 Return。
+logical 原生 S2C logical 原文 BLOB，一列一個完整 frame 的 records，1～2560 bytes。切分只在完整 record 邊界。
+status 0 Pending 尚待實際 socket 全寫／1 Written 全 frame 寫入／2 Failed 寫入失敗或實際斷線取消。
+
+同交易先保存全部收件人的 after-state 與輸出，之後才交實際 Session 傳送。Written 是本機 whole async_write，不是原版 client ACK、動畫完成或戰鬥判定。
+晚加入者收到現在的 roster／HP／MP／死亡狀態；舊人只補新 actor，不重放整場82／1C而把已死者重設。
+每位 Session 同時只送一列，Written 後才送下一列。整個房間的 Pending 全清後才開放下一批命令與明示 CUSTOM AI／回合。
+Return 可以多列，必須全部 Written 且最後 sequence 相符才能返回；早列 Failed 不能只靠最後列成功放行。
+已完成列保留於此歷史表；記憶體只保有界待送與返回屏障，不永久累積全部 wire。

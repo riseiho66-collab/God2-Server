@@ -1,0 +1,35 @@
+CUSTOM-0163 銀行容量操作清單（非資料表、非原服解鎖規則）
+
+實際入口：god2-server --export-owned-bank-capacity / --provision-owned-bank-capacity。
+PHASE1 只完成源碼；本輪未執行以上命令、SQL、測試或資料匯入。
+不新增資料表。現有 owned_inventory_cells 等表的英文欄位維持不變。
+
+format：清單格式版本，固定 god2-owned-bank-capacity-v1。
+design_id：明示自訂政策，固定 CUSTOM-0163；不是台服原服權限。
+database_identity：實際資料庫檔案的作業系統身分；不能借其他檔案。
+account_id：完整64位元帳號編號，不是原生封包的短編號。
+character_id：完整64位元角色編號，不是畫面 actor_handle。
+expected_material：兩份完整原值，所有欄位、空格、原始位元組都須吻合。
+  inventory：原始共用物品快照，含 root、revision、source_sha256、source_record、cells。
+  equipment：原始完整 native equipment witness，含 root、position、client_sha256、record_kind、source_sha256、source_record、record、revision、actor_handle。
+  root：角色原值，包括 account_id、character_id、slot、40位元組 profile、created_at、name_codepage、streamer_privilege。
+  position：area、scene、x、y、revision，表示已存位置，不修改座標。
+  cells：有序完整格子，包括 location_kind、location_index、instance。
+  instance=null：已授權但為空的格子；不存在的格子不是空格。
+  instance：完整既存實例，包含 id、definition_key、quantity、revision、stackable、acquisition_sha256、acquisition_record、aliases。
+  aliases：完整原生別名，包含 client_sha256、profile、source_sha256、source_record、native_key、native_slot、revision、record。
+  record：整數位元組陣列；未知的原始資料也逐位元組保留，不能補零或刪除。
+new_bank_indices：操作者逐一明列新增的空格，bank索引0..299；不能重複、不能覆蓋原有格。
+approved：匯出草稿為 false，操作者審核後須明確改為 true。
+permit_id：操作者設定的有界英文／數字／底線／減號識別字，最長64字元。
+operator_note：操作者的非空說明，最多2048個UTF-8位元組；留在審核清單內供追溯。
+
+數值必須是整數，拒絕小數、負數索引、重複鍵、未知頂層欄位。
+清單總長最多64MiB。儲存資料的所有數量／身分仍沿用原本完整領域。
+輸出檔必須不存在，避免覆蓋原檔／資料庫。匯出不預先選格，也不預先批准。
+新增格必須補齊目前開倉所需的300個明示格，不能把部分容量冒充完整。
+新增後只增加 inventory/equipment 快照版本及自訂來源註記，其餘既有實例／別名／裝備快照全保留。
+同一資料庫的現用伺服器／匯入程序尚持有共享檔案身分鎖時，離線操作會拒絕。
+必須先停止所有現用伺服器程序；不會藉由啟動SQL宣稱玩家已離線。
+成功提交後即使後續檢查失敗，也明確回報已提交，禁止自動重試舊清單。
+不會初建物品母快照、不會給新物品、不會改怪物／NPC位置、不會推定原服付費或解鎖公式。

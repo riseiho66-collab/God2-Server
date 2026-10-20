@@ -1,0 +1,12 @@
+owned_pve_character_claims — 角色正在參與的 PvE 房間（CUSTOM-0161）
+
+character 主鍵，完整共同角色 ID；避免同一角色同時建立兩個 PvE 房間。
+room 所屬唯一房間。
+account 原始帳號。
+session 原始實際 Session。
+battle_generation 本次私有 battle binding 世代。
+
+建立／晚加入時同交易取得 claim；所有角色 HP／MP、主副寵 raw、canonical checkpoint、輸出同交易保存。
+正常返回只在本人全部返回 frame Written 與原 context 相符後精確刪除本人 claim。真斷線以 Retired 保存並精確刪除本人 claim；其他人繼續留在原房間。
+程序停止、持久化後來源失效、輸出／保存結果不明時保留 claim 與復原待辦，不假稱回滾或讓舊 RNG 重試。
+本表不是一般 NPC／怪物座標資料，也不是原服準入公式。只讀 retained 歷史不能重建 live Ticket 或 Session grant。

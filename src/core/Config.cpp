@@ -724,6 +724,15 @@ Config Config::load(const std::filesystem::path& path) {
         if(c.owned_pk_invitation_enabled&&(!c.recovered_world_entry||!c.recovered_movement||!c.recovered_account_auth||c.mock_login||c.fixture_battle||c.diagnostic_battle_transition||c.diagnostic_battle_after_movement))
             throw std::runtime_error("Owned PK requires authenticated native world independently of diagnostic combat");
     }
+    if(j.contains("world") && j.at("world").contains("owned_pve_rooms")) {
+        const auto& feature=j.at("world").at("owned_pve_rooms");
+        if(!feature.is_object()||!feature.at("enabled").is_boolean())throw std::runtime_error("Owned PvE rooms bool required");
+        c.owned_pve_rooms_enabled=feature.at("enabled").get<bool>();
+        if(c.owned_pve_rooms_enabled&&(c.protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate||
+           !c.recovered_character_creation||!c.recovered_dual_connection||!c.recovered_world_entry||!c.recovered_movement||!c.recovered_account_auth||
+           c.mock_login||c.fixture_battle||c.diagnostic_battle_participants||c.diagnostic_battle_transition||c.diagnostic_battle_after_movement))
+            throw std::runtime_error("Owned PvE requires authenticated normal Taiwan world independently of all diagnostic combat");
+    }
     if(j.contains("world") && j.at("world").contains("fruit_village_quests")) {
         const auto& fruit=j.at("world").at("fruit_village_quests");
         if(!fruit.is_object() || !fruit.at("enabled").is_boolean())throw std::runtime_error("Fruit quest bool required");

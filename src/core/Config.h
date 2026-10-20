@@ -32,6 +32,7 @@ struct Config {
     bool owned_skillbook_learning_enabled=false;
     bool owned_beast_panel_enabled=false; // CUSTOM-0085 display only; source-phase opt-in
     bool owned_pk_invitation_enabled=false; // CUSTOM-0086 incomplete until shared room authority exists
+    bool owned_pve_rooms_enabled=false; // CUSTOM-0161 complete explicit DB source; no diagnostics/default stats.
     bool owned_attribute_allocation_enabled=false;
     bool fruit_village_quests_enabled=false;
     bool fruit_sourcehint_placements=false;

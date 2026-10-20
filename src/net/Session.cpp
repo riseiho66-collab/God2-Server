@@ -349,6 +349,40 @@ bool Session::NormalWorldInitialization::world_identity_sender_current() const n
     return entry_written() && data_->entry->world_identity_sender.eligible();
 }
 
+struct Session::OwnedPveBinding::Data {
+    enum class Phase {Prepared,Entering,Active,Returning,CompletingReturn,Returned,Failed};
+    const std::weak_ptr<Session> session;
+    const std::thread::id game_thread=std::this_thread::get_id();
+    const NormalWorldInitialization initialization;
+    const std::shared_ptr<const WorldDeliveryIdentity> prior_world;
+    const std::uint64_t id,account,character,world_generation,prebattle;
+    const std::uint8_t channel;
+    const std::optional<std::uint8_t> native_ordinal;
+    const SessionState prephase;
+    std::atomic<Phase> phase{Phase::Prepared};
+    std::atomic<bool> blocked{true};
+    std::optional<std::array<std::uint8_t,4>> return_context; // GAME only.
+    std::shared_ptr<const NormalWorldInitialization::Data> successor; // GAME only.
+    std::shared_ptr<const WorldDeliveryIdentity> successor_world; // GAME only.
+    std::uint64_t last_sequence{}; // GAME only; local outbox sequence, not native nonce.
+    bool return_written{}; // GAME only; exact whole Return output completed.
+    bool output_started{}; // NET only; first Entry output owns the one raw-prefix quiet cut.
+    Data(std::weak_ptr<Session> s,NormalWorldInitialization init,
+        std::shared_ptr<const WorldDeliveryIdentity> world,std::uint64_t sid,
+        std::uint64_t a,std::uint64_t c,std::uint64_t generation,std::uint64_t battle,
+        std::uint8_t ch,std::optional<std::uint8_t> native,SessionState state):session(std::move(s)),initialization(std::move(init)),
+        prior_world(std::move(world)),id(sid),account(a),character(c),world_generation(generation),
+        prebattle(battle),channel(ch),native_ordinal(native),prephase(state){}
+};
+std::uint64_t Session::OwnedPveBinding::session_id()const noexcept{return data_->id;}
+std::uint64_t Session::OwnedPveBinding::account()const noexcept{return data_->account;}
+std::uint64_t Session::OwnedPveBinding::character()const noexcept{return data_->character;}
+std::uint64_t Session::OwnedPveBinding::world_generation()const noexcept{return data_->world_generation;}
+std::uint64_t Session::OwnedPveBinding::prebattle_generation()const noexcept{return data_->prebattle;}
+std::uint64_t Session::OwnedPveBinding::battle_generation()const noexcept{return data_->prebattle+1;}
+std::uint8_t Session::OwnedPveBinding::channel()const noexcept{return data_->channel;}
+Session::NormalWorldInitialization Session::OwnedPveBinding::initialization()const{return data_->initialization;}
+
 // Composite callback metadata is distinct from both legacy write receipts.
 struct Session::WorldCallbackOutput::Data {
     const std::thread::id game_thread=std::this_thread::get_id();
@@ -1256,7 +1290,11 @@ struct Session::Impl {
     std::size_t callback_output_activity=0;
     std::shared_ptr<CallbackOutputAttempt> callback_output_capture;
     std::atomic<std::shared_ptr<WorldCallbackOutput::Data>> callback_output_input_hold;
-    bool has_input_hold() const noexcept{return bool(owned_response_input_hold.load())||bool(callback_output_input_hold.load());}
+    bool pve_input_held() const noexcept {
+        auto binding=pve_binding.load();if(!binding)binding=pve_return_input_hold.load();
+        return binding&&binding->blocked.load();
+    }
+    bool has_input_hold() const noexcept{return bool(owned_response_input_hold.load())||bool(callback_output_input_hold.load())||pve_input_held();}
     std::shared_ptr<CallbackComponentAttempt> add_callback_component(
             const std::shared_ptr<WorldCallbackOutput::Data>& cohort,WorldCallbackOutput::Kind kind,
             std::span<const std::uint8_t> logical) noexcept {
@@ -1879,7 +1917,10 @@ struct Session::Impl {
         for(const auto& record:records)if(const auto* context=std::get_if<RecoveredWorldRecords::ContextNotification>(&record)){
             seen=true;
             // A terminal retains THIS original callback's exact source node.
-            if(terminal&&terminal->receiver_selector&&terminal->receiver_selector->context==context->payload)
+            if(const auto pve=pve_binding.load();pve&&pve->phase.load()==OwnedPveBinding::Data::Phase::Returning&&
+               pve->return_context==std::optional{context->payload}&&pve->successor)
+                next=pve->successor->receiver_selector;
+            else if(terminal&&terminal->receiver_selector&&terminal->receiver_selector->context==context->payload)
                 next=terminal->receiver_selector;
             else if(normal&&normal->entry&&normal->entry->written.load())
                 next=make_receiver_selector(normal->entry,context->payload);
@@ -1958,6 +1999,110 @@ struct Session::Impl {
     God2ProtocolSpec protocol;
     Buffer input;
     std::array<std::uint8_t, 8192> read_bytes{};
+    struct PveOutput {
+        const OwnedPveBinding binding;
+        const std::uint64_t sequence;
+        const std::weak_ptr<OwnedPveOutputOwner> source;
+        const bool returning;
+        const bool final_return;
+        std::shared_ptr<std::vector<std::uint8_t>> frame; // Assigned once on NET.
+        std::atomic<bool> completing{false};
+        PveOutput(OwnedPveBinding b,std::uint64_t seq,std::weak_ptr<OwnedPveOutputOwner> owner,bool back,bool final)
+            :binding(std::move(b)),sequence(seq),source(std::move(owner)),returning(back),final_return(final){}
+    };
+    std::atomic<std::shared_ptr<OwnedPveBinding::Data>> pve_binding;
+    std::atomic<std::shared_ptr<OwnedPveBinding::Data>> pve_return_input_hold;
+    std::atomic<std::shared_ptr<PveOutput>> pve_output;
+    std::atomic<std::shared_ptr<std::function<void()>>> pve_deferred_game_work;
+    // NET publishes each original parsed WORLD work before posting it. Count
+    // individual work lifetimes: an older GAME tail must not clear a newer
+    // NET-posted job's pending flag. Parked work retains its same ticket.
+    std::atomic<std::uint64_t> actual_world_work_pending{0};
+    struct WorldGameWorkTicket {
+        const std::weak_ptr<Session> session;
+        bool armed=false; // NET before post; immutable after that handoff.
+        explicit WorldGameWorkTicket(std::weak_ptr<Session> owner):session(std::move(owner)){}
+        ~WorldGameWorkTicket(){if(armed)if(const auto owner=session.lock())
+            owner->impl_->actual_world_work_pending.fetch_sub(1);}
+    };
+    std::uint64_t pve_world_sequence{}; // GAME only, never renewed from a wire ID.
+    void release_pve_deferred_game_work() {
+        auto work=pve_deferred_game_work.exchange({});if(!work)return;
+        try{post_status_work(game,[self=owner.shared_from_this(),work=std::move(work)]{(*work)();});}
+        catch(...) {
+            // No business/TLS from this whole job has run. Its NET-owned
+            // outstanding-job flag must still retire on a failed repost.
+            try{post_status_work(strand,[self=owner.shared_from_this()]{
+                self->impl_->game_busy=false;self->impl_->fail_owned_input("PvE deferred GAME repost failed");
+            });}catch(...){close_requested.store(true);}
+            throw;
+        }
+    }
+    bool pve_transport_current(const std::shared_ptr<OwnedPveBinding::Data>& b)const noexcept {
+        if(!b||(pve_binding.load()!=b&&(pve_return_input_hold.load()!=b||b->phase.load()!=OwnedPveBinding::Data::Phase::Returned))||
+           b->session.lock().get()!=&owner||close_requested.load()||
+           !owner.recovered_world_ready()||mode!=ProtocolMode::God2CharacterConnection)return false;
+        // NET cannot call matches_destination(): that method belongs to GAME.
+        // Retain the actual accepted listener lifetime rather than treating its
+        // ordinal metadata as permission after the listener/world retired.
+        if(owner.native_channel_&&(!owner.native_channel_acceptance_||
+           owner.native_channel_acceptance_->session!=&owner||owner.native_channel_acceptance_->id!=id||
+           owner.native_channel_->presence_.expired()||
+           !owner.native_channel_->accepts(owner.native_channel_acceptance_->local)))return false;
+        if(owner.native_channel_ordinal()!=b->native_ordinal)return false;
+        // GAME publishes a private transition phase BEFORE either coupled
+        // state/generation CAS. These phases only retain the raw input hold;
+        // owned_pve_current never grants output/action authority in them.
+        for(unsigned retry=0;retry<4;++retry) {
+            const auto phase=b->phase.load();const auto state=owner.state();const auto battle=owner.battle_generation();
+            const auto normal=normal_initialization.load();const auto world=world_delivery_identity.load();
+            const auto entry=b->initialization.data_->entry;
+            if(normal_entry.load()!=entry||!entry->written.load()||entry->retired.load())return false;
+            const bool original=normal==b->initialization.data_&&world==b->prior_world;
+            bool valid=false;
+            if(phase==OwnedPveBinding::Data::Phase::Prepared)valid=original&&state==b->prephase&&battle==b->prebattle;
+            else if(phase==OwnedPveBinding::Data::Phase::Entering)
+                valid=original&&((state==b->prephase&&battle==b->prebattle)||
+                    (state==SessionState::InBattle&&(battle==b->prebattle||battle==b->prebattle+1)));
+            else if(phase==OwnedPveBinding::Data::Phase::Active||phase==OwnedPveBinding::Data::Phase::Returning)
+                valid=original&&state==SessionState::InBattle&&battle==b->prebattle+1;
+            else if(phase==OwnedPveBinding::Data::Phase::CompletingReturn)
+                valid=(normal==b->initialization.data_||normal==b->successor)&&
+                    (world==b->prior_world||world==b->successor_world)&&
+                    ((state==SessionState::InBattle&&battle==b->prebattle+1)||
+                    (state==b->prephase&&(battle==b->prebattle+1||battle==b->prebattle+2)));
+            else if(phase==OwnedPveBinding::Data::Phase::Returned)
+                valid=normal==b->successor&&world==b->successor_world&&state==b->prephase&&battle==b->prebattle+2; // Only the final input-hold release window.
+            if(b->phase.load()!=phase)continue; // Do not reject a mixed observation of a legitimate phase change.
+            return valid&&(pve_binding.load()==b||pve_return_input_hold.load()==b)&&!close_requested.load();
+        }
+        return false;
+    }
+    void complete_pve_output(const std::shared_ptr<PveOutput>& output,bool written) {
+        if(!output||output->completing.exchange(true))return;
+        try {post_status_work(game,[self=owner.shared_from_this(),output,written] {
+            auto& s=*self->impl_;
+            auto expected=output;
+            if(!s.pve_output.compare_exchange_strong(expected,{}))return;
+            const bool actual=written&&self->owned_pve_current(output->binding);
+            if(actual&&output->returning&&output->final_return)output->binding.data_->return_written=true;
+            const auto retire=[&]() noexcept {
+                output->binding.data_->phase.store(OwnedPveBinding::Data::Phase::Failed);
+                try{self->close();}catch(...){s.close_requested.store(true);}
+            };
+            try {
+                const auto source=output->source.lock();
+                if(!source)throw std::logic_error("PvE output lost its actual room owner");
+                source->owned_pve_written(*self,output->binding,output->sequence,actual);
+                if(!actual)retire();
+            }catch(...) {retire();}
+            // Only the room owner may release blocked input after ALL members'
+            // durable outbox completions. No per-socket optimistic turn grant.
+        });}catch(...) {
+            output->binding.data_->phase.store(OwnedPveBinding::Data::Phase::Failed);
+            fail_owned_input("PvE completion GAME handoff failed");
+        }
+    }
     struct Write {
         std::shared_ptr<std::vector<std::uint8_t>> bytes;
         std::shared_ptr<Reservation> reservation;
@@ -1982,6 +2127,7 @@ struct Session::Impl {
         std::shared_ptr<CallbackComponentAttempt> callback_component{}; // LAST: actual self-Write only.
         std::shared_ptr<ReplyPushFinal> reply_pushes{}; // LAST: producer reservations through actual FIFO lifetime.
         std::shared_ptr<const std::atomic_bool> qualified_source_live{}; // LAST: pure cancellation, never authority.
+        std::shared_ptr<PveOutput> owned_pve{}; // LAST: independent shared-PvE full-Write custody.
     };
     std::deque<Write> writes;
     template<class Executor,class Body>
@@ -4132,6 +4278,15 @@ struct Session::Impl {
             if(!closing)fail_owned_input("Owned bootstrap input already retired");
             return true;
         }
+        auto pve_hold=pve_binding.load();if(!pve_hold)pve_hold=pve_return_input_hold.load();
+        if(const auto binding=pve_hold;binding&&binding->blocked.load()) {
+            if(pve_transport_current(binding))return true;
+            // Abort/return may have released this exact hold after the first
+            // load. A retired successful hold must not close its successor.
+            if((pve_binding.load()==binding||pve_return_input_hold.load()==binding)&&binding->blocked.load()) {
+                fail_owned_input("PvE input source retired");return true;
+            }
+        }
         if(const auto cohort=callback_output_input_hold.load()){
             if(!callback_output_transport_current(cohort)||cohort->status.load()==WorldCallbackOutputStatus::Failed)
                 fail_owned_input("Callback output raw input hold retired");
@@ -4399,9 +4554,45 @@ struct Session::Impl {
             resume_world_input();return;
         }
         game_busy=true;
-        post_status_work(game,[self=owner.shared_from_this(),records=std::move(records),requests=std::move(requests),native_batch_generation] {
+        auto work=std::make_shared<std::function<void()>>();
+        auto work_ticket=std::make_shared<WorldGameWorkTicket>(owner.weak_from_this());
+        const std::weak_ptr<std::function<void()>> weak_work=work;
+        auto delayed=std::make_shared<bool>(false); // GAME only, shared by this one original work body.
+        const auto parsed_battle=owner.battle_generation();const auto parsed_phase=owner.state();
+        *work=[weak_session=owner.weak_from_this(),weak_work,work_ticket,delayed,parsed_battle,parsed_phase,
+               records=std::move(records),requests=std::move(requests),native_batch_generation] {
+            (void)work_ticket; // Its last retained work release ends ONLY this pending lifetime.
+            const auto self=weak_session.lock();if(!self)return;
             auto& s=*self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
+            const auto reject_deferred=[&](const char* reason) {
+                s.owned_input_retired.store(true);s.close_requested.store(true);
+                try{s.post_status_work(s.strand,[self,reason]{self->impl_->game_busy=false;self->impl_->fail_owned_input(reason);});}catch(...){}
+            };
+            if(*delayed&&(s.close_requested.load()||self->battle_generation()!=parsed_battle||self->state()!=parsed_phase)) {
+                reject_deferred("PvE deferred original work belongs to a retired phase/generation");return;
+            }
+            if(s.pve_input_held()&&!s.owned_response_input_hold.load()&&!s.callback_output_input_hold.load()&&
+               !s.owned_input_retired.load()&&!s.close_requested.load()) {
+                auto pve=s.pve_binding.load();if(!pve)pve=s.pve_return_input_hold.load();
+                if(!s.pve_transport_current(pve)) {
+                    reject_deferred("PvE cannot defer an already retired input source");return;
+                }
+                if(std::any_of(records.begin(),records.end(),[](const auto& record){return
+                    std::holds_alternative<RecoveredWorldRecords::ContextNotification>(record);})) {
+                    reject_deferred("PvE terminal context may not be deferred across pending output");return;
+                }
+                auto retained=weak_work.lock();std::shared_ptr<std::function<void()>> absent;
+                if(!retained||!s.pve_deferred_game_work.compare_exchange_strong(absent,retained)) {
+                    reject_deferred("PvE already retains its one original GAME job");return;
+                }
+                *delayed=true; // Retain game_busy; no capture reset, TLS or business has begun.
+                if(s.close_requested.load()||s.owned_input_retired.load()||!s.pve_transport_current(pve)) {
+                    auto expected=retained;s.pve_deferred_game_work.compare_exchange_strong(expected,{});
+                    reject_deferred("PvE deferred source retired while parking original work");
+                }
+                return;
+            }
             // A batch parsed/posted BEFORE arm cannot be rolled back into raw
             // input. Reject it before ANY callback/capture/owner mutation; no
             // splitting, redispatch, or reclassification of those records.
@@ -4458,7 +4649,9 @@ struct Session::Impl {
                                std::holds_alternative<RecoveredBattleCommand::Action2Request>(record) ||
                                std::holds_alternative<RecoveredBattleCommand::ControlRequest>(record) ||
                                std::holds_alternative<RecoveredSkillCommand::Record>(record) ||
-                               std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record);
+                               std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record) ||
+                               std::holds_alternative<RecoveredSosBattleCommand::Request>(record) ||
+                               std::holds_alternative<RecoveredBattleFleeCommand::Request>(record);
                     });
                     if(has_battle_command && self->state()!=SessionState::InBattle)
                         throw std::runtime_error("Recovered attack outside battle state");
@@ -4720,7 +4913,12 @@ struct Session::Impl {
                     s.game_busy=false;s.fail("Native PK terminal exact ACK handoff failed");
                 });}catch(...) {} // Independently armed strand deadline remains.
             }
-        });
+        };
+        auto outstanding=actual_world_work_pending.load();
+        do {if(outstanding==UINT64_MAX)throw std::length_error("Actual WORLD work lifetime exhausted");}
+        while(!actual_world_work_pending.compare_exchange_weak(outstanding,outstanding+1));
+        work_ticket->armed=true;
+        post_status_work(game,[self=owner.shared_from_this(),work=std::move(work)]{(*work)();});
     }
     void deliver(std::vector<Packet> packets) {
         for (const auto& packet : packets) log_packet(packet, "C2S");
@@ -4783,6 +4981,11 @@ struct Session::Impl {
             }
             return;
         }
+        const auto pve=writes.front().owned_pve;
+        if(pve&&(!pve_transport_current(pve->binding.data_)||pve_output.load()!=pve||
+           pve->frame!=writes.front().bytes||pve->completing.load())) {
+            complete_pve_output(pve,false);fail("PvE outbox lost exact FIFO custody");return;
+        }
         const auto marked=writes.front().return_output;
         if(marked){
             const auto output=marked->cohort.lock();const auto publication=output?output->publication.load():nullptr;
@@ -4831,7 +5034,7 @@ struct Session::Impl {
         active_write_continuation=continuation;
         owner.invalidate_actor_status_writes(); // Final exhaustive socket sink.
         auto completion=
-            [self = owner.shared_from_this(), bytes,marked,continuation,status_seal,initial_ticket,initial_status,initial_seal,outward_marker,outward_seal,movement_marker,callback_component](const asio::error_code& ec, std::size_t transferred) {
+            [self = owner.shared_from_this(), bytes,marked,continuation,status_seal,initial_ticket,initial_status,initial_seal,outward_marker,outward_seal,movement_marker,callback_component,pve](const asio::error_code& ec, std::size_t transferred) {
                 auto& s = *self->impl_;
                 [[maybe_unused]] const auto status_admission=self->begin_actor_status_writer();
                 const bool owned_completion=s.has_input_hold() || s.owned_input_retired.load();
@@ -4867,6 +5070,11 @@ struct Session::Impl {
                         std::size_t(std::find_if(output->recipients.begin(),output->recipients.end(),
                             [&](const auto& recipient){return recipient->session==self;})-output->recipients.begin())))){
                     if(output)Session::fail_native_pk_return_output(output);return;
+                }
+                if(pve&&(ec||transferred!=bytes->size()||s.writes.front().owned_pve!=pve||
+                   s.writes.front().bytes!=bytes||s.writes.front().held||pve->frame!=bytes||
+                   s.pve_output.load()!=pve||!s.pve_transport_current(pve->binding.data_))) {
+                    s.complete_pve_output(pve,false);s.fail("PvE output was not its exact whole write");return;
                 }
                 if (ec) { s.fail(ec.message()); return; }
                 if(outward_marker&&transferred!=bytes->size()){
@@ -5044,6 +5252,7 @@ struct Session::Impl {
                 const auto completed_input_lease=s.writes.front().owned_input_lease;
                 s.write_bytes -= s.writes.front().bytes->size();
                 s.writes.pop_front();
+                if(pve)s.complete_pve_output(pve,true);
                 if(outward_marker)outward_marker->frame->identity->active.store(false); // Actual full write only.
                 if(initial_status){
                     const auto& context=initial_ticket->member->identity->status;
@@ -5136,6 +5345,8 @@ struct Session::Impl {
         }
     }
     void close() {
+        if(pve_deferred_game_work.exchange({}))game_busy=false;
+        if(const auto returned=pve_return_input_hold.exchange({}))returned->phase.store(OwnedPveBinding::Data::Phase::Failed);
         if(native_logout_phase!=NativeLogoutPhase::None&&native_logout_phase!=NativeLogoutPhase::AckQueued)native_logout_phase=NativeLogoutPhase::Failed;
         for(const auto& queued:writes)if(queued.movement_response)queued.movement_response->fail();
         retire_outward_status_writes();
@@ -5163,6 +5374,10 @@ struct Session::Impl {
         finish();
     }
     void fail(const std::string& reason) {
+        if(pve_deferred_game_work.exchange({}))game_busy=false;
+        if(const auto returned=pve_return_input_hold.exchange({}))returned->phase.store(OwnedPveBinding::Data::Phase::Failed);
+        if(const auto output=pve_output.load())complete_pve_output(output,false);
+        if(const auto binding=pve_binding.load())binding->phase.store(OwnedPveBinding::Data::Phase::Failed);
         if(native_logout_phase!=NativeLogoutPhase::None)native_logout_phase=NativeLogoutPhase::Failed;
         // Pure selected movement retirement precedes old callbacks/logging.
         // Written remains a historical physical fact after later failure.
@@ -6969,6 +7184,263 @@ void Session::send_actor_status_output(std::vector<std::uint8_t> logical,
         else close();
     }
 }
+bool Session::owned_pve_entry_available_on_game() const noexcept {
+    const auto normal=impl_->normal_initialization.load();
+    if(!normal||!normal->entry||normal->entry->game_thread!=std::this_thread::get_id())return false;
+    // Only after actual GAME ownership is established may common64 identity
+    // and GAME-only callback holders be observed.
+    const auto entry=normal->entry;const auto phase=state();const auto battle=battle_generation();
+    if(closing()||!recovered_world_ready()||!account_id||!character_id||
+       impl_->mode!=ProtocolMode::God2CharacterConnection||
+       (phase!=SessionState::CharacterSelected&&phase!=SessionState::InWorld)||
+       impl_->normal_entry.load()!=entry||entry->session.lock().get()!=this||entry->retired.load()||!entry->written.load()||
+       entry->account!=account_id||entry->character!=character_id||normal->effective_battle!=battle||
+       impl_->pve_binding.load()||impl_->has_input_hold()||impl_->owned_input_retired.load()||
+       (observed_world_callback!=this&&impl_->actual_world_work_pending.load()!=0)||
+       impl_->world_response_callback_capture||impl_->normal_response_callback_capture||
+       impl_->normal_callback_admission_capture||impl_->callback_output_capture||impl_->owned_input_callback_lease||
+       impl_->native_pk_pending.load()||impl_->native_pk_terminal.load()||impl_->native_battle_pending.load()||
+       impl_->native_pk_return.load()||impl_->native_pk_return_output.load()||
+       impl_->native_pk_return_consumption.load()||impl_->native_pk_return_finalisation.load()||
+       battle>UINT64_MAX-2||impl_->pve_world_sequence==UINT64_MAX)return false;
+    if(native_channel_&&(!native_channel_acceptance_||native_channel_acceptance_->session!=this||
+       native_channel_acceptance_->id!=id()||native_channel_->presence_.expired()||
+       !native_channel_->accepts(native_channel_acceptance_->local)))return false;
+    const auto world=impl_->world_delivery_identity.load();
+    return !world||(world->account==account_id&&world->character==character_id&&
+        world->battle_generation==battle&&world->world_generation);
+}
+Session::OwnedPveBinding Session::prepare_owned_pve_entry() {
+    if(!owned_pve_entry_available_on_game())
+        throw std::logic_error("PvE entry requires the quiet actual GAME normal owner");
+    const auto initialization=normal_world_initialization_on_game();
+    if(!initialization||!initialization->entry_written()||!account_id||!character_id||closing()||
+       impl_->mode!=ProtocolMode::God2CharacterConnection||impl_->pve_binding.load()||impl_->has_input_hold()||
+       impl_->native_pk_pending.load()||impl_->native_pk_terminal.load()||
+       impl_->native_battle_pending.load()||battle_generation()>UINT64_MAX-2||impl_->pve_world_sequence==UINT64_MAX)
+        throw std::logic_error("PvE entry requires one actual Written ready normal incarnation");
+    const auto prior=impl_->world_delivery_identity.load();
+    if(prior&&(prior->account!=account_id||prior->character!=character_id||
+       prior->battle_generation!=battle_generation()||!prior->world_generation))
+        throw std::logic_error("PvE entry conflicts with current world delivery owner");
+    // CUSTOM standalone room channel1 is distinct from configured native
+    // ordinal0. Preserve that optional source separately; room channels1..3
+    // are an explicit domain conversion, not three-channel admission.
+    const auto native=native_channel_ordinal();
+    const auto channel=static_cast<std::uint8_t>(native?*native+1u:1u);
+    auto data=std::make_shared<OwnedPveBinding::Data>(weak_from_this(),*initialization,prior,id(),
+        account_id,character_id,++impl_->pve_world_sequence,battle_generation(),channel,native,state());
+    std::shared_ptr<OwnedPveBinding::Data> absent;
+    if(!normal_world_initialization_current_on_game(*initialization)||
+       !impl_->pve_binding.compare_exchange_strong(absent,data))
+        throw std::logic_error("PvE prepared incarnation changed");
+    return OwnedPveBinding(std::move(data));
+}
+bool Session::owned_pve_prepared_current(const OwnedPveBinding& binding)const noexcept {
+    const auto b=binding.data_;
+    return b&&b->game_thread==std::this_thread::get_id()&&impl_->pve_binding.load()==b&&
+        (observed_world_callback==this||impl_->actual_world_work_pending.load()==0)&&
+        b->phase.load()==OwnedPveBinding::Data::Phase::Prepared&&impl_->pve_transport_current(b)&&
+        b->account==account_id&&b->character==character_id&&b->initialization.entry_written()&&
+        impl_->world_delivery_identity.load()==b->prior_world&&
+        normal_world_initialization_current_on_game(b->initialization);
+}
+bool Session::commit_owned_pve_entry(const OwnedPveBinding& binding)noexcept {
+    if(!owned_pve_prepared_current(binding))return false;
+    const auto b=binding.data_;
+    auto preparing=OwnedPveBinding::Data::Phase::Prepared;
+    if(!b->phase.compare_exchange_strong(preparing,OwnedPveBinding::Data::Phase::Entering))return false;
+    impl_->retire_normal_output();
+    (void)impl_->battle_self_view_fence.advance();(void)impl_->battle_self_view_intents.advance();
+    if(const auto view=impl_->battle_self_view_source.exchange({}))view->completion.revoke();
+    auto expected=b->prephase;
+    if(!state_.compare_exchange_strong(expected,SessionState::InBattle)) {
+        b->phase.store(OwnedPveBinding::Data::Phase::Failed);
+        try{close();}catch(...){impl_->close_requested.store(true);}return false;
+    }
+    auto battle=b->prebattle;
+    if(!battle_generation_.compare_exchange_strong(battle,b->prebattle+1)) {
+        b->phase.store(OwnedPveBinding::Data::Phase::Failed);
+        try{close();}catch(...){impl_->close_requested.store(true);}return false;
+    }
+    auto entering=OwnedPveBinding::Data::Phase::Entering;
+    if(!b->phase.compare_exchange_strong(entering,OwnedPveBinding::Data::Phase::Active))return false;
+    return owned_pve_current(binding);
+}
+bool Session::owned_pve_current(const OwnedPveBinding& binding)const noexcept {
+    const auto b=binding.data_;
+    if(!b||b->game_thread!=std::this_thread::get_id()||!impl_->pve_transport_current(b)||
+       b->account!=account_id||b->character!=character_id||!b->initialization.entry_written()||
+       impl_->normal_initialization.load()!=b->initialization.data_||
+       impl_->world_delivery_identity.load()!=b->prior_world)return false;
+    const auto phase=b->phase.load();
+    return phase==OwnedPveBinding::Data::Phase::Active||phase==OwnedPveBinding::Data::Phase::Returning;
+}
+bool Session::owned_pve_cleanup_current(const OwnedPveBinding& binding)const noexcept {
+    const auto b=binding.data_;
+    if(!b||b->game_thread!=std::this_thread::get_id()||impl_->pve_binding.load()!=b||
+       b->session.lock().get()!=this||b->id!=id()||b->account!=account_id||b->character!=character_id||
+       impl_->mode!=ProtocolMode::God2CharacterConnection||native_channel_ordinal()!=b->native_ordinal||
+       impl_->world_delivery_identity.load()!=b->prior_world)return false;
+    const auto original=b->initialization.data_;const auto entry=original->entry;
+    const auto normal=impl_->normal_initialization.load();
+    if(impl_->normal_entry.load()!=entry||entry->session.lock().get()!=this||
+       entry->account!=b->account||entry->character!=b->character||!entry->written.load()||
+       (normal!=original&&(normal||!closing())))return false;
+    // Listener liveness has already retired on server shutdown; only its
+    // immutable actual accepted identity is required for this cleanup source.
+    if(native_channel_&&(!native_channel_acceptance_||native_channel_acceptance_->session!=this||
+       native_channel_acceptance_->id!=b->id))return false;
+    const auto phase=b->phase.load();
+    if(phase==OwnedPveBinding::Data::Phase::Returned||phase==OwnedPveBinding::Data::Phase::CompletingReturn)return false;
+    const auto state=this->state();const auto battle=battle_generation();
+    const bool prepared=state==b->prephase&&battle==b->prebattle;
+    const bool active=state==SessionState::InBattle&&battle==b->prebattle+1;
+    const bool disconnected=closing()&&state==SessionState::Disconnected&&
+        (battle==b->prebattle||battle==b->prebattle+1);
+    return (prepared||active||disconnected)&&impl_->pve_binding.load()==b;
+}
+void Session::abort_owned_pve_entry(const OwnedPveBinding& binding) {
+    if(!owned_pve_prepared_current(binding))throw std::logic_error("Only an uncommitted PvE preparation may abort");
+    auto expected=binding.data_;
+    if(!impl_->pve_binding.compare_exchange_strong(expected,{}))throw std::logic_error("PvE abort incarnation changed");
+    binding.data_->phase.store(OwnedPveBinding::Data::Phase::Failed);binding.data_->blocked.store(false);
+    try {
+        impl_->release_pve_deferred_game_work();
+        impl_->post_status_work(impl_->strand,[self=shared_from_this()] {
+            auto& s=*self->impl_;if(!s.game_busy&&!s.read_inflight&&!s.closing)s.resume_world_input();
+        });
+    }catch(...){try{close();}catch(...){impl_->close_requested.store(true);}throw;}
+}
+void Session::send_owned_pve_output(const OwnedPveBinding& binding,std::uint64_t sequence,
+        std::vector<std::uint8_t> logical,std::weak_ptr<OwnedPveOutputOwner> source,bool returning,bool final_return) {
+    const auto b=binding.data_;
+    if(!owned_pve_current(binding)||!sequence||sequence<=b->last_sequence||source.expired()||
+       logical.empty()||logical.size()>RecoveredWorldFrame::max_logical_size||
+       !RecoveredTaiwanServerRecords::read(logical)||
+       (!returning&&!final_return)||
+       (b->phase.load()==OwnedPveBinding::Data::Phase::Returning)!=returning||
+       (returning&&(!b->return_context||!b->successor||b->return_written)))
+        throw std::logic_error("PvE output requires exact live member and fresh complete durable outbox");
+    auto pending=std::make_shared<Impl::PveOutput>(binding,sequence,std::move(source),returning,final_return);
+    std::shared_ptr<Impl::PveOutput> absent;
+    if(!impl_->pve_output.compare_exchange_strong(absent,pending))throw std::logic_error("PvE output already pending");
+    b->blocked.store(true);b->last_sequence=sequence;
+    impl_->unsupported_callback_output();
+    impl_->retire_normal_output();
+    invalidate_actor_status_writes();
+    try {impl_->post_status_work(impl_->strand,[self=shared_from_this(),pending,logical=std::move(logical)] {
+        auto& s=*self->impl_;
+        if(!s.pve_transport_current(pending->binding.data_)||s.pve_output.load()!=pending||
+           (!pending->binding.data_->output_started&&!s.world_input.empty())||
+           s.world_input.size()>16384||!s.world_pending_records.empty()||s.skill_deadline||s.native_skill_generation) {
+            s.complete_pve_output(pending,false);s.fail("PvE output intersects retired or incomplete input");return;
+        }
+        try {
+            // Only the first Entry output owns a raw-prefix quiet cut. Later
+            // frames retain bounded raw bytes under this same binding's hold;
+            // they never parse/reclassify them or infer a native turn nonce.
+            pending->binding.data_->output_started=true;
+            auto bytes=std::make_shared<std::vector<std::uint8_t>>(RecoveredWorldFrame::encode(logical));
+            std::shared_ptr<Reservation> reservation;
+            {std::lock_guard lock(s.budget->mutex);
+                if(bytes->size()<=max_buffer-s.budget->bytes&&s.budget->count<max_writes) {
+                    reservation=std::make_shared<Reservation>(s.budget,bytes->size());
+                    s.budget->bytes+=bytes->size();++s.budget->count;
+                }
+            }
+            if(!reservation||bytes->size()>max_buffer-s.write_bytes||s.writes.size()>=max_writes||!s.terminal_write_allowed())
+                throw std::length_error("PvE output queue reservation unavailable");
+            pending->frame=bytes;
+            Impl::Write output{bytes,std::move(reservation)};output.owned_pve=pending;
+            s.append_write(std::move(output));s.write_bytes+=bytes->size();
+            if(s.writes.size()==1)s.write();
+        }catch(...) {s.complete_pve_output(pending,false);s.fail("PvE output queue or encoding failed");}
+    });}catch(...) {
+        auto expected=pending;impl_->pve_output.compare_exchange_strong(expected,{});
+        b->phase.store(OwnedPveBinding::Data::Phase::Failed);close();throw;
+    }
+}
+void Session::release_owned_pve_input(const OwnedPveBinding& binding) {
+    if(!owned_pve_current(binding)||impl_->pve_output.load()||
+       binding.data_->phase.load()!=OwnedPveBinding::Data::Phase::Active)
+        throw std::logic_error("PvE input cannot release before actual outbox completion");
+    binding.data_->blocked.store(false);
+    impl_->release_pve_deferred_game_work();
+    impl_->post_status_work(impl_->strand,[self=shared_from_this(),b=binding.data_] {
+        auto& s=*self->impl_;
+        if(s.pve_binding.load()!=b||b->blocked.load()||s.pve_output.load())return;
+        if(!s.pve_transport_current(b)){s.fail("PvE input release lost actual member");return;}
+        if(!s.game_busy&&!s.read_inflight&&!s.closing)s.resume_world_input();
+    });
+}
+void Session::prepare_owned_pve_return(const OwnedPveBinding& binding,
+        const RecoveredWorldRecords::ContextNotification& context) {
+    if(!owned_pve_current(binding)||impl_->pve_output.load()||observed_world_callback!=this||
+       binding.data_->phase.load()!=OwnedPveBinding::Data::Phase::Active||
+       std::count_if(observed_world_records.begin(),observed_world_records.end(),[](const auto& record) {
+           return std::holds_alternative<RecoveredWorldRecords::ContextNotification>(record);
+       })!=1||
+       std::none_of(observed_world_records.begin(),observed_world_records.end(),[&](const auto& record) {
+           return std::get_if<RecoveredWorldRecords::ContextNotification>(&record)==&context;
+       }))throw std::logic_error("PvE return requires this member's actual terminal context callback");
+    auto b=binding.data_;
+    const auto selector=impl_->make_receiver_selector(b->initialization.data_->entry,context.payload);
+    if(!selector)throw std::logic_error("PvE return context does not name the retained actual world actor");
+    b->successor=std::make_shared<const NormalWorldInitialization::Data>(b->initialization.data_,b->prebattle+2,selector);
+    if(b->prior_world)b->successor_world=std::make_shared<const WorldDeliveryIdentity>(WorldDeliveryIdentity{
+        b->account,b->character,b->prior_world->world_generation,b->prebattle+2});
+    b->return_context=context.payload;b->blocked.store(true);
+    b->phase.store(OwnedPveBinding::Data::Phase::Returning);
+}
+bool Session::complete_owned_pve_return(const OwnedPveBinding& binding)noexcept {
+    const auto b=binding.data_;
+    if(!owned_pve_current(binding)||!b->successor||!b->return_context||!b->return_written||
+       impl_->pve_output.load()||b->phase.load()!=OwnedPveBinding::Data::Phase::Returning||
+       impl_->receiver_selector!=b->successor->receiver_selector)return false;
+    // The host has committed ONLY this member's Return claim and accepted the
+    // fresh whole scene output. Other members retain their canonical room.
+    impl_->retire_normal_output();
+    auto returning=OwnedPveBinding::Data::Phase::Returning;
+    if(!b->phase.compare_exchange_strong(returning,OwnedPveBinding::Data::Phase::CompletingReturn))return false;
+    auto phase=SessionState::InBattle;
+    if(!state_.compare_exchange_strong(phase,b->prephase)) {
+        b->phase.store(OwnedPveBinding::Data::Phase::Failed);
+        try{close();}catch(...){impl_->close_requested.store(true);}return false;
+    }
+    auto generation=b->prebattle+1;
+    if(!battle_generation_.compare_exchange_strong(generation,b->prebattle+2)) {
+        b->phase.store(OwnedPveBinding::Data::Phase::Failed);
+        try{close();}catch(...){impl_->close_requested.store(true);}return false;
+    }
+    impl_->normal_initialization.store(b->successor);
+    impl_->world_delivery_identity.store(b->successor_world);
+    std::shared_ptr<OwnedPveBinding::Data> absent;
+    if(!impl_->pve_return_input_hold.compare_exchange_strong(absent,b))return false;
+    auto completing=OwnedPveBinding::Data::Phase::CompletingReturn;
+    if(!b->phase.compare_exchange_strong(completing,OwnedPveBinding::Data::Phase::Returned))return false;
+    auto expected=b;if(!impl_->pve_binding.compare_exchange_strong(expected,{}))return false;
+    // Retain input independently until the host's returned callback has queued
+    // its T1 WORLD reconciliation after these actual Return full Writes.
+    return true;
+}
+void Session::resume_owned_pve_return_input(const OwnedPveBinding& binding) {
+    const auto b=binding.data_;
+    if(!b||b->game_thread!=std::this_thread::get_id()||impl_->pve_binding.load()||
+       impl_->pve_return_input_hold.load()!=b||b->phase.load()!=OwnedPveBinding::Data::Phase::Returned||
+       !b->return_written||impl_->pve_output.load()||!impl_->pve_transport_current(b)||
+       account_id!=b->account||character_id!=b->character)
+        throw std::logic_error("PvE return input requires its actual renewed WORLD owner and queued source handoff");
+    b->blocked.store(false);auto expected=b;
+    if(!impl_->pve_return_input_hold.compare_exchange_strong(expected,{}))
+        throw std::logic_error("PvE returned input hold changed before release");
+    try {
+        impl_->release_pve_deferred_game_work();
+        impl_->post_status_work(impl_->strand,[self=shared_from_this()] {
+            auto& s=*self->impl_;if(!s.game_busy&&!s.read_inflight&&!s.closing)s.resume_world_input();
+        });
+    }catch(...){try{close();}catch(...){impl_->close_requested.store(true);}throw;}
+}
 void Session::send_native_battle_skill_publication(NativeBattleSkill delivery,
     std::weak_ptr<NativeBattleSkillPublicationOwner> source) {
     impl_->unsupported_callback_output();
@@ -8472,6 +8944,7 @@ void Session::send_world_records_with_acceptance(std::vector<std::uint8_t> logic
     });
 }
 void Session::close() {
+    if(const auto binding=impl_->pve_binding.load())binding->phase.store(OwnedPveBinding::Data::Phase::Failed);
     retire_actor_status_incarnation();
     [[maybe_unused]] const auto status_admission=begin_actor_status_writer();
     invalidate_actor_status_writes();
@@ -8514,6 +8987,7 @@ void Session::set_state(SessionState state) noexcept {
     auto current = state_.load();
     while(current!=SessionState::Disconnected) {
         if(current!=state) {
+            if(const auto binding=impl_->pve_binding.load())binding->phase.store(OwnedPveBinding::Data::Phase::Failed);
             // No old battle occurrence survives a phase boundary, even if a
             // later original response callback completes with the old bytes.
             (void)impl_->battle_self_view_fence.advance();

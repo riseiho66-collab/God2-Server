@@ -7,6 +7,7 @@
 #include "core/Application.h"
 #include "core/ApplicationGameFrame.h"
 #include "core/ApplicationGameSources.h"
+#include "core/OwnedPveApplicationSource.h"
 #include "core/TaiwanThreeChannelPlan.h"
 #include "game/TaiwanChannelCharacterLists.h"
 #include "game/OwnedTaiwanGuildChatDispatch.h"
@@ -869,6 +870,15 @@ static void validate_application_world_plan(const Config& config,const SharedWor
        (world_plan->make_taiwan_world_entry || world_plan->make_taiwan_movement))
         throw std::invalid_argument("World catalog transfer host requires its current dispatcher; actual native source transfer bridge unavailable");
     config.validate_owned_whole_bag_moves();
+    // Programmatic Config must obey the same gates as JSON loading, before
+    // database initialization or any listener/source can be constructed.
+    if(config.owned_pve_rooms_enabled&&(config.protocol_mode!=ProtocolMode::God2LegacyCharacterListCandidate||
+       !config.recovered_character_creation||!config.recovered_world_entry||!config.recovered_movement||
+       !config.recovered_account_auth||!config.recovered_dual_connection||config.mock_login||config.fixture_battle||
+       config.diagnostic_battle_participants||config.diagnostic_battle_transition||config.diagnostic_battle_after_movement))
+        throw std::invalid_argument("PvE requires authenticated normal Taiwan world independently of diagnostic combat");
+    if(config.owned_pve_rooms_enabled&&world_plan)
+        throw std::invalid_argument("Normal retained-world PvE source cannot borrow a shared-common-world or paired PK plan");
     if(config.owned_whole_bag_moves_enabled && world_plan)
         throw std::invalid_argument("Normal-entry whole bag moves cannot borrow or compete with an explicit shared world plan");
     // CUSTOM-0149: reject programmatic Config too, before any DB/listener/source.
@@ -914,6 +924,8 @@ static void validate_application_world_plan(const Config& config,const SharedWor
 static int run_server_impl(const Config& config,const WebServerPlan* web_plan,unsigned run_for_seconds,
                            const SharedWorldHostPlan* world_plan=nullptr,const TaiwanThreeChannelPlan* channels=nullptr) {
     if(channels&&world_plan)throw std::invalid_argument("Select a single world plan or a three-channel recipe");
+    if(config.owned_pve_rooms_enabled&&channels)
+        throw std::invalid_argument("Normal PvE source cannot manufacture a three-channel common-world source bridge");
     if(channels) {
         channels->validate();config.validate_owned_whole_bag_moves();
         // Every triple recipe requires these complete native paths. Refuse
@@ -960,6 +972,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
 #endif
             if(config.owned_whole_bag_moves_enabled && native_records_lab)
                 throw std::invalid_argument("Whole bag moves cannot combine native record lab fixture populations");
+            if(config.owned_pve_rooms_enabled && native_records_lab)
+                throw std::invalid_argument("PvE rooms cannot combine native record lab fixture populations");
             if(native_records_lab && (config.host!="127.0.0.1" || config.port!=2598 ||
                 !config.database.parent_path().filename().string().starts_with("private-native-blackbox-")))
                 throw std::runtime_error("Native record lab requires disposable private-native-blackbox DB and loopback2598");
@@ -1769,6 +1783,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             std::map<std::uint64_t,RecoveredWorldEntry::Body> diagnostic_remote_appearance;
             // CUSTOM-0027: isolated same-scene real-session routing, default off.
             RecoveredVisibility player_visibility;
+            std::unique_ptr<OwnedPveApplicationSource> pve_application;
             std::map<std::uint64_t,RecoveredVisibility::Presence> pending_visibility;
             std::set<std::uint64_t> pending_visibility_refresh;
             std::map<std::uint64_t,std::weak_ptr<Session>> visibility_sessions;
@@ -1782,6 +1797,10 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     const auto found=visibility_sessions.find(delivery.recipient);
                     if(found!=visibility_sessions.end())
                         if(auto peer=found->second.lock()) {
+                            // Battle owns a retained WORLD cache. Individual
+                            // return reconciles fresh actors; never dispatch
+                            // ordinary WORLD actor packets into battle handlers.
+                            if(pve_application&&pve_application->bound(*peer))continue;
                             std::optional<RecoveredCharacterPose::LogicalRecord> pose_after_spawn;
                             if(const auto spawn=RecoveredRemoteActor::parse_logical(delivery.logical)) {
                                 pose_after_spawn=player_visibility.pose_after_spawn(*spawn);
@@ -1833,6 +1852,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             };
             const auto publish_visibility_movement=[&](Session& session,
                     const RecoveredMovementService::CommittedMove& committed) {
+                if(pve_application){pve_application->committed_movement(session,committed);return;}
                 if(!player_visibility.contains(session.id())) {
                     if(!config.diagnostic_town_player_visibility || !pending_visibility.contains(session.id()))
                         throw std::runtime_error("Visibility movement without owned presence");
@@ -3043,6 +3063,14 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
             std::unique_ptr<OwnedPkInvitationService::RoomAuthority> pk_rooms;
             std::unique_ptr<OwnedTaiwanPkRoomBackend> owned_pk_backend;
             std::map<std::uint64_t,std::uint64_t> pk_world_generations;
+            if(config.owned_pve_rooms_enabled) {
+                if(!recovered_movement||!config.recovered_dual_connection||fixture_mode)
+                    throw std::invalid_argument("PvE requires the actual normal Taiwan dual-connection movement owner");
+                pve_application=std::make_unique<OwnedPveApplicationSource>(database,lua,*recovered_movement,
+                    player_visibility,deliver_visibility);
+            }
+            struct PveSourceLifetime {std::unique_ptr<OwnedPveApplicationSource>& owner;
+                ~PveSourceLifetime(){if(owner)owner->stop();}} pve_source_lifetime{pve_application};
             // This guard covers EVERY PK peer observer, not only the roster
             // reader. A caught nested resolver still poisons the outer result.
             // Genuine cached supplier for the configured preparation owner.
@@ -4455,7 +4483,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                 if(committed.displaced_steps) ready=true;
                                 return std::move(committed.reply);
                             }
-                            if(config.diagnostic_town_player_visibility) {
+                            if(config.diagnostic_town_player_visibility || (pve_application&&player_visibility.contains(session.id()))) {
                                 auto committed=recovered_movement->move_committed(
                                     session.id(),session.account_id,session.character_id,requests);
                                 publish_visibility_movement(session,committed);
@@ -10818,12 +10846,24 @@ if(guild_officer_runtime && player_guild(session) &&
                 }
                 if(game_handlers.world_records) {
                     const auto original=game_handlers.world_records;
-                    game_handlers.world_records=[original](Session& session,
+                    game_handlers.world_records=[&,original](Session& session,
                             std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
-                        // Native SOS is a separate typed source. No real shared
-                        // PvE admission/save/return owner is mounted yet. Reject
-                        // the WHOLE input before any unrelated prefix can commit;
-                        // never cast support into party or invent an empty ACK.
+                        if(pve_application) {
+                            if(session.state()!=SessionState::InBattle&&session.recovered_world_ready()) {
+                                visibility_sessions.insert_or_assign(session.id(),session.shared_from_this());
+                                pve_application->observe_world(session);
+                            }
+                            // The real room owner classifies the WHOLE callback
+                            // before ordinary dispatch can mutate any prefix.
+                            if(pve_application->handle(session,records))return std::vector<std::uint8_t>{};
+                            auto response=original(session,records);
+                            if(response) {
+                                pve_application->observe_world(session);
+                                pve_application->observe_movement(session,records,*response);
+                            }
+                            return response;
+                        }
+                        // Disabled feature: no party alias or synthetic ACK.
                         if(std::any_of(records.begin(),records.end(),[](const auto& record){
                             return std::holds_alternative<RecoveredSosSupportRequest::Request>(record) ||
                                 std::holds_alternative<RecoveredSosBattleCommand::Request>(record);
@@ -10834,6 +10874,15 @@ if(guild_officer_runtime && player_guild(session) &&
                         }
                         return original(session,records);
                     };
+                    if(pve_application) {
+                        const auto previous=on_disconnect;
+                        on_disconnect=[&,previous](std::shared_ptr<Session> session) {
+                            std::exception_ptr failure;
+                            try {if(session)pve_application->disconnected(*session);}catch(...) {failure=std::current_exception();}
+                            try {if(previous)previous(std::move(session));}catch(...) {if(!failure)failure=std::current_exception();}
+                            if(failure)std::rethrow_exception(failure);
+                        };
+                    }
                 }
                 game_character_sources.emplace(std::move(game_handlers));
             }
@@ -10848,6 +10897,7 @@ if(guild_officer_runtime && player_guild(session) &&
                 ~OrdinaryPolicyReloadGuard(){if(owner)owner->stop();}
             } ordinary_policy_reload_guard{ordinary_policy_reloads};
             auto scheduler=std::make_shared<Scheduler>(game.get_executor(),std::chrono::milliseconds(50),[&] {
+                if(pve_application)pve_application->poll();
                 if(ordinary_policy_reloads)ordinary_policy_reloads->poll(std::chrono::steady_clock::now());
                 if(party_preview_transport)party_preview_transport->settle(); // Pending has no native timeout.
                 world.update(0.05f);
@@ -10883,6 +10933,7 @@ if(guild_officer_runtime && player_guild(session) &&
             bool gameplay_retired=false;
             auto retire_gameplay=[&] {
                 if(gameplay_retired)return;gameplay_retired=true;
+                if(pve_application)pve_application->retire_dispatch(); // Preserve save-only cleanup until NET/GAME drain.
                 if(battle_row_preferences)battle_row_preferences->stop(); // Before other retirement observers.
                 if(ordinary_policy_reloads)ordinary_policy_reloads->stop();
                 if(hosted_pk)hosted_pk_lifetime.stop();

@@ -3,6 +3,7 @@
 #include "db/GuildOfficerSqliteMigrations.h"
 #include "core/Application.h"
 #include "core/TaiwanSkillImportOperator.h"
+#include "core/OwnedBankCapacityOperator.h"
 #include "core/Logger.h"
 #include "db/SqliteDatabase.h"
 #include "db/ServerSqliteMigrations.h"
@@ -12,6 +13,8 @@
 #include <charconv>
 int main(int argc,char** argv) {
     try {
+        if(const auto capacity=god2::OwnedBankCapacityOperator::parse_if_requested(argc,argv))
+            return god2::OwnedBankCapacityOperator::run(*capacity);
         if(const auto skill_import=god2::TaiwanSkillImportOperator::parse_if_requested(argc,argv))
             return god2::TaiwanSkillImportOperator::run(*skill_import);
         std::filesystem::path path="config/server.json";
@@ -46,6 +49,7 @@ int main(int argc,char** argv) {
                     "  Creates all 5 tables in one transaction; existing feature tables cause failure. No item grants, import or gameplay activation.\n";
                 std::cout<<"--owned-blacklist-schema: fresh CUSTOM-0096 storage only; requires --migrate-only, forbids any --run-for; mutually exclusive with other schema flags. No population or gameplay activation.\n";
                 god2::TaiwanSkillImportOperator::write_help(std::cout);
+                god2::OwnedBankCapacityOperator::write_help(std::cout);
                 return 0;
             }
             else throw std::runtime_error("Invalid command line; use --help");

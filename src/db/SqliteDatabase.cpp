@@ -9,6 +9,7 @@
 #include "db/SqliteNativeWorldEntrySnapshotRepository.h"
 #include "db/SqliteNativeEquipmentSnapshotRepository.h"
 #include "db/SqliteOwnedInventoryRepository.h"
+#include "db/SqliteProcessOwnership.h"
 #include "db/SqliteOwnedBlacklistRepository.h"
 #include "db/SqliteCharacterRepository.h"
 #include "db/SqliteRecoveredCharacterRepository.h"
@@ -23,6 +24,10 @@
 namespace god2 {
 struct SqliteDatabase::Impl {
     bool taiwan_skill_import_only=false;
+    bool bank_capacity_only=false;
+    // Declared before connection: all readers/writers and SQLite close BEFORE
+    // the last shared/exclusive process ownership handle is released.
+    std::unique_ptr<SqliteProcessOwnership> process_owner;
     struct Close { void operator()(sqlite3* db) const noexcept { sqlite3_close_v2(db); } };
     std::unique_ptr<sqlite3, Close> connection;
     std::unique_ptr<SqliteAccountRepository> accounts;
@@ -175,18 +180,25 @@ SqliteDatabase::SqliteDatabase(std::filesystem::path path, std::vector<Migration
 }
 SqliteDatabase::~SqliteDatabase() = default;
 void SqliteDatabase::initialize() {
-    if(impl_ && impl_->taiwan_skill_import_only)
+    if(impl_ && (impl_->taiwan_skill_import_only||impl_->bank_capacity_only))
         throw DatabaseError("Import-only database cannot initialize gameplay owners");
     if (impl_) return;
     if (path_.empty()) throw DatabaseError("SQLite path must not be empty");
     const auto utf8 = path_.u8string();
     if (utf8.find(u8'\0') != std::u8string::npos) throw DatabaseError("SQLite path contains NUL");
     auto candidate = std::make_unique<Impl>();
+    // Preserve ordinary SQLite CREATE and private in-memory test semantics.
+    // File-backed hosts acquire a shared actual-file lifetime before any SQL.
+    if(path_!=std::filesystem::path(":memory:"))
+        candidate->process_owner=SqliteProcessOwnership::acquire(path_,SqliteProcessOwnership::Mode::Shared,true);
+    const auto owned_utf8=candidate->process_owner?candidate->process_owner->path().u8string():utf8;
     sqlite3* raw = nullptr;
-    const int result = sqlite3_open_v2(reinterpret_cast<const char*>(utf8.c_str()), &raw,
+    const int result = sqlite3_open_v2(reinterpret_cast<const char*>(owned_utf8.c_str()), &raw,
                                       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
     candidate->connection.reset(raw);
     if (result != SQLITE_OK) throw DatabaseError(raw ? sqlite3_errmsg(raw) : "Unable to allocate SQLite connection");
+    if(candidate->process_owner&&!candidate->process_owner->path_current())
+        throw DatabaseError("SQLite file identity changed after process ownership");
     sqlite_detail::check(raw, sqlite3_busy_timeout(raw, 5000));
     sqlite_detail::execute(raw, "PRAGMA foreign_keys=ON");
     {
@@ -274,6 +286,7 @@ void SqliteDatabase::initialize_existing_for_taiwan_skill_import() {
     if(utf8.empty() || utf8.find(u8'\0')!=std::u8string::npos)
         throw DatabaseError("Existing skill import resolved path is invalid");
     auto candidate=std::make_unique<Impl>();candidate->taiwan_skill_import_only=true;
+    candidate->process_owner=SqliteProcessOwnership::acquire(opened_path,SqliteProcessOwnership::Mode::Shared);
     sqlite3* raw=nullptr;
     const int result=sqlite3_open_v2(reinterpret_cast<const char*>(utf8.c_str()),&raw,
         SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,nullptr); // Deliberately no CREATE/URI.
@@ -288,6 +301,7 @@ void SqliteDatabase::initialize_existing_for_taiwan_skill_import() {
     // this metadata join is not a private file-handle incarnation attestation.
     if(!std::filesystem::equivalent(opened_path,actual_path,error) || error)
         throw DatabaseError("Existing skill import opened a different database path");
+    if(!candidate->process_owner->path_current())throw DatabaseError("Existing skill import file owner changed");
     sqlite_detail::check(raw,sqlite3_busy_timeout(raw,5000));
     sqlite_detail::execute(raw,"PRAGMA foreign_keys=ON"); // Connection setting only, no schema change.
     {
@@ -300,9 +314,78 @@ void SqliteDatabase::initialize_existing_for_taiwan_skill_import() {
     // migrated_ stays false; schema4/5 is qualified by the actual importer before DML.
     impl_=std::move(candidate);
 }
+void SqliteDatabase::initialize_existing_for_owned_bank_capacity() {
+    if(impl_||migrated_)throw DatabaseError("Capacity requires a fresh exclusive Database owner");
+    auto candidate=std::make_unique<Impl>();candidate->bank_capacity_only=true;
+    candidate->process_owner=SqliteProcessOwnership::acquire(path_,SqliteProcessOwnership::Mode::Exclusive);
+    const auto utf8=candidate->process_owner->path().u8string();sqlite3* raw=nullptr;
+    const auto opened=sqlite3_open_v2(reinterpret_cast<const char*>(utf8.c_str()),&raw,
+        SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,nullptr); // No CREATE or URI.
+    candidate->connection.reset(raw);
+    if(opened!=SQLITE_OK)throw DatabaseError(raw?sqlite3_errmsg(raw):"Cannot open existing capacity database");
+    if(!candidate->process_owner->path_current())throw DatabaseError("Capacity database file identity changed");
+    sqlite_detail::check(raw,sqlite3_busy_timeout(raw,0));
+    sqlite_detail::execute(raw,"PRAGMA foreign_keys=ON");
+    {sqlite_detail::Statement fk(raw,"PRAGMA foreign_keys");
+     if(!fk.row()||fk.integer(0)!=1||fk.row())throw DatabaseError("Capacity requires foreign keys");}
+    // Additional SQLite-level exclusion refuses active/noncooperating SQLite
+    // connections. The process lifetime lock separately excludes current
+    // server owners with cached Sessions even while their SQL is idle.
+    {sqlite_detail::Statement mode(raw,"PRAGMA locking_mode=EXCLUSIVE");
+     if(!mode.row()||mode.text(0)!="exclusive"||mode.row())throw DatabaseError("Capacity exclusive SQLite lock unavailable");}
+    sqlite_detail::execute(raw,"BEGIN EXCLUSIVE");sqlite_detail::execute(raw,"COMMIT");
+    if(!candidate->process_owner->path_current())throw DatabaseError("Capacity exclusive file owner changed");
+    candidate->accounts=std::make_unique<SqliteAccountRepository>(raw);
+    candidate->recovered_characters=std::make_unique<SqliteRecoveredCharacterRepository>(raw);
+    candidate->owned_inventory=std::make_unique<SqliteOwnedInventoryRepository>(raw,*candidate->accounts,*candidate->recovered_characters);
+    candidate->native_equipment_snapshots=std::make_unique<SqliteNativeEquipmentSnapshotRepository>(raw,*candidate->accounts,*candidate->recovered_characters);
+    // migrated_ remains false. Only the following dedicated operations can use
+    // these exact same-connection writers; all ordinary getters stay closed.
+    impl_=std::move(candidate);
+}
+nlohmann::json SqliteDatabase::owned_bank_capacity_draft(std::uint64_t account,std::uint64_t character) {
+    if(!impl_||!impl_->bank_capacity_only||impl_->pk_player_thread!=std::this_thread::get_id()||
+       !impl_->process_owner||!impl_->process_owner->exclusive()||!impl_->process_owner->path_current())
+        throw DatabaseError("Capacity draft requires its actual exclusive offline owner");
+    SqliteOwnedEquipmentTransaction joint(*impl_->owned_inventory,*impl_->native_equipment_snapshots);
+    const auto before=joint.observe_before(account,character);
+    if(!before||!before->inventory||!before->equipment)throw DatabaseError("Capacity draft requires existing full owned material");
+    return OwnedBankCapacityProvision::draft({*before->inventory,*before->equipment},impl_->process_owner->file_identity());
+}
+SqliteDatabase::CapacityOutcome SqliteDatabase::provision_owned_bank_capacity(const nlohmann::json& manifest) {
+    if(!impl_||!impl_->bank_capacity_only||impl_->pk_player_thread!=std::this_thread::get_id()||
+       !impl_->process_owner||!impl_->process_owner->exclusive()||!impl_->process_owner->path_current())
+        throw DatabaseError("Capacity provision requires its actual exclusive offline owner");
+    if(!manifest.is_object()||!manifest.contains("account_id")||!manifest.at("account_id").is_number_unsigned()||
+       !manifest.contains("character_id")||!manifest.at("character_id").is_number_unsigned())
+        throw DatabaseError("Capacity manifest requires full unsigned account/character");
+    SqliteOwnedEquipmentTransaction joint(*impl_->owned_inventory,*impl_->native_equipment_snapshots);
+    const auto before=joint.observe_before(manifest.at("account_id").get<std::uint64_t>(),manifest.at("character_id").get<std::uint64_t>());
+    if(!before)throw DatabaseError("Capacity material source is absent");
+    const auto plan=OwnedBankCapacityProvision::plan(manifest,*before,impl_->process_owner->file_identity());
+    const auto current=[this]() noexcept {return impl_&&impl_->bank_capacity_only&&impl_->process_owner&&
+        impl_->process_owner->exclusive()&&impl_->process_owner->current()&&impl_->pk_player_thread==std::this_thread::get_id();};
+    const auto committed=joint.replace_from_issuer(plan.expected,plan.next,
+        [&](const auto& expected,const auto& next,auto)->std::optional<SqliteOwnedEquipmentTransaction::State> {
+            if(!current()||expected.inventory!=plan.expected.inventory||expected.equipment!=plan.expected.equipment||next!=plan.next)return std::nullopt;
+            return plan.next;
+        },current);
+    if(!committed)return {}; // Never retry an unknown or refused attempt.
+    // Truth is retained even if post-COMMIT qualification throws/fails. No
+    // postcommit allocation/SQL observer can turn the durable write into retry.
+    CapacityOutcome outcome{true,false};
+    try{outcome.connection_current=current()&&impl_->process_owner->path_current()&&joint.committed_current(*committed);}catch(...){return outcome;}
+    return outcome;
+}
+sqlite3* SqliteDatabase::owned_pve_connection() {
+    if(!impl_||!migrated_||impl_->taiwan_skill_import_only||impl_->bank_capacity_only||!impl_->connection||
+       impl_->pk_player_thread!=std::this_thread::get_id()||(impl_->process_owner&&!impl_->process_owner->current()))
+        throw DatabaseError("Owned PVE requires the actual migrated Database/thread owner");
+    return impl_->connection.get();
+}
 void SqliteDatabase::migrate() {
     if (!impl_) throw DatabaseError("Initialize database before migrating");
-    if(impl_->taiwan_skill_import_only)
+    if(impl_->taiwan_skill_import_only||impl_->bank_capacity_only)
         throw DatabaseError("Import-only database cannot run migrations");
     migrated_ = false;
     if(migrations_.back().version==53) {

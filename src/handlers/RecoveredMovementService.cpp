@@ -366,31 +366,26 @@ std::optional<RecoveredPosition> RecoveredMovementService::current_world_locatio
 }
 std::optional<RecoveredPosition> RecoveredMovementService::current_location(
     std::uint64_t session,std::uint64_t account,std::uint64_t character) const {
-    if(owned_movement_busy_) {
-        const auto snapshot=[&]()->std::optional<Position> {
-            const auto found=active_.find(session);
-            if(found==active_.end())return std::nullopt;
-            return found->second;
-        }();
-        if(owned_movement_invalid_ || !snapshot || !snapshot->ready || snapshot->transfer_pending ||
-           snapshot->account!=account || snapshot->character!=character)return std::nullopt;
-        const auto saved=characters_.load_position(account,character);
-        const auto now=active_.find(session);
-        if(owned_movement_invalid_ || now==active_.end() || now->second!=*snapshot || saved!=snapshot->saved)
-            return std::nullopt;
-        return RecoveredPosition{snapshot->area,snapshot->scene,
-            static_cast<std::uint16_t>(snapshot->x),static_cast<std::uint16_t>(snapshot->y),
-            snapshot->saved?snapshot->saved->revision:0};
-    }
-    const auto it=active_.find(session);
-    if(it==active_.end() || !it->second.ready || it->second.transfer_pending ||
-       it->second.account!=account || it->second.character!=character ||
-       characters_.load_position(account,character)!=it->second.saved)
+    // A read can call an observer too. Apply the same fence as the owned
+    // movement transaction, while allowing its existing nested read-only use.
+    const bool owns_fence=!owned_movement_busy_;
+    if(owns_fence){owned_movement_busy_=true;owned_movement_invalid_=false;}
+    struct End {const RecoveredMovementService& self;bool owns;
+        ~End(){if(owns)self.owned_movement_busy_=self.owned_movement_invalid_=false;}} end{*this,owns_fence};
+    const auto snapshot=[&]()->std::optional<Position> {
+        const auto found=active_.find(session);
+        if(found==active_.end())return std::nullopt;
+        return found->second;
+    }();
+    if(owned_movement_invalid_ || !snapshot || !snapshot->ready || snapshot->transfer_pending ||
+       snapshot->account!=account || snapshot->character!=character)return std::nullopt;
+    const auto saved=characters_.load_position(account,character);
+    const auto now=active_.find(session);
+    if(owned_movement_invalid_ || now==active_.end() || now->second!=*snapshot || saved!=snapshot->saved)
         return std::nullopt;
-    const auto& position=it->second;
-    return RecoveredPosition{position.area,position.scene,
-        static_cast<std::uint16_t>(position.x),static_cast<std::uint16_t>(position.y),
-        position.saved?position.saved->revision:0};
+    return RecoveredPosition{snapshot->area,snapshot->scene,
+        static_cast<std::uint16_t>(snapshot->x),static_cast<std::uint16_t>(snapshot->y),
+        snapshot->saved?snapshot->saved->revision:0};
 }
 std::vector<std::uint8_t> RecoveredMovementService::move(std::uint64_t session,std::uint64_t account,
     std::uint64_t character,std::span<const RecoveredMovement::Request> requests) {
@@ -398,12 +393,22 @@ std::vector<std::uint8_t> RecoveredMovementService::move(std::uint64_t session,s
 }
 void RecoveredMovementService::resume_after_battle(std::uint64_t session,std::uint64_t account,std::uint64_t character) {
     reject_owned_movement_mutation();
+    owned_movement_busy_=true;owned_movement_invalid_=false;
+    struct End {RecoveredMovementService& self;~End(){self.owned_movement_busy_=self.owned_movement_invalid_=false;}} end{*this};
     const auto it=active_.find(session);
     if(it==active_.end() || !it->second.ready || it->second.transfer_pending || it->second.account!=account ||
-       it->second.character!=character || characters_.load_position(account,character)!=it->second.saved)
+       it->second.character!=character)
+        throw std::invalid_argument("Battle return movement baseline mismatch");
+    // A repository callback may remove this connection. Never retain its node
+    // across SQL; the mutation fence also rejects remove/reprepare with equal
+    // values, which a value comparison alone cannot distinguish.
+    const auto before=it->second;
+    const auto saved=characters_.load_position(account,character);
+    const auto now=active_.find(session);
+    if(owned_movement_invalid_ || now==active_.end() || now->second!=before || saved!=before.saved)
         throw std::invalid_argument("Battle return movement baseline mismatch");
     // Native world return resets the connection ring, not the saved coordinates.
-    it->second.slot=0;
+    now->second.slot=0;
 }
 std::vector<std::uint8_t> RecoveredMovementService::begin_town_transfer(
     std::uint64_t session,std::uint64_t account,std::uint64_t character,

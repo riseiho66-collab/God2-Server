@@ -60,6 +60,11 @@ public:
     }
 
     std::size_t size() const noexcept { return members_.size(); }
+    // Pure owned GAME snapshot for retained-world reconciliation. This does
+    // not qualify a recipient, deliver bytes or mutate the visibility set.
+    std::vector<Presence> retained_scene(Scene scene)const {
+        std::vector<Presence> result;for(const auto& [id,p]:members_){(void)id;if(p.location==scene)result.push_back(p);}return result;
+    }
     bool contains(std::uint64_t session) const noexcept { return members_.contains(session); }
     std::optional<Presence> snapshot(std::uint64_t session) const {
         const auto found=members_.find(session);

@@ -3,6 +3,7 @@
 #include "db/SqliteDatabase.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include <array>
+#include <functional>
 #include <stdexcept>
 
 namespace {
@@ -11,6 +12,31 @@ template<class F> void rejects(F f) {
     try { f(); } catch(const std::exception&) { return; }
     throw std::runtime_error("Invalid recovered movement accepted");
 }
+// Delegate real persisted material, injecting only a repository read observer.
+// This is a SOURCE regression, not an executed DB/native acceptance claim.
+struct ObservedPositions final:god2::RecoveredCharacterRepository {
+    god2::RecoveredCharacterRepository& source;std::function<void()> read;
+    explicit ObservedPositions(god2::RecoveredCharacterRepository& value):source(value){}
+    std::optional<god2::CharacterRoleSnapshot> load_role(std::uint64_t a,std::uint64_t c)override{return source.load_role(a,c);}
+    god2::RoleResourceCommit commit_role_resources(std::uint64_t a,std::uint64_t c,
+        const std::optional<god2::CharacterRoleSnapshot>& r,const god2::CharacterResources& e,
+        god2::CharacterRoleSnapshot n,god2::CharacterResources v)override{return source.commit_role_resources(a,c,r,e,std::move(n),v);}
+    std::optional<god2::CharacterExperience> load_experience(std::uint64_t a,std::uint64_t c)override{return source.load_experience(a,c);}
+    god2::BattleSettlement settle_battle(std::uint64_t a,std::uint64_t c,std::uint64_t b,
+        const god2::CharacterResources& e,god2::CharacterResources n,bool w,std::uint64_t x,
+        const std::optional<god2::BattleProgressionCommit>& p)override{return source.settle_battle(a,c,b,e,n,w,x,p);}
+    std::uint64_t reserve_battle(std::uint64_t a,std::uint64_t c,const god2::CharacterResources& e)override{return source.reserve_battle(a,c,e);}
+    std::optional<god2::CharacterResources> load_resources(std::uint64_t a,std::uint64_t c)override{return source.load_resources(a,c);}
+    god2::CharacterResources commit_resources(std::uint64_t a,std::uint64_t c,
+        const std::optional<god2::CharacterResources>& e,god2::CharacterResources n)override{return source.commit_resources(a,c,e,n);}
+    god2::RecoveredCharacter create(std::uint64_t a,const std::array<std::uint8_t,40>& p)override{return source.create(a,p);}
+    std::vector<god2::RecoveredCharacter> list_for_account(std::uint64_t a)override{return source.list_for_account(a);}
+    std::optional<god2::RecoveredPosition> load_position(std::uint64_t a,std::uint64_t c)override{
+        const auto value=source.load_position(a,c);if(read)read();return value;}
+    god2::RecoveredPosition commit_position(std::uint64_t a,std::uint64_t c,
+        const std::optional<god2::RecoveredPosition>& e,std::uint16_t ar,std::uint16_t s,std::uint16_t x,std::uint16_t y)override{
+        return source.commit_position(a,c,e,ar,s,x,y);}
+};
 }
 void test_recovered_movement_service() {
     using Request=god2::RecoveredMovement::Request;
@@ -107,6 +133,25 @@ void test_recovered_movement_service() {
     require(reset_move.before==walked.after && reset_move.displaced_steps==0 &&
             reset_move.reply==std::vector<std::uint8_t>(ack.begin(),ack.end()),
             "Battle return did not reset ring while retaining position");
+    ObservedPositions observed(db.recovered_characters());
+    god2::RecoveredMovementService reentrant(observed,
+        std::filesystem::path(GOD2_SOURCE_DIR)/"artifacts/world-atlas/indoor-2-15.json");
+    reentrant.prepare(99,owner,character);reentrant.bind(99,owner,character);
+    bool replaced=false;
+    observed.read=[&]{reentrant.remove(99);
+        try{reentrant.prepare(99,owner,character);replaced=true;}catch(const std::exception&){}
+    };
+    rejects([&]{reentrant.resume_after_battle(99,owner,character);});
+    require(!replaced&&!reentrant.current_world_location(99,owner,character),
+        "SQL return observer recreated or retained an erased movement owner");
+    observed.read={};reentrant.prepare(99,owner,character);reentrant.bind(99,owner,character);
+    observed.read=[&]{reentrant.remove(99);};
+    require(!reentrant.current_location(99,owner,character),
+        "Read-only position observation retained a node erased by SQL observer");
+    observed.read={};reentrant.prepare(99,owner,character);reentrant.bind(99,owner,character);
+    require(reentrant.current_location(99,owner,character)==reset_move.after,
+        "Rejected observer must release the fence for a distinct subsequent owner");
+    reentrant.remove(99);
     service.remove(2);
     const auto restored=service.prepare(3,owner,character);
     require(restored==god2::RecoveredWorldEntry::wire(character,

@@ -5,6 +5,7 @@
 #include "protocol/RecoveredBattleRowPreference.h"
 #include "protocol/RecoveredSosSupportRequest.h"
 #include "protocol/RecoveredSosBattleCommand.h"
+#include "protocol/RecoveredBattleFleeCommand.h"
 #include "protocol/RecoveredTeamRequest57.h"
 #include "protocol/RecoveredPartyExitRequest5A.h"
 #include "protocol/TaiwanNativeSkillCommand.h"
@@ -133,7 +134,7 @@ struct RecoveredWorldRecords {
                                 RecoveredSpectator6E::Request,RecoveredMapPanelControl68::Request,
                                 RecoveredSpectatorClose::Request,TaiwanNativeSkillCommand::WireRecord,TaiwanNativeBlacklist::Request,TaiwanNativePartyMenu::Request,TaiwanNativeClientOptions::Control,RecoveredWorldSkillRequest::Request,RecoveredPrebornChoiceRequest::Mask,RecoveredPrebornChoiceRequest::Words,
                                 RecoveredSkillSelectionRequest::Request,RecoveredBattleRowPreference::Request,
-                                RecoveredSosSupportRequest::Request,RecoveredSosBattleCommand::Request,
+                                RecoveredSosSupportRequest::Request,RecoveredSosBattleCommand::Request,RecoveredBattleFleeCommand::Request,
                                 RecoveredTeamRequest57::Request,RecoveredPartyExitRequest5A::Request>;
     static constexpr std::size_t max_logical_size = RecoveredWorldFrame::max_logical_size;
 
@@ -579,6 +580,11 @@ struct RecoveredWorldRecords {
                 // Explicit actual native skill owner only. Preserve all17
                 // bytes; game-owner definition/turn qualification follows.
                 // Existing CUSTOM PK/diagnostic grammar remains the default.
+                if(remaining[2]==6) {
+                    const auto flee=RecoveredBattleFleeCommand::decode(remaining.first(size));
+                    if(!flee)return {}; // Whole batch rejects; never fall through as action2/skill.
+                    records.emplace_back(*flee);offset+=size;break;
+                }
                 if(remaining[2]==8) {
                     const auto sos=RecoveredSosBattleCommand::decode(remaining.first(size));
                     if(!sos)return {};

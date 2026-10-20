@@ -1,0 +1,20 @@
+owned_pve_members — 房間成員與原始來源鏡像（CUSTOM-0161）
+
+room 所屬 owned_pve_rooms.id。
+character 完整共同角色 ID；與 room 合組主鍵，不能拿原生 WORD handle 代替。
+account 帳號 ID。
+session 實際連線 Session ID；標量數值本身不是準入權限。
+world_generation 原始實際 normal-entry 世代。
+battle_generation 這次私有 PvE binding 的戰鬥世代。
+channel 實際分流 1～3。舊未綁定監聽端明示採 CUSTOM 分流1，不把它稱為原生封包欄位。
+actor_handle 原版世界 actor WORD 身分；必須有實際 Session／場景來源。
+primary_slot 實際配置的主角色戰鬥位置 0～13。
+secondary_slot 實際配置的戰寵位置 0～13，-1 表示不存在；不把 14 個位置猜成 7+7。
+status 0 Entering／1 Active／2 Withdrawn／3 Returned／4 Retired。
+grant_epoch 這位成員目前回合命令世代。
+primary_grant 主角色尚可用的一次命令。
+secondary_grant 真實在場戰寵尚可用的一次命令。
+source_document 完整英文 JSON 讀集：root、role、auxiliary、resources、實際返回位置、原始寵資料、完整 B4 選擇、原始 command_context。
+
+Returned 必須先取得本人原始 C1C callback、同一 context 的完整返回輸出全部 Written，再由本人私有 Session 更新 WORLD 世代。Retired 只表示真斷線已保存並釋放此人的房間 claim，不表示送回遊戲世界成功。
+離線或已返回者的歷史成員仍保留；後續房間不能再覆蓋該角色的新資料。每次新釋放仍屬這次交易的完整最終來源檢查。

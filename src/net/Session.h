@@ -37,6 +37,7 @@ class TaiwanActorStatusWriteFence;
 class SharedTaiwanMovement;
 class RecoveredMovementService;
 class NativeTaiwanChannelBinding;
+class OwnedPveRoomHost;
 
 enum class SessionState {
     Connected, Handshaked, Authenticated, CharacterSelected,
@@ -247,6 +248,62 @@ public:
         explicit NormalWorldInitialization(std::shared_ptr<const Data> data):data_(std::move(data)) {}
         std::shared_ptr<const Data> data_;
     };
+    // CUSTOM-0161: private retained normal-entry incarnation, independent of
+    // the two-player PK path. Scalar IDs cannot construct/rebind this source.
+    class OwnedPveBinding {
+    public:
+        OwnedPveBinding(const OwnedPveBinding&)=default;
+        OwnedPveBinding& operator=(const OwnedPveBinding&)=default;
+        std::uint64_t session_id() const noexcept;
+        std::uint64_t account() const noexcept;
+        std::uint64_t character() const noexcept;
+        std::uint64_t world_generation() const noexcept;
+        std::uint64_t prebattle_generation() const noexcept;
+        std::uint64_t battle_generation() const noexcept;
+        // CUSTOM room logical channel1..3; native listener ordinal0..2 is
+        // retained separately and never relabelled as native protocol data.
+        std::uint8_t channel() const noexcept;
+        NormalWorldInitialization initialization() const;
+        bool same_binding(const OwnedPveBinding& other) const noexcept{return data_==other.data_;}
+    private:
+        friend class Session;friend struct Impl;
+        struct Data;
+        explicit OwnedPveBinding(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class OwnedPveOutputOwner {
+    public:
+        virtual ~OwnedPveOutputOwner()=default;
+        // GAME only, once per actual output. Written is whole local socket IO,
+        // never a native client ACK or permission to synthesize another entry.
+        virtual void owned_pve_written(Session&,const OwnedPveBinding&,
+            std::uint64_t sequence,bool written)=0;
+    };
+    // Pure GAME observation of a quiet actual normal owner; no reservation,
+    // transition, grant or durable retry. A false result must be awaited.
+    bool owned_pve_entry_available_on_game() const noexcept;
+    OwnedPveBinding prepare_owned_pve_entry();
+    bool owned_pve_prepared_current(const OwnedPveBinding&) const noexcept;
+    bool commit_owned_pve_entry(const OwnedPveBinding&) noexcept;
+    bool owned_pve_current(const OwnedPveBinding&) const noexcept;
+    // GAME save/claim-retirement fence only. Closing may retire the original
+    // normal token; its physical Written entry and exact private binding remain
+    // history. This never permits output, admission, input or WORLD renewal.
+    bool owned_pve_cleanup_current(const OwnedPveBinding&) const noexcept;
+    void abort_owned_pve_entry(const OwnedPveBinding&);
+    // Return aggregates use original ordered bounded frames. Only the actual
+    // final Return outbox frame's whole Written may permit WORLD renewal.
+    void send_owned_pve_output(const OwnedPveBinding&,std::uint64_t sequence,
+        std::vector<std::uint8_t> logical,std::weak_ptr<OwnedPveOutputOwner>,
+        bool return_output=false,bool final_return_output=true);
+    void release_owned_pve_input(const OwnedPveBinding&);
+    // Actual OWN received terminal context, never a scalar room ID or timer.
+    void prepare_owned_pve_return(const OwnedPveBinding&,
+        const RecoveredWorldRecords::ContextNotification&);
+    bool complete_owned_pve_return(const OwnedPveBinding&) noexcept;
+    // Called only after the actual returned source queued its fresh ordinary
+    // WORLD reconciliation. That queue handoff is not terminal Written.
+    void resume_owned_pve_return_input(const OwnedPveBinding&);
     // Issued only by the trusted registry after its own true private selection.
     // A read-only exact-frame identity; it is not a raw-byte/tag factory or ACK.
     class WorldCallbackSelectionEmission {

@@ -4,6 +4,73 @@
   "inventory_complete": false,
   "designs": [
     {
+      "id": "CUSTOM-0161",
+      "name": "One authoritative PvE/SOS room with all-member custody and individual retained WORLD return",
+      "authority": "OWNER_AUTHORIZED_CUSTOM_SERVER_POLICY_WITH_QUALIFIED_CURRENT_TAIWAN_WIRE",
+      "implementation": [
+        "src/game/OwnedPveRoomTypes.h",
+        "src/game/OwnedPveRoomState.cpp",
+        "src/db/SqliteOwnedPveRoomRepository.cpp",
+        "src/handlers/OwnedPveRoomHost.cpp",
+        "src/net/Session.cpp",
+        "src/core/OwnedPveApplicationSource.cpp",
+        "src/game/OwnedPveWorldCatalog.cpp",
+        "src/db/SqlitePveRoomHostFactory.cpp",
+        "src/core/Application.cpp"
+      ],
+      "rules": {
+        "room": "One canonical Battle checkpoint and RNG, exact full64 private Session bindings, late admission without resetting enemies/resources/grants, complete existing active Pet1/Pet2 slot44 material.",
+        "save": "One room/member/outbox/return-ledger transaction and all still-owned actual player/pet resource CAS before output. Released members retain historical tuples and may continue independently. Commit ambiguity retains durable recovery claims.",
+        "turn": "Explicit server primary/secondary grants and one enemy action each per round. All actual output Written and qualified untrusted0B progress gate CUSTOM cycle advancement; no animation ACK, native timeout, client nonce or recovered original scheduling claim.",
+        "return": "Native typed FLEE and original per-connection C1C context. Retained WORLD plus savedE8 and fresh player reconciliation; no inventory/companion/login replay. All split return frames Written before exact per-person WORLD renewal and post-return FIFO catch-up/input release.",
+        "catalog": "Explicit versioned immutable full native material and trusted combat policies required. No default encounter/profile/topology or populated game DB. Explicit CUSTOM animation BYTE grouping and checked DWORD bulk counter; no inferred original counter rule.",
+        "lifecycle": "Bounded original-input deferral, independent disconnect retirement, save-only exact private cleanup, dispatch retirement before NET/GAME drain; stop does not invent save or client acceptance. Actual normal one-channel host only; shared-common-world/three-channel mount refuses."
+      },
+      "native_gap": "Original encounter/reward/admission/formula/round timing, action9 deployment permutation, crash recovery executor, complete native material population, retained post-battle companion/learning continuation and real current-client acceptance remain OPEN.",
+      "document": "docs/research/tw-sos-room-save-return-source-20261020.md",
+      "tests": ["tests/test_owned_pve_room_0161.cpp", "tests/test_session_state.cpp", "tests/test_owned_pve_world_catalog.cpp", "tests/test_recovered_movement_service.cpp"],
+      "production_activated": false,
+      "native_client_acceptance": false,
+      "verification_status": "SOURCE_AND_POST_EDIT_INDEPENDENT_REVIEW_ONLY_REGRESSIONS_NOT_EXECUTED",
+      "replacement_plan": "Recover missing original rules/material, preserve existing save history and claims, then complete separately authorized build/regression/current-native acceptance before activation."
+    },
+    {
+      "id": "CUSTOM-0162",
+      "name": "Explicit front/back topology and bounded Taiwan room projections",
+      "authority": "OWNER_AUTHORIZED_CONFIGURED_TOPOLOGY_NOT_RECOVERED_ORIGINAL_LANE_ALLOCATION",
+      "implementation": ["src/game/OwnedBattleFormation.h", "src/protocol/RecoveredPveRoomProjection.cpp", "src/protocol/RecoveredBattleFleeCommand.h", "src/protocol/RecoveredWorldRecords.h"],
+      "rules": {
+        "formation": "Use actually saved B4/E8 row selection and explicit nonoverlapping DB lane pairs. Current native14 positions are triangular5+4+3+2; never front7/back7 or slot+7.",
+        "projection": "Appearance before identity, current living/dead resources, no old actor/enemy reset on late join, no eager88 following ordinary deferred83 damage. Observed CUSTOM progress-gated Grant may refresh88 before86/5.",
+        "flee": "Typed native17-byte action6 request preserves uninitialized native stack fields, validates private room context/masks and actual primary/secondary grant; side flag is role priority, not team."
+      },
+      "native_gap": "Original server lane allocation, action9 full room permutation and delayed completion, exact original cycle counter progression and native multiplayer acceptance remain OPEN.",
+      "document": "docs/research/tw-battle-formation-0162-source-20261020.md",
+      "tests": ["tests/test_owned_battle_formation.cpp"],
+      "production_activated": false,
+      "native_client_acceptance": false,
+      "verification_status": "MATCHED_NATIVE_STATIC_TRACE_AND_POST_EDIT_SOURCE_REVIEW_ONLY",
+      "replacement_plan": "Replace explicit configured pair policy only with build-matched original allocation evidence and lossless source migration; verify native rendering/action order in the later acceptance phase."
+    },
+    {
+      "id": "CUSTOM-0163",
+      "name": "Offline explicit empty bank capacity provision with whole material CAS",
+      "authority": "OWNER_AUTHORIZED_OFFLINE_CAPACITY_POLICY_NOT_NATIVE_UNLOCK_RULE",
+      "implementation": ["src/core/OwnedBankCapacityOperator.cpp", "src/db/OwnedBankCapacityProvision.cpp", "src/db/SqliteProcessOwnership.cpp", "src/db/SqliteDatabase.cpp", "src/main.cpp"],
+      "rules": {
+        "authority": "Explicit approved manifest/operator/permit and every new empty cell index required. Never infer absent-as-empty capacity, populate items or derive unlock right from received client page indices.",
+        "conservation": "Full joint inventory/equipment expected material, native aliases/opaque fields, identity/quantity/acquisition and provenance compare before one transaction; all items preserved.",
+        "offline": "Existing DB file only, exclusive cooperative same-file ownership for provision, shared process-lifetime ownership for ordinary server/import. Exact file identity includes hard links; no automatic schema migration or live activation."
+      },
+      "native_gap": "Original capacity unlock/payment producer, original unlock amounts and third-party noncooperative cached-process exclusion are not proven. No game DB inspected or manifest executed.",
+      "document": "docs/research/tw-owned-bank-capacity-source-20261020.md",
+      "tests": ["tests/test_owned_bank_capacity.cpp"],
+      "production_activated": false,
+      "native_client_acceptance": false,
+      "verification_status": "SOURCE_AND_POST_EDIT_REVIEW_ONLY_NO_EXPORT_PROVISION_SQL_OR_TEST_EXECUTION",
+      "replacement_plan": "Obtain complete original unlock evidence before labeling any capacity native; provision only explicitly approved lossless material in a later authorized execution phase."
+    },
+    {
       "id": "CUSTOM-0160",
       "name": "Whole-instance Taiwan bank custody using one joint inventory/equipment owner",
       "authority": "OWNER_AUTHORIZED_CUSTOM_CUSTODY_POLICY_WITH_QUALIFIED_NATIVE_WIRE_SUBSET",

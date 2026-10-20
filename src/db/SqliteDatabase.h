@@ -24,6 +24,7 @@
 #include "db/NativeSupplyCatalog.h"
 #include "db/NativeSkillCatalog.h"
 #include "db/TaiwanInstalledSkillCatalogImport.h"
+#include "db/OwnedBankCapacityProvision.h"
 #include "db/NativeSkillBookCatalog.h"
 #include "db/SqliteSkillBookLearningRepository.h"
 #include "db/NativeSkillBookSourceCatalog.h"
@@ -57,6 +58,8 @@
 namespace god2 {
 class OwnedBagProjectionService;
 class SqliteOwnedPkRoomRepository;
+class SqliteOwnedPveRoomRepository;
+class OwnedPveWorldCatalog;
 class SqliteNativeAccountSnapshotRepository;
 class SqliteNativeCharacterSummarySnapshotRepository;
 class SqliteNativeWorldEntrySnapshotRepository;
@@ -77,6 +80,16 @@ public:
     // import only. No CREATE, migration, guild selector or gameplay owners.
     // Ordinary initialize/migrate and repository access remain unavailable.
     void initialize_existing_for_taiwan_skill_import();
+    // CUSTOM-0163 exclusive offline file owner, existing SQLite only. No
+    // migrations, schema, gameplay repositories, initial material or items.
+    void initialize_existing_for_owned_bank_capacity();
+    nlohmann::json owned_bank_capacity_draft(std::uint64_t account,std::uint64_t character);
+    struct CapacityOutcome {bool commit_confirmed=false,connection_current=false;};
+    CapacityOutcome provision_owned_bank_capacity(const nlohmann::json&);
+    std::unique_ptr<SqliteOwnedPveRoomRepository> make_owned_pve_room_repository();
+    void install_owned_pve_room_schema();
+    std::shared_ptr<const OwnedPveWorldCatalog> load_owned_pve_world_catalog();
+    void install_owned_pve_world_catalog_schema(); // Explicit source only; never automatic startup.
     void migrate() override;
     AccountRepository& accounts() override;
     CharacterRepository& characters() override;
@@ -280,6 +293,7 @@ public:
     const NativeFruitQuestSources& fruit_sources() const;
     const NativeNpcDisplayCatalog& native_npc_display_catalog() const;
 private:
+    sqlite3* owned_pve_connection();
     struct Impl;
     std::filesystem::path path_;
     std::vector<Migration> migrations_;
