@@ -365,6 +365,7 @@ foreach(companion_test IN ITEMS recovered_player_snapshot recovered_deity recove
   target_link_libraries(${companion_test} PRIVATE god2_core)
   add_test(NAME ${companion_test} COMMAND ${companion_test})
 endforeach()
+target_compile_definitions(owned_companions PRIVATE GOD2_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 list(FILTER TEST_SOURCES EXCLUDE REGEX "/test_native_pet2_categories\\.cpp$")
 add_executable(native-pet2-categories test_native_pet2_categories.cpp)
 target_link_libraries(native-pet2-categories PRIVATE god2_core)

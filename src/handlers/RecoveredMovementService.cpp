@@ -364,6 +364,25 @@ std::optional<RecoveredPosition> RecoveredMovementService::current_world_locatio
     return RecoveredPosition{value.area,value.scene,static_cast<std::uint16_t>(value.x),
         static_cast<std::uint16_t>(value.y),value.saved?value.saved->revision:0};
 }
+std::optional<RecoveredMovementService::WorldLocationObservation> RecoveredMovementService::observe_world_location(
+        std::uint64_t session,std::uint64_t account,std::uint64_t character)const {
+    const auto position=current_world_location(session,account,character);
+    if(!position)return {};
+    const auto at=active_.find(session);
+    if(at==active_.end()||!at->second.incarnation)return {};
+    return WorldLocationObservation(this,session,account,character,*position,at->second.incarnation);
+}
+bool RecoveredMovementService::world_location_current(const WorldLocationObservation& observation)const {
+    return world_binding_current(observation)&&
+        current_world_location(observation.session_,observation.account_,observation.character_)==std::optional{observation.position_};
+}
+bool RecoveredMovementService::world_binding_current(const WorldLocationObservation& observation)const {
+    if(owned_movement_thread_!=std::this_thread::get_id())return false;
+    if(observation.service_!=this||!observation.identity_)return false;
+    const auto at=active_.find(observation.session_);
+    return !owned_movement_busy_&&!owned_movement_invalid_&&at!=active_.end()&&at->second.ready&&!at->second.transfer_pending&&
+        at->second.account==observation.account_&&at->second.character==observation.character_&&at->second.incarnation==observation.identity_;
+}
 std::optional<RecoveredPosition> RecoveredMovementService::current_location(
     std::uint64_t session,std::uint64_t account,std::uint64_t character) const {
     // A read can call an observer too. Apply the same fence as the owned
@@ -849,7 +868,7 @@ RecoveredMovementService::OwnedCommittedMove RecoveredMovementService::move_comm
     if(!active_current(old) || committed->inventory().snapshot()!=*before->inventory ||
        committed->equipment().snapshot()!=expected_equipment || !custody.committed_current(*committed) || !active_current(old))
         throw std::runtime_error("Owned movement committed but old local publication became stale");
-    // Storage is now NEW. Publishing this trivially copied Position allocates
+    // Storage is now NEW. Publishing this preallocated Position allocates
     // nothing; old current_location would reject until saved becomes NEW too.
     prepared.next.saved=committed->equipment().snapshot().position;
     {

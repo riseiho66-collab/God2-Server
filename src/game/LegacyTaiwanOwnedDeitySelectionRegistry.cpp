@@ -106,7 +106,7 @@ LegacyTaiwanOwnedDeitySelectionRegistry::Callback LegacyTaiwanOwnedDeitySelectio
     return Callback(std::move(data));
 }
 std::optional<LegacyWorldReply> LegacyTaiwanOwnedDeitySelectionRegistry::select(
-        Session& peer,const RecoveredDeitySelection::Request& request) {
+        Session& peer,const RecoveredDeitySelection::Request& request,std::function<bool()> current) {
     const auto state=state_;Impl::Read read(*state);const auto data=state->active;
     if(!state->collecting(peer,data))throw std::runtime_error("Legacy selection lacks its original active callback");
     const auto input=peer.claim_next_callback_selection(data->output,request);
@@ -116,7 +116,10 @@ std::optional<LegacyWorldReply> LegacyTaiwanOwnedDeitySelectionRegistry::select(
         data->invalid=true;throw std::runtime_error("Legacy selection input occurrence changed");
     }
     // True helper invocation only; no API accepts a caller-provided publication.
-    auto result=state->companions.select_deity_with_source(data->account,data->character,request);
+    const auto pure=[state,data,&peer,input,current=std::move(current)] {
+        return state->collecting(peer,data)&&peer.callback_output_selection_current(data->output,*input)&&(!current||current());
+    };
+    auto result=state->companions.select_deity_with_source(data->account,data->character,request,pure);
     if(!result)return std::nullopt; // Original authority refusal; no fabricated S31.
     if(!state->collecting(peer,data) || !peer.callback_output_selection_current(data->output,*input)) {
         data->invalid=true;throw std::runtime_error("Committed legacy selection lost its owner");

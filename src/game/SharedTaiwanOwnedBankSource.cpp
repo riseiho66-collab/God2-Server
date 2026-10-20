@@ -232,6 +232,7 @@ struct SharedTaiwanOwnedBankSource::Impl {
         std::optional<RecoveredPosition> position;
         std::uint64_t battle;
         SessionState phase;
+        std::optional<RecoveredMovementService::WorldLocationObservation> movement_binding;
     };
     struct Outcome {Transaction::Committed committed;std::vector<std::uint8_t> wire;bool mutated,current;};
     Impl(std::shared_ptr<Transaction> transaction,RecoveredMovementService& movement,RecoveredBankService& money,std::size_t capacity)
@@ -249,7 +250,8 @@ struct SharedTaiwanOwnedBankSource::Impl {
         owner();if(stopped || invalid)return false;
         const auto found=contexts.find(session.id());if(found==contexts.end())return false;
         const auto& context=found->second;
-        return context.position && context.connection.lock().get()==&session && !session.closing() &&
+        return context.position && context.movement_binding && movement.world_location_current(*context.movement_binding) &&
+            context.connection.lock().get()==&session && !session.closing() &&
             session.recovered_world_ready() && session.state()==context.phase &&
             (context.phase==SessionState::CharacterSelected || context.phase==SessionState::InWorld) &&
             context.battle==session.battle_generation() &&
@@ -274,12 +276,14 @@ struct SharedTaiwanOwnedBankSource::Impl {
             const auto initialization=session.normal_world_initialization();
             if(!initialization || contexts.size()>=capacity)return {};
             held.emplace(Context{session.shared_from_this(),*initialization,
-                money.capture_lease(id,target,RecoveredBankService::Clock::now()),target,{},battle,phase});
+                money.capture_lease(id,target,RecoveredBankService::Clock::now()),target,{},battle,phase,
+                movement.observe_world_location(id,account,character)});
         }
         const auto connection=held->connection.lock();
         std::optional<RecoveredPosition> position;
         const auto local=[&] {
-            return !invalid && !stopped && connection.get()==&session && id && account && character &&
+            return held->movement_binding&&movement.world_location_current(*held->movement_binding)&&
+                !invalid && !stopped && connection.get()==&session && id && account && character &&
                 target==held->target && held->source.owns(id,account,character,target) &&
                 session.normal_world_initialization_current_on_game(held->initialization) && held->initialization.entry_written() &&
                 !session.closing() && session.recovered_world_ready() && session.id()==id &&

@@ -139,9 +139,9 @@ public:
     std::optional<std::vector<std::uint8_t>> use(Session&,const RecoveredTargetItemRequest::Request&,
         const std::shared_ptr<SharedWorldPresence>& presence={});
     std::optional<UseResult> use_with_source(Session&,const RecoveredInventoryItemRequest::Request&,
-        const std::shared_ptr<SharedWorldPresence>& presence={});
+        const std::shared_ptr<SharedWorldPresence>& presence={},std::function<bool()> current={});
     std::optional<UseResult> use_with_source(Session&,const RecoveredTargetItemRequest::Request&,
-        const std::shared_ptr<SharedWorldPresence>& presence={});
+        const std::shared_ptr<SharedWorldPresence>& presence={},std::function<bool()> current={});
     void bind_learning_response(Session&,const LearningPublication&,const Session::WorldResponseWrite&);
     bool learning_publication_current(Session&,const LearningPublication&);
     std::optional<LearningPublication> latest_learning_publication(Session&);
@@ -207,7 +207,7 @@ private:
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration>,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration>,SelectionSource);
     std::optional<UseResult> use_request(Session&,UseRequest,
-        const std::shared_ptr<SharedWorldPresence>& presence,bool with_source);
+        const std::shared_ptr<SharedWorldPresence>& presence,bool with_source,std::function<bool()> current={});
     bool publication_current(Session&,const std::shared_ptr<LearningPublication::Data>&);
     bool publication_local(Session&,const std::shared_ptr<Entry>&,
         const std::shared_ptr<LearningPublication::Data>&)const;

@@ -20,6 +20,7 @@
 #include "game/SharedTaiwanOwnedDeitySkillSource.h"
 #include "game/LegacyTaiwanOwnedDeitySelectionRegistry.h"
 #include "handlers/OwnedSkillBookLearningService.h"
+#include "handlers/RecoveredNormalCompanionCurrent.h"
 #include "db/SqliteSkillBookLearningRepository.h"
 #include "db/SqliteAccountRepository.h"
 #include "game/OwnedPveRoomState.h"
@@ -577,7 +578,7 @@ void recovered_callback_output_transport() {
 // declares a synthetic acquisition and obtains actual learning events through
 // repository issuers. Neither mode proves a native grant or gameplay formula.
 // The actual Session writes the original restoration and learning responses.
-void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned material_case=0,unsigned first_book_case=0) {
+void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned material_case=0,unsigned first_book_case=0,unsigned pose_case=0) {
     using Source=LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource;
     using Restoration=RecoveredOwnedCompanions::Restoration;
     struct Close {void operator()(sqlite3* value)const {sqlite3_close_v2(value);}};
@@ -601,7 +602,11 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
     const auto character=characters.create(RecoveredSessionPeer::account,profile).id;
     require(character>0&&character<=0x3fff,"Legacy learning test actor outside native domain");
     const auto actor=static_cast<std::uint16_t>(character);
-    const auto position=characters.commit_position(RecoveredSessionPeer::account,character,{},1,1,18,14);
+    const auto position=pose_case?characters.commit_position(RecoveredSessionPeer::account,character,{},2,15,17,13):
+        characters.commit_position(RecoveredSessionPeer::account,character,{},1,1,18,14);
+    std::unique_ptr<RecoveredMovementService> movement;
+    if(pose_case)movement=std::make_unique<RecoveredMovementService>(characters,
+        std::filesystem::path(GOD2_SOURCE_DIR)/"artifacts/world-atlas/indoor-2-15.json");
     for(std::uint8_t key=1;key<=16;++key) {
         sqlite_detail::Statement metadata(raw,"INSERT INTO native_companion_metadata VALUES('GOD',?,?,1,X'4C',?,zeroblob(396))");
         metadata.bind(1,2800+key);metadata.bind(2,std::string(SqliteCompanionRepository::source_sha256));
@@ -706,6 +711,7 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
     const auto material_wire=RecoveredWorldFrame::encode(*RecoveredInventory::clear_slot(0));
     const RecoveredWorldRecords::Record* original_book_record=nullptr;
     unsigned original_book_passes=0;
+    bool pose_fired=false,pose_observer_failed=false;
     RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
         std::optional<OwnedSkillBookLearningService::UseRequest> book;
         if(with_book&&records.size()==1) {
@@ -732,7 +738,39 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
                 require(original_book_passes==2&&bootstrap_response&&bootstrap_response->status()==Session::WorldResponseWriteStatus::Written,
                     "Original book job resumed before real bootstrap Written or more than once");
             } else require(bootstrapped&&applied&&applied->current(session),"Book use lost the actual prior Written legacy selection");
-            auto result=std::visit([&](const auto& request){return learning.use_with_source(session,request);},*book);
+            const auto normal=movement?RecoveredNormalCompanionCurrent::capture(session,*movement,[]{return true;},position):
+                std::optional<RecoveredNormalCompanionCurrent>{};
+            require(!pose_case||bool(normal),"Actual book fixture lacks original Written INIT and ready movement");
+            struct PoseObserver {sqlite3* db;RecoveredMovementService* movement;Session* session;unsigned mode;
+                bool& fired;bool& failed;bool wrote=false;
+            } pose_observer{raw,movement.get(),&session,pose_case,pose_fired,pose_observer_failed};
+            struct PoseTraceEnd {sqlite3* db;bool installed;~PoseTraceEnd(){if(installed)sqlite3_trace_v2(db,0,nullptr,nullptr);}}
+                pose_trace_end{raw,pose_case!=0};
+            if(pose_case)require(sqlite3_trace_v2(raw,SQLITE_TRACE_STMT|SQLITE_TRACE_PROFILE,
+                [](unsigned type,void* context,void* statement,void*)->int {
+                    auto& o=*static_cast<PoseObserver*>(context);const auto* text=sqlite3_sql(static_cast<sqlite3_stmt*>(statement));
+                    if(!text)return 0;const std::string_view sql(text);
+                    if(type==SQLITE_TRACE_STMT&&sql.starts_with("UPDATE main.character_deities"))o.wrote=true;
+                    if(!o.fired&&o.wrote&&((o.mode<=2&&type==SQLITE_TRACE_STMT&&sql.starts_with("UPDATE main.character_deities"))||
+                        (o.mode>=3&&type==SQLITE_TRACE_PROFILE&&sql=="COMMIT"))) {
+                        o.fired=true;
+                        try {
+                            const auto old=o.movement->current_world_location(o.session->id(),o.session->account_id,o.session->character_id);
+                            o.movement->remove(o.session->id());
+                            if(o.mode==2||o.mode==4) {
+                                const auto init=o.session->normal_world_initialization_on_game();
+                                if(!init)throw std::runtime_error("Pose fixture INIT lost");
+                                o.movement->prepare_native(o.session->id(),o.session->account_id,o.session->character_id,init->entry_frame());
+                                o.movement->bind(o.session->id(),o.session->account_id,o.session->character_id);
+                                if(o.movement->current_world_location(o.session->id(),o.session->account_id,o.session->character_id)!=old)
+                                    throw std::runtime_error("Pose fixture rebind changed value");
+                            }
+                        }catch(...){o.failed=true;}
+                    }
+                    return 0;
+                },&pose_observer)==SQLITE_OK,"Book pose SOURCE trace registration failed");
+            auto result=std::visit([&](const auto& request){return learning.use_with_source(session,request,{},
+                [normal]{return !normal||normal->current();});},*book);
             require(result&&result->publication(),"Actual CUSTOM-0148 learning did not issue its private committed publication");
             const auto publication=*result->publication();
             auto response=std::move(*result).take_wire();
@@ -866,6 +904,7 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
         return session.take_world_callback_reply(std::move(reply));
     },character,48171);
     peer.select(false);peer.send(RecoveredSessionPeer::tail(actor));peer.silent();
+    if(movement){movement->prepare_native(peer.session->id(),7,character,peer.world_frame);movement->bind(peer.session->id(),7,character);}
     const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
     peer.send(tick);
     for(const auto& batch:original->batches())peer.expect(RecoveredWorldFrame::encode(batch));
@@ -896,6 +935,12 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned 
     if(first_book_case) {
         if(first_book_case==3){peer.closed();require(original_book_passes==1&&learning_callbacks==0&&
             inventory.load(7,character)->cells.front().instance->quantity==2,"Retired bootstrap service replayed the original input/debit");return;}
+        if(pose_case) {
+            peer.closed();require(pose_fired&&!pose_observer_failed&&learning_callbacks==0&&
+                inventory.load(7,character)->cells.front().instance->quantity==(pose_case>=3?1u:2u),
+                "Book movement retirement/ABA was ignored or durable commit was falsely rolled back");
+            return;
+        }
         const std::array<std::uint8_t,13> delta{0x34,1,0,1,0x35,1,0,1,0x41,0x65,0x19,0,1};
         peer.expect(RecoveredWorldFrame::encode(delta));peer.silent();
         require(original_book_passes==2&&learning_callbacks==1&&latest_learning&&bootstrap_response&&
@@ -2468,6 +2513,7 @@ void test_session_state() {
     recovered_legacy_selection_learning_reanchor(false,1);
     recovered_legacy_selection_learning_reanchor(false,2);
     for(const unsigned first_book_case:{1u,2u,3u,4u})recovered_legacy_selection_learning_reanchor(true,0,first_book_case);
+    for(const unsigned pose_case:{1u,2u,3u,4u})recovered_legacy_selection_learning_reanchor(true,0,1,pose_case);
     recovered_written_deity_selection_transport();
     recovered_logout_cleanup_barrier();
     recovered_owned_pve_transport_source_cases();

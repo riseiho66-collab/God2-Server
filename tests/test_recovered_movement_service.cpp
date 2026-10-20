@@ -57,10 +57,14 @@ void test_recovered_movement_service() {
     rejects([&]{service.bind(1,owner,character);});
     require(!service.character_active(owner,character),"Unprepared character reported active");
     service.prepare(1,owner,character);
+    require(!service.observe_world_location(1,owner,character),"Prepared movement was promoted to ready read evidence");
     require(service.character_active(owner,character) && !service.character_active(other,character),
         "Prepared native lease missing or cross-account active lookup");
     rejects([&]{service.move(1,owner,character,first);});
     service.bind(1,owner,character);
+    const auto initial_binding=service.observe_world_location(1,owner,character);
+    require(initial_binding&&service.world_location_current(*initial_binding)&&service.world_binding_current(*initial_binding)&&
+        !service.observe_world_location(1,other,character),"Actual ready/full-owner movement observation missing");
     require(service.current_location(1,owner,character)==god2::RecoveredPosition{2,15,17,13,0},
         "First world-entry location unavailable without a saved row");
     rejects([&]{service.prepare(2,owner,character);});
@@ -93,6 +97,10 @@ void test_recovered_movement_service() {
     require(committed.path==std::vector<Step>{{18,12}},"First committed path missing");
     require(service.current_location(1,owner,character)==committed.after,
         "Committed location not reflected in bound session");
+    const auto after_step=service.observe_world_location(1,owner,character);
+    require(after_step&&after_step->same_binding(*initial_binding)&&!service.world_location_current(*initial_binding)&&
+        service.world_binding_current(*initial_binding)&&service.world_location_current(*after_step),
+        "Legal movement either revived historical pose or replaced the actual binding incarnation");
     rejects([&]{service.move(1,owner,character,first);});
     for(unsigned step=2;step<83;++step) {
         const auto index=static_cast<std::uint8_t>(step%40);
@@ -104,6 +112,17 @@ void test_recovered_movement_service() {
     }
     service.remove(2); // A refused second session cannot evict the first.
     rejects([&]{service.prepare(2,owner,character);});
+    const auto before_rebind=service.observe_world_location(1,owner,character);
+    service.remove(1);
+    require(before_rebind&&!service.world_binding_current(*before_rebind),"Removal retained old movement read authority");
+    service.prepare(1,owner,character);service.bind(1,owner,character);
+    const auto after_rebind=service.observe_world_location(1,owner,character);
+    require(after_rebind&&after_rebind->position()==before_rebind->position()&&!after_rebind->same_binding(*before_rebind)&&
+        !service.world_location_current(*before_rebind)&&!service.world_binding_current(*before_rebind)&&
+        service.world_location_current(*after_rebind),"Same-value remove/reprepare revived an old binding observation");
+    god2::RecoveredMovementService foreign_movement(db.recovered_characters(),
+        std::filesystem::path(GOD2_SOURCE_DIR)/"artifacts/world-atlas/indoor-2-15.json");
+    require(!foreign_movement.world_binding_current(*after_rebind),"Another movement owner borrowed an equal scalar observation");
     service.remove(1);
     require(!service.character_active(owner,character),"Removed native lease still active");
     const auto saved=db.recovered_characters().load_position(owner,character);

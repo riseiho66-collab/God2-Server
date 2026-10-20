@@ -36,7 +36,8 @@ public:
 private:
     using T=OwnedPveRoomTypes;using Binding=Session::OwnedPveBinding;
     struct WorldBefore {Binding binding;RecoveredPosition position;std::vector<RecoveredVisibility::Presence> actors;
-        std::optional<std::vector<RecoveredVisibility::Presence>> return_actors;std::shared_ptr<ReturnHandoff> handoff;};
+        std::optional<std::vector<RecoveredVisibility::Presence>> return_actors;std::shared_ptr<ReturnHandoff> handoff;
+        std::optional<RecoveredMovementService::WorldLocationObservation> movement;};
     struct Pending {std::weak_ptr<Session> session;Session::NormalWorldInitialization initialization;
         Session::WorldResponseWrite written;RecoveredPosition position;};
     std::shared_ptr<const OwnedPveRoomHost::Sources> sources(const OwnedPveWorldCatalog::Scene&);

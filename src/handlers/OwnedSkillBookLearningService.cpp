@@ -955,15 +955,17 @@ std::optional<std::vector<std::uint8_t>> OwnedSkillBookLearningService::use(Sess
     if(!result)return std::nullopt;return std::move(*result).take_wire();
 }
 std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningService::use_with_source(Session& session,
-        const RecoveredInventoryItemRequest::Request& request,const std::shared_ptr<SharedWorldPresence>& presence) {
-    return use_request(session,UseRequest{request},presence,true);
+        const RecoveredInventoryItemRequest::Request& request,const std::shared_ptr<SharedWorldPresence>& presence,
+        std::function<bool()> current) {
+    return use_request(session,UseRequest{request},presence,true,std::move(current));
 }
 std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningService::use_with_source(Session& session,
-        const RecoveredTargetItemRequest::Request& request,const std::shared_ptr<SharedWorldPresence>& presence) {
-    return use_request(session,UseRequest{request},presence,true);
+        const RecoveredTargetItemRequest::Request& request,const std::shared_ptr<SharedWorldPresence>& presence,
+        std::function<bool()> current) {
+    return use_request(session,UseRequest{request},presence,true,std::move(current));
 }
 std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningService::use_request(Session& session,
-        UseRequest owned_request,const std::shared_ptr<SharedWorldPresence>& presence,bool with_source) {
+        UseRequest owned_request,const std::shared_ptr<SharedWorldPresence>& presence,bool with_source,std::function<bool()> current) {
     const auto common=presence; // Own both native variants before any observer.
     Operation operation(*this);
     const auto found=entries_.find(session.id());
@@ -987,7 +989,7 @@ std::optional<OwnedSkillBookLearningService::UseResult> OwnedSkillBookLearningSe
     const auto item_id=std::visit([](const auto& request){return request.client_item_id;},owned_request);
     const auto request_current=[&] {
         // PURE throughout repository.commit: no before/after-source query here.
-        if(!ready(session,entry,true)||entry->presence!=common||entry->selection_anchor!=selection||entry->material_anchor!=material_anchor||
+        if((current&&!current())||!ready(session,entry,true)||entry->presence!=common||entry->selection_anchor!=selection||entry->material_anchor!=material_anchor||
            (with_source&&entry->latest_publication!=previous))return false;
         if(data&&(entry->pending_publication!=data||
            (data->phase.load()!=LearningPublication::Data::Phase::Prepared&&

@@ -312,8 +312,10 @@ RecoveredOwnedCompanions::selection_successor_from_committed(const Restoration& 
     return Restoration(std::move(roster),std::move(history));
 }
 std::optional<RecoveredOwnedCompanions::SelectionResult> RecoveredOwnedCompanions::select_deity_with_source(
-        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request) {
-    const auto key=request.key;
+        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request,std::function<bool()> current) {
+    PrefixRead read(*this);const auto key=request.key;
+    const auto pure=[&]{return !prefix_reentered_&&(!current||current())&&!prefix_reentered_;};
+    if(!pure())return {};
     const auto rows=repository_.load_deities(account,character);
     const auto found=std::find_if(rows.begin(),rows.end(),[&](const auto& row){return row.snapshot.status.key_raw()==key;});
     if(found==rows.end()) return std::nullopt;
@@ -323,16 +325,18 @@ std::optional<RecoveredOwnedCompanions::SelectionResult> RecoveredOwnedCompanion
     // after a successful selection. The repository compares this full row.
     auto wire=RecoveredWorldFrame::encode(projection->encode());
     const auto selected=repository_.load_deity_selection(account,character);
+    if(!pure())return {};
     // CUSTOM-0147: second original frame and its holder allocate PRECOMMIT.
     // Installing the private commit and returning both owners only move.
     auto retained=std::make_shared<SelectionPublication::Data>(wire);
-    auto committed=repository_.select_deity_with_source(account,character,key,selected,*found);
+    auto committed=repository_.select_deity_with_source(account,character,key,selected,*found,pure);
+    if(!committed.current()||!pure())throw DatabaseError("Deity selection durably committed but source retired; no success/retry");
     retained->committed.emplace(std::move(committed));
     return SelectionResult(SelectionPublication(std::move(retained)),std::move(wire));
 }
 std::optional<std::vector<std::uint8_t>> RecoveredOwnedCompanions::select_deity(std::uint64_t account,std::uint64_t character,
-        const RecoveredDeitySelection::Request& request) {
-    auto result=select_deity_with_source(account,character,request);
+        const RecoveredDeitySelection::Request& request,std::function<bool()> current) {
+    auto result=select_deity_with_source(account,character,request,std::move(current));
     if(!result) return std::nullopt;
     return std::move(*result).take_wire();
 }

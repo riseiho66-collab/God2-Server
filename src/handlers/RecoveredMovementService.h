@@ -75,6 +75,31 @@ public:
     // Outside SQL, separately compare current_location to this same snapshot.
     std::optional<RecoveredPosition> current_world_location(std::uint64_t session,
         std::uint64_t account,std::uint64_t character) const;
+    // Pure read evidence for one actual ready binding and pose, not movement or
+    // world admission authority. A new same-value prepare cannot revive it.
+    class WorldLocationObservation {
+    public:
+        const RecoveredPosition& position()const noexcept{return position_;}
+        bool same_binding(const WorldLocationObservation& other)const noexcept {
+            return service_==other.service_&&session_==other.session_&&account_==other.account_&&
+                character_==other.character_&&identity_&&identity_==other.identity_;
+        }
+    private:
+        friend class RecoveredMovementService;
+        WorldLocationObservation(const RecoveredMovementService* service,std::uint64_t session,
+                std::uint64_t account,std::uint64_t character,RecoveredPosition position,
+                std::shared_ptr<const std::uint8_t> identity)
+            :service_(service),session_(session),account_(account),character_(character),position_(position),identity_(std::move(identity)){}
+        const RecoveredMovementService* service_;
+        std::uint64_t session_,account_,character_;
+        RecoveredPosition position_;
+        std::shared_ptr<const std::uint8_t> identity_;
+    };
+    std::optional<WorldLocationObservation> observe_world_location(std::uint64_t session,
+        std::uint64_t account,std::uint64_t character)const;
+    bool world_location_current(const WorldLocationObservation&)const;
+    // Same actual ready owner only; an ordinary authorized step may change pose.
+    bool world_binding_current(const WorldLocationObservation&)const;
     void resume_after_battle(std::uint64_t session,std::uint64_t account,std::uint64_t character);
     // Source-pinned destination check for a proposed town/indoor transfer.
     [[nodiscard]] bool qualifies_transfer_destination(std::uint16_t scene,
@@ -206,6 +231,8 @@ private:
         std::uint16_t area=2;
         std::optional<RecoveredPosition> saved;
         std::optional<MovePreview> last_step;
+        // Construct before insertion; normal Position copies retain the owner.
+        std::shared_ptr<const std::uint8_t> incarnation=std::make_shared<const std::uint8_t>(0);
         bool operator==(const Position&) const = default;
     };
     struct PreparedMove {

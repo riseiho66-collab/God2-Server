@@ -86,6 +86,7 @@ struct SqliteCompanionRepository::CommittedDeitySelection::Data {
     std::optional<StoredDeitySelection> before;
     StoredDeitySelection after;
     bool changed;
+    bool current=true;
 };
 std::uint64_t SqliteCompanionRepository::CommittedDeitySelection::account() const noexcept {return data_->account;}
 std::uint64_t SqliteCompanionRepository::CommittedDeitySelection::character() const noexcept {return data_->character;}
@@ -93,8 +94,9 @@ const StoredDeity& SqliteCompanionRepository::CommittedDeitySelection::deity() c
 const std::optional<StoredDeitySelection>& SqliteCompanionRepository::CommittedDeitySelection::before() const noexcept {return data_->before;}
 const StoredDeitySelection& SqliteCompanionRepository::CommittedDeitySelection::after() const noexcept {return data_->after;}
 bool SqliteCompanionRepository::CommittedDeitySelection::changed() const noexcept {return data_->changed;}
+bool SqliteCompanionRepository::CommittedDeitySelection::current() const noexcept {return data_&&data_->current;}
 bool SqliteCompanionRepository::issued_selection(const CommittedDeitySelection& value) const noexcept {
-    if(!value.data_ || value.data_->repository!=this)return false;
+    if(!value.data_ || !value.data_->current || value.data_->repository!=this)return false;
     const auto identity=value.data_->identity.lock();
     return identity && identity==readset_identity_;
 }
@@ -133,7 +135,7 @@ void SqliteCompanionRepository::require_provenance(const CompanionProvenance& p)
         throw DatabaseError("Unqualified companion instance provenance");
 }
 std::vector<std::uint8_t> SqliteCompanionRepository::deity_template_keys() {
-    sqlite_detail::Statement rows(db_,"SELECT metadata_key,source_sha256 FROM native_companion_metadata WHERE family='GOD' ORDER BY metadata_key");
+    sqlite_detail::Statement rows(db_,"SELECT metadata_key,source_sha256 FROM main.native_companion_metadata WHERE family='GOD' ORDER BY metadata_key");
     std::vector<std::uint8_t> result;
     while(rows.row()) {
         const auto key=rows.number<std::uint16_t>(0);
@@ -161,7 +163,7 @@ bool SqliteCompanionRepository::resolves_pet1(std::uint16_t key) {
 std::vector<StoredDeity> SqliteCompanionRepository::load_deities(std::uint64_t account,std::uint64_t character) {
     require_owner(account,character);
     const auto keys=deity_template_keys();
-    sqlite_detail::Statement rows(db_,"SELECT row_key,declaration,status,skills,revision,source_sha256,authority,evidence_id FROM character_deities WHERE character_id=? ORDER BY row_key");
+    sqlite_detail::Statement rows(db_,"SELECT row_key,declaration,status,skills,revision,source_sha256,authority,evidence_id FROM main.character_deities WHERE character_id=? ORDER BY row_key");
     rows.bind_id(1,character);std::vector<StoredDeity> result;
     while(rows.row()) {
         const auto declaration=RecoveredDeityState::Declaration::parse(rows.blob(1,19,19));
@@ -481,7 +483,10 @@ std::optional<StoredDeitySelection> SqliteCompanionRepository::load_deity_select
 }
 SqliteCompanionRepository::CommittedDeitySelection SqliteCompanionRepository::select_deity_with_source(
         std::uint64_t account,std::uint64_t character,std::uint8_t key,
-        std::optional<StoredDeitySelection> expected,StoredDeity expected_deity) {
+        std::optional<StoredDeitySelection> expected,StoredDeity expected_deity,std::function<bool()> current) {
+    PetTransferOperation operation(db_); // Same physical connection owner as pet24/28.
+    const auto pure=[&]{operation.current();if(current&&!current())throw DatabaseError("Deity selection actual host source retired");operation.current();};
+    pure();
     if(readset_reading_) {
         readset_reentered_=true;
         throw DatabaseError("Deity selection source reentry rejected");
@@ -493,6 +498,7 @@ SqliteCompanionRepository::CommittedDeitySelection SqliteCompanionRepository::se
     auto changes=sqlite3_total_changes64(db_);
     sqlite_detail::Transaction transaction(db_);
     const auto fence=[&] {
+        pure();
         if(readset_reentered_ || sqlite3_get_autocommit(db_) || sqlite3_total_changes64(db_)!=changes)
             throw DatabaseError("Deity selection source changed during transaction");
     };
@@ -515,6 +521,7 @@ SqliteCompanionRepository::CommittedDeitySelection SqliteCompanionRepository::se
         owner.bind_id(1,account);owner.bind_id(2,character);
         if(!owner.row() || owner.row()) throw DatabaseError("Deity selection source ownership rejected");
         require_no_pending_battle(character);
+        pet_transfer_room_claims(db_,character);
         fence();
     };
     owner_current();
@@ -560,14 +567,16 @@ SqliteCompanionRepository::CommittedDeitySelection SqliteCompanionRepository::se
        !same_deity(*actual,*found) || !same_deity(*actual,expected_deity))
         throw DatabaseError("Deity selection source full row readback mismatch");
     owner_current();
-    // Every owning allocation is complete before COMMIT; nothing is observed
-    // or validated after the durable selection. Only noexcept moves follow.
-    auto data=std::make_shared<const CommittedDeitySelection::Data>(
+    // Every owning allocation is complete before COMMIT. The private returned
+    // data retains durable truth even if a late pure host cut forbids success.
+    auto data=std::make_shared<CommittedDeitySelection::Data>(
         CommittedDeitySelection::Data{this,readset_identity_,account,character,
             std::move(expected_deity),before,after,changed});
-    CommittedDeitySelection result(std::move(data));
+    CommittedDeitySelection result(data);
     owner_current();fence();
     transaction.commit();
+    try{pure();data->current=sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==changes;}
+    catch(...){data->current=false;}
     return result;
 }
 StoredDeitySelection SqliteCompanionRepository::select_deity(std::uint64_t account,std::uint64_t character,

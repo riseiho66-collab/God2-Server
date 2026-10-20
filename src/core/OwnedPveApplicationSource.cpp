@@ -104,9 +104,10 @@ void OwnedPveApplicationSource::committed_movement(Session& session,const Recove
 OwnedPveRoomTypes::MemberInput OwnedPveApplicationSource::member(const OwnedPveWorldCatalog::Scene& scene,
         const std::shared_ptr<Session>& session,const Binding& binding,std::shared_ptr<const T::Snapshot> room) {
     need(!stopped_&&!retiring_&&session&&session->owned_pve_prepared_current(binding),"PvE member lacks its actual private preparation");
+    const auto movement=movement_.observe_world_location(session->id(),binding.account(),binding.character());
     const auto entry=RecoveredWorldEntryView::read(binding.initialization().entry_frame());
     const auto position=movement_.current_location(session->id(),binding.account(),binding.character());
-    need(entry&&entry->actor_handle&&entry->actor_handle<0x4000&&position&&
+    need(entry&&entry->actor_handle&&entry->actor_handle<0x4000&&movement&&movement_.world_location_current(*movement)&&position&&
         movement_.current_world_location(session->id(),binding.account(),binding.character())==position&&
         position->area==scene.area&&position->scene==scene.scene,"PvE member location/native actor source missing");
     const auto roots=db_.recovered_characters().list_for_account(binding.account());
@@ -150,6 +151,7 @@ OwnedPveRoomTypes::MemberInput OwnedPveApplicationSource::member(const OwnedPveW
         result.pet=T::PetInput{assigned.row1,pet};
     }
     need(session->owned_pve_prepared_current(binding)&&
+        movement_.world_location_current(*movement)&&
         movement_.current_world_location(session->id(),binding.account(),binding.character())==position,
         "PvE member actual source changed during saved observations");
     need(bool(prepare_return_handoff_),"PvE actual Application return handoff is not installed");
@@ -157,7 +159,8 @@ OwnedPveRoomTypes::MemberInput OwnedPveApplicationSource::member(const OwnedPveW
     need(handoff&&handoff->retained_current(*session,binding)&&session->owned_pve_prepared_current(binding),
         "PvE companion/learning continuation is not an actual retained source");
     auto actors=visibility_.retained_scene({position->area,position->scene});
-    worlds_.insert_or_assign(session->id(),WorldBefore{binding,*position,std::move(actors),{},handoff});
+    need(movement_.world_location_current(*movement),"PvE member original movement incarnation changed during handoff");
+    worlds_.insert_or_assign(session->id(),WorldBefore{binding,*position,std::move(actors),{},handoff,movement});
     return result;
 }
 std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sources(const OwnedPveWorldCatalog::Scene& scene) {
@@ -180,6 +183,7 @@ std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sour
     source->member_continuation_current=[this](Session& peer,const Binding& binding) {
         const auto at=worlds_.find(peer.id());
         return !stopped_&&at!=worlds_.end()&&at->second.binding.same_binding(binding)&&
+            at->second.movement&&movement_.world_location_current(*at->second.movement)&&
             at->second.handoff&&at->second.handoff->retained_current(peer,binding);
     };
     const auto catalog=catalog_;
@@ -216,13 +220,14 @@ std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sour
         need(!stopped_&&at!=worlds_.end()&&at->second.binding.same_binding(binding)&&at->second.return_actors,
             "PvE returned WORLD lost its actual last-written scene source");
         const auto before=*at->second.return_actors;const auto handoff=at->second.handoff;
+        const auto movement=at->second.movement;
         const auto returned=peer->owned_pve_return_source(binding);
-        need(handoff&&returned,"PvE return lost its private completed Session lineage");
+        need(handoff&&returned&&movement&&movement_.world_location_current(*movement),"PvE return lost its private completed Session/movement lineage");
         handoff->returned(*peer,binding,repository_,receipt,*returned);
         const auto now=visibility_.retained_scene({member.return_position.area,member.return_position.scene});
         const auto init=peer->normal_world_initialization_on_game();
         auto latest=world_reconciliation(*peer,before,now);
-        need(!stopped_&&init&&peer->normal_world_initialization_current_on_game(*init)&&
+        need(!stopped_&&init&&peer->normal_world_initialization_current_on_game(*init)&&movement_.world_location_current(*movement)&&
             same_population(now,visibility_.retained_scene({member.return_position.area,member.return_position.scene})),
             "PvE fresh WORLD catch-up source changed during saved observers");
         // Ordinary WORLD updates after terminal Written, with GAME -> NET FIFO
@@ -243,6 +248,7 @@ std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sour
         const auto live=[&] {
             const auto world=worlds_.find(peer->id());
             return !stopped_&&init&&peer->normal_world_initialization_current_on_game(*init)&&
+                movement_.world_location_current(*movement)&&
                 world!=worlds_.end()&&world->second.binding.same_binding(binding)&&
                 movement_.current_world_location(peer->id(),peer->account_id,peer->character_id)==std::optional{member.return_position};
         };
@@ -258,7 +264,8 @@ std::vector<std::uint8_t> OwnedPveApplicationSource::return_world(const std::sha
     const auto at=worlds_.find(peer->id());
     need(!stopped_&&at!=worlds_.end()&&at->second.binding.same_binding(binding),"PvE return retained source missing");
     const auto before=at->second; // Never retain a map iterator across a SQL/provider callback.
-    need(peer->owned_pve_current(binding)&&
+    need(peer->owned_pve_current(binding)&&before.movement&&movement_.world_location_current(*before.movement)&&
+        before.handoff&&before.handoff->retained_current(*peer,binding)&&
         movement_.current_location(peer->id(),binding.account(),binding.character())==std::optional{m.return_position}&&
         before.position==m.return_position,"PvE return lost its retained actual world/source position");
     const auto resources=db_.recovered_characters().load_resources(binding.account(),binding.character());
@@ -292,6 +299,7 @@ std::vector<std::uint8_t> OwnedPveApplicationSource::return_world(const std::sha
     const auto scene=world_reconciliation(*peer,before.actors,current);result.insert(result.end(),scene.begin(),scene.end());
     const auto final=worlds_.find(peer->id());
     need(!stopped_&&final!=worlds_.end()&&final->second.binding.same_binding(binding)&&
+        movement_.world_location_current(*before.movement)&&before.handoff->retained_current(*peer,binding)&&
         final->second.position==before.position&&result.size()<=RecoveredTaiwanServerRecords::max_aggregate_logical_size&&peer->owned_pve_current(binding),
         "PvE complete individual return exceeds bounded whole native aggregate/source changed");
     need(same_population(current,visibility_.retained_scene({m.return_position.area,m.return_position.scene})),

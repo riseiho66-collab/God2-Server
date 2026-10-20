@@ -1,5 +1,6 @@
 #include "handlers/RecoveredOwnedCompanions.h"
 #include "handlers/RecoveredOwnedPetReserveMove.h"
+#include "handlers/RecoveredMovementService.h"
 #include "db/SqliteMigrationManager.h"
 #include "db/SqliteRecoveredCharacterRepository.h"
 #include "db/SqliteSupport.h"
@@ -611,6 +612,59 @@ void pet_selection_continuation_regression() {
     require(RecoveredOwnedPetReserveMove::move(f.companions,1,f.character,{42,43},[]{return true;}).has_value()&&
         f.learning.restoration_current(*original.learning_source()),"Pet reserve reorder retired the unrelated complete learning/material graph");
 }
+void deity_selection_live_source_regression() {
+    // Actual movement bindings and selection repositories; no Session Written
+    // receipt is invented by these focused storage/helper SOURCE cases.
+    for(unsigned mode=1;mode<=5;++mode) {
+        LearningSelectionFixture f;
+        const auto old_position=f.characters.load_position(1,f.character);
+        f.characters.commit_position(1,f.character,old_position,2,15,17,13);
+        const auto root=f.characters.list_for_account(1).front();
+        const auto frame=RecoveredWorldEntry::wire(f.character,root.profile,17,13,2,15,2);
+        RecoveredMovementService movement(f.characters,std::filesystem::path(GOD2_SOURCE_DIR)/"artifacts/world-atlas/indoor-2-15.json");
+        movement.prepare_native(71,1,f.character,frame);movement.bind(71,1,f.character);
+        const auto actual=movement.observe_world_location(71,1,f.character);require(actual.has_value(),"C67 ready movement fixture absent");
+        const auto before=f.companions.load_deity_roster(1,f.character);const auto activation=f.activation_storage();
+        const auto selected=f.companions.load_deity_selection(1,f.character);
+        const auto rows=f.companions.load_deities(1,f.character);
+        const auto chosen=std::find_if(rows.begin(),rows.end(),[](const auto& d){return d.snapshot.status.key_raw()==2;});
+        require(chosen!=rows.end(),"C67 full expected deity missing");
+        struct Observe {RecoveredMovementService* movement;RecoveredWorldEntry::Frame frame;std::uint64_t character;
+            unsigned mode;bool wrote=false,fired=false,failed=false;
+        } observed{&movement,frame,f.character,mode};
+        const auto trace=[](unsigned type,void* context,void* statement,void*)->int {
+            auto& o=*static_cast<Observe*>(context);const auto* text=sqlite3_sql(static_cast<sqlite3_stmt*>(statement));
+            if(!text)return 0;const std::string_view sql(text);
+            const bool write=sql.starts_with("UPDATE main.character_deity_selection")||sql.starts_with("INSERT INTO main.character_deity_selection");
+            if(type==SQLITE_TRACE_STMT&&write)o.wrote=true;
+            if(!o.fired&&o.wrote&&((o.mode<=2&&type==SQLITE_TRACE_STMT&&write)||
+                (o.mode>=3&&type==SQLITE_TRACE_PROFILE&&sql=="COMMIT"))) {
+                o.fired=true;
+                try {
+                    const auto old=o.movement->current_world_location(71,1,o.character);o.movement->remove(71);
+                    if(o.mode==2||o.mode==4) {
+                        o.movement->prepare_native(71,1,o.character,o.frame);o.movement->bind(71,1,o.character);
+                        if(o.movement->current_world_location(71,1,o.character)!=old)throw std::runtime_error("C67 rebind altered pose fixture");
+                    }
+                }catch(...){o.failed=true;}
+            }
+            return 0;
+        };
+        struct TraceEnd {sqlite3* db;~TraceEnd(){sqlite3_trace_v2(db,0,nullptr,nullptr);}} end{f.db.get()};
+        require(sqlite3_trace_v2(f.db.get(),SQLITE_TRACE_STMT|SQLITE_TRACE_PROFILE,trace,&observed)==SQLITE_OK,"C67 source trace registration failed");
+        const auto pure=[&]{return movement.world_location_current(*actual);};
+        if(mode==5) {
+            auto durable=f.companions.select_deity_with_source(1,f.character,2,selected,*chosen,pure);
+            require(!durable.current()&&!f.companions.issued_selection(durable)&&
+                !f.companions.selection_roster_successor(before,durable),"Retired durable delivery cut minted live selection authority");
+        }else rejects([&]{(void)f.helper.select_deity_with_source(1,f.character,{2},pure);});
+        sqlite3_trace_v2(f.db.get(),0,nullptr,nullptr);
+        const auto saved=f.companions.load_deity_selection(1,f.character);
+        require(observed.fired&&!observed.failed&&saved&&saved->key==(mode>=3?2:1)&&f.activation_storage()==activation,
+            "C67 movement source cut leaked a precommit change, lost durable truth or changed learning history");
+        require(!movement.world_binding_current(*actual),"Removed/same-value movement incarnation remained current");
+    }
+}
 }
 int main() {
     try {
@@ -619,6 +673,7 @@ int main() {
         joint_material_successor_regression();
         status_activation_lineage_regression();
         pet_selection_continuation_regression();
+        deity_selection_live_source_regression();
         Fixture f;auto repo=f.repo();RecoveredOwnedCompanions service(repo);const auto c=f.character;
         require(service.restore(1,c).empty(),"Absent ownership emitted packets");
         require(!repo.selected_deity_has_skill(1,c,0,126),"Absent ownership granted custom skill");

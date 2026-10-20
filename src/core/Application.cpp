@@ -43,6 +43,7 @@
 #include "game/ExtendedExperienceAmount.h"
 #include "handlers/OwnedAttributeAllocation.h"
 #include "handlers/RecoveredMovementService.h"
+#include "handlers/RecoveredNormalCompanionCurrent.h"
 #include "handlers/RecoveredWorldService.h"
 #include "handlers/RecoveredWorldDisplays.h"
 #include "handlers/RecoveredPlayerPresence.h"
@@ -1453,6 +1454,10 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 // pending private cohort may establish its canonical successor.
                 bool selection_unjoined=false;
                 std::shared_ptr<const PendingCompanionMaterial> pending_material;
+                // Original normal movement incarnation persists across legitimate
+                // pose/joint/Return successors; a same-value rebind is unrelated.
+                RecoveredMovementService* normal_movement_owner=nullptr;
+                std::optional<RecoveredMovementService::WorldLocationObservation> normal_movement;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -1578,6 +1583,18 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             };
             auto& supply_repository=static_cast<SqliteRecoveredCharacterRepository&>(database.recovered_characters());
             RecoveredFruitQuests fruit_quests(database.fruit_quests());
+            const auto normal_companion_current=[&](Session& session,std::optional<RecoveredPosition> expected={}) {
+                const auto movement=recovered_movement.get();
+                if(!movement)return std::optional<RecoveredNormalCompanionCurrent>{};
+                const auto at=owned_companion_restoration_sources.find(session.id());
+                if(at!=owned_companion_restoration_sources.end()&&
+                   (at->second->normal_movement_owner!=movement||!at->second->normal_movement||
+                    !movement->world_binding_current(*at->second->normal_movement)))return std::optional<RecoveredNormalCompanionCurrent>{};
+                return RecoveredNormalCompanionCurrent::capture(session,*movement,[&,movement,id=session.id()]{
+                    return !common_world&&recovered_movement.get()==movement&&
+                        !diagnostic_town_scene_pending.contains(id)&&!diagnostic_island_return_pending.contains(id);
+                },expected);
+            };
             std::function<void(Session&)> advance_companion_successors;
             const auto observe_companion_restoration_write=[&](Session& session) {
                 if(advance_companion_successors)advance_companion_successors(session);
@@ -1587,9 +1604,15 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 const auto whole=source->whole_response;
                 const auto whole_wire=source->whole_response_wire;
                 const auto whole_material=source->material;
+                const auto world=common_world;
+                const auto actual_material=source->canonical_source?source->canonical_source->material:source->material;
+                const auto normal=world?std::optional<RecoveredNormalCompanionCurrent>{}:
+                    normal_companion_current(session,actual_material&&actual_material->learning_source()?
+                        std::optional{actual_material->learning_source()->equipment().position}:std::nullopt);
                 const auto local=[&] {
                     const auto found=owned_companion_restoration_sources.find(session.id());
-                    return found!=owned_companion_restoration_sources.end() && found->second==source &&
+                    return common_world==world&&(world||(normal&&normal->current()))&&
+                        found!=owned_companion_restoration_sources.end() && found->second==source &&
                         source->session.lock().get()==&session && source->material && !session.closing() &&
                         source->account==session.account_id && source->character==session.character_id &&
                         source->phase_at_restore==session.state() && session.recovered_world_ready() &&
@@ -1602,6 +1625,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 if(source->pending_selection || source->pending_material)return; // Never query a consumed predecessor before its Written successor.
                 if(source->selection_unjoined){source->last_observed_write=CompanionWriteObservation::Stale;return;}
                 if(const auto canonical=source->canonical_source){
+                    const auto pose_current=[&]{return common_world==world&&(world||(normal&&normal->current()));};
                     // A deity-only cohort has no equipment/pose readset. Pin
                     // the ACTUAL current movement pose for this entire SQL
                     // observation, rather than requiring its historical entry
@@ -1628,13 +1652,13 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                         return canonical->material_source && pure() && canonical->material_source->current(session) && pure();
                     };
                     const auto current=[&]{
-                        return local() && source->canonical_source==canonical && source->session.lock().get()==&session &&
+                        return pose_current() && local() && source->canonical_source==canonical && source->session.lock().get()==&session &&
                             !session.closing() && source->normal_initialization &&
                             session.normal_world_initialization_current_on_game(*source->normal_initialization) &&
                             ((canonical->learning && canonical->learning->current(session)) ||
                              (canonical->selection && canonical->selection->current(session)) ||
                              (canonical->legacy_selection && canonical->legacy_selection->current(session)) ||
-                             material_current());
+                             material_current()) && pose_current();
                     };
                     if(!current() || !owned_companions.restoration_current(*canonical->material) || !current()){
                         source->last_observed_write=CompanionWriteObservation::Stale;return;
@@ -3304,6 +3328,8 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                            holder->session.lock()!=peer || holder->canonical_source!=previous || holder->pending_material!=pending ||
                            holder->pending_selection || holder->selection_unjoined || pending->previous!=previous || pending->material!=material ||
                            !host->live || !host->accepting || host->transaction!=transaction || !movement || host->movement!=movement || !pending->mutation ||
+                           holder->normal_movement_owner!=movement || !holder->normal_movement ||
+                           !movement->world_binding_current(*holder->normal_movement) ||
                            pending->mutation->session.lock()!=peer || !pending->mutation->material_mutated ||
                            movement->current_world_location(session.id(),holder->account,holder->character)!=
                                std::optional{pending->mutation->after.equipment().snapshot().position} ||
@@ -3368,9 +3394,12 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 // entry. Common presence belongs only to the separate PK pair.
                 if(!peer||!initial||!holder->material)return;
                 const auto before_material=previous?previous->material:holder->material;
+                const auto normal=world?std::optional<RecoveredNormalCompanionCurrent>{}:
+                    normal_companion_current(session,before_material->learning_source()?
+                        std::optional{before_material->learning_source()->equipment().position}:std::nullopt);
                 const auto local=[&]{
                     const auto now=owned_companion_restoration_sources.find(session.id());
-                    return !companion_reentered && now!=owned_companion_restoration_sources.end() && now->second==holder &&
+                    return (world||(normal&&normal->current())) && !companion_reentered && now!=owned_companion_restoration_sources.end() && now->second==holder &&
                         holder->session.lock()==peer && holder->canonical_source==previous && holder->pending_selection==pending &&
                         holder->selection_unjoined==selection_unjoined && legacy_deity_selections==legacy &&
                         holder->material==original_material && holder->whole_response==original_whole && holder->whole_response_wire==original_wire &&
@@ -4584,23 +4613,10 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         },RecoveredWorldService::Quest{},
                         [&](Session& session,const RecoveredSelectionItemRequest::Request& request)
                             ->std::optional<std::vector<std::uint8_t>> {
-                            const auto initialization=session.normal_world_initialization();
-                            const auto phase=session.state();const auto battle=session.battle_generation();
-                            const auto movement=recovered_movement.get();
-                            const auto position=movement?movement->current_location(session.id(),session.account_id,session.character_id):std::nullopt;
+                            const auto normal=normal_companion_current(session);
                             const auto account=session.account_id,character=session.character_id;
-                            const auto current=[&]{return initialization&&movement&&recovered_movement.get()==movement&&
-                                initialization->entry_written()&&
-                                phase!=SessionState::InBattle&&(phase==SessionState::CharacterSelected||phase==SessionState::InWorld)&&
-                                session.state()==phase&&session.battle_generation()==battle&&!session.closing()&&session.recovered_world_ready()&&
-                                session.account_id==account&&session.character_id==character&&
-                                session.normal_world_initialization_current_on_game(*initialization)&&
-                                owned_player_and_companions_projected.contains(session.id())&&
-                                !diagnostic_town_scene_pending.contains(session.id())&&!diagnostic_island_return_pending.contains(session.id())&&
-                                position&&movement->current_world_location(session.id(),account,character)==position;};
-                            if(!owned_player_and_companions_projected.contains(session.id()) ||
-                               diagnostic_town_scene_pending.contains(session.id()) ||
-                               !current())
+                            const auto current=[&,normal]{return normal&&normal->current()&&owned_player_and_companions_projected.contains(session.id());};
+                            if(!current()||recovered_movement->current_location(session.id(),account,character)!=std::optional{normal->position()}||!current())
                                 return std::nullopt;
                             auto reply=owned_companions.select_pet2(account,character,request,current);
                             if(reply) spdlog::info("OWNED_PET2_SELECTION_COMMITTED session_id={} character_id={} source={} key={} CUSTOM-0039",
@@ -4611,20 +4627,10 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         [&](Session& session,const RecoveredInventoryMoveRequest::Request& request)
                             ->std::optional<std::vector<std::uint8_t>> {
                             if(RecoveredOwnedPetReserveMove::handles(request)) {
-                                const auto initialization=session.normal_world_initialization();
-                                const auto phase=session.state();const auto battle=session.battle_generation();
-                                const auto movement=recovered_movement.get();
+                                const auto normal=normal_companion_current(session);
                                 const auto account=session.account_id,character=session.character_id;
-                                const auto position=movement?movement->current_location(session.id(),account,character):std::nullopt;
-                                const auto current=[&]{return initialization&&movement&&recovered_movement.get()==movement&&
-                                    initialization->entry_written()&&(phase==SessionState::CharacterSelected||phase==SessionState::InWorld)&&
-                                    session.state()==phase&&session.battle_generation()==battle&&!session.closing()&&session.recovered_world_ready()&&
-                                    session.account_id==account&&session.character_id==character&&
-                                    session.normal_world_initialization_current_on_game(*initialization)&&
-                                    owned_player_and_companions_projected.contains(session.id())&&
-                                    !diagnostic_town_scene_pending.contains(session.id())&&!diagnostic_island_return_pending.contains(session.id())&&
-                                    position&&movement->current_world_location(session.id(),account,character)==position;};
-                                if(!current())return std::nullopt;
+                                const auto current=[&,normal]{return normal&&normal->current()&&owned_player_and_companions_projected.contains(session.id());};
+                                if(!current()||recovered_movement->current_location(session.id(),account,character)!=std::optional{normal->position()}||!current())return std::nullopt;
                                 auto reply=RecoveredOwnedPetReserveMove::move(database.companions(),account,character,request,current);
                                 if(!reply)return std::nullopt;
                                 spdlog::info("OWNED_PET_RESERVE_MOVE session_id={} character_id={} source={} destination={} changed={} CUSTOM-0039",
@@ -4670,11 +4676,11 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         },
                         [&](Session& session,const RecoveredDeitySelection::Request& request)
                             ->std::optional<std::vector<std::uint8_t>> {
-                            if(!owned_player_and_companions_projected.contains(session.id()) ||
-                               diagnostic_town_scene_pending.contains(session.id()) ||
-                               !recovered_movement->current_location(session.id(),session.account_id,session.character_id))
+                            const auto normal=normal_companion_current(session);
+                            const auto current=[&,normal]{return normal&&normal->current()&&owned_player_and_companions_projected.contains(session.id());};
+                            if(!current()||recovered_movement->current_location(session.id(),session.account_id,session.character_id)!=std::optional{normal->position()}||!current())
                                 return std::nullopt;
-                            auto reply=owned_companions.select_deity(session.account_id,session.character_id,request);
+                            auto reply=owned_companions.select_deity(session.account_id,session.character_id,request,current);
                             if(reply) spdlog::info("OWNED_DEITY_SELECTION_COMMITTED session_id={} character_id={} key={} CUSTOM-0039",
                                 session.id(),session.character_id,request.key);
                             return reply;
@@ -4682,11 +4688,11 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                         legacy_deity_selections?RecoveredWorldService::CausalDeitySelection{
                         [&](Session& session,const RecoveredDeitySelection::Request& request)
                             ->std::optional<LegacyWorldReply> {
-                            if(!owned_player_and_companions_projected.contains(session.id()) ||
-                               diagnostic_town_scene_pending.contains(session.id()) ||
-                               !recovered_movement->current_location(session.id(),session.account_id,session.character_id))
+                            const auto normal=normal_companion_current(session);
+                            const auto current=[&,normal]{return normal&&normal->current()&&owned_player_and_companions_projected.contains(session.id());};
+                            if(!current()||recovered_movement->current_location(session.id(),session.account_id,session.character_id)!=std::optional{normal->position()}||!current())
                                 return std::nullopt;
-                            auto reply=legacy_deity_selections->select(session,request);
+                            auto reply=legacy_deity_selections->select(session,request,current);
                             if(reply)spdlog::info("OWNED_DEITY_SELECTION_COMMITTED session_id={} character_id={} key={} CUSTOM-0039",
                                 session.id(),session.character_id,request.key);
                             return reply;
@@ -6869,6 +6875,12 @@ if(guild_officer_runtime && player_guild(session) &&
                                std::holds_alternative<RecoveredWorldRecords::Tick>(records.front())) {
                                 const auto admission=recovered_world->handle(session,records);
                                 if(!admission) return admission;
+                                if(!common_world) {
+                                    const auto init=session.normal_world_initialization();
+                                    if(!init||!init->entry_written())return admission; // Pending original entry is not a failed source or a replay grant.
+                                }
+                                const auto normal=common_world?std::optional<RecoveredNormalCompanionCurrent>{}:normal_companion_current(session);
+                                if(!common_world&&!normal)throw DatabaseError("Original companion restoration lost its actual normal movement binding");
                                 const auto player=RecoveredPlayerSnapshot::load_for_world_entry(
                                     database.recovered_characters(),session.account_id,session.character_id);
                                 const auto actual_session=session.weak_from_this().lock();
@@ -6889,6 +6901,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                 // Missing passive metadata preserves old restore
                                 // behavior, but cannot qualify initialization.
                                 lineage->normal_initialization=session.normal_world_initialization();
+                                if(normal){lineage->normal_movement_owner=recovered_movement.get();lineage->normal_movement=normal->movement();
+                                    if(!normal->current())throw DatabaseError("Original companion movement binding changed during restoration");}
                                 if(const auto at=owned_companion_restoration_sources.find(session.id());
                                    at!=owned_companion_restoration_sources.end() && at->second->session.lock().get()!=&session)
                                     throw DatabaseError("Owned companion source Session incarnation conflict");
@@ -6977,7 +6991,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                 // call-return counts remain submission attempts.
                                 const auto source_local=[&] {
                                     const auto at=owned_companion_restoration_sources.find(session.id());
-                                    return at!=owned_companion_restoration_sources.end() && at->second==lineage &&
+                                    return (common_world||(normal&&normal->current()))&&
+                                        at!=owned_companion_restoration_sources.end() && at->second==lineage &&
                                         lineage->session.lock().get()==&session && !session.closing() &&
                                         lineage->account==session.account_id && lineage->character==session.character_id &&
                                         lineage->phase_at_restore==session.state() && session.recovered_world_ready() &&
@@ -10018,7 +10033,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             return std::move(*reply).take_wire(); // Original prebuilt wire, no repack.
                         });
                     const auto original=game_handlers.world_records;
-                    game_handlers.world_records=[weak,original,&native_banks,&database,&recovered_movement,native_records_lab](Session& session,
+                    game_handlers.world_records=[weak,original,&native_banks,&database,&recovered_movement,&normal_companion_current,native_records_lab](Session& session,
                             std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
                         const auto host=weak.lock();
                         if(!host || !host->live || !host->accepting)return {};
@@ -10028,6 +10043,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(host->bank)host->bank->invalidate_active();
                             throw std::logic_error("Owned mutation response facade reentered");
                         }
+                        const auto callback_current=normal_companion_current(session);
                         // Pet cells42..44 belong to the actual companion store,
                         // not the0092 item namespace. Classify their WHOLE
                         // original batch before movement/bank can commit a prefix.
@@ -10051,11 +10067,23 @@ if(guild_officer_runtime && player_guild(session) &&
                             else if(const auto* request=std::get_if<RecoveredNpcInteraction::Request>(&record)){bank_npc=*request;++bank_operations;}
                             else if(!std::holds_alternative<RecoveredWorldRecords::Tick>(record))bank_only=false;
                         }
+                        // Pin the actual original binding BEFORE classifier/NPC
+                        // SQL. A fresh Context captured after lookup must not
+                        // launder a same-value remove/reprepare during lookup.
+                        const bool bank_candidate=bank_item||bank_money||bank_npc;
+                        const auto bank_current=bank_candidate?callback_current:std::optional<RecoveredNormalCompanionCurrent>{};
+                        if(bank_candidate&&(!bank_current||!bank_current->current())) {
+                            if(host->bank)host->bank->release(session);native_banks.disconnect(session.id());
+                            return std::vector<std::uint8_t>{};
+                        }
                         bool bank_open=false;
                         if(bank_npc && bank_npc->raw_target && bank_npc->raw_target<=0xffff && recovered_movement) {
                             const auto where=recovered_movement->current_location(session.id(),session.account_id,session.character_id);
                             bank_open=where && database.bank_access().lookup(where->area,where->scene,
                                 static_cast<std::uint16_t>(bank_npc->raw_target),native_records_lab).has_value();
+                        }
+                        if(bank_candidate&&!bank_current->current()) {
+                            if(host->bank)host->bank->release(session);native_banks.disconnect(session.id());return {};
                         }
                         const bool bank_operation=bank_item.has_value() || bank_money.has_value() || bank_open;
                         if(bank_operation && (!bank_only || bank_operations!=1)) {
@@ -10088,7 +10116,9 @@ if(guild_officer_runtime && player_guild(session) &&
                             } end{host,draft};
                             const auto transaction=host->transaction;
                             const auto local=[&] {
-                                return host->live && host->accepting && host->transaction==transaction && host->active==draft &&
+                                return callback_current&&callback_current->binding_current()&&
+                                    (!bank_operation||(bank_current&&bank_current->current()))&&
+                                    host->live && host->accepting && host->transaction==transaction && host->active==draft &&
                                     !draft->invalid && draft->session.lock().get()==&session && !session.closing() &&
                                     session.normal_world_initialization_current(draft->initialization) && draft->initialization.entry_written();
                             };
@@ -10133,7 +10163,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                         bank->release(session);
                                         auto money=native_banks.open(session.id(),static_cast<std::uint16_t>(bank_npc->raw_target),
                                             std::chrono::steady_clock::now());
-                                        if(money) {opening=RecoveredWorldFrame::encode(*money);result=bank->open(session,static_cast<std::uint16_t>(bank_npc->raw_target));}
+                                        if(money) {
+                                            if(!local()){native_banks.disconnect(session.id());throw std::runtime_error("Whole bank opening classifier source retired");}
+                                            opening=RecoveredWorldFrame::encode(*money);result=bank->open(session,static_cast<std::uint16_t>(bank_npc->raw_target));
+                                        }
                                     } else result=bank->dispatch(session,*bank_item);
                                     if(result) {
                                         // Actual common tuple, including a durable write
@@ -10320,12 +10353,15 @@ if(guild_officer_runtime && player_guild(session) &&
                                     return std::nullopt;
                             }
                             if(!use)return std::nullopt;
+                            const auto normal=presence?std::optional<RecoveredNormalCompanionCurrent>{}:normal_companion_current(session);
+                            const auto actual_current=[normal,presence]{return presence||(normal&&normal->current());};
+                            if(!actual_current())return std::nullopt;
                             // A valid first book input may arrive before any
                             // idle Tick after Return (or first normal entry).
                             // Publish its real bootstrap first, then let Session
                             // retain/re-run this SAME original work after Written.
                             auto bootstrap=learning->bootstrap(session,presence,restored);
-                            if(!bootstrap)return std::nullopt;
+                            if(!bootstrap||!actual_current())return std::nullopt;
                             if(!bootstrap->empty()) {
                                 const auto write=session.observe_world_response(*bootstrap);
                                 session.hold_world_input_until_response_written(write);
@@ -10355,7 +10391,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 }catch(...){} // Existing passive PK observer semantics, never a grant.
                             }
                             auto result=std::visit([&](const auto& request) {
-                                return learning->use_with_source(session,request,presence);
+                                return learning->use_with_source(session,request,presence,actual_current);
                             },*use);
                             if(!result)return std::nullopt;
                             const auto publication=result->publication(); // Owning preallocated Data copy.
@@ -10679,9 +10715,11 @@ if(guild_officer_runtime && player_guild(session) &&
                             const auto original_material=holder->material;
                             const auto whole=holder->whole_response;const auto wire=holder->whole_response_wire;
                             const bool unjoined=holder->selection_unjoined;
-                            owner_current=[&,previous,material,original_material,whole,wire,unjoined]{
+                            const auto normal=normal_companion_current(session,material&&material->learning_source()?
+                                std::optional{material->learning_source()->equipment().position}:std::nullopt);
+                            owner_current=[&,previous,material,original_material,whole,wire,unjoined,normal]{
                                 const auto now=owned_companion_restoration_sources.find(session.id());
-                                return !custody->reentered && !common_world && legacy_deity_selections==registry &&
+                                return normal&&normal->current()&&!custody->reentered && !common_world && legacy_deity_selections==registry &&
                                     now!=owned_companion_restoration_sources.end() && now->second==holder &&
                                     holder->session.lock()==peer && holder->canonical_source==previous && !holder->pending_selection &&
                                     holder->selection_unjoined==unjoined && holder->material==original_material &&
@@ -10830,6 +10868,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     game_handlers.world_records=[&,weak,original](Session& session,
                             std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
                         const auto host=weak.lock();if(!host || !host->live || !host->accepting)return {};
+                        const auto callback_current=normal_companion_current(session);
                         const bool unrelated=std::any_of(records.begin(),records.end(),[](const auto& record){
                             return !std::holds_alternative<RecoveredWorldRecords::Tick>(record) &&
                                 !std::holds_alternative<RecoveredBankItems::Request>(record) &&
@@ -10876,8 +10915,8 @@ if(guild_officer_runtime && player_guild(session) &&
                             // Recheck exact pure callback/INIT/host custody AFTER
                             // it, including bank opening when this is its reply.
                             const auto transaction=host->transaction;const auto bank=host->bank;
-                            if(!response || response->empty() || !transaction ||
-                               !transaction->committed_current(after->after) || !host->live || !host->accepting ||
+                            if(!callback_current || !callback_current->binding_current() || !response || response->empty() || !transaction ||
+                               !transaction->committed_current(after->after) || !callback_current->binding_current() || !host->live || !host->accepting ||
                                host->transaction!=transaction || host->bank!=bank ||
                                after->session.lock().get()!=&session || !after->initialization.entry_written() || !host->movement ||
                                host->movement->current_world_location(session.id(),session.account_id,session.character_id)!=
@@ -10900,7 +10939,8 @@ if(guild_officer_runtime && player_guild(session) &&
                             const auto current=[&]{
                                 const auto at=owned_companion_restoration_sources.find(session.id());
                                 const auto mutation=host->mutations.find(session.id());
-                                return host->live && host->accepting && mutation!=host->mutations.end() && mutation->second==after &&
+                                return callback_current&&callback_current->binding_current()&&
+                                    host->live && host->accepting && mutation!=host->mutations.end() && mutation->second==after &&
                                     at!=owned_companion_restoration_sources.end() && at->second==restoration &&
                                     restoration->session.lock().get()==&session && restoration->canonical_source==canonical &&
                                     !restoration->pending_material && !restoration->pending_selection && !restoration->selection_unjoined &&
@@ -10959,9 +10999,12 @@ if(guild_officer_runtime && player_guild(session) &&
                         const auto learning=skill_book_learning_service;
                         const auto phase=holder->phase_at_restore;const auto battle=holder->battle_generation_at_restore;
                         const auto movement=recovered_movement.get();
+                        const auto movement_binding=holder->normal_movement;
                         const auto position=movement?movement->current_world_location(session.id(),session.account_id,session.character_id):std::nullopt;
                         if(!peer||!material||holder->pending_material||holder->pending_selection||holder->selection_unjoined||
-                           !position||(material->learning_source()&&material->learning_source()->equipment().position!=*position)||
+                           !position||holder->normal_movement_owner!=movement||!movement_binding||
+                           !movement->world_binding_current(*movement_binding)||
+                           (material->learning_source()&&material->learning_source()->equipment().position!=*position)||
                            !initialization||!initialization->same_initialization(binding.initialization())||
                            phase!=session.state()||battle!=session.battle_generation()||!holder->all_submission_calls_returned||
                            (holder->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityCurrent&&
@@ -10975,7 +11018,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             if(!admission)throw std::runtime_error("PvE could not capture its actual learning Entry predecessor");
                         }
                         const auto retained=[&,holder,canonical,material,original,whole,whole_wire,publication,
-                                initialization,peer,learning,phase,battle,binding,movement,position](Session& actual,const Session::OwnedPveBinding& actual_binding) {
+                                initialization,peer,learning,phase,battle,binding,movement,movement_binding,position](Session& actual,const Session::OwnedPveBinding& actual_binding) {
                             const auto now=owned_companion_restoration_sources.find(actual.id());
                             return !common_world&&pve_application&&peer.get()==&actual&&!actual.closing()&&
                                 actual_binding.same_binding(binding)&&now!=owned_companion_restoration_sources.end()&&now->second==holder&&
@@ -10988,6 +11031,8 @@ if(guild_officer_runtime && player_guild(session) &&
                                 holder->all_submission_calls_returned&&!holder->pending_selection&&!holder->pending_material&&
                                 !holder->selection_unjoined&&skill_book_learning_service==learning&&
                                 recovered_movement.get()==movement&&movement&&
+                                holder->normal_movement_owner==movement&&holder->normal_movement&&movement_binding&&
+                                holder->normal_movement->same_binding(*movement_binding)&&movement->world_binding_current(*movement_binding)&&
                                 movement->current_world_location(actual.id(),actual.account_id,actual.character_id)==position;
                         };
                         auto handoff=std::make_shared<ActualPveReturnHandoff>();

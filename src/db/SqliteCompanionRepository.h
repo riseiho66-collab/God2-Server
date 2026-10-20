@@ -141,6 +141,11 @@ public:
         const std::optional<StoredDeitySelection>& before() const noexcept;
         const StoredDeitySelection& after() const noexcept;
         bool changed() const noexcept;
+        // Durable data remains available when a post-COMMIT host cut retires;
+        // false forbids publication/successor authority, never implies rollback.
+        // This records only the delivery cut when the method returned; true is
+        // not future live-row, Session, socket-Written or casting authority.
+        bool current() const noexcept;
     private:
         friend class SqliteCompanionRepository;
         struct Data;
@@ -157,7 +162,8 @@ public:
     // Own IMMEDIATE transaction; both expected values are owned before any
     // observer. Reject stale full rows even for an idempotent selection.
     CommittedDeitySelection select_deity_with_source(std::uint64_t account,std::uint64_t character,
-        std::uint8_t key,std::optional<StoredDeitySelection> expected,StoredDeity expected_deity);
+        std::uint8_t key,std::optional<StoredDeitySelection> expected,StoredDeity expected_deity,
+        std::function<bool()> current={});
     StoredDeitySelection select_deity(std::uint64_t account,std::uint64_t character,
         std::uint8_t key,const std::optional<StoredDeitySelection>& expected);
     // Explicit trusted acquisition/import API. Network requests cannot grant.

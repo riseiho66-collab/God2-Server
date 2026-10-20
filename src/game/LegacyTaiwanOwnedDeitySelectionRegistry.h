@@ -38,7 +38,7 @@ public:
     Callback begin(Session&,const Session::NormalWorldInitialization&,const Session::WorldCallbackOutput&);
     // Only this method obtains the real helper publication; callers cannot
     // install an earlier idempotent commit or supply arbitrary tagged bytes.
-    std::optional<LegacyWorldReply> select(Session&,const RecoveredDeitySelection::Request&);
+    std::optional<LegacyWorldReply> select(Session&,const RecoveredDeitySelection::Request&,std::function<bool()> current={});
     void finish(Session&,const Callback&,bool callback_returned_value);
     void abandon(const Callback&) noexcept;
     std::optional<WrittenSelectionSource> observe(Session&);

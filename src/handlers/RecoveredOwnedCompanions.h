@@ -118,9 +118,11 @@ public:
     // Exact prebuilt S31 plus the one-row selection commit which qualified it.
     // No socket-written receipt, native adoption or permission is inferred.
     std::optional<SelectionResult> select_deity_with_source(
-        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request);
+        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request,
+        std::function<bool()> current={});
     std::optional<std::vector<std::uint8_t>> select_deity(
-        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request);
+        std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request,
+        std::function<bool()> current={});
     struct PetSelectionBatch {
         enum class Kind {Absent,Rejected,Selection};
         Kind kind=Kind::Absent;
