@@ -82,6 +82,8 @@ struct OwnedSkillBookLearningService::Entry {
     };
     std::shared_ptr<const SelectionAnchor> selection_anchor;
     std::shared_ptr<WrittenMaterialSource::Data> material_anchor;
+    std::optional<Session::OwnedPveReturnSource> world_return;
+    std::shared_ptr<LearningPublication::Data> returned_learning_history;
     bool bootstrap_complete_without_reply=false;
     std::shared_ptr<SharedWorldPresence> presence;
     std::optional<SharedWorldPresence::Lease> lease;
@@ -107,13 +109,16 @@ struct OwnedSkillBookLearningService::WrittenMaterialSource::Data {
     std::weak_ptr<Lifetime> life;
     std::weak_ptr<Session> session;
     Session::NormalWorldInitialization initialization;
-    Session::WorldResponseWrite response;
+    std::optional<Session::WorldResponseWrite> response;
     std::shared_ptr<const RecoveredOwnedCompanions::Restoration> material;
     std::shared_ptr<SqliteOwnedEquipmentTransaction> joint;
-    SqliteOwnedEquipmentTransaction::Committed committed;
+    std::optional<SqliteOwnedEquipmentTransaction::Committed> committed;
     std::uint64_t account,character,battle;
     SessionState phase;
     bool valid=true;
+    std::optional<Session::OwnedPveReturnSource> returned;
+    std::shared_ptr<SqliteOwnedPveRoomRepository> returned_repository;
+    std::optional<SqliteOwnedPveRoomRepository::ReturnContinuation> return_commit;
 };
 struct OwnedSkillBookLearningService::MaterialAdmission::Data {
     std::weak_ptr<Lifetime> life;
@@ -127,6 +132,8 @@ struct OwnedSkillBookLearningService::MaterialAdmission::Data {
     std::uint64_t account,character,battle;
     SessionState phase;
     bool valid=true;
+    std::optional<Session::OwnedPveBinding> pve_binding;
+    bool learning_written_before_entry=false;
 };
 struct OwnedSkillBookLearningService::LearningPublication::Data {
     enum class Phase {Prepared,Committed,Bound,Revoked};
@@ -276,17 +283,33 @@ bool OwnedSkillBookLearningService::ready(Session& session,const std::shared_ptr
        session.account_id!=entry->account || session.character_id!=entry->character ||
        session.battle_generation()!=entry->battle)return false;
     if(!entry->actor || !entry->original_restoration)return false;
-    if(entry->material_anchor && (!entry->material_anchor->valid ||
-       entry->material_anchor->response.status()!=Session::WorldResponseWriteStatus::Written ||
-       !session.world_response_write_current_on_game(entry->material_anchor->response)))return false;
+    if(entry->material_anchor) {
+        const auto& source=*entry->material_anchor;
+        if(!source.valid)return false;
+        if(source.returned) {
+            if(source.response||source.joint||source.committed||!source.returned->current(session))return false;
+        } else if(!source.response||source.response->status()!=Session::WorldResponseWriteStatus::Written||
+            !session.world_response_write_current_on_game(*source.response))return false;
+    }
     if(entry->presence) {
         if(!entry->lease || entry->lease->actor_handle!=entry->actor || !entry->presence->retained_ready_current(*entry->lease) ||
            !session.common_world_delivery_current(entry->account,entry->character,entry->lease->generation) ||
            session.common_world_entry_current(entry->account,entry->character,entry->lease->generation))return false;
     } else if(entry->lease)return false;
-    return !written || entry->bootstrap_complete_without_reply || (entry->bootstrap_response &&
+    return !written || (entry->world_return&&entry->world_return->current(session)) ||
+        entry->bootstrap_complete_without_reply || (entry->bootstrap_response &&
         entry->bootstrap_response->status()==Session::WorldResponseWriteStatus::Written &&
         session.world_response_write_current_on_game(*entry->bootstrap_response));
+}
+bool OwnedSkillBookLearningService::retained_learning_written(Session& session,const std::shared_ptr<Entry>& entry,
+        const std::shared_ptr<LearningPublication::Data>& latest)const {
+    if(!latest)return true;
+    if(entry&&entry->world_return&&entry->world_return->current(session)&&
+       entry->returned_learning_history==latest&&entry->latest_publication==latest&&latest->entry.lock()==entry)return true;
+    if(latest->phase.load()!=LearningPublication::Data::Phase::Bound||!latest->response||
+       latest->response->status()!=Session::WorldResponseWriteStatus::Written)return false;
+    if(session.world_response_write_current_on_game(*latest->response))return true;
+    return false;
 }
 bool OwnedSkillBookLearningService::qualify_presence(Session& session,const std::shared_ptr<Entry>& entry,
         const NativeEquipmentSnapshot& equipment) const {
@@ -341,13 +364,14 @@ std::optional<std::vector<std::uint8_t>> OwnedSkillBookLearningService::bootstra
     const auto old=entries_.find(session.id());
     if(old!=entries_.end()) {
         entry=old->second;
-        if(entry->bootstrap_response &&
+        if(!entry->world_return && entry->bootstrap_response &&
            entry->bootstrap_response->status()==Session::WorldResponseWriteStatus::Failed) {
             // An actual failed local publication is terminal, not a replay source.
             retire(session,entry);throw std::logic_error("Skill book bootstrap publication failed");
         }
         const bool same=entry->presence==common && ready(session,entry,false);
-        if(same && (entry->bootstrap_complete_without_reply || (entry->bootstrap_response &&
+        if(same && ((entry->world_return&&entry->world_return->current(session)) ||
+           entry->bootstrap_complete_without_reply || (entry->bootstrap_response &&
            entry->bootstrap_response->status()!=Session::WorldResponseWriteStatus::Failed &&
            session.world_response_write_current_on_game(*entry->bootstrap_response))))
             return std::vector<std::uint8_t>{}; // Do not requery an old roster consumed by real learning.
@@ -480,9 +504,7 @@ bool OwnedSkillBookLearningService::reanchor_selection_impl(Session& session,
     if(!predecessor||!canonical||!predecessor->owns_learning_repository(repository_)||
        !canonical->owns_learning_repository(repository_)||!predecessor->learning_source()||!canonical->learning_source()||
        !local()||(anchor&&anchor->same_source(source))||!source.current(session)||!local())return false;
-    if(latest && (latest->phase.load()!=LearningPublication::Data::Phase::Bound||!latest->response||
-       latest->response->status()!=Session::WorldResponseWriteStatus::Written||
-       !session.world_response_write_current_on_game(*latest->response)))return false;
+    if(!retained_learning_written(session,entry,latest))return false;
     if(entry->pending_publication && entry->pending_publication!=latest)return false;
     const auto& before=(anchor||material_anchor)?*original->learning_source():
         (latest?latest->after:*original->learning_source());
@@ -538,10 +560,12 @@ bool OwnedSkillBookLearningService::material_current(Session& session,const std:
             session.account_id==data->account && session.character_id==data->character && session.battle_generation()==data->battle &&
             session.state()==data->phase && (data->phase==SessionState::CharacterSelected || data->phase==SessionState::InWorld) &&
             data->initialization.entry_written() && session.normal_world_initialization_current_on_game(data->initialization) &&
-            data->response.status()==Session::WorldResponseWriteStatus::Written && session.world_response_write_current_on_game(data->response);
+            (data->returned?(data->returned->current(session)&&!data->response&&!data->joint&&!data->committed):
+                (data->response&&data->response->status()==Session::WorldResponseWriteStatus::Written&&
+                 session.world_response_write_current_on_game(*data->response)));
     };
     try {
-        return local() && data->joint->committed_current(data->committed) && local() &&
+        return local() && (data->returned||(data->joint&&data->committed&&data->joint->committed_current(*data->committed))) && local() &&
             data->material->learning_source() && repository_.restoration_current(*data->material->learning_source()) && local();
     } catch(...) {poisoned_=true;throw;}
 }
@@ -576,6 +600,69 @@ void OwnedSkillBookLearningService::abandon_material(const MaterialAdmission& so
         if(at!=material_admissions_.end() && at->second==data)material_admissions_.erase(at);
     }
 }
+std::optional<OwnedSkillBookLearningService::MaterialAdmission> OwnedSkillBookLearningService::prepare_pve_return(
+        Session& session,const Session::OwnedPveBinding& binding,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor) {
+    Operation operation(*this);
+    const auto initialization=session.normal_world_initialization_on_game();
+    if(!predecessor||!predecessor->owns_learning_repository(repository_)||!initialization||
+       !binding.initialization().same_initialization(*initialization)||
+       !session.owned_pve_prepared_current(binding)||!admit_material_epoch(session,*initialization))return {};
+    const auto at=entries_.find(session.id());const auto entry=at==entries_.end()?std::shared_ptr<Entry>{}:at->second;
+    if(entry&&(!ready(session,entry,true)||entry->presence||!retained_learning_written(session,entry,entry->latest_publication)||
+       (entry->pending_publication&&entry->pending_publication!=entry->latest_publication)))return {};
+    const auto original=entry?entry->original_restoration:nullptr;
+    const auto latest=entry?entry->latest_publication:nullptr,pending=entry?entry->pending_publication:nullptr;
+    const auto selection=entry?entry->selection_anchor:nullptr;
+    const auto material=entry?entry->material_anchor:nullptr;
+    const auto epoch=material_epochs_.at(session.id());
+    const auto local=[&] {
+        const auto now=entries_.find(session.id());const auto e=material_epochs_.find(session.id());
+        return live_&&!poisoned_&&session.owned_pve_prepared_current(binding)&&
+            e!=material_epochs_.end()&&e->second==epoch&&!epoch->retired&&
+            epoch->initialization.same_initialization(*initialization)&&
+            (entry?(now!=entries_.end()&&now->second==entry&&ready(session,entry,true)&&
+                entry->original_restoration==original&&entry->latest_publication==latest&&
+                entry->pending_publication==pending&&entry->selection_anchor==selection&&entry->material_anchor==material):now==entries_.end());
+    };
+    if(!local()||!repository_.restoration_current(*predecessor->learning_source())||!local())return {};
+    if(entry) {
+        if(!original||!original->learning_source())return {};
+        const auto& before=(entry->material_anchor||entry->selection_anchor)?*original->learning_source():
+            (entry->latest_publication?entry->latest_publication->after:*original->learning_source());
+        if(!same_learning(before,*predecessor->learning_source()))return {};
+    }
+    const auto old=material_admissions_.find(session.id());
+    if(old==material_admissions_.end()&&material_admissions_.size()>=capacity_)return {};
+    auto data=std::make_shared<MaterialAdmission::Data>(MaterialAdmission::Data{
+        lifetime_,session.weak_from_this(),entry,predecessor,original,latest,pending,selection,material,*initialization,
+        session.account_id,session.character_id,session.battle_generation(),session.state(),true,binding,true});
+    if(!local())return {};
+    if(old!=material_admissions_.end())old->second->valid=false;
+    material_admissions_.insert_or_assign(session.id(),data);
+    return MaterialAdmission(std::move(data));
+}
+bool OwnedSkillBookLearningService::pve_return_admission_current(Session& session,const Session::OwnedPveBinding& binding,
+        const MaterialAdmission& source)const noexcept {
+    try {
+        const auto data=source.data_;
+        if(thread_!=std::this_thread::get_id()||!data||!data->valid||!data->pve_binding||
+           !data->pve_binding->same_binding(binding)||!data->learning_written_before_entry||!live_||poisoned_||
+           data->session.lock().get()!=&session||data->account!=session.account_id||data->character!=session.character_id||
+           (!session.owned_pve_prepared_current(binding)&&!session.owned_pve_current(binding)))return false;
+        const auto life=data->life.lock();const auto held=material_admissions_.find(session.id());
+        const auto epoch=material_epochs_.find(session.id());const auto entry=entries_.find(session.id());
+        if(!life||life->owner!=this||held==material_admissions_.end()||held->second!=data||
+           epoch==material_epochs_.end()||epoch->second->retired||epoch->second->session.lock().get()!=&session||
+           !epoch->second->initialization.same_initialization(data->initialization))return false;
+        if(!data->entry)return entry==entries_.end();
+        const auto& expected=data->entry;
+        return entry!=entries_.end()&&entry->second==expected&&!expected->revoked&&
+            expected->session.lock().get()==&session&&expected->initialization.same_initialization(data->initialization)&&
+            expected->original_restoration==data->original&&expected->latest_publication==data->latest&&
+            expected->pending_publication==data->pending&&expected->selection_anchor==data->selection&&expected->material_anchor==data->material;
+    }catch(...){return false;}
+}
 std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> OwnedSkillBookLearningService::reanchor_material(
     Session& session,std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
     std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical,
@@ -603,6 +690,69 @@ bool OwnedSkillBookLearningService::admit_material_epoch(Session& session,const 
     }
     material_epochs_.emplace(session.id(),std::make_shared<MaterialEpoch>(MaterialEpoch{session.weak_from_this(),initialization,false}));
     return true;
+}
+std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> OwnedSkillBookLearningService::reanchor_pve_return(
+        Session& session,std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical,
+        std::shared_ptr<SqliteOwnedPveRoomRepository> rooms,
+        const SqliteOwnedPveRoomRepository::ReturnContinuation& receipt,
+        const Session::OwnedPveReturnSource& returned,const MaterialAdmission& supplied) {
+    Operation operation(*this);
+    const auto admission=supplied.data_;const auto connection=session.weak_from_this().lock();
+    if(!admission||!admission->valid||!admission->pve_binding||!admission->learning_written_before_entry||
+       !rooms||!predecessor||!canonical||!predecessor->owns_learning_repository(repository_)||
+       !canonical->owns_learning_repository(repository_))return {};
+    const auto entry=admission->entry;
+    const auto epoch_at=material_epochs_.find(session.id());if(epoch_at==material_epochs_.end())return {};
+    const auto epoch=epoch_at->second;
+    const auto prior_at=material_sources_.find(session.id());
+    const auto prior=prior_at==material_sources_.end()?std::shared_ptr<WrittenMaterialSource::Data>{}:prior_at->second;
+    if(!prior&&material_sources_.size()>=capacity_)return {};
+    const auto& identity=receipt.identity();const auto& binding=returned.binding();
+    const auto local=[&] {
+        const auto now=entries_.find(session.id());const auto held=material_admissions_.find(session.id());
+        const auto e=material_epochs_.find(session.id());const auto source=material_sources_.find(session.id());
+        const auto life=admission->life.lock();
+        return live_&&!poisoned_&&life&&life->owner==this&&admission->valid&&connection.get()==&session&&
+            admission->session.lock()==connection&&held!=material_admissions_.end()&&held->second==admission&&
+            admission->predecessor==predecessor&&admission->pve_binding->same_binding(binding)&&
+            returned.predecessor_initialization().same_initialization(admission->initialization)&&returned.current(session)&&
+            session.account_id==admission->account&&session.character_id==admission->character&&
+            session.state()==admission->phase&&session.battle_generation()==admission->battle+2&&
+            identity.session==session.id()&&identity.account==admission->account&&identity.character==admission->character&&
+            identity.world_generation==binding.world_generation()&&identity.battle_generation==binding.battle_generation()&&
+            identity.channel==binding.channel()&&e!=material_epochs_.end()&&e->second==epoch&&!epoch->retired&&
+            epoch->initialization.same_initialization(admission->initialization)&&
+            (prior?(source!=material_sources_.end()&&source->second==prior):source==material_sources_.end())&&
+            (entry?(now!=entries_.end()&&now->second==entry&&!entry->revoked&&entry->session.lock()==connection&&
+                entry->initialization.same_initialization(admission->initialization)&&!entry->presence&&!entry->lease&&
+                entry->original_restoration==admission->original&&entry->latest_publication==admission->latest&&
+                entry->pending_publication==admission->pending&&entry->selection_anchor==admission->selection&&
+                entry->material_anchor==admission->material&&entry->account==admission->account&&
+                entry->character==admission->character&&entry->battle==admission->battle&&entry->phase==admission->phase):now==entries_.end());
+    };
+    if(!local()||!same_learning(*predecessor->learning_source(),*canonical->learning_source())||
+       !same_roster(predecessor->deity_roster(),canonical->deity_roster())||predecessor->batches()!=canonical->batches()||
+       !rooms->return_continuation_current(receipt,local)||!local()||
+       !repository_.restoration_current(*canonical->learning_source())||!local())return {};
+    auto next=std::make_shared<WrittenMaterialSource::Data>(WrittenMaterialSource::Data{
+        lifetime_,connection,returned.initialization(),{},canonical,{}, {},admission->account,admission->character,
+        session.battle_generation(),session.state(),true,returned,rooms,receipt});
+    auto successor_epoch=std::make_shared<MaterialEpoch>(MaterialEpoch{connection,returned.initialization(),false});
+    if(!rooms->return_continuation_current(receipt,local)||!local())return {};
+    // One-use actual Return successor; old Written history is retained, never
+    // queried as old Current or relabelled as a new response receipt.
+    material_sources_.insert_or_assign(session.id(),next);
+    if(prior)prior->valid=false;
+    if(entry) {
+        entry->initialization=returned.initialization();entry->battle=session.battle_generation();entry->phase=session.state();
+        entry->world_return=returned;entry->returned_learning_history=admission->latest;
+        entry->original_restoration=canonical;entry->material_anchor=next;entry->selection_anchor.reset();
+        entry->pending_publication.reset();
+    }
+    epoch->retired=true;material_epochs_.insert_or_assign(session.id(),std::move(successor_epoch));
+    admission->valid=false;material_admissions_.erase(session.id());
+    return WrittenMaterialSource(std::move(next));
 }
 std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> OwnedSkillBookLearningService::reanchor_material_chain(
     Session& session,std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
@@ -650,9 +800,7 @@ std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> OwnedSkillBo
        !canonical->owns_learning_repository(repository_) || !local())return {};
     if(entry) {
         if(entry->pending_publication && entry->pending_publication!=latest)return {};
-        if(latest && (latest->phase.load()!=LearningPublication::Data::Phase::Bound || !latest->response ||
-           latest->response->status()!=Session::WorldResponseWriteStatus::Written ||
-           !session.world_response_write_current_on_game(*latest->response)))return {};
+        if(!retained_learning_written(session,entry,latest))return {};
         const auto& before=(material||selection)?*original->learning_source():
             (latest?latest->after:*original->learning_source());
         if(!same_learning(before,*predecessor->learning_source()))return {};

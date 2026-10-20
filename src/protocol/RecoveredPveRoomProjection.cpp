@@ -8,7 +8,7 @@ namespace {
 using P=RecoveredPveRoomProjection;
 using T=OwnedPveRoomTypes;
 void need(bool value,const char* why){if(!value)throw P::ProfileRequired(why);}
-bool recipient(const T::Member& m){return m.status!=T::MemberStatus::Returned&&m.status!=T::MemberStatus::Retired&&!m.disconnected;}
+bool recipient(const T::Member& m){return m.status!=T::MemberStatus::Returned&&m.status!=T::MemberStatus::Retired&&!m.disconnected&&!m.return_context;}
 bool present(const T::Member& m){return m.status!=T::MemberStatus::Returned&&m.status!=T::MemberStatus::Retired&&m.status!=T::MemberStatus::Withdrawn;}
 template<class Bytes>void put(Bytes& bytes,std::size_t at,std::uint64_t value){
     const auto n=RecoveredBattleBootstrap::native_hp_dword(value);
@@ -35,7 +35,7 @@ Roster roster(const T::Snapshot& room){
     Roster result;
     for(const auto& [id,m]:room.members){
         const auto& input=m.input;
-        need(id==input.identity.character&&id&&input.identity.actor_handle&&input.primary_slot<14,
+        need(id==input.identity.character&&id&&input.identity.actor_handle&&m.primary_position()<14,
              "profile_required: member slot/identity missing");
         const auto bind=[&](std::uint8_t slot,bool pet){
             need(slot<14&&!result.owners[slot],"profile_required: duplicate member slot");
@@ -44,8 +44,8 @@ Roster roster(const T::Snapshot& room){
                  "profile_required: formation does not own its actual Battle actor");
             result.visible[slot]=present(m);
         };
-        bind(input.primary_slot,false);
-        if(input.pet)bind(input.pet->actor_slot,true);
+        bind(m.primary_position(),false);
+        if(input.pet)bind(*m.pet_position(),true);
     }
     for(std::uint8_t i=0;i<28;++i)if(const auto& a=state.actors[i]){
         need(a->position==i&&a->max_hp&&a->hp<=a->max_hp&&a->mp<=a->max_mp,
@@ -101,22 +101,29 @@ void emit_bulk(Writer& w,const P::RecipientProfile& p,const Roster& r,const Batt
     auto bytes=RecoveredBattleVitalsBatch::encode_logical(*p.bulk);
     for(unsigned i=0;i<14;++i){
         const auto visible=r.visible[i]&&state.actors[i].has_value();
-        put(bytes,5+8*i,visible?state.actors[i]->hp:0);
-        put(bytes,9+8*i,visible?state.actors[i]->mp:0);
+        std::uint64_t hp=visible?state.actors[i]->hp:0;std::uint32_t mp=visible?state.actors[i]->mp:0;
+        // A fleeing member's combat tombstones are not saved death. Native88
+        // also feeds its own HUD, so retain its exact pre-withdraw resources.
+        if(const auto owner=r.owners[i];owner&&owner->input.identity.character==p.character&&owner->status==T::MemberStatus::Withdrawn){
+            if(!r.pets[i]){hp=owner->input.resources.hp;mp=owner->input.resources.mp;}
+            else if(const auto& pet=owner->input.pet->saved;pet.pet){const auto v=pet.pet->stats.vitals();hp=v.current_hp;mp=v.current_mp;}
+            else{const auto v=owner->input.pet->saved.pet1->stats.vitals();hp=v.current_hp;mp=v.current_mp;}
+        }
+        put(bytes,5+8*i,hp);put(bytes,9+8*i,mp);
     }
     w.append(bytes);
 }
 void emit_grant(Writer& w,const P::RecipientProfile& p,const T::Member& m,const BattleSnapshot& state){
     need(p.grant&&(*p.grant)[0]==0x86&&(*p.grant)[1]==5,
          "profile_required: complete current native grant template missing");
-    auto bytes=*p.grant;const auto primary=m.input.primary_slot;
+    auto bytes=*p.grant;const auto primary=m.primary_position();
     need(primary<14&&state.actors[primary]&&(!m.primary_grant||state.actors[primary]->hp),
          "profile_required: primary grant names no living owned actor");
-    need(!m.secondary_grant||(m.input.pet&&state.actors[m.input.pet->actor_slot]&&state.actors[m.input.pet->actor_slot]->hp),
+    need(!m.secondary_grant||(m.input.pet&&state.actors[*m.pet_position()]&&state.actors[*m.pet_position()]->hp),
          "profile_required: secondary grant names no living owned pet");
     bytes[3]=static_cast<std::uint8_t>((bytes[3]&0xfc)|(m.primary_grant?1:0)|(m.secondary_grant?2:0));
     bytes[4]=static_cast<std::uint8_t>((bytes[4]&0xf0)|primary);
-    if(m.input.pet)bytes[4]=static_cast<std::uint8_t>((bytes[4]&0x0f)|(m.input.pet->actor_slot<<4));
+    if(m.input.pet)bytes[4]=static_cast<std::uint8_t>((bytes[4]&0x0f)|(*m.pet_position()<<4));
     // Native517590 sets only the flagged A/B controls; absent bits DO NOT
     // clear an old client control/slot. Server grants remain the core's exact
     // current epoch. Native input cleanup/completion must come from the host;
@@ -124,7 +131,7 @@ void emit_grant(Writer& w,const P::RecipientProfile& p,const T::Member& m,const 
     w.append(bytes);
 }
 void emit_action(Writer& w,const P::RecipientProfile& p,const T::Snapshot& room,const T::Change& change,const Roster& r){
-    need(change.result.has_value(),"profile_required: actual ordered action result missing");
+    need(change.result.has_value()&&change.animation_group&&*change.animation_group<255,"profile_required: actual ordered action/group missing");
     const auto& result=*change.result;const auto& state=room.checkpoint.snapshot;
     need(result.source<28&&state.actors[result.source]&&p.attacks.size()==result.hits.size()&&!result.hits.empty(),
          "profile_required: actual action/template sequence differs");
@@ -138,13 +145,13 @@ void emit_action(Writer& w,const P::RecipientProfile& p,const T::Snapshot& room,
         const auto& target=*state.actors[hit.target];
         if(!prototype.requires_absolute_hp_update())
             RecoveredBattleAttackPresentation::require_deferred_hp_target(target.max_hp,target.hp);
-        w.append(RecoveredBattleAttackPresentation::hit(prototype,result.source,hit.target,hit.hp_loss,target.hp!=0));
+        auto bytes=RecoveredBattleAttackPresentation::hit(prototype,result.source,hit.target,hit.hp_loss,target.hp!=0);
+        bytes[3]=*change.animation_group;w.append(bytes);
         if(prototype.requires_absolute_hp_update())
             w.append(vital(actor_profile(p,hit.target,r,state).hp,hit.target,target.hp));
     }
-    //88 writes the SAME side0 current HP and clears playback subrecords.
-    // Sending after-state HP before deferred83 hit events double-applies loss.
-    // Network Written cannot qualify native animation/cycle completion.
+    // The following88 is a true queued group boundary (5140C0/52AC20),
+    // processed after renderer completion. Written alone proves no animation.
 }
 }
 std::vector<OwnedPveRoomTypes::Output> RecoveredPveRoomProjection::prepare(
@@ -154,7 +161,7 @@ std::vector<OwnedPveRoomTypes::Output> RecoveredPveRoomProjection::prepare(
     const auto r=roster(room);const auto& state=room.checkpoint.snapshot;
     const auto changed=room.members.find(change.character);
     if(change.kind==Types::Change::Kind::Admission||change.kind==Types::Change::Kind::Withdrawal||
-       change.kind==Types::Change::Kind::Support)
+       change.kind==Types::Change::Kind::Support||change.kind==Types::Change::Kind::RowSwap||change.kind==Types::Change::Kind::RowSwapComplete)
         need(changed!=room.members.end(),"profile_required: changed member missing");
     std::vector<Types::Output> out;
     for(const auto& [id,m]:room.members)if(recipient(m)){
@@ -166,6 +173,7 @@ std::vector<OwnedPveRoomTypes::Output> RecoveredPveRoomProjection::prepare(
         if(change.kind==Types::Change::Kind::Grant)kind=Types::OutputKind::Grant;
         if(change.kind==Types::Change::Kind::Terminal)kind=Types::OutputKind::Terminal;
         Writer w{out,id,kind,{}};
+        const auto grant=[&]{if(std::find(change.suppress_grants.begin(),change.suppress_grants.end(),id)==change.suppress_grants.end())emit_grant(w,p,m,state);};
         if(entry||change.kind==Types::Change::Kind::Admission){
             std::vector<std::uint8_t> slots;
             if(entry){
@@ -173,8 +181,8 @@ std::vector<OwnedPveRoomTypes::Output> RecoveredPveRoomProjection::prepare(
                 w.append(RecoveredBattleEntry::encode_logical(*p.entry));
                 for(std::uint8_t s=0;s<28;++s)if(r.visible[s])slots.push_back(s);
             }else{
-                const auto& joined=changed->second;slots.push_back(joined.input.primary_slot);
-                if(joined.input.pet)slots.push_back(joined.input.pet->actor_slot);
+                const auto& joined=changed->second;slots.push_back(joined.primary_position());
+                if(joined.input.pet)slots.push_back(*joined.pet_position());
             }
             emit_roster(w,p,r,state,slots);
             if(entry){
@@ -183,50 +191,76 @@ std::vector<OwnedPveRoomTypes::Output> RecoveredPveRoomProjection::prepare(
                 // incumbent actors/flags must not be reset to accomplish it.
                 if(room.support_enabled){
                     need(p.support&&p.support->word9_operand()!=0&&
-                        (p.support->source()==m.input.primary_slot||
-                         (m.input.pet&&p.support->source()==m.input.pet->actor_slot))&&
+                        (p.support->source()==m.primary_position()||
+                         (m.input.pet&&p.support->source()==*m.pet_position()))&&
                         state.actors[p.support->source()]&&state.actors[p.support->source()]->hp,
                         "profile_required: enabled room needs entrant's actual support profile");
-                    w.append(RecoveredBattleAction08Control::encode(*p.support));
+                    auto control=RecoveredBattleAction08Control::encode(*p.support);
+                    control[3]=change.animation_group.value_or(0);w.append(control);
                 }
-                emit_bulk(w,p,r,state);emit_grant(w,p,m,state);
-            }
+                emit_bulk(w,p,r,state);grant();
+            }else emit_bulk(w,p,r,state); // new native progress edge for incumbents; no roster reset
         }else if(change.kind==Types::Change::Kind::Action||change.kind==Types::Change::Kind::Terminal){
             if(change.result)emit_action(w,p,room,change,r);
             else need(change.kind==Types::Change::Kind::Terminal,"profile_required: action result missing");
+            // Native5140C0 queues83 of one label until88/different label.
+            // The88 is applied only AFTER that animation group completes.
+            // Its fixed profile counter is not the manager's actor count.
+            if(change.result)emit_bulk(w,p,r,state);
             if(change.kind==Types::Change::Kind::Terminal){
                 need(p.terminal.has_value(),"profile_required: actual terminal89 profile missing");
                 w.append(RecoveredBattleExperience::encode_logical(*p.terminal));
-            }else emit_grant(w,p,m,state);
+            }else grant();
+        }else if(change.kind==Types::Change::Kind::Pass){
+            // Actual action2/target-gone pass has no83. Reset the native sent0B
+            // latch with a fixed-counter88 boundary, never on grant refresh.
+            emit_bulk(w,p,r,state);grant();
         }else if(change.kind==Types::Change::Kind::Grant){
             // CUSTOM-0161 host observes untrusted original0B only after all
             // server grants are consumed and all room outputs Written. This
             // explicit cycle gate is not an animation ACK or a turn nonce.
             if(change.cycle_progress_observed)emit_bulk(w,p,r,state);
-            emit_grant(w,p,m,state);
+            grant();
         }else if(change.kind==Types::Change::Kind::Support){
             const auto& input=changed->second.input;
-            need(change.actor_position&&(*change.actor_position==input.primary_slot||
-                 (input.pet&&*change.actor_position==input.pet->actor_slot))&&
+            need(change.actor_position&&(*change.actor_position==changed->second.primary_position()||
+                 (input.pet&&*change.actor_position==*changed->second.pet_position()))&&
                  state.actors[*change.actor_position]&&state.actors[*change.actor_position]->hp&&
                  p.support&&p.support->source()==*change.actor_position&&
                  (p.support->word9_operand()!=0)==room.support_enabled,
                  "profile_required: actual support state/template mismatch");
-            w.append(RecoveredBattleAction08Control::encode(*p.support));
+            need(change.animation_group&&*change.animation_group<255,"profile_required: support animation label missing");
+            auto control=RecoveredBattleAction08Control::encode(*p.support);control[3]=*change.animation_group;w.append(control);
+            emit_bulk(w,p,r,state);
             //518E50 common cleanup consumes the selected A/B control for08.
             // CUSTOM-0161 consumes that same actual role grant; advertise any
             // remaining owned role without treating absent bits as a clear.
-            emit_grant(w,p,m,state);
+            grant();
+        }else if(change.kind==Types::Change::Kind::RowSwap){
+            need(change.formation_before&&change.actor_position&&change.animation_group&&*change.animation_group<255&&
+                room.pending_swap&&room.pending_swap->identity==changed->second.input.identity&&
+                room.pending_swap->before==*change.formation_before&&p.row_swap,
+                "profile_required: exact pending native row swap/source missing");
+            const auto from=change.formation_before->primary,to=changed->second.primary_position();
+            need(from!=to&&p.row_swap->source()==*change.actor_position&&p.row_swap->from()==from&&p.row_swap->to()==to&&
+                p.row_swap->success_operand()!=0,"profile_required: row swap is not the authorized original pair permutation");
+            auto bytes=RecoveredBattleRowSwapResult::encode(*p.row_swap);bytes[3]=*change.animation_group;w.append(bytes);
+            emit_bulk(w,p,r,state); // actual native group boundary, not a Written/renderer ACK
+        }else if(change.kind==Types::Change::Kind::RowSwapComplete){
+            need(!room.pending_swap&&change.formation_before,"profile_required: row swap completion has no cleared exact edge");
+            grant();
         }else if(change.kind==Types::Change::Kind::Withdrawal){
-            std::set<std::uint8_t> expected{changed->second.input.primary_slot};
-            if(changed->second.input.pet)expected.insert(changed->second.input.pet->actor_slot);
+            std::set<std::uint8_t> expected{changed->second.primary_position()};
+            if(changed->second.input.pet)expected.insert(*changed->second.pet_position());
             for(const auto& control:p.withdrawal){
                 const auto records=RecoveredTaiwanServerRecords::read(control);
                 need(records&&records->size()==1&&control[0]==0x83&&control[1]==6&&control[12]==2&&
                      expected.erase(control[2])==1,"profile_required: actual flee-removal template missing/mismatched");
-                w.append(control);
+                need(change.animation_group&&*change.animation_group<255,"profile_required: withdrawal animation label missing");
+                auto bytes=control;bytes[3]=*change.animation_group;w.append(bytes);
             }
             need(expected.empty(),"profile_required: withdrawal omits primary or secondary actor");
+            emit_bulk(w,p,r,state);
         }else throw ProfileRequired("profile_required: unsupported room change");
         w.flush();
     }

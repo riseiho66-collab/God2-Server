@@ -1372,6 +1372,28 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 std::optional<LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource> legacy_selection;
                 std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> material_source;
                 std::weak_ptr<WholeBagMoveHost> material_host;
+                std::optional<Session::OwnedPveReturnSource> world_return;
+                RecoveredMovementService* return_movement=nullptr;
+                std::optional<RecoveredPosition> return_position;
+            };
+            struct ActualPveReturnHandoff final:OwnedPveApplicationSource::ReturnHandoff {
+                std::function<bool(Session&,const Session::OwnedPveBinding&)> retained;
+                std::function<void(Session&,const Session::OwnedPveBinding&,std::shared_ptr<SqliteOwnedPveRoomRepository>,
+                    const SqliteOwnedPveRoomRepository::ReturnContinuation&,const Session::OwnedPveReturnSource&)> finish;
+                std::function<void()> abandon;
+                bool operating=false,completed=false;
+                ~ActualPveReturnHandoff(){if(!completed&&abandon)try{abandon();}catch(...) {}}
+                bool retained_current(Session& session,const Session::OwnedPveBinding& binding)const noexcept override {
+                    try{return !operating&&!completed&&retained&&retained(session,binding);}catch(...){return false;}
+                }
+                void returned(Session& session,const Session::OwnedPveBinding& binding,
+                        std::shared_ptr<SqliteOwnedPveRoomRepository> repository,
+                        const SqliteOwnedPveRoomRepository::ReturnContinuation& receipt,
+                        const Session::OwnedPveReturnSource& source)override {
+                    if(operating||completed||!finish)throw std::logic_error("PvE return continuation reentered or consumed");
+                    operating=true;struct End{bool& value;~End(){value=false;}}end{operating};
+                    finish(session,binding,std::move(repository),receipt,source);completed=true;
+                }
             };
             struct PendingCompanionMaterial {
                 std::shared_ptr<const CanonicalCompanionSource> previous;
@@ -1580,7 +1602,24 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 if(source->pending_selection || source->pending_material)return; // Never query a consumed predecessor before its Written successor.
                 if(source->selection_unjoined){source->last_observed_write=CompanionWriteObservation::Stale;return;}
                 if(const auto canonical=source->canonical_source){
+                    // A deity-only cohort has no equipment/pose readset. Pin
+                    // the ACTUAL current movement pose for this entire SQL
+                    // observation, rather than requiring its historical entry
+                    // position forever or adopting a late observer's new pose.
+                    const auto observed_return_pose=canonical->world_return&&!canonical->material->learning_source()&&
+                        recovered_movement.get()==canonical->return_movement&&canonical->return_movement?
+                        canonical->return_movement->current_world_location(session.id(),source->account,source->character):std::nullopt;
                     const auto material_current=[&]{
+                        if(canonical->world_return) {
+                            const auto expected=canonical->material->learning_source()?canonical->return_position:observed_return_pose;
+                            const auto pure=[&]{return canonical->return_movement&&
+                                recovered_movement.get()==canonical->return_movement&&expected&&
+                                canonical->return_movement->current_world_location(session.id(),source->account,source->character)==expected&&
+                                (!canonical->material->learning_source()||canonical->material->learning_source()->equipment().position==*expected);};
+                            return pure()&&canonical->world_return->current(session)&&
+                                (!canonical->material->learning_source()||
+                                    (canonical->material_source&&canonical->material_source->current(session)))&&pure();
+                        }
                         const auto host=canonical->material_host.lock();
                         const auto pure=[&]{return host && host->live && host->accepting && host->movement &&
                             canonical->material->learning_source() &&
@@ -1611,7 +1650,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 if(!source->normal_initialization) {
                     source->last_observed_write=CompanionWriteObservation::InitializationUnavailable;return;
                 }
-                if(!session.normal_world_initialization_current(*source->normal_initialization)) {
+                if(!session.normal_world_initialization_current_on_game(*source->normal_initialization)) {
                     source->last_observed_write=CompanionWriteObservation::Stale;return;
                 }
                 if(!source->normal_initialization->entry_written()) {
@@ -1634,7 +1673,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 }
                 if(!whole)for(std::size_t i=0;i<batches.size();++i) {
                     const auto& observation=source->write_observations[i];
-                    if(observation.logical()!=batches[i] || !session.world_records_write_current(observation)) {
+                    if(observation.logical()!=batches[i] || !session.world_records_write_current_on_game(observation)) {
                         source->last_observed_write=CompanionWriteObservation::Stale;return;
                     }
                     const auto status=observation.status();
@@ -1656,7 +1695,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     source->last_observed_write=CompanionWriteObservation::Failed;return;
                 }
                 const auto initialization_current=[&] {
-                    return local() && session.normal_world_initialization_current(*source->normal_initialization) &&
+                    return local() && session.normal_world_initialization_current_on_game(*source->normal_initialization) &&
                         source->normal_initialization->entry_written();
                 };
                 if(!saved_current || !initialization_current()) {
@@ -10180,7 +10219,12 @@ if(guild_officer_runtime && player_guild(session) &&
                             source->last_observed_write!=CompanionWriteObservation::NoRecords))return {};
                         if(source->canonical_source){
                             const auto canonical=source->canonical_source;
-                            if(source->pending_selection || !owned_companions.restoration_current(*canonical->material) ||
+                            // observe_companion_restoration_write just finished
+                            // full graph/current and actual-pose checks on both
+                            // sides of its last SQL. Everything since is a pure
+                            // holder/INIT read. Do not insert an extra SQL read
+                            // here with no subsequent actual-pose final fence.
+                            if(source->pending_selection || source->pending_material ||
                                source->canonical_source!=canonical)return {};
                             return canonical->material;
                         }
@@ -10843,6 +10887,100 @@ if(guild_officer_runtime && player_guild(session) &&
                         }
                         return response;
                     };
+                }
+                if(pve_application) {
+                    pve_application->install_return_handoff([&](Session& session,const Session::OwnedPveBinding& binding)
+                            ->std::shared_ptr<OwnedPveApplicationSource::ReturnHandoff> {
+                        if(common_world||!session.owned_pve_prepared_current(binding))
+                            throw std::logic_error("PvE return capture requires its actual normal prepared owner");
+                        auto at=owned_companion_restoration_sources.find(session.id());
+                        if(at==owned_companion_restoration_sources.end())
+                            throw std::runtime_error("PvE must await the original Written companion source");
+                        observe_companion_restoration_write(session);
+                        // An actual battle entry retires every bank window
+                        // lease. A later return must open a fresh NPC context;
+                        // committed inventory history remains the same owner.
+                        if(whole_bag_moves&&whole_bag_moves->bank)whole_bag_moves->bank->release(session);
+                        bank_items_disconnect(session.id());native_banks.disconnect(session.id());
+                        at=owned_companion_restoration_sources.find(session.id());
+                        if(at==owned_companion_restoration_sources.end())throw std::runtime_error("PvE companion source retired during capture");
+                        const auto holder=at->second;const auto canonical=holder->canonical_source;
+                        const auto material=canonical?canonical->material:holder->material;
+                        const auto original=holder->material;const auto whole=holder->whole_response;
+                        const auto whole_wire=holder->whole_response_wire;const auto publication=holder->learning_publication;
+                        const auto initialization=holder->normal_initialization;const auto peer=session.weak_from_this().lock();
+                        const auto learning=skill_book_learning_service;
+                        const auto phase=holder->phase_at_restore;const auto battle=holder->battle_generation_at_restore;
+                        const auto movement=recovered_movement.get();
+                        const auto position=movement?movement->current_world_location(session.id(),session.account_id,session.character_id):std::nullopt;
+                        if(!peer||!material||holder->pending_material||holder->pending_selection||holder->selection_unjoined||
+                           !position||(material->learning_source()&&material->learning_source()->equipment().position!=*position)||
+                           !initialization||!initialization->same_initialization(binding.initialization())||
+                           phase!=session.state()||battle!=session.battle_generation()||!holder->all_submission_calls_returned||
+                           (holder->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityCurrent&&
+                            holder->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityPrefixCurrent&&
+                            holder->last_observed_write!=CompanionWriteObservation::NoRecords)||
+                           (canonical&&canonical->paired))throw std::runtime_error("PvE original companion publication is not fully qualified");
+                        std::optional<OwnedSkillBookLearningService::MaterialAdmission> admission;
+                        if(material->learning_source()) {
+                            if(!learning)throw std::logic_error("PvE complete learning source lost its actual service");
+                            admission=learning->prepare_pve_return(session,binding,material);
+                            if(!admission)throw std::runtime_error("PvE could not capture its actual learning Entry predecessor");
+                        }
+                        const auto retained=[&,holder,canonical,material,original,whole,whole_wire,publication,
+                                initialization,peer,learning,phase,battle,binding,movement,position](Session& actual,const Session::OwnedPveBinding& actual_binding) {
+                            const auto now=owned_companion_restoration_sources.find(actual.id());
+                            return !common_world&&pve_application&&peer.get()==&actual&&!actual.closing()&&
+                                actual_binding.same_binding(binding)&&now!=owned_companion_restoration_sources.end()&&now->second==holder&&
+                                holder->session.lock()==peer&&holder->canonical_source==canonical&&holder->material==original&&
+                                (canonical?canonical->material:holder->material)==material&&holder->whole_response==whole&&
+                                holder->whole_response_wire==whole_wire&&holder->learning_publication==publication&&
+                                holder->normal_initialization&&holder->normal_initialization->same_initialization(*initialization)&&
+                                holder->phase_at_restore==phase&&holder->battle_generation_at_restore==battle&&
+                                holder->account==actual.account_id&&holder->character==actual.character_id&&
+                                holder->all_submission_calls_returned&&!holder->pending_selection&&!holder->pending_material&&
+                                !holder->selection_unjoined&&skill_book_learning_service==learning&&
+                                recovered_movement.get()==movement&&movement&&
+                                movement->current_world_location(actual.id(),actual.account_id,actual.character_id)==position;
+                        };
+                        auto handoff=std::make_shared<ActualPveReturnHandoff>();
+                        handoff->retained=[retained,learning,admission](Session& actual,const Session::OwnedPveBinding& actual_binding) {
+                            if(!retained(actual,actual_binding))return false;
+                            if(actual.owned_pve_prepared_current(actual_binding))return !admission||
+                                (learning&&learning->pve_return_admission_current(actual,actual_binding,*admission));
+                            // Room combat authority is independent of later learning
+                            // retirement. Its private resource/claim cleanup remains
+                            // possible; a retired admission cannot renew eligibility.
+                            return actual.owned_pve_current(actual_binding);
+                        };
+                        handoff->abandon=[learning,admission]{if(learning&&admission)learning->abandon_material(*admission);};
+                        handoff->finish=[&,retained,holder,canonical,material,learning,admission,movement,position](Session& actual,
+                                const Session::OwnedPveBinding& actual_binding,std::shared_ptr<SqliteOwnedPveRoomRepository> rooms,
+                                const SqliteOwnedPveRoomRepository::ReturnContinuation& receipt,const Session::OwnedPveReturnSource& returned) {
+                            const auto local=[&]{return retained(actual,actual_binding)&&returned.binding().same_binding(actual_binding)&&
+                                returned.current(actual)&&returned.predecessor_initialization().same_initialization(actual_binding.initialization());};
+                            if(!rooms||!local())throw std::runtime_error("PvE returned companion handoff lost its private before/after lineage");
+                            auto value=owned_companions.pve_return_successor(*material,*rooms,receipt,local);
+                            if(!value||!local())throw std::runtime_error("PvE return did not preserve its complete saved learning/companion graph");
+                            auto after=std::make_shared<const RecoveredOwnedCompanions::Restoration>(std::move(*value));
+                            std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> source;
+                            if(admission) {
+                                source=learning->reanchor_pve_return(actual,material,after,rooms,receipt,returned,*admission);
+                                if(!source||!local())throw std::runtime_error("PvE actual learning Entry successor was retired; no restore/retry");
+                            }
+                            auto next=std::make_shared<const CanonicalCompanionSource>(CanonicalCompanionSource{
+                                after,after,{},{},canonical?canonical->latest_learning:holder->learning_publication,{},{},source,{},returned,movement,position});
+                            if(!local()||!rooms->return_continuation_current(receipt,local)||!local()||
+                               (source&&!source->current(actual))||!local())
+                                throw std::runtime_error("PvE return successor lost its final complete source cut");
+                            holder->canonical_source=std::move(next);
+                            holder->normal_initialization=returned.initialization();holder->phase_at_restore=actual.state();
+                            holder->battle_generation_at_restore=actual.battle_generation();holder->expected_receiving_prefix.reset();
+                            holder->last_observed_write=CompanionWriteObservation::WrittenSavedDeityCurrent;
+                        };
+                        if(!handoff->retained_current(session,binding))throw std::runtime_error("PvE source retired before entry capture completed");
+                        return handoff;
+                    });
                 }
                 if(game_handlers.world_records) {
                     const auto original=game_handlers.world_records;

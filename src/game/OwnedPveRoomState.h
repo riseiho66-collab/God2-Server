@@ -22,6 +22,11 @@ public:
     void pass(const Ticket&,Types::Identity,std::uint64_t grant_epoch,std::uint8_t actor_position,
         Types::Project,Types::PureCurrent);
     void grant_round(const Ticket&,Types::Project,Types::PureCurrent,bool cycle_progress_observed=false);
+    void swap_pair(const Ticket&,Types::Identity,std::uint64_t grant_epoch,std::uint64_t assignment_revision,
+        std::uint8_t actor_position,Types::Project,Types::PureCurrent);
+    void complete_swap(const Ticket&,Types::Project,Types::PureCurrent);
+    void refresh_grants(const Ticket&,Types::Identity,Types::Project,Types::PureCurrent);
+    void refresh_grants(const Ticket&,std::vector<Types::Identity>,Types::Project,Types::PureCurrent);
     // CUSTOM withdrawal removes only this member's combat presence. Its actual
     // pre-withdraw resources are saved; HP0 combat tombstones do not kill the save.
     void withdraw(const Ticket&,Types::Identity,bool disconnected,Types::Project,Types::PureCurrent);
@@ -30,7 +35,7 @@ public:
     void written(const Ticket&,std::uint64_t sequence,Types::Identity,bool success,Types::PureCurrent);
     void prepare_return(const Ticket&,Types::Identity,std::vector<std::uint8_t> logical,
         std::array<std::uint8_t,4> expected_context,Types::PureCurrent);
-    void complete_return(const Ticket&,Types::Identity,std::array<std::uint8_t,4>,Types::PureCurrent);
+    SqliteOwnedPveRoomRepository::ReturnContinuation complete_return(const Ticket&,Types::Identity,std::array<std::uint8_t,4>,Types::PureCurrent);
     std::shared_ptr<const Types::Snapshot> inspect(const Ticket&)const;
     bool recovery_required(const Ticket&)const noexcept;
     void retire_closed(const Ticket&); // Durable history remains; no live actor/input/output.
@@ -40,12 +45,12 @@ private:
     class Operation;
     using State=Types::Snapshot;
     std::shared_ptr<Room> find(const Ticket&)const;
-    void publish(Operation&,std::shared_ptr<State>,const Types::PureCurrent&);
+    std::optional<SqliteOwnedPveRoomRepository::ReturnContinuation> publish(Operation&,std::shared_ptr<State>,const Types::PureCurrent&);
     static Types::Member& member(State&,const Types::Identity&);
     static void require_drained(const State&);
     static void append(State&,std::vector<Types::Output>,bool every_live_member);
     static void check_current(const Types::PureCurrent&);
-    void project(Operation&,State&,const Types::Change&,const Types::Project&);
+    void project(Operation&,State&,const Types::Change&,const Types::Project&,bool every_live_member=true);
     SqliteOwnedPveRoomRepository& repository_;
     std::map<std::uint64_t,std::shared_ptr<Room>> rooms_;
     std::thread::id thread_;

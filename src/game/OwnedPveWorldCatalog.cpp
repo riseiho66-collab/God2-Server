@@ -18,7 +18,6 @@ template<std::size_t N>std::array<std::uint8_t,N> raw(const J& j) {
 }
 template<class T>T present(std::optional<T> v){need(v.has_value(),"PvE catalog native record grammar invalid");return *v;}
 void put16(auto& b,std::size_t at,std::uint16_t n){b[at]=std::uint8_t(n);b[at+1]=std::uint8_t(n>>8);}
-void put32(auto& b,std::size_t at,std::uint64_t n){need(n<=UINT32_MAX,"PvE native DWORD requires explicit extended profile");for(unsigned i=0;i<4;++i)b[at+i]=std::uint8_t(n>>(8*i));}
 P::ActorProfile actor(const J& j) {
     return {present(RecoveredBattleIdentity::parse_logical(raw<45>(j.at("identity")))),
         j.at("appearance").is_null()?std::nullopt:std::optional{present(RecoveredBattlePlayerAppearance::parse(raw<17>(j.at("appearance"))))},
@@ -42,15 +41,66 @@ BattleAction policy(const J& j) {
         std::uint32_t(number(j.at("critical_chance_bp"),10000)),std::uint32_t(number(j.at("critical_multiplier_percent"),UINT32_MAX))};
     need(p.critical_multiplier_percent>=100,"PvE critical multiplier must be explicit >=100 percent");return p;
 }
+J pet_material_key(const J& saved) {
+    const auto kind=saved.at("kind").get<std::string>();
+    need(kind=="Pet1"||kind=="Pet2","PvE pet source kind missing");
+    const auto metadata=raw<20>(saved.at("metadata"));
+    const auto metadata_key=std::uint16_t(metadata[0])|(std::uint16_t(metadata[1])<<8);
+    J stats;
+    if(kind=="Pet2") {
+        auto bytes=raw<RecoveredPet2Stats::logical_size>(saved.at("stats"));
+        const auto parsed=present(RecoveredPet2Stats::parse_logical(bytes));
+        need((metadata[2]&0x3f)==34&&parsed.metadata_key()==metadata_key&&parsed.slot()==44,
+            "PvE Pet2 metadata family/key/active slot differs from complete stats");
+        // Proven packed HP14/MP11 only; preserve the high seven opaque bits.
+        bytes[5]=bytes[6]=bytes[7]=0;bytes[8]&=0xfe;stats=bytes;
+    }else{
+        auto bytes=raw<RecoveredPet1Stats::logical_size>(saved.at("stats"));
+        const auto parsed=present(RecoveredPet1Stats::parse_logical(bytes));
+        need((metadata[2]&0x3f)==32&&parsed.metadata_key()==metadata_key&&parsed.slot()==44,
+            "PvE Pet1 metadata family/key/active slot differs from complete stats");
+        bytes[1]=bytes[2]=bytes[5]=bytes[6]=0;stats=bytes;
+    }
+    const auto source=saved.at("source_sha256").get<std::string>();
+    need(source.size()==64&&source.find_first_not_of("0123456789abcdef")==std::string::npos,
+        "PvE pet source pin invalid");
+    return {{"kind",kind},{"metadata",metadata},{"stats",stats},{"source_sha256",source}};
+}
+J validate_pet_variant(const J& variant) {
+    const auto p=actor(variant.at("pet"));
+    need(p.mp&&p.identity.position()<14&&p.hp.resource()==RecoveredBattleVitals::Resource::Hp&&
+        p.mp->resource()==RecoveredBattleVitals::Resource::Mp,
+        "PvE active pet requires complete native HP/MP profile");
+    const auto& saved=variant.at("active_pet_material");
+    const auto key=pet_material_key(saved);
+    if(saved.at("kind")=="Pet2"){
+        const auto stats=present(RecoveredPet2Stats::parse_logical(raw<RecoveredPet2Stats::logical_size>(saved.at("stats"))));
+        const auto v=stats.vitals();need(v.maximum_hp&&v.current_hp<=v.maximum_hp&&v.current_mp<=v.maximum_mp&&
+            p.hp.maximum()==v.maximum_hp&&p.mp->maximum()==v.maximum_mp,
+            "PvE Pet2 profile maxima differ from complete saved material");
+    }else{
+        const auto stats=present(RecoveredPet1Stats::parse_logical(raw<RecoveredPet1Stats::logical_size>(saved.at("stats"))));
+        const auto v=stats.vitals();need(v.maximum_hp&&v.current_hp<=v.maximum_hp&&v.current_mp<=v.maximum_mp&&
+            p.hp.maximum()==v.maximum_hp&&p.mp->maximum()==v.maximum_mp,
+            "PvE Pet1 profile maxima differ from complete saved material");
+    }
+    return key;
+}
 void validate_templates(const J& j) {
-    need(j.at("animation_group_policy")=="custom_cyclic_byte_epoch","PvE explicit animation group policy required");
-    (void)present(RecoveredBattleVitalsBatch::parse_logical(raw<121>(j.at("bulk"))));
+    need(j.at("animation_group_policy")=="custom_contiguous_batch_0_254","PvE explicit animation group policy required");
+    need(j.at("cycle_counter_policy")=="fixed_complete_profile","PvE explicit fixed native cycle counter policy required");
+    const auto bulk=present(RecoveredBattleVitalsBatch::parse_logical(raw<121>(j.at("bulk"))));
+    need(bulk.counter_bits()!=UINT32_MAX,"PvE fixed bulk counter cannot use the native uninitialized sentinel");
     const auto grant=raw<17>(j.at("grant"));need(grant[0]==0x86&&grant[1]==5,"PvE grant template invalid");
     const auto attack=present(RecoveredBattleAttackPresentation::parse(raw<15>(j.at("attack"))));
     need(attack.basic(),"PvE basic-only action owner cannot accept a skill template without skill authority");
-    (void)present(RecoveredBattleAction08Control::parse(raw<15>(j.at("support"))));
+    const auto support=raw<15>(j.at("support"));
+    (void)present(RecoveredBattleAction08Control::parse(support));
+    need(support[3]<255,"PvE initial support template uses a reserved animation batch label");
     const auto removal=raw<15>(j.at("withdrawal"));
     need(removal[0]==0x83&&removal[1]==6&&removal[12]==2,"PvE native successful withdrawal template invalid");
+    const auto swap=present(RecoveredBattleRowSwapResult::parse(raw<15>(j.at("row_swap"))));
+    need(swap.success_operand()!=0,"PvE row swap requires an explicit successful native template");
     const auto terminal=present(RecoveredBattleExperience::parse_logical(raw<57>(j.at("terminal"))));
     // CUSTOM-0161 currently has no reward issuer. Never display an award which
     // the same transaction has not granted to the actual participant.
@@ -105,15 +155,13 @@ OwnedPveWorldCatalog::OwnedPveWorldCatalog(const nlohmann::json& j) {
         (void)present(RecoveredRemoteActorMove::parse_logical(raw<13>(a.at("world_move"))));
         const auto p=actor(a.at("primary"));need(p.appearance&&p.mp&&p.identity.position()<14,
             "PvE player requires complete native appearance/identity/HP/MP profile");
-        if(!a.at("pet").is_null()){
-            const auto pet=actor(a.at("pet"));need(pet.mp.has_value(),"PvE active pet MP profile required");
-            const auto& saved=a.at("active_pet_material");
-            need(saved.at("kind")=="Pet1"||saved.at("kind")=="Pet2","PvE pet source kind missing");
-            (void)raw<20>(saved.at("metadata"));
-            if(saved.at("kind")=="Pet1")(void)present(RecoveredPet1Stats::parse_logical(raw<RecoveredPet1Stats::logical_size>(saved.at("stats"))));
-            else (void)present(RecoveredPet2Stats::parse_logical(raw<RecoveredPet2Stats::logical_size>(saved.at("stats"))));
-            const auto source=saved.at("source_sha256").get<std::string>();
-            need(source.size()==64&&source.find_first_not_of("0123456789abcdef")==std::string::npos,"PvE pet source pin invalid");
+        std::set<std::string> pet_keys;
+        if(!a.at("pet").is_null())pet_keys.insert(validate_pet_variant(a).dump());
+        if(a.contains("pet_profiles")){
+            const auto& variants=a.at("pet_profiles");
+            need(variants.is_array()&&variants.size()<=1024,"PvE complete pet variant list exceeds source format");
+            for(const auto& variant:variants)need(pet_keys.insert(validate_pet_variant(variant).dump()).second,
+                "PvE ambiguous duplicate active-pet material profile");
         }
         need(actors_.emplace(id,a).second,"PvE duplicate full character profile");
     }
@@ -123,6 +171,26 @@ const OwnedPveWorldCatalog::Scene* OwnedPveWorldCatalog::scene(std::uint16_t are
 }
 const nlohmann::json& OwnedPveWorldCatalog::actor_profile(std::uint64_t character)const {
     const auto at=actors_.find(character);if(at==actors_.end())throw P::ProfileRequired("profile_required: complete current saved-player native profile missing");return at->second;
+}
+RecoveredPveRoomProjection::ActorProfile OwnedPveWorldCatalog::pet_profile(
+        std::uint64_t character,const StoredPet2Slot& saved)const {
+    need(saved.slot==44&&bool(saved.pet)!=bool(saved.pet1),"PvE actual active pet material missing/ambiguous");
+    J actual{{"kind",saved.pet?"Pet2":"Pet1"},
+        {"metadata",saved.pet?saved.pet->inventory:saved.pet1->inventory},
+        {"stats",saved.pet?J(RecoveredPet2Stats::encode_logical(saved.pet->stats)):
+            J(RecoveredPet1Stats::encode_logical(saved.pet1->stats))},
+        {"source_sha256",saved.provenance.source_sha256}};
+    const auto key=pet_material_key(actual);const auto& root=actor_profile(character);
+    const J* selected=nullptr;
+    const auto consider=[&](const J& variant){
+        if(pet_material_key(variant.at("active_pet_material"))==key){
+            need(!selected,"PvE ambiguous actual active-pet native profile");selected=&variant;
+        }
+    };
+    if(!root.at("pet").is_null())consider(root);
+    if(root.contains("pet_profiles"))for(const auto& variant:root.at("pet_profiles"))consider(variant);
+    if(!selected)throw P::ProfileRequired("profile_required: complete current active-pet native profile missing");
+    return actor(selected->at("pet"));
 }
 bool OwnedPveWorldCatalog::same_entry_material(const nlohmann::json& prototype,std::span<const std::uint8_t> actual) {
     if(actual.size()!=37||actual.front()!=0x2a)return false;
@@ -146,49 +214,62 @@ RecoveredPveRoomProjection::Profiles OwnedPveWorldCatalog::profiles(const Scene&
         for(const auto& [other,peer]:room.members) {
             if(peer.status==Types::MemberStatus::Returned||peer.status==Types::MemberStatus::Retired||
                peer.status==Types::MemberStatus::Withdrawn||peer.disconnected)continue;
-            const auto& a=actor_profile(other);auto primary=positioned(actor(a.at("primary")),peer.input.primary_slot,peer.input.identity.actor_handle);
+            const auto& a=actor_profile(other);auto primary=positioned(actor(a.at("primary")),peer.primary_position(),peer.input.identity.actor_handle);
             const auto role=present(RecoveredRoleLevel::parse(peer.input.role.logical));
             auto identity=RecoveredBattleIdentity::encode_logical(primary.identity);identity[2]=role.level();
             primary.identity=present(RecoveredBattleIdentity::parse_logical(identity));
-            p.actors.emplace(peer.input.primary_slot,std::move(primary));
+            p.actors.emplace(peer.primary_position(),std::move(primary));
             if(peer.input.pet) {
-                need(!a.at("pet").is_null(),"profile_required: current active pet native profile missing");
-                auto secondary=positioned(actor(a.at("pet")),peer.input.pet->actor_slot,
+                need(peer.pet_position().has_value(),"PvE saved pet has no current formation assignment");
+                auto secondary=positioned(pet_profile(other,peer.input.pet->saved),*peer.pet_position(),
                     std::uint16_t(peer.input.identity.actor_handle|0x4000));
-                p.actors.emplace(peer.input.pet->actor_slot,std::move(secondary));
+                p.actors.emplace(*peer.pet_position(),std::move(secondary));
             }
         }
-        if(change.kind==Types::Change::Kind::Entry||
-           (change.kind==Types::Change::Kind::Admission&&change.character==id)||
-           (change.kind==Types::Change::Kind::Grant&&change.cycle_progress_observed)) {
-            auto bulk=raw<121>(scene.templates.at("bulk"));put32(bulk,1,room.grant_epoch);
-            p.bulk=present(RecoveredBattleVitalsBatch::parse_logical(bulk));
-        }
+        // The native queue delays this boundary until the preceding83 batch
+        // finishes. Its DWORD is a full source value, not a server turn count:
+        // ordinary K0 compares the later cache against the first88 cache.
+        p.bulk=present(RecoveredBattleVitalsBatch::parse_logical(raw<121>(scene.templates.at("bulk"))));
         p.grant=raw<17>(scene.templates.at("grant"));
         if(change.result)for(std::size_t n=0;n<change.result->hits.size();++n) {
             auto attack=raw<15>(scene.templates.at("attack"));
-            // Explicit CUSTOM cyclic BYTE label, never a truncated room ID,
-            // native turn credential or proof that an animation completed.
-            // The full grant epoch remains64-bit in the authoritative room.
-            need(scene.templates.at("animation_group_policy")=="custom_cyclic_byte_epoch",
-                "PvE animation grouping requires an explicit source policy");
-            attack[3]=std::uint8_t(room.grant_epoch%256);p.attacks.push_back(present(RecoveredBattleAttackPresentation::parse(attack)));
+            // Explicit CUSTOM contiguous batch label. The room publishes this
+            // exact group after source authorization; it is never a turn nonce.
+            need(change.animation_group&&*change.animation_group<255,
+                "PvE action lacks its actual server-owned animation batch");
+            attack[3]=*change.animation_group;p.attacks.push_back(present(RecoveredBattleAttackPresentation::parse(attack)));
         }
         if(change.kind==Types::Change::Kind::Support) {
             const auto changed=room.members.find(change.character);need(changed!=room.members.end(),"PvE support owner missing");
             auto support=raw<15>(scene.templates.at("support"));
             need(change.actor_position.has_value(),"PvE support requires its actual primary/secondary producer");
             support[2]=*change.actor_position;
+            need(change.animation_group&&*change.animation_group<255,"PvE support animation batch missing");
+            support[3]=*change.animation_group;
             put16(support,9,room.support_enabled?1:0);p.support=present(RecoveredBattleAction08Control::parse(support));
         } else if((change.kind==Types::Change::Kind::Entry||
             (change.kind==Types::Change::Kind::Admission&&change.character==id))&&room.support_enabled) {
-            auto support=raw<15>(scene.templates.at("support"));support[2]=m.input.primary_slot;
+            auto support=raw<15>(scene.templates.at("support"));support[2]=m.primary_position();
             put16(support,9,1);p.support=present(RecoveredBattleAction08Control::parse(support));
         }
         if(change.kind==Types::Change::Kind::Withdrawal) {
             const auto changed=room.members.find(change.character);need(changed!=room.members.end(),"PvE withdrawal owner missing");
-            std::vector<std::uint8_t> slots{changed->second.input.primary_slot};if(changed->second.input.pet)slots.push_back(changed->second.input.pet->actor_slot);
-            for(const auto slot:slots){auto removal=raw<15>(scene.templates.at("withdrawal"));removal[2]=slot;p.withdrawal.push_back(removal);}
+            std::vector<std::uint8_t> slots{changed->second.primary_position()};if(changed->second.pet_position())slots.push_back(*changed->second.pet_position());
+            need(change.animation_group&&*change.animation_group<255,"PvE withdrawal animation batch missing");
+            for(const auto slot:slots){auto removal=raw<15>(scene.templates.at("withdrawal"));removal[2]=slot;
+                removal[3]=*change.animation_group;p.withdrawal.push_back(removal);}
+        }
+        if(change.kind==Types::Change::Kind::RowSwap) {
+            need(change.formation_before&&change.actor_position,
+                "PvE row swap lacks the actual original pair and acting role");
+            const auto changed=room.members.find(change.character);
+            need(changed!=room.members.end()&&change.formation_before->primary!=changed->second.primary_position(),
+                "PvE row swap has no actual canonical destination");
+            need(change.animation_group&&*change.animation_group<255,"PvE row swap animation batch missing");
+            auto bytes=raw<15>(scene.templates.at("row_swap"));bytes[3]=*change.animation_group;
+            const auto prototype=present(RecoveredBattleRowSwapResult::parse(bytes));
+            p.row_swap=RecoveredBattleRowSwapResult::positioned(prototype,*change.actor_position,
+                change.formation_before->primary,changed->second.primary_position());
         }
         p.terminal=present(RecoveredBattleExperience::parse_logical(raw<57>(scene.templates.at("terminal"))));
         out.emplace(id,std::move(p));

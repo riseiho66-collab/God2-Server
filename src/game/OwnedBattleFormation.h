@@ -87,7 +87,6 @@ struct OwnedBattleFormation {
         Snapshot swapped_pair(const Owner& owner)const {
             auto next=members_;bool found=false;
             for(auto& m:next)if(m.owner==owner){
-                if(!m.has_pet)throw std::invalid_argument("Pair swap requires two actual owned actors");
                 m.row^=1;found=true;
             }
             if(!found)throw std::invalid_argument("Formation swap is not its exact owner");

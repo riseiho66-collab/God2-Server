@@ -21,20 +21,11 @@ using Frame = god2::RecoveredWorldFrame;
 using Bytes = std::vector<std::uint8_t>;
 
 static_assert(World::max_logical_size == 0xa00);
-static_assert(std::is_same_v<World::Record, std::variant<Movement::Request,
-              World::Tick, Inventory::Request, god2::RecoveredTargetItemRequest::Request,
-              SelectionItem::Request, Quest::Request, Close::Request,
-              Battle::BasicAttackRequest, Battle::ControlRequest, Skill::Record, World::TimerNotification, World::ContextNotification,
-              Battle::Action2Request, Npc::Request, god2::RecoveredChat::Request, World::ClientDiagnostic,
-              World::ClientControl1F, World::ClientControl6D, god2::RecoveredTeleport::Selection,
-              InventoryMove::Request, god2::RecoveredDeitySelection::Request,
-              god2::RecoveredDailyQuestRequest::Request,World::DailyPanelOpen,
-              god2::RecoveredAttributeAllocation::Request,World::ClientPoseNotification,
-              god2::RecoveredPet2Revert::Request,god2::RecoveredRoleText::Request,
-              World::ClientOpaque74,World::ClientPanelOpen88,World::ClientOptionsNotification,
-              god2::RecoveredInventoryDiscard::Request,god2::RecoveredParty::Request,god2::RecoveredTrade::Request,god2::RecoveredBank::Request,god2::RecoveredBankItems::Request,god2::RecoveredPartyPositionQuery::Request,god2::RecoveredPartyChat::Request,god2::RecoveredPrivateChat::Request,god2::RecoveredGuildChat::Request,
-              god2::RecoveredGuildRoster::PanelReady,god2::RecoveredGuildLeave::Request,
-              god2::RecoveredGuildDisband75::Request,god2::RecoveredGuildMembership::Request,god2::RecoveredGuildLeadership::Request,god2::RecoveredGuildAnnouncement::Request>>);
+// Keep stable early occurrence alternatives; appended protocol types are covered
+// by their own round trips. This fixture explicitly refuses unsupported types.
+static_assert(std::is_same_v<std::variant_alternative_t<0,World::Record>,Movement::Request>);
+static_assert(std::is_same_v<std::variant_alternative_t<7,World::Record>,Battle::BasicAttackRequest>);
+static_assert(std::is_same_v<std::variant_alternative_t<std::variant_size_v<World::Record>-1,World::Record>,god2::RecoveredBattleRowSwapCommand::Request>);
 static_assert(Quest::encode({0x1234, 2, 0x9a, 0xa5}) ==
               Quest::LogicalRecord{0x85, 0x34, 0x12, 2, 0, 0x9a, 0xa5});
 
@@ -121,6 +112,10 @@ Bytes reconstruct(const std::vector<World::Record>& records) {
                 append(result,god2::RecoveredSosSupportRequest::encode(value));
             } else if constexpr (std::is_same_v<T, god2::RecoveredSosBattleCommand::Request>) {
                 append(result,god2::RecoveredSosBattleCommand::encode(value));
+            } else if constexpr (std::is_same_v<T, god2::RecoveredBattleRowSwapCommand::Request>) {
+                append(result,god2::RecoveredBattleRowSwapCommand::encode(value));
+            } else if constexpr (std::is_same_v<T, god2::RecoveredBattleFleeCommand::Request>) {
+                append(result,god2::RecoveredBattleFleeCommand::encode(value));
             } else if constexpr (std::is_same_v<T, god2::RecoveredTeamRequest57::Request>) {
                 append(result,god2::RecoveredTeamRequest57::encode(value));
             } else if constexpr (std::is_same_v<T, god2::RecoveredPartyExitRequest5A::Request>) {
@@ -171,7 +166,7 @@ Bytes reconstruct(const std::vector<World::Record>& records) {
                 for(unsigned shift=0;shift<32;shift+=8)
                     result.push_back(static_cast<std::uint8_t>(value.context_storage>>shift));
                 append(result,std::array<std::uint8_t,4>{value.selection_id_byte,value.selection_kind_byte,0,0});
-            } else {
+            } else if constexpr(std::is_same_v<T,Battle::BasicAttackRequest>||std::is_same_v<T,Battle::ControlRequest>||std::is_same_v<T,Battle::Action2Request>) {
                 const auto& fields = [&]() -> const Battle::BasicAttackRequest& {
                     if constexpr (std::is_same_v<T, Battle::ControlRequest> || std::is_same_v<T, Battle::Action2Request>) return value.fields;
                     else return value;
@@ -187,7 +182,7 @@ Bytes reconstruct(const std::vector<World::Record>& records) {
                 for(const auto word:{fields.context_storage,fields.unwritten_parameter})
                     for(unsigned shift=0;shift<32;shift+=8)
                         result.push_back(static_cast<std::uint8_t>(word>>shift));
-            }
+            }else throw std::runtime_error("This legacy reconstruction fixture has no encoder for the appended typed grammar");
         }, record);
     }
     return result;

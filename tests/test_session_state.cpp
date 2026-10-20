@@ -21,6 +21,9 @@
 #include "game/LegacyTaiwanOwnedDeitySelectionRegistry.h"
 #include "handlers/OwnedSkillBookLearningService.h"
 #include "db/SqliteSkillBookLearningRepository.h"
+#include "db/SqliteAccountRepository.h"
+#include "game/OwnedPveRoomState.h"
+#include "game/OwnedBattleRowPreference.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -2178,6 +2181,119 @@ void recovered_skill_sequence_transport() {
 
 // SOURCE ONLY until PHASE2: transport ownership, not native entry rendering or
 // room durability. Bindings come from real authenticated Written normal INIT.
+// SOURCE ONLY: real private Session Return + real room COMMIT, and the actual
+// learning holder API. Empty explicit owned populations create no pet/item or
+// skill grant. Modes cover first bootstrap, an existing Entry, and retirement
+// after preparation; all use the actual opaque tokens rather than constructors.
+void recovered_owned_pve_learning_continuation_source_cases() {
+    using T=OwnedPveRoomTypes;
+    for(const unsigned mode:{0u,1u,2u}) {
+        sqlite3* raw=nullptr;require(sqlite3_open(":memory:",&raw)==SQLITE_OK,"Return fixture open");
+        std::unique_ptr<sqlite3,decltype(&sqlite3_close_v2)> db(raw,sqlite3_close_v2);
+        auto migrations=default_sqlite_migrations();std::erase_if(migrations,[](const auto& m){return m.version>42;});
+        SqliteMigrationManager(raw,migrations).migrate();
+        sqlite_detail::execute(raw,"INSERT INTO accounts(id,username,password_hash) VALUES(7,'return-source-only','hash')");
+        SqliteAccountRepository accounts(raw);SqliteRecoveredCharacterRepository characters(raw);
+        SqliteRoleAuxiliaryRepository auxiliary(raw);SqliteCompanionRepository pets(raw);
+        SqliteOwnedInventoryRepository inventory(raw,accounts,characters);
+        SqliteNativeEquipmentSnapshotRepository equipment(raw,accounts,characters);
+        NativeSkillBookCatalog books(raw);NativeSkillCatalog skills(raw);
+        SqliteSkillBookLearningRepository repository(inventory,equipment,pets,books,skills);
+        sqlite_detail::execute(raw,SqliteOwnedInventoryRepository::schema());
+        sqlite_detail::execute(raw,SqliteNativeEquipmentSnapshotRepository::schema());
+        sqlite_detail::execute(raw,SqliteSkillBookLearningRepository::schema());
+        sqlite_detail::execute(raw,SqliteNativeWorldEntrySnapshotRepository::schema());
+        SqliteOwnedPveRoomRepository::install_schema(raw);
+        std::array<std::uint8_t,40> profile{};profile[0]='R';
+        const auto root=characters.create(7,profile);const auto actor=static_cast<std::uint16_t>(root.id);
+        const auto position=characters.commit_position(7,root.id,{},4,3,10,10);
+        OwnedInventorySnapshot bag{root,1,std::string(64,'b'),"CUSTOM_TEST_NOT_NATIVE:return-empty-population",{}};
+        require(inventory.replace_from_issuer({},bag,[&](const auto&,const auto&,auto){return std::optional{bag};}).has_value(),"Return bag source");
+        NativeEquipmentSnapshot worn{root,position,NativeEquipmentSnapshot::client_pin,NativeEquipmentSnapshot::kind,
+            std::string(64,'c'),"CUSTOM_TEST_NOT_NATIVE:return-complete-empty-witness",std::vector<std::uint8_t>(NativeEquipmentSnapshot::record_bytes),1,actor};
+        worn.record[1200]=0xda;worn.record[1201]=std::uint8_t(actor);worn.record[1202]=std::uint8_t(actor>>8);worn.record[1214]=0x82;
+        require(equipment.replace_from_issuer({},worn,[&](const auto&,const auto&,auto){return std::optional{worn};}).has_value(),"Return equipment source");
+        T::MemberInput input;input.root=root;input.return_position=position;input.primary_slot=0;input.reserved_partner=1;input.command_context=10;
+        input.role.logical.fill(0);input.role.logical[0]=0x22;input.role.logical[1]=1;input.role.logical[17]=100;input.role.logical[21]=20;
+        input.role.revision=1;input.role.design_id="CUSTOM-0013";
+        sqlite_detail::Statement role(raw,"INSERT INTO character_role_snapshots VALUES(?,?,1,'CUSTOM-0013')");
+        role.bind_id(1,root.id);role.bind_blob(2,input.role.logical);role.done();
+        input.resources={100,100,20,20,1,"CUSTOM-0012"};
+        sqlite_detail::Statement resources(raw,"INSERT INTO character_resources VALUES(?,100,100,20,20,1,'CUSTOM-0012')");resources.bind_id(1,root.id);resources.done();
+        RecoveredRoleAuxiliary::Logical aux{};aux[0]=0x2c;aux[49]=20;aux[57]=20;
+        input.auxiliary=auxiliary.save(7,root.id,{},aux,"CUSTOM_TEST_NOT_NATIVE","return-source-only");
+        SqliteNativeWorldEntrySnapshotRepository rows(raw,accounts,characters);
+        NativeWorldEntrySnapshot preference{root,position,OwnedBattleRowPreference::client_pin,OwnedBattleRowPreference::record_kind,
+            OwnedBattleRowPreference::client_pin,OwnedBattleRowPreference::source_record,{0xe8,0},1};
+        input.row_preference=rows.replace_from_issuer({},preference,[](const auto&,const auto&,auto){return true;},[]{return true;});
+        require(input.row_preference.has_value(),"Return explicit B4 source");
+        auto rooms=std::make_shared<SqliteOwnedPveRoomRepository>(raw,accounts,characters,auxiliary,pets);
+        OwnedPveRoomState room(*rooms);RecoveredOwnedCompanions helper(pets);
+        auto canonical=std::make_shared<const RecoveredOwnedCompanions::Restoration>(helper.restore_with_source(7,root.id,repository));
+        LuaEngine lua(std::filesystem::path(GOD2_SOURCE_DIR)/"scripts");OwnedSkillBookLearningService learning(repository,lua,1);
+        std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> material;
+        std::optional<Session::OwnedPveBinding> binding;bool bootstrap=false,returning=false;
+        unsigned supplier_calls=0;
+        const auto fixture=std::vector<std::uint8_t>{0xe8,0};const auto wire=RecoveredWorldFrame::encode(fixture);
+        struct Writer final:Session::OwnedPveOutputOwner {
+            void owned_pve_written(Session&,const Session::OwnedPveBinding&,std::uint64_t,bool ok)override{require(ok,"Return fixture output failed");}
+        };auto writer=std::make_shared<Writer>();
+        RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
+            if(returning){require(binding.has_value(),"Return missing original binding");
+                const auto* context=std::get_if<RecoveredWorldRecords::ContextNotification>(&records.front());require(context,"Return context lost");
+                session.prepare_owned_pve_return(*binding,*context);session.send_owned_pve_output(*binding,2,fixture,writer,true);returning=false;
+            }else if(bootstrap){
+                const auto result=learning.bootstrap(session,{},[&](Session& actual){++supplier_calls;
+                    require(!material||material->current(actual),"First bootstrap reentered or lost its return material");return canonical;});
+                require(result&&result->empty(),"Return bootstrap replayed historical deity/pet output");bootstrap=false;
+                if(material){const auto bank=learning.prepare_material(session,canonical);
+                    require(bank.has_value(),"Returned Entry could not capture the next actual inventory mutation");learning.abandon_material(*bank);}
+            }
+            return std::vector<std::uint8_t>{};
+        },root.id,50900+mode);
+        peer.select(false);peer.send(RecoveredSessionPeer::tail(actor));peer.silent();
+        const auto tick=RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0});
+        if(mode){bootstrap=true;peer.send(tick);peer.silent();}
+        binding=peer.session->prepare_owned_pve_entry();
+        const auto admission=learning.prepare_pve_return(*peer.session,*binding,canonical);
+        require(admission&&learning.pve_return_admission_current(*peer.session,*binding,*admission),"Prepared learning predecessor missing");
+        input.identity={peer.session->id(),7,root.id,binding->world_generation(),binding->battle_generation(),binding->channel(),actor};
+        T::Encounter encounter;encounter.members={input};encounter.enemies={{14,0,1000,1000,0,0,10,10,0,0}};
+        encounter.seed=7;encounter.source_sha256=std::string(64,'a');encounter.source_record="CUSTOM_TEST_NOT_NATIVE:return-source";
+        const T::PureCurrent current=[]{return true;};
+        const T::Project project=[](const auto& snapshot,const auto& change){std::vector<T::Output> out;
+            for(const auto& [id,m]:snapshot.members)if(m.status!=T::MemberStatus::Returned&&m.status!=T::MemberStatus::Retired)
+                out.push_back({id,change.kind==T::Change::Kind::Entry?T::OutputKind::Entry:T::OutputKind::Grant,{0xe8,0}});return out;};
+        const auto ticket=room.create(encounter,project,current);
+        const auto written=[&]{for(const auto& output:room.pending(ticket))room.written(ticket,output.sequence,output.recipient,true,current);};written();
+        require(peer.session->commit_owned_pve_entry(*binding),"Return Session commit failed");
+        peer.session->send_owned_pve_output(*binding,1,fixture,writer);peer.expect(wire);peer.session->release_owned_pve_input(*binding);peer.silent();
+        if(mode==2)learning.release(*peer.session);
+        room.withdraw(ticket,input.identity,false,project,current);written();
+        const std::array<std::uint8_t,4> context{std::uint8_t(actor),std::uint8_t(actor>>8),1,0};
+        room.prepare_return(ticket,input.identity,fixture,context,current);written();
+        returning=true;peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,5>{0x1c,context[0],context[1],1,0}));peer.expect(wire);
+        const auto receipt=room.complete_return(ticket,input.identity,context,current);
+        require(peer.session->complete_owned_pve_return(*binding),"Return Session missing actual Written transition");
+        const auto returned=peer.session->owned_pve_return_source(*binding);require(returned.has_value(),"Return private lineage absent");
+        auto after=helper.pve_return_successor(*canonical,*rooms,receipt,current);require(after.has_value(),"Return unchanged complete material rejected");
+        const auto next=std::make_shared<const RecoveredOwnedCompanions::Restoration>(*after);
+        require(!helper.pve_return_successor(*canonical,*rooms,receipt,[]{return false;}),"Return ignored final source retirement");
+        material=learning.reanchor_pve_return(*peer.session,canonical,next,rooms,receipt,*returned,*admission);
+        if(mode==2){require(!material,"Released same-INIT Entry revived after combat");peer.session->close();continue;}
+        require(material&&material->current(*peer.session),"Actual Return failed learning/material continuation");canonical=next;
+        require(!learning.reanchor_pve_return(*peer.session,canonical,next,rooms,receipt,*returned,*admission),"Consumed Return admission replayed");
+        room.retire_closed(ticket);
+        require(material->current(*peer.session),"Runtime room retirement invalidated new normal learning material");
+        peer.session->resume_owned_pve_return_input(*binding);peer.silent();
+        const auto before_calls=supplier_calls;bootstrap=true;peer.send(tick);peer.silent();
+        require(material->current(*peer.session)&&supplier_calls==(mode?before_calls:before_calls+3),"Returned first/existing bootstrap lost exact lineage");
+        const auto next_binding=peer.session->prepare_owned_pve_entry();
+        require(peer.session->commit_owned_pve_entry(next_binding)&&!material->current(*peer.session),
+            "Prior returned material survived a genuinely new battle generation");
+        learning.release(*peer.session);require(!material->current(*peer.session),"Released return material remained Current");
+    }
+}
 void recovered_owned_pve_transport_source_cases() {
     using namespace god2;
     struct Owner final:Session::OwnedPveOutputOwner {
@@ -2223,7 +2339,7 @@ void recovered_owned_pve_transport_source_cases() {
     peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,5>{0x1c,
         static_cast<std::uint8_t>(RecoveredSessionPeer::character),
         static_cast<std::uint8_t>(RecoveredSessionPeer::character>>8),1,0}));peer.expect(wire);
-    require(terminal&&!peer.session->complete_owned_pve_return(*binding)&&
+    require(terminal&&!peer.session->owned_pve_return_source(*binding)&&!peer.session->complete_owned_pve_return(*binding)&&
         peer.session->state()==SessionState::InBattle,"PvE nonfinal Return Write renewed WORLD");
     peer.session->send_owned_pve_output(*binding,4,fixture,owner,true,true);peer.expect(wire);
     require(peer.session->complete_owned_pve_return(*binding)&&
@@ -2231,6 +2347,21 @@ void recovered_owned_pve_transport_source_cases() {
         peer.session->battle_generation()==generation+2&&
         !peer.session->normal_world_initialization_current_on_game(*initialization),
         "PvE final Return did not renew exactly the original WORLD owner");
+    const auto returned_source=peer.session->owned_pve_return_source(*binding);
+    require(returned_source&&returned_source->current(*peer.session)&&
+        returned_source->predecessor_initialization().same_initialization(*initialization)&&
+        !returned_source->initialization().same_initialization(*initialization),
+        "PvE return source did not preserve exact private before-to-after INIT lineage");
+    bool off_game_rejected=false;
+    std::thread wrong_owner([&]{off_game_rejected=!returned_source->current(*peer.session)&&
+        !peer.session->owned_pve_return_source(*binding);});wrong_owner.join();
+    require(off_game_rejected,"Return source inspected GAME-owned lineage from a different thread");
+    {
+        RecoveredSessionPeer foreign(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>>{
+            return std::vector<std::uint8_t>{};},RecoveredSessionPeer::character,50881);
+        foreign.select(false);foreign.send(RecoveredSessionPeer::tail());foreign.silent();
+        require(!returned_source->current(*foreign.session),"Equal scalar owner borrowed another Session return source");
+    }
     const auto returned_calls=peer.world_calls;
     peer.send(RecoveredWorldFrame::encode(std::array<std::uint8_t,2>{0x30,0}));peer.silent();
     require(peer.world_calls==returned_calls&&!peer.session->owned_pve_entry_available_on_game(),
@@ -2242,6 +2373,7 @@ void recovered_owned_pve_transport_source_cases() {
     const auto cleanup=peer.session->prepare_owned_pve_entry();
     require(peer.session->commit_owned_pve_entry(cleanup)&&peer.session->owned_pve_cleanup_current(cleanup),
         "Actual retained room lost its save-only cleanup source");
+    require(!returned_source->current(*peer.session),"New battle revived the previous returned normal source");
     peer.session->account_id^=std::uint64_t{1}<<32;
     require(!peer.session->owned_pve_cleanup_current(cleanup),"PvE cleanup narrowed account identity");
     peer.session->account_id^=std::uint64_t{1}<<32;
@@ -2250,6 +2382,21 @@ void recovered_owned_pve_transport_source_cases() {
         "Closing room lost cleanup or retained output authority");
     peer.closed();
     require(peer.session->owned_pve_cleanup_current(cleanup),"Retired normal INIT erased physical Written cleanup history");
+}
+void recovered_row_swap_whole_admission_source_cases() {
+    for(const bool unbound_battle:{false,true}) {
+        RecoveredSessionPeer peer(true,[](Session&,auto)->std::optional<std::vector<std::uint8_t>>{
+            return std::vector<std::uint8_t>{};});
+        peer.select(false);peer.send(RecoveredSessionPeer::tail());peer.silent();
+        if(unbound_battle)peer.session->set_state(SessionState::InBattle);
+        const auto calls=peer.world_calls,moves=peer.movement_calls;
+        std::vector<std::uint8_t> logical{0x2e,18,0,14,0,3,0};
+        RecoveredBattleRowSwapCommand::Bytes swap{};swap[0]=0x35;swap[2]=9;
+        logical.insert(logical.end(),swap.begin(),swap.end());
+        peer.send(RecoveredWorldFrame::encode(logical));peer.closed();
+        require(peer.world_calls==calls&&peer.movement_calls==moves,
+            "Unbound row swap reached business or committed its movement prefix");
+    }
 }
 
 void test_session_state() {
@@ -2272,6 +2419,8 @@ void test_session_state() {
     recovered_written_deity_selection_transport();
     recovered_logout_cleanup_barrier();
     recovered_owned_pve_transport_source_cases();
+    recovered_owned_pve_learning_continuation_source_cases();
+    recovered_row_swap_whole_admission_source_cases();
     for(std::uint8_t reason:{0,1,2}) {
         RecoveredSessionPeer peer(false,[](Session&,auto)->std::optional<std::vector<std::uint8_t>> {
             return std::vector<std::uint8_t>{};

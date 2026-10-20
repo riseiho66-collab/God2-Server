@@ -84,6 +84,28 @@ bool RecoveredOwnedCompanions::restoration_current(const Restoration& restoratio
     return repository_.deity_roster_current(restoration.deity_roster());
 }
 std::optional<RecoveredOwnedCompanions::Restoration>
+RecoveredOwnedCompanions::pve_return_successor(const Restoration& before,
+        SqliteOwnedPveRoomRepository& rooms,const SqliteOwnedPveRoomRepository::ReturnContinuation& returned,
+        const OwnedPveRoomTypes::PureCurrent& current) {
+    PrefixRead read(*this);const auto retained=before;
+    const auto& admission=returned.admission();const auto& saved=returned.saved();
+    if(!current||!current()||admission.identity.account!=retained.deity_roster().account()||
+       admission.identity.character!=retained.deity_roster().character()||
+       saved.identity!=admission.identity||!rooms.return_continuation_current(returned,current)||prefix_reentered_)return {};
+    if(retained.learning_source()) {
+        const auto& source=*retained.learning_source();
+        if(!OwnedInventorySnapshot::same_root(source.inventory().root,admission.root)||
+           source.equipment().position!=admission.return_position||
+           !NativeEquipmentSnapshot::same_root(source.equipment().root,saved.root))return {};
+    }
+    // Battle updated only the resource/pet tuple certified by the private room
+    // commit. The complete existing learning graph and joint item tuple must
+    // still be current; no restoration or stale-check exemption is permitted.
+    if(!restoration_current(retained)||prefix_reentered_||!current()||
+       !rooms.return_continuation_current(returned,current)||prefix_reentered_||!current())return {};
+    return retained;
+}
+std::optional<RecoveredOwnedCompanions::Restoration>
 RecoveredOwnedCompanions::material_successor_from_committed(const Restoration& before,
     SqliteOwnedEquipmentTransaction& joint,const SqliteOwnedEquipmentTransaction::Committed& committed) {
     const std::array<const SqliteOwnedEquipmentTransaction::Committed*,1> chain{&committed};

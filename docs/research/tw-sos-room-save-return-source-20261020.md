@@ -1,5 +1,12 @@
 # 台服 SOS 共用戰鬥、全員保存與逐人返回：來源階段
 
+> 2026-10-21 pass5 更新：本文保留 pass4 歷史結論。action9、返回接續及83／88
+> 時序已有後續修正，現況以 [換排與回合源碼](tw-pve-row-swap-cycle-source-20261021.md)、
+> [原版佇列 REA](tw-native-row-swap-and-cycle-20261021.md) 與
+> [返回接續](tw-pve-return-continuation-source-20261021.md) 為準；
+> pass4 直接 consumer 推得的「83 後不能接88」不適用實際延後播放佇列。
+
+
 2026-10-20，pass4；CUSTOM-0161／0162／0163。這是源碼接線與修改後審查，
 不是編譯成功、黑箱通過或原版遊戲驗收。`world.owned_pve_rooms.enabled` 預設
 關閉；未更動任何現用設定、帳號、遊戲資料庫或客戶端。完整目標與 Discord

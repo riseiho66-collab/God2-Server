@@ -31,10 +31,17 @@ struct OwnedPveRoomTypes {
         std::uint32_t command_context{}; // Original actual entry context, never a room ID.
         std::optional<NativeWorldEntrySnapshot> row_preference;
         std::optional<StoredPet2Slot> empty_active_pet;
+        std::optional<std::uint8_t> reserved_partner; // Explicit immutable CUSTOM-0162 pair; never +7.
     };
     enum class MemberStatus {Entering,Active,Withdrawn,Returned,Retired};
     enum class OutputKind {Entry,Roster,Action,Grant,Terminal,Return};
     enum class OutputStatus {Pending,Written,Failed};
+    struct Assignment {
+        std::uint8_t primary{};
+        std::optional<std::uint8_t> pet;
+        std::uint64_t revision{1};
+        bool operator==(const Assignment&)const=default;
+    };
     struct Member {
         MemberInput input;
         MemberStatus status{MemberStatus::Entering};
@@ -42,6 +49,18 @@ struct OwnedPveRoomTypes {
         bool primary_grant{},secondary_grant{},disconnected{};
         std::optional<std::array<std::uint8_t,4>> return_context;
         std::uint64_t return_sequence{};
+        std::optional<Assignment> assignment;
+        std::optional<MemberInput> admission_source;
+        Assignment positions()const noexcept{return assignment?*assignment:Assignment{
+            input.primary_slot,input.pet?std::optional{input.pet->actor_slot}:std::nullopt,1};}
+        std::uint8_t primary_position()const noexcept{return positions().primary;}
+        std::optional<std::uint8_t> pet_position()const noexcept{return positions().pet;}
+        std::optional<std::uint8_t> partner_position()const noexcept {
+            const auto other=input.reserved_partner?input.reserved_partner:
+                input.pet?std::optional{input.pet->actor_slot}:std::nullopt;
+            if(!other)return {};
+            return primary_position()==input.primary_slot?other:std::optional{input.primary_slot};
+        }
     };
     struct Output {
         std::uint64_t character{};
@@ -62,6 +81,10 @@ struct OwnedPveRoomTypes {
         std::map<std::uint64_t,Member> members; // Full common character IDs.
         std::vector<Delivery> outbox;
         bool support_enabled{},closed{};
+        struct PendingSwap {Identity identity;Assignment before;std::uint8_t actor_position{};
+            bool operator==(const PendingSwap&)const=default;};
+        std::optional<PendingSwap> pending_swap;
+        std::uint64_t animation_sequence{}; // CUSTOM monotonically assigned native group labels0..254.
     };
     struct Encounter {
         std::vector<MemberInput> members;
@@ -72,12 +95,15 @@ struct OwnedPveRoomTypes {
         bool support_enabled{};
     };
     struct Change {
-        enum class Kind {Entry,Admission,Action,Grant,Support,Withdrawal,Terminal};
+        enum class Kind {Entry,Admission,Action,Grant,Support,Withdrawal,Terminal,RowSwap,RowSwapComplete,Pass};
         Kind kind{};
         std::uint64_t character{};
         std::optional<BattleActionResult> result;
         std::optional<std::uint8_t> actor_position;
         bool cycle_progress_observed=false; // Server-owned CUSTOM gate, never a client ACK claim.
+        std::optional<Assignment> formation_before;
+        std::optional<std::uint8_t> animation_group;
+        std::vector<std::uint64_t> suppress_grants; // Host-owned queued commands; wire UI only, not canonical permission.
     };
     // Called outside SQL, on owned immutable after-state; prepares bytes only.
     using Project=std::function<std::vector<Output>(const Snapshot&,const Change&)>;

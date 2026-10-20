@@ -44,7 +44,11 @@ public:
         // Optional actual application handoff, after BOTH durable individual
         // return and private Session WORLD renewal succeed. Never called early.
         std::function<void(const std::shared_ptr<Session>&,const Binding&,
-            const Types::MemberInput&)> returned;
+            const Types::MemberInput&,const SqliteOwnedPveRoomRepository::ReturnContinuation&)> returned;
+        // Actual application continuation readset; pure, no SQL/provider calls.
+        std::function<bool(Session&,const Binding&)> member_continuation_current;
+        std::function<void(const std::shared_ptr<Session>&,const Binding&,const Types::MemberInput&)> entered;
+        std::function<void(const std::shared_ptr<Session>&,const Binding&)> cancelled;
     };
     explicit OwnedPveRoomHost(SqliteOwnedPveRoomRepository&);
     ~OwnedPveRoomHost();
@@ -55,6 +59,7 @@ public:
     // no common-character-ID fallback or watcher/party routing.
     void support(std::shared_ptr<Session>,RecoveredSosSupportRequest::Request);
     bool bound(const Session&)const noexcept;
+    bool pending(const Session&)const noexcept;
     // Returns false only when no PvE binding exists. A bound batch is fully
     // classified before any mutation; one native mutation plus opaque ticks
     // per batch is accepted. Unsupported/multiple mutations throw, no prefix.
@@ -70,6 +75,11 @@ private:
         std::optional<std::uint64_t> allow_retired={})const;
     void drain(const std::shared_ptr<Room>&);
     void advance(const std::shared_ptr<Room>&);
+    void animation_started(const std::shared_ptr<Room>&,std::uint64_t before_sequence);
+    Types::Project projection(const std::shared_ptr<Room>&)const;
+    void admit_prepared(const std::shared_ptr<Room>&,const std::shared_ptr<Peer>&,RecoveredSosSupportRequest::Request);
+    void cancel_pending(const std::shared_ptr<Room>&)noexcept;
+    void cancel_prepared(const std::shared_ptr<Room>&,const std::shared_ptr<Peer>&)noexcept;
     bool process(const std::shared_ptr<Room>&,Session&,
         std::span<const RecoveredWorldRecords::Record>,bool allow_queue);
     void fail(const std::shared_ptr<Room>&)noexcept;
@@ -77,6 +87,7 @@ private:
     OwnedPveRoomState state_;
     std::map<std::uint64_t,std::shared_ptr<Room>> rooms_;
     std::map<std::uint64_t,std::weak_ptr<Room>> sessions_;
+    std::map<std::uint64_t,std::weak_ptr<Room>> pending_sessions_;
     std::thread::id thread_;
     bool accepting_=true,stopped_=false,creating_=false,creation_poisoned_=false;
 };

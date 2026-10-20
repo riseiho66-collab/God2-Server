@@ -1,5 +1,12 @@
 # 台服布陣、多人 PvE 投影與保留的未知規則
 
+> 2026-10-21 pass5 更新：本文保留 pass4 歷史結論。action9、返回接續及83／88
+> 時序已有後續修正，現況以 [換排與回合源碼](tw-pve-row-swap-cycle-source-20261021.md)、
+> [原版佇列 REA](tw-native-row-swap-and-cycle-20261021.md) 與
+> [返回接續](tw-pve-return-continuation-source-20261021.md) 為準；
+> pass4 直接 consumer 推得的「83 後不能接88」不適用實際延後播放佇列。
+
+
 本輪只有 PHASE1 來源／靜態分析。未建置、執行測試、遊戲、VM、codec、
 SQL 或部署；回歸來源不代表驗收通過。正式封包盤點由主代理獨佔執行。
 
@@ -123,7 +130,7 @@ actor，再呼叫518E50；這是動態共用 caller，尚未把特定原生按�
 個人物／戰寵操作權卡住。沒有用未設bit清除舊native權限。Entry enabled08
 也要求該source是當前alive ownedactor，避免08將deadpet誤改為存活pose。
 
-P1來源修正：現用aaf0的518A90→52D360將88當前值直接寫side0 actor+DE8／DEC，
+歷史快讀（已由20261021完整queue REA修正，見 `tw-pve-row-swap-cycle-source-20261021.md`）：現用aaf0的518A90→52D360將88當前值直接寫side0 actor+DE8／DEC，
 並經516AC0清播放資料。普通83延後hit也改同一HP欄；AI→友方若緊接送
 action後HP88會重扣／清播放。Action／Terminal及普通Grant均不再送88，另有reported-cycle條件Grant；新
 entrant的初始roster後有88；晚入舊成員沒有重播。既有完整REA證據沿用

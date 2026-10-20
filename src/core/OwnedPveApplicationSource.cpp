@@ -21,6 +21,14 @@ bool same_population(const std::vector<RecoveredVisibility::Presence>& a,const s
         RecoveredRemoteActorRemove::encode_logical(a[n].departure)!=RecoveredRemoteActorRemove::encode_logical(b[n].departure))return false;
     return true;
 }
+bool same_pet(const StoredPet2Slot& a,const StoredPet2Slot& b) {
+    if(a.slot!=b.slot||a.revision!=b.revision||a.provenance!=b.provenance||a.display_category!=b.display_category||
+       bool(a.pet)!=bool(b.pet)||bool(a.pet1)!=bool(b.pet1))return false;
+    if(a.pet&&(a.pet->owner.account!=b.pet->owner.account||a.pet->owner.character!=b.pet->owner.character||
+       a.pet->inventory!=b.pet->inventory||RecoveredPet2Stats::encode_logical(a.pet->stats)!=RecoveredPet2Stats::encode_logical(b.pet->stats)))return false;
+    return !a.pet1||(a.pet1->owner.account==b.pet1->owner.account&&a.pet1->owner.character==b.pet1->owner.character&&
+        a.pet1->inventory==b.pet1->inventory&&RecoveredPet1Stats::encode_logical(a.pet1->stats)==RecoveredPet1Stats::encode_logical(b.pet1->stats));
+}
 }
 OwnedPveApplicationSource::OwnedPveApplicationSource(SqliteDatabase& db,LuaEngine& lua,
         RecoveredMovementService& movement,RecoveredVisibility& visibility,
@@ -31,6 +39,11 @@ OwnedPveApplicationSource::OwnedPveApplicationSource(SqliteDatabase& db,LuaEngin
     need(movement.owns_repository(db.recovered_characters())&&bool(deliver_),"PvE actual Application sources mismatch");
 }
 OwnedPveApplicationSource::~OwnedPveApplicationSource(){stop();}
+void OwnedPveApplicationSource::install_return_handoff(PrepareReturnHandoff prepare) {
+    need(!stopped_&&!retiring_&&!prepare_return_handoff_&&bool(prepare)&&worlds_.empty()&&pending_.empty(),
+        "PvE return handoff must be installed once by its actual Application owner before use");
+    prepare_return_handoff_=std::move(prepare);
+}
 bool OwnedPveApplicationSource::bound(const Session& s)const noexcept{return host_&&host_->bound(s);}
 void OwnedPveApplicationSource::observe_world(Session& s) {
     if(stopped_||retiring_||bound(s)||s.closing()||!s.recovered_world_ready()||
@@ -71,7 +84,7 @@ void OwnedPveApplicationSource::title(Session& s,bool active) {
 }
 void OwnedPveApplicationSource::committed_movement(Session& session,const RecoveredMovementService::CommittedMove& committed) {
     const auto before=visibility_.snapshot(session.id());if(!before)return;
-    need(!stopped_&&!bound(session)&&committed.before&&before->account==session.account_id&&before->character==session.character_id&&
+    need(!stopped_&&!bound(session)&&!host_->pending(session)&&committed.before&&before->account==session.account_id&&before->character==session.character_id&&
         before->location==RecoveredVisibility::Scene{committed.after.area,committed.after.scene}&&
         movement_.current_world_location(session.id(),session.account_id,session.character_id)==std::optional{committed.after},
         "PvE world movement lacks its actual committed current source");
@@ -123,36 +136,26 @@ OwnedPveRoomTypes::MemberInput OwnedPveApplicationSource::member(const OwnedPveW
     T::MemberInput result;result.identity={binding.session_id(),binding.account(),binding.character(),
         binding.world_generation(),binding.battle_generation(),binding.channel(),entry->actor_handle};
     result.root=*root;result.role=*role;result.auxiliary=*auxiliary;result.resources=*resources;result.row_preference=*row;
-    result.return_position=*position;result.primary_slot=assigned.row0;
+    result.return_position=*position;result.primary_slot=assigned.row0;result.reserved_partner=assigned.row1;
     std::random_device entropy;result.command_context=entropy(); // CUSTOM opaque source context, not a room ID.
     const auto pets=db_.companions().load_pet2_slots(binding.account(),binding.character());
     for(const auto& pet:pets)if(pet.slot==44){
         if(!pet.occupied()){result.empty_active_pet=pet;continue;}
-        need(!result.pet&&!profile.at("pet").is_null(),"profile_required: active44 must have one complete native pet profile");
+        need(!result.pet,"PvE duplicate occupied active44 source");
         // Preserve the whole original native Pet1/Pet2 slot in the room. The
         // repository compares its full raw metadata/revision before HP/MP CAS.
-        const auto& expected=profile.at("active_pet_material");
-        const auto metadata=pet.pet?pet.pet->inventory:pet.pet1->inventory;
-        auto stats=pet.pet?nlohmann::json(RecoveredPet2Stats::encode_logical(pet.pet->stats)):
-            nlohmann::json(RecoveredPet1Stats::encode_logical(pet.pet1->stats));
-        auto expected_stats=expected.at("stats");
-        const auto normalize=[&](nlohmann::json& bytes) {
-            need(bytes.is_array()&&bytes.size()==stats.size(),"PvE active pet native stats width changed");
-            if(pet.pet) { // Native FB packed HP14/MP11 only; retain opaque high7.
-                bytes[5]=0;bytes[6]=0;bytes[7]=0;bytes[8]=bytes[8].get<unsigned>()&0xfeu;
-            } else {bytes[1]=0;bytes[2]=0;bytes[5]=0;bytes[6]=0;}
-        };
-        normalize(stats);normalize(expected_stats);
-        need(expected.at("kind")== (pet.pet?"Pet2":"Pet1")&&expected.at("metadata")==nlohmann::json(metadata)&&
-            expected_stats==stats&&expected.at("source_sha256")==pet.provenance.source_sha256,
-            "profile_required: pet portrait/identity template differs from actual complete saved active44 beyond owned current HP/MP");
+        (void)catalog_->pet_profile(binding.character(),pet);
         result.pet=T::PetInput{assigned.row1,pet};
     }
     need(session->owned_pve_prepared_current(binding)&&
         movement_.current_world_location(session->id(),binding.account(),binding.character())==position,
         "PvE member actual source changed during saved observations");
+    need(bool(prepare_return_handoff_),"PvE actual Application return handoff is not installed");
+    const auto handoff=prepare_return_handoff_(*session,binding);
+    need(handoff&&handoff->retained_current(*session,binding)&&session->owned_pve_prepared_current(binding),
+        "PvE companion/learning continuation is not an actual retained source");
     auto actors=visibility_.retained_scene({position->area,position->scene});
-    worlds_.insert_or_assign(session->id(),WorldBefore{binding,*position,std::move(actors),{}});
+    worlds_.insert_or_assign(session->id(),WorldBefore{binding,*position,std::move(actors),{},handoff});
     return result;
 }
 std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sources(const OwnedPveWorldCatalog::Scene& scene) {
@@ -162,6 +165,21 @@ std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sour
     source->encounter.source_sha256=catalog_->source_sha256();source->encounter.source_record=catalog_->source_record()+";scene="+std::to_string(scene.id);
     const auto* policy=&scene;
     source->member=[this,policy](const auto& peer,const auto& binding,auto snapshot){return member(*policy,peer,binding,std::move(snapshot));};
+    source->entered=[this](const auto& peer,const Binding& binding,const auto&) {
+        const auto world=worlds_.find(peer->id());
+        need(!stopped_&&world!=worlds_.end()&&world->second.binding.same_binding(binding)&&
+            peer->owned_pve_current(binding),"PvE fight title lacks an actual committed member");
+        title(*peer,true);
+    };
+    source->cancelled=[this](const auto& peer,const Binding& binding) {
+        if(!peer)return;const auto world=worlds_.find(peer->id());
+        if(world!=worlds_.end()&&world->second.binding.same_binding(binding))worlds_.erase(world);
+    };
+    source->member_continuation_current=[this](Session& peer,const Binding& binding) {
+        const auto at=worlds_.find(peer.id());
+        return !stopped_&&at!=worlds_.end()&&at->second.binding.same_binding(binding)&&
+            at->second.handoff&&at->second.handoff->retained_current(peer,binding);
+    };
     const auto catalog=catalog_;
     source->project=[catalog,policy](const auto& snapshot,const auto& change){
         return RecoveredPveRoomProjection::prepare(snapshot,change,catalog->profiles(*policy,snapshot,change));};
@@ -181,7 +199,7 @@ std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sour
         auto action=policy->ai;action.source=enemy;
         for(std::uint8_t n=0;n<14;++n)if(snapshot.checkpoint.snapshot.actors[n]&&snapshot.checkpoint.snapshot.actors[n]->hp){
             bool live=false;for(const auto& [id,m]:snapshot.members){(void)id;if(!finished(m.status)&&!m.disconnected&&
-                m.status!=T::MemberStatus::Withdrawn&&(m.input.primary_slot==n||(m.input.pet&&m.input.pet->actor_slot==n)))live=true;}
+                m.status!=T::MemberStatus::Withdrawn&&(m.primary_position()==n||(m.pet_position()&&*m.pet_position()==n)))live=true;}
             if(live){action.targets={n};return action;}}
         return std::nullopt; // Explicit CUSTOM lowest-live-slot target policy.
     };
@@ -191,11 +209,14 @@ std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sour
         return action2?OwnedPveRoomHost::Sources::ControlDecision::Pass:OwnedPveRoomHost::Sources::ControlDecision::ObserveOnly;
     };
     source->return_world=[this](const auto& peer,const auto& binding,const auto& m,const auto& context){return return_world(peer,binding,m,context);};
-    source->returned=[this](const auto& peer,const auto& binding,const auto& member) {
+    source->returned=[this](const auto& peer,const auto& binding,const auto& member,const auto& receipt) {
         const auto at=worlds_.find(peer->id());
         need(!stopped_&&at!=worlds_.end()&&at->second.binding.same_binding(binding)&&at->second.return_actors,
             "PvE returned WORLD lost its actual last-written scene source");
-        const auto before=*at->second.return_actors;
+        const auto before=*at->second.return_actors;const auto handoff=at->second.handoff;
+        const auto returned=peer->owned_pve_return_source(binding);
+        need(handoff&&returned,"PvE return lost its private completed Session lineage");
+        handoff->returned(*peer,binding,repository_,receipt,*returned);
         const auto now=visibility_.retained_scene({member.return_position.area,member.return_position.scene});
         const auto init=peer->normal_world_initialization_on_game();
         auto latest=world_reconciliation(*peer,before,now);
@@ -220,7 +241,8 @@ std::shared_ptr<const OwnedPveRoomHost::Sources> OwnedPveApplicationSource::sour
         const auto live=[&] {
             const auto world=worlds_.find(peer->id());
             return !stopped_&&init&&peer->normal_world_initialization_current_on_game(*init)&&
-                world!=worlds_.end()&&world->second.binding.same_binding(binding);
+                world!=worlds_.end()&&world->second.binding.same_binding(binding)&&
+                movement_.current_world_location(peer->id(),peer->account_id,peer->character_id)==std::optional{member.return_position};
         };
         need(live(),"PvE returned movement handoff retired its exact WORLD owner");
         title(*peer,false);
@@ -247,6 +269,21 @@ std::vector<std::uint8_t> OwnedPveApplicationSource::return_world(const std::sha
         "PvE return saved row source missing");
     const auto current=visibility_.retained_scene({m.return_position.area,m.return_position.scene});
     std::vector<std::uint8_t> result=row->record;
+    const auto pets=db_.companions().load_pet2_slots(binding.account(),binding.character());
+    const StoredPet2Slot* active=nullptr;
+    for(const auto& pet:pets)if(pet.slot==44){need(!active,"PvE return duplicate active44 source");active=&pet;}
+    if(m.pet) {
+        need(active&&same_pet(*active,m.pet->saved)&&active->occupied(),"PvE return active44 differs from complete room save");
+        // Current aaf0 REA: ordinary E3/FB overwrite the existing native cell;
+        // they do not append S30 or need a repeated metadata declaration.
+        // Battle frames already update normal caches. This exact saved body
+        // makes the final value part of the same full-written Return cohort.
+        if(active->pet){const auto bytes=RecoveredPet2Stats::encode_logical(active->pet->stats);
+            result.insert(result.end(),bytes.begin(),bytes.end());}
+        else {const auto bytes=RecoveredPet1Stats::encode_logical(active->pet1->stats);
+            result.insert(result.end(),bytes.begin(),bytes.end());}
+    } else need(m.empty_active_pet?(active&&same_pet(*active,*m.empty_active_pet)):!active,
+        "PvE return active44 absence source changed");
     // Retained WORLD, never CF/2A/S30. Remove the exact former player set and
     // rebuild it from fresh actual GAME visibility. NPC geometry is retained;
     // this normal legacy source is not a substitute for common-world leases.
@@ -286,6 +323,7 @@ bool OwnedPveApplicationSource::handle(Session& s,std::span<const RecoveredWorld
         else if(request)throw DatabaseError("SOS request mixed with another mutation");
     }
     if(!request)return false;
+    need(!host_->pending(s),"SOS support already has its actual prepared admission");
     need(std::all_of(records.begin(),records.end(),[](const auto& r){return
         std::holds_alternative<RecoveredWorldRecords::Tick>(r)||std::holds_alternative<RecoveredSosSupportRequest::Request>(r);}),
         "SOS support must own the whole callback before any prefix");
@@ -295,11 +333,11 @@ bool OwnedPveApplicationSource::handle(Session& s,std::span<const RecoveredWorld
     const auto peers=visibility_.retained_scene(observer->location);
     need(std::any_of(peers.begin(),peers.end(),[&](const auto& p){return p.session!=s.id()&&p.spawn.identity()==request->target;}),
         "SOS selected target is not in this actual scene's world actor source");
-    host_->support(s.shared_from_this(),*request);title(s,true);return true;
+    host_->support(s.shared_from_this(),*request);return true;
 }
 void OwnedPveApplicationSource::observe_movement(Session& s,std::span<const RecoveredWorldRecords::Record> records,
         std::span<const std::uint8_t> response) {
-    if(stopped_||retiring_||host_->bound(s)||response.empty())return;
+    if(stopped_||retiring_||host_->bound(s)||host_->pending(s)||response.empty())return;
     const auto count=std::count_if(records.begin(),records.end(),[](const auto& r){return std::holds_alternative<RecoveredMovement::Request>(r);});
     if(!count)return;
     const auto init=s.normal_world_initialization();const auto position=movement_.current_world_location(s.id(),s.account_id,s.character_id);
@@ -317,6 +355,7 @@ void OwnedPveApplicationSource::poll() {
     if(stopped_||retiring_)return;
     for(auto it=pending_.begin();it!=pending_.end();) {
         const auto source=it->second;const auto peer=source.session.lock();
+        if(peer&&(host_->bound(*peer)||host_->pending(*peer))){it=pending_.erase(it);continue;}
         if(!peer||peer->closing()||source.written.status()==Session::WorldResponseWriteStatus::Failed||
            !peer->normal_world_initialization_current_on_game(source.initialization)||
            movement_.current_world_location(peer->id(),peer->account_id,peer->character_id)!=std::optional{source.position}){
@@ -325,9 +364,9 @@ void OwnedPveApplicationSource::poll() {
         const auto* policy=catalog_->scene(source.position.area,source.position.scene);
         it=pending_.erase(it); // One actual attempt; NEVER retry an unknown durable outcome.
         if(!policy)continue;
-        try {host_->create({peer},sources(*policy));steps_.erase(peer->id());title(*peer,true);}
+        try {host_->create({peer},sources(*policy));steps_.erase(peer->id());}
         catch(const std::exception& error){spdlog::warn("OWNED_PVE_ENTRY_REFUSED session={} reason={}",peer->id(),error.what());
-            if(host_->bound(*peer))peer->close();}
+            if(host_->bound(*peer))peer->close();else worlds_.erase(peer->id());}
         if(stopped_||retiring_)break;
         it=pending_.begin(); // Supplier may have retired/erased any other pending member.
     }

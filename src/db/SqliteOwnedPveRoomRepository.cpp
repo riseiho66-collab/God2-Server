@@ -58,12 +58,13 @@ NativeWorldEntrySnapshot row_json(const J& j){NativeWorldEntrySnapshot r;r.root=
     r.source_sha256=j.at("source_sha256").get<std::string>();r.source_record=j.at("source_record").get<std::string>();
     r.record=variable_bytes(j.at("record"),2);r.revision=number(j.at("revision"));return r;}
 J input_json(const T::MemberInput& m){
-    return {{"identity",identity(m.identity)},{"root",root(m.root)},{"role",m.role.logical},{"role_revision",m.role.revision},{"role_design",m.role.design_id},
+    J value={{"identity",identity(m.identity)},{"root",root(m.root)},{"role",m.role.logical},{"role_revision",m.role.revision},{"role_design",m.role.design_id},
         {"auxiliary",m.auxiliary.logical},{"auxiliary_revision",m.auxiliary.revision},{"auxiliary_origin",m.auxiliary.origin},{"auxiliary_provenance",m.auxiliary.provenance},
         {"resources",resources(m.resources)},{"return_position",position(m.return_position)},{"primary_slot",m.primary_slot},{"pet",m.pet?pet_json(*m.pet):J(nullptr)},{"command_context",m.command_context},
         {"row_preference",m.row_preference?row_json(*m.row_preference):J(nullptr)},
         {"empty_active_pet",m.empty_active_pet?J::array({m.empty_active_pet->slot,m.empty_active_pet->revision,
             m.empty_active_pet->provenance.source_sha256,m.empty_active_pet->provenance.authority,m.empty_active_pet->provenance.evidence_id}):J(nullptr)}};
+    if(m.reserved_partner)value["reserved_partner"]=*m.reserved_partner;return value;
 }
 bool released(const T::Member& m){return m.status==T::MemberStatus::Returned||m.status==T::MemberStatus::Retired;}
 void structure(const T::Snapshot& s){
@@ -71,15 +72,24 @@ void structure(const T::Snapshot& s){
         s.source_sha256.size()==64&&!s.source_record.empty()&&!s.members.empty()&&s.members.size()<=14&&
         s.checkpoint.snapshot.id==s.id&&s.outbox.size()<=1024,"PvE canonical room structure invalid");
     (void)Battle::restore(s.checkpoint);
-    std::set<std::uint64_t> sessions;std::set<std::uint16_t> handles;std::set<std::uint8_t> slots;
+    std::set<std::uint64_t> sessions;std::set<std::uint16_t> handles;std::set<std::uint8_t> slots,reservations;
     for(const auto& [id,m]:s.members){const auto& i=m.input.identity;
         need(id==i.character&&id&&i.account&&i.session&&i.world_generation&&i.battle_generation&&
             i.channel>=1&&i.channel<=3&&i.actor_handle&&i.actor_handle<0x4000&&m.grant_epoch&&
             m.grant_epoch<=s.grant_epoch&&sessions.insert(i.session).second&&handles.insert(i.actor_handle).second,
             "PvE canonical member identity/grant invalid");
-        const auto primary=m.input.primary_slot;need(primary<14&&slots.insert(primary).second&&s.checkpoint.snapshot.actors[primary]&&
+        const auto primary=m.primary_position();need(primary<14&&slots.insert(primary).second&&s.checkpoint.snapshot.actors[primary]&&
             s.checkpoint.snapshot.actors[primary]->controller==id,"PvE canonical primary occupancy changed");
-        if(m.input.pet){const auto p=m.input.pet->actor_slot;need(p<14&&slots.insert(p).second&&s.checkpoint.snapshot.actors[p]&&
+        need(m.positions().revision&&bool(m.pet_position())==bool(m.input.pet),"PvE role assignment structure invalid");
+        const auto partner=m.partner_position();need(reservations.insert(primary).second,"PvE primary reservation overlaps");
+        if(partner)need(*partner<14&&*partner!=primary&&reservations.insert(*partner).second&&
+            (!m.input.pet||m.pet_position()==partner),"PvE configured pair reservation overlaps/changes pet role");
+        if(m.assignment)need((primary==m.input.primary_slot||
+            (m.input.reserved_partner&&primary==*m.input.reserved_partner)||
+            (m.input.pet&&primary==m.input.pet->actor_slot)),"PvE live primary escaped immutable configured pair");
+        if(m.admission_source)need(m.admission_source->identity==i&&m.admission_source->primary_slot==m.input.primary_slot&&
+            m.admission_source->reserved_partner==m.input.reserved_partner,"PvE admission lineage identity/pair changed");
+        if(m.input.pet){const auto p=*m.pet_position();need(p<14&&slots.insert(p).second&&s.checkpoint.snapshot.actors[p]&&
             s.checkpoint.snapshot.actors[p]->controller==id,"PvE canonical pet occupancy changed");}
         need(!m.secondary_grant||m.input.pet.has_value(),"PvE grant manufactures missing pet");
         if(released(m)||m.status==T::MemberStatus::Withdrawn||m.disconnected||m.return_context)
@@ -90,6 +100,10 @@ void structure(const T::Snapshot& s){
     }
     for(std::uint8_t p=0;p<28;++p)if(const auto& a=s.checkpoint.snapshot.actors[p])
         need(a->position==p&&(p<14?(slots.contains(p)&&a->controller!=0):a->controller==0),"PvE canonical actor controller/slot mismatch");
+    if(s.pending_swap){const auto& p=*s.pending_swap;const auto m=s.members.find(p.identity.character);
+        need(m!=s.members.end()&&m->second.input.identity==p.identity&&p.before.revision<std::uint64_t(INT64_MAX)&&
+            m->second.positions().revision==p.before.revision+1&&
+            (p.actor_position==p.before.primary||(p.before.pet&&p.actor_position==*p.before.pet)),"PvE pending formation edge mismatch");}
     std::set<std::uint64_t> sequences;
     for(const auto& d:s.outbox){const auto m=s.members.find(d.recipient.character);
         need(d.sequence&&d.sequence<s.next_sequence&&sequences.insert(d.sequence).second&&m!=s.members.end()&&m->second.input.identity==d.recipient&&
@@ -102,20 +116,30 @@ void structure(const T::Snapshot& s){
 T::MemberInput input_json(const J& j){T::MemberInput m;m.identity=identity(j.at("identity"));m.root=root(j.at("root"));m.role={bytes<RecoveredRoleLevel::Bytes>(j.at("role")),number(j.at("role_revision")),j.at("role_design").get<std::string>()};
     m.auxiliary={bytes<RecoveredRoleAuxiliary::Logical>(j.at("auxiliary")),number(j.at("auxiliary_revision")),j.at("auxiliary_origin").get<std::string>(),j.at("auxiliary_provenance").get<std::string>()};
     m.resources=resources(j.at("resources"));m.return_position=position(j.at("return_position"));m.primary_slot=byte(j.at("primary_slot"));m.command_context=dword(j.at("command_context"));if(!j.at("pet").is_null())m.pet=pet_json(j.at("pet"),m.identity);if(!j.at("row_preference").is_null())m.row_preference=row_json(j.at("row_preference"));
-    if(const auto& e=j.at("empty_active_pet");!e.is_null()){need(e.is_array()&&e.size()==5,"PvE empty active pet readset width invalid");StoredPet2Slot p;p.slot=byte(e[0]);p.revision=number(e[1]);p.provenance={e[2].get<std::string>(),e[3].get<std::string>(),e[4].get<std::string>()};m.empty_active_pet=std::move(p);}return m;
+    if(const auto& e=j.at("empty_active_pet");!e.is_null()){need(e.is_array()&&e.size()==5,"PvE empty active pet readset width invalid");StoredPet2Slot p;p.slot=byte(e[0]);p.revision=number(e[1]);p.provenance={e[2].get<std::string>(),e[3].get<std::string>(),e[4].get<std::string>()};m.empty_active_pet=std::move(p);}if(j.contains("reserved_partner"))m.reserved_partner=byte(j.at("reserved_partner"));return m;
 }
 std::string document(const T::Snapshot& s){J members=J::array(),outputs=J::array();
-    for(const auto& [id,m]:s.members)members.push_back({{"character",id},{"input",input_json(m.input)},{"status",int(m.status)},{"grant_epoch",m.grant_epoch},
-        {"primary_grant",m.primary_grant},{"secondary_grant",m.secondary_grant},{"disconnected",m.disconnected},{"return_context",m.return_context?J(*m.return_context):J(nullptr)},{"return_sequence",m.return_sequence}});
+    for(const auto& [id,m]:s.members){J value={{"character",id},{"input",input_json(m.input)},{"status",int(m.status)},{"grant_epoch",m.grant_epoch},
+        {"primary_grant",m.primary_grant},{"secondary_grant",m.secondary_grant},{"disconnected",m.disconnected},{"return_context",m.return_context?J(*m.return_context):J(nullptr)},{"return_sequence",m.return_sequence}};
+        if(m.assignment)value["assignment"]={m.assignment->primary,m.assignment->pet?J(*m.assignment->pet):J(nullptr),m.assignment->revision};
+        if(m.admission_source)value["admission_source"]=input_json(*m.admission_source);
+        members.push_back(std::move(value));}
     for(const auto& d:s.outbox)outputs.push_back({d.sequence,identity(d.recipient),int(d.kind),d.logical,int(d.status)});
-    return J{{"version",1},{"design_id","CUSTOM-0161"},{"id",s.id},{"incarnation",s.incarnation},{"revision",s.revision},{"grant_epoch",s.grant_epoch},{"next_sequence",s.next_sequence},
-        {"source_sha256",s.source_sha256},{"source_record",s.source_record},{"checkpoint",BattleCheckpointCodec::encode(s.checkpoint)},{"members",members},{"outbox",outputs},{"support_enabled",s.support_enabled},{"closed",s.closed}}.dump();
+    J value={{"version",1},{"design_id","CUSTOM-0161"},{"id",s.id},{"incarnation",s.incarnation},{"revision",s.revision},{"grant_epoch",s.grant_epoch},{"next_sequence",s.next_sequence},
+        {"source_sha256",s.source_sha256},{"source_record",s.source_record},{"checkpoint",BattleCheckpointCodec::encode(s.checkpoint)},{"members",members},{"outbox",outputs},{"support_enabled",s.support_enabled},{"closed",s.closed}};
+    if(s.pending_swap){const auto& p=*s.pending_swap;value["pending_swap"]={identity(p.identity),p.before.primary,p.before.pet?J(*p.before.pet):J(nullptr),p.before.revision,p.actor_position};}
+    if(s.animation_sequence)value["animation_sequence"]=s.animation_sequence;return value.dump();
 }
 T::Snapshot document(const std::string& text){
     need(text.size()<=16*1024*1024,"PvE durable room exceeds storage bound");const auto j=J::parse(text);need(j.at("version")==1&&j.at("design_id")=="CUSTOM-0161","PvE durable source version mismatch");
     T::Snapshot s;s.id=number(j.at("id"));s.incarnation=j.at("incarnation").get<std::string>();s.revision=number(j.at("revision"));s.grant_epoch=number(j.at("grant_epoch"));s.next_sequence=number(j.at("next_sequence"));s.source_sha256=j.at("source_sha256").get<std::string>();s.source_record=j.at("source_record").get<std::string>();s.checkpoint=BattleCheckpointCodec::decode(j.at("checkpoint").get<std::string>());s.support_enabled=j.at("support_enabled").get<bool>();s.closed=j.at("closed").get<bool>();
+    if(j.contains("pending_swap")){const auto& p=j.at("pending_swap");need(p.is_array()&&p.size()==5,"PvE pending formation width changed");s.pending_swap=T::Snapshot::PendingSwap{identity(p[0]),{byte(p[1]),p[2].is_null()?std::nullopt:std::optional{byte(p[2])},number(p[3])},byte(p[4])};}
+    if(j.contains("animation_sequence"))s.animation_sequence=number(j.at("animation_sequence"));
     need(j.at("members").is_array()&&j.at("members").size()<=14,"PvE durable member count");
-    for(const auto& v:j.at("members")){T::Member m;m.input=input_json(v.at("input"));const auto status=number(v.at("status"));need(status<=4,"PvE durable member status");m.status=T::MemberStatus(status);m.grant_epoch=number(v.at("grant_epoch"));m.primary_grant=v.at("primary_grant").get<bool>();m.secondary_grant=v.at("secondary_grant").get<bool>();m.disconnected=v.at("disconnected").get<bool>();if(!v.at("return_context").is_null())m.return_context=bytes<std::array<std::uint8_t,4>>(v.at("return_context"));m.return_sequence=number(v.at("return_sequence"));need(number(v.at("character"))==m.input.identity.character&&s.members.emplace(m.input.identity.character,std::move(m)).second,"PvE durable member identity duplicate");}
+    for(const auto& v:j.at("members")){T::Member m;m.input=input_json(v.at("input"));const auto status=number(v.at("status"));need(status<=4,"PvE durable member status");m.status=T::MemberStatus(status);m.grant_epoch=number(v.at("grant_epoch"));m.primary_grant=v.at("primary_grant").get<bool>();m.secondary_grant=v.at("secondary_grant").get<bool>();m.disconnected=v.at("disconnected").get<bool>();if(!v.at("return_context").is_null())m.return_context=bytes<std::array<std::uint8_t,4>>(v.at("return_context"));m.return_sequence=number(v.at("return_sequence"));
+        if(v.contains("assignment")){const auto& a=v.at("assignment");need(a.is_array()&&a.size()==3,"PvE assignment width changed");m.assignment=T::Assignment{byte(a[0]),a[1].is_null()?std::nullopt:std::optional{byte(a[1])},number(a[2])};}
+        if(v.contains("admission_source"))m.admission_source=input_json(v.at("admission_source"));
+        need(number(v.at("character"))==m.input.identity.character&&s.members.emplace(m.input.identity.character,std::move(m)).second,"PvE durable member identity duplicate");}
     need(j.at("outbox").is_array()&&j.at("outbox").size()<=1024,"PvE bounded pending flight count");
     for(const auto& v:j.at("outbox")){need(v.is_array()&&v.size()==5,"PvE durable output width");const auto kind=number(v[2]),status=number(v[4]);need(kind<=5&&status<=2,"PvE durable output kind/status");s.outbox.push_back({number(v[0]),identity(v[1]),T::OutputKind(kind),variable_bytes(v[3],RecoveredWorldFrame::max_logical_size),T::OutputStatus(status)});}
     structure(s);need(document(s)==text,"PvE durable document is not canonical/lossless");return s;
@@ -152,10 +176,20 @@ struct SqliteOwnedPveRoomRepository::Issuer {
         bool after(const Types::PureCurrent& f)const noexcept{try{return !i.reentered&&f&&f()&&!i.reentered;}catch(...){return false;}}
     };
 };
-struct SqliteOwnedPveRoomRepository::TicketData {std::shared_ptr<Issuer> issuer;std::uint64_t id{};std::string incarnation;};
+struct SqliteOwnedPveRoomRepository::TicketData {std::shared_ptr<Issuer> issuer;std::uint64_t id{};std::string incarnation;bool commit_uncertain=false;};
+struct SqliteOwnedPveRoomRepository::ReturnData {
+    std::shared_ptr<Issuer> issuer;std::shared_ptr<const std::uint8_t> owner;std::uint64_t room{};std::string incarnation;
+    Types::MemberInput admission;Types::Member saved;bool committed=false;
+};
+const OwnedPveRoomTypes::MemberInput& SqliteOwnedPveRoomRepository::ReturnContinuation::admission()const noexcept{return data_->admission;}
+const OwnedPveRoomTypes::MemberInput& SqliteOwnedPveRoomRepository::ReturnContinuation::saved()const noexcept{return data_->saved.input;}
+const OwnedPveRoomTypes::Identity& SqliteOwnedPveRoomRepository::ReturnContinuation::identity()const noexcept{return data_->saved.input.identity;}
+std::uint64_t SqliteOwnedPveRoomRepository::ReturnContinuation::room()const noexcept{return data_->room;}
+const std::string& SqliteOwnedPveRoomRepository::ReturnContinuation::incarnation()const noexcept{return data_->incarnation;}
 std::uint64_t SqliteOwnedPveRoomRepository::Ticket::id()const noexcept{return data_->id;}
 const std::string& SqliteOwnedPveRoomRepository::Ticket::incarnation()const noexcept{return data_->incarnation;}
 bool SqliteOwnedPveRoomRepository::Ticket::same_incarnation(const Ticket& v)const noexcept{return data_==v.data_;}
+bool SqliteOwnedPveRoomRepository::commit_uncertain(const Ticket& t)const noexcept{return t.data_->issuer!=issuer_||t.data_->commit_uncertain;}
 SqliteOwnedPveRoomRepository::SqliteOwnedPveRoomRepository(sqlite3* db,AccountRepository& a,SqliteRecoveredCharacterRepository& c,SqliteRoleAuxiliaryRepository& aux,SqliteCompanionRepository& pets)
  :db_(db),accounts_(a),characters_(c),auxiliary_(aux),companions_(pets){
     const auto actual=dynamic_cast<SqliteAccountRepository*>(&a);
@@ -182,6 +216,8 @@ void SqliteOwnedPveRoomRepository::validate_member(const Types::MemberInput& m){
     const auto& i=m.identity;need(i.account&&i.character&&i.session&&i.world_generation&&i.battle_generation&&i.channel>=1&&i.channel<=3&&
         i.actor_handle&&i.actor_handle<0x4000&&m.primary_slot<14&&m.return_position.revision&&m.resources.valid_health()&&m.resources.mp<=m.resources.max_mp,
         "PvE actual owner/member material invalid");
+    if(m.reserved_partner)need(*m.reserved_partner<14&&*m.reserved_partner!=m.primary_slot&&
+        (!m.pet||m.pet->actor_slot==*m.reserved_partner),"PvE immutable topology partner invalid");
     const auto account=accounts_.find_by_id(i.account);need(account&&account->id==i.account,"PvE account source missing");
     const auto roots=characters_.list_for_account(i.account);const auto at=std::find_if(roots.begin(),roots.end(),[&](const auto& r){return r.id==i.character;});
     need(at!=roots.end()&&root(*at)==root(m.root)&&m.root.id==i.character&&m.root.account_id==i.account,"PvE whole root changed");
@@ -213,11 +249,11 @@ void SqliteOwnedPveRoomRepository::validate_member(const Types::MemberInput& m){
                 "PvE explicit empty active pet tuple changed/occupied");}
     }
 }
-OwnedPveRoomTypes::MemberInput SqliteOwnedPveRoomRepository::updated_resources(Types::MemberInput m,const BattleSnapshot& state,bool withdrawn){
-    if(withdrawn)return m;need(m.primary_slot<28&&state.actors[m.primary_slot]&&state.actors[m.primary_slot]->controller==m.identity.character,"PvE primary resource actor mismatch");
-    const auto& actor=*state.actors[m.primary_slot];need(actor.max_hp==m.resources.max_hp&&actor.max_mp==m.resources.max_mp,"PvE battle changed saved maximum resources");
+OwnedPveRoomTypes::MemberInput SqliteOwnedPveRoomRepository::updated_resources(Types::MemberInput m,const BattleSnapshot& state,bool withdrawn,Types::Assignment assignment){
+    if(withdrawn)return m;need(assignment.primary<28&&state.actors[assignment.primary]&&state.actors[assignment.primary]->controller==m.identity.character,"PvE primary resource actor mismatch");
+    const auto& actor=*state.actors[assignment.primary];need(actor.max_hp==m.resources.max_hp&&actor.max_mp==m.resources.max_mp,"PvE battle changed saved maximum resources");
     if(actor.hp!=m.resources.hp||actor.mp!=m.resources.mp){m.resources.hp=actor.hp;m.resources.mp=actor.mp;m.resources.revision=next_revision(m.resources.revision);}
-    if(m.pet){auto& p=m.pet->saved;const auto slot=m.pet->actor_slot;need(slot<28&&state.actors[slot]&&state.actors[slot]->controller==m.identity.character,"PvE secondary resource actor mismatch");const auto& a=*state.actors[slot];bool changed_pet=false;
+    if(m.pet){auto& p=m.pet->saved;need(assignment.pet.has_value(),"PvE actual pet assignment missing");const auto slot=*assignment.pet;need(slot<28&&state.actors[slot]&&state.actors[slot]->controller==m.identity.character,"PvE secondary resource actor mismatch");const auto& a=*state.actors[slot];bool changed_pet=false;
         if(p.pet){const auto old=p.pet->stats.vitals();need(a.max_hp==old.maximum_hp&&a.max_mp==old.maximum_mp&&a.hp<=0x3fff&&a.mp<=0x7ff,"PvE pet2 resource cannot be represented losslessly");
             if(a.hp!=old.current_hp||a.mp!=old.current_mp){auto b=RecoveredPet2Stats::encode_logical(p.pet->stats);std::uint32_t word=std::uint32_t(b[5])|(std::uint32_t(b[6])<<8)|(std::uint32_t(b[7])<<16)|(std::uint32_t(b[8])<<24);
                 word=(word&0xfe000000u)|std::uint32_t(a.hp)|(a.mp<<14);for(unsigned n=0;n<4;++n)b[5+n]=std::uint8_t(word>>(8*n));const auto next=RecoveredPet2Stats::parse_logical(b);need(bool(next),"PvE updated pet2 raw structure invalid");p.pet->stats=*next;changed_pet=true;}}
@@ -230,14 +266,14 @@ namespace {
 void write_member(sqlite3* db,std::uint64_t room,const T::Member& m,bool insert){const auto& i=m.input.identity;
     Statement q(db,insert?"INSERT INTO main.owned_pve_members(account,session,world_generation,battle_generation,channel,actor_handle,primary_slot,secondary_slot,status,grant_epoch,primary_grant,secondary_grant,source_document,room,character) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)":
         "UPDATE main.owned_pve_members SET account=?,session=?,world_generation=?,battle_generation=?,channel=?,actor_handle=?,primary_slot=?,secondary_slot=?,status=?,grant_epoch=?,primary_grant=?,secondary_grant=?,source_document=? WHERE room=? AND character=?");
-    q.bind_id(1,i.account);q.bind_id(2,i.session);q.bind_id(3,i.world_generation);q.bind_id(4,i.battle_generation);q.bind(5,i.channel);q.bind(6,i.actor_handle);q.bind(7,m.input.primary_slot);q.bind(8,m.input.pet?m.input.pet->actor_slot:-1);q.bind(9,int(m.status));q.bind_id(10,m.grant_epoch);q.bind(11,m.primary_grant?1:0);q.bind(12,m.secondary_grant?1:0);q.bind(13,input_json(m.input).dump());q.bind_id(14,room);q.bind_id(15,i.character);q.done();changed(db);
+    q.bind_id(1,i.account);q.bind_id(2,i.session);q.bind_id(3,i.world_generation);q.bind_id(4,i.battle_generation);q.bind(5,i.channel);q.bind(6,i.actor_handle);q.bind(7,m.primary_position());q.bind(8,m.pet_position()?int(*m.pet_position()):-1);q.bind(9,int(m.status));q.bind_id(10,m.grant_epoch);q.bind(11,m.primary_grant?1:0);q.bind(12,m.secondary_grant?1:0);q.bind(13,input_json(m.input).dump());q.bind_id(14,room);q.bind_id(15,i.character);q.done();changed(db);
 }
 void member_current(sqlite3* db,std::uint64_t room,const T::Member& m){const auto& i=m.input.identity;
     Statement q(db,"SELECT account,session,world_generation,battle_generation,channel,actor_handle,primary_slot,secondary_slot,status,grant_epoch,primary_grant,secondary_grant,source_document FROM main.owned_pve_members WHERE room=? AND character=?");
     q.bind_id(1,room);q.bind_id(2,i.character);need(q.row(),"PvE canonical member mirror missing");
     need(q.number<std::uint64_t>(0)==i.account&&q.number<std::uint64_t>(1)==i.session&&q.number<std::uint64_t>(2)==i.world_generation&&
-        q.number<std::uint64_t>(3)==i.battle_generation&&q.integer(4)==i.channel&&q.integer(5)==i.actor_handle&&q.integer(6)==m.input.primary_slot&&
-        q.integer(7)==(m.input.pet?m.input.pet->actor_slot:-1)&&q.integer(8)==int(m.status)&&q.number<std::uint64_t>(9)==m.grant_epoch&&
+        q.number<std::uint64_t>(3)==i.battle_generation&&q.integer(4)==i.channel&&q.integer(5)==i.actor_handle&&q.integer(6)==m.primary_position()&&
+        q.integer(7)==(m.pet_position()?int(*m.pet_position()):-1)&&q.integer(8)==int(m.status)&&q.number<std::uint64_t>(9)==m.grant_epoch&&
         q.integer(10)==int(m.primary_grant)&&q.integer(11)==int(m.secondary_grant)&&q.text(12)==input_json(m.input).dump()&&!q.row(),
         "PvE whole member mirror CAS baseline changed");
 }
@@ -263,7 +299,9 @@ void output_current(sqlite3* db,std::uint64_t room,const T::Delivery& d){Stateme
 }
 SqliteOwnedPveRoomRepository::Commit SqliteOwnedPveRoomRepository::activate(const Ticket& ticket,const Types::Snapshot& state,const Types::PureCurrent& current){
     Issuer::Operation op(*issuer_);need(ticket.data_->issuer==issuer_&&state.id==ticket.id()&&state.incarnation==ticket.incarnation()&&state.revision==1,"PvE activation private incarnation mismatch");
-    structure(state);const auto text=document(state);op.final(current);need(sqlite3_get_autocommit(db_),"PvE activation needs own transaction");sqlite_detail::Transaction tx(db_);namespaces(db_);
+    structure(state);for(const auto& [id,m]:state.members){(void)id;need(m.assignment&&m.positions().revision==1&&m.primary_position()==m.input.primary_slot&&
+        m.admission_source&&input_json(*m.admission_source)==input_json(m.input),"PvE activation lacks exact original assignment/admission lineage");}
+    const auto text=document(state);op.final(current);need(sqlite3_get_autocommit(db_),"PvE activation needs own transaction");sqlite_detail::Transaction tx(db_);namespaces(db_);
     Statement prior(db_,"SELECT incarnation,revision,phase,document FROM main.owned_pve_rooms WHERE id=? AND design_id='CUSTOM-0161'");prior.bind_id(1,ticket.id());need(prior.row()&&prior.text(0)==ticket.incarnation()&&prior.integer(1)==0&&prior.text(2)=="reserved"&&prior.text(3).empty()&&!prior.row(),"PvE reservation changed before activation");
     for(const auto& [id,m]:state.members){need(id==m.input.identity.character&&m.status==Types::MemberStatus::Entering,"PvE initial member state invalid");validate_member(m.input);op.current();need(!characters_.owned_pending_battle(m.input.identity.account,id),"PvE character has a diagnostic reservation");insert_claim(db_,state.id,m.input.identity);write_member(db_,state.id,m,true);}
     for(const auto& d:state.outbox)write_output(db_,state.id,d);
@@ -271,12 +309,43 @@ SqliteOwnedPveRoomRepository::Commit SqliteOwnedPveRoomRepository::activate(cons
     const auto final_changes=sqlite3_total_changes64(db_);
     for(const auto& [id,m]:state.members){(void)id;validate_member(m.input);require_claim(db_,state.id,m.input.identity);}for(const auto& d:state.outbox)output_current(db_,state.id,d);
     room_mirrors(db_,state);Statement verify(db_,"SELECT document FROM main.owned_pve_rooms WHERE id=? AND revision=1");verify.bind_id(1,state.id);need(verify.row()&&verify.text(0)==text&&!verify.row(),"PvE activated document readback mismatch");op.final(current);
-    need(!sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==final_changes,"PvE source changed during final complete readset/pure fence");op.current();tx.commit();
+    need(!sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==final_changes,"PvE source changed during final complete readset/pure fence");op.current();
+    ticket.data_->commit_uncertain=true;tx.commit();ticket.data_->commit_uncertain=false;
     return {true,op.after(current)&&sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==final_changes};
 }
 SqliteOwnedPveRoomRepository::Commit SqliteOwnedPveRoomRepository::replace(const Ticket& ticket,const Types::Snapshot& before,const Types::Snapshot& after,const Types::PureCurrent& current){
+    std::shared_ptr<ReturnData> returned;
+    for(const auto& [id,m]:after.members){const auto old=before.members.find(id);
+        if(m.status==Types::MemberStatus::Returned&&old!=before.members.end()&&old->second.status!=Types::MemberStatus::Returned){
+            need(!returned&&m.admission_source.has_value(),"PvE return lacks unique original admission lineage");
+            returned=std::make_shared<ReturnData>(ReturnData{issuer_,continuation_issuer_,after.id,after.incarnation,*m.admission_source,m,false});
+        }
+    }
     Issuer::Operation op(*issuer_);need(ticket.data_->issuer==issuer_&&before.id==ticket.id()&&after.id==before.id&&before.incarnation==ticket.incarnation()&&after.incarnation==before.incarnation&&after.revision==next_revision(before.revision),"PvE replace private incarnation/revision mismatch");
     need(after.source_sha256==before.source_sha256&&after.source_record==before.source_record&&after.checkpoint.snapshot.id==before.checkpoint.snapshot.id&&after.members.size()>=before.members.size(),"PvE immutable encounter/member history changed");
+    need(after.animation_sequence>=before.animation_sequence&&after.animation_sequence-before.animation_sequence<=before.members.size(),"PvE animation label sequence changed outside bounded publication");
+    std::optional<std::uint64_t> swapped;
+    for(const auto& [id,m]:after.members){const auto old=before.members.find(id);if(old==before.members.end()){
+            need(m.assignment&&m.positions().revision==1&&m.primary_position()==m.input.primary_slot&&m.admission_source&&input_json(*m.admission_source)==input_json(m.input),"PvE admission lacks exact original assignment/source");continue;}
+        const auto& b=old->second;if(m.assignment!=b.assignment){
+            const auto partner=b.partner_position();need(!swapped&&!before.pending_swap&&after.pending_swap&&after.pending_swap->identity==b.input.identity&&
+                after.pending_swap->before==b.positions()&&m.assignment&&partner&&m.primary_position()==*partner&&
+                m.positions().revision==next_revision(b.positions().revision)&&
+                m.pet_position()==(b.input.pet?std::optional{b.primary_position()}:std::nullopt)&&
+                b.status==Types::MemberStatus::Active&&m.status==b.status&&!b.disconnected&&!b.return_context,
+                "PvE assignment changed outside unique exact configured swap");swapped=id;
+            const auto source=after.pending_swap->actor_position;const bool primary=source==b.primary_position();
+            need((primary?b.primary_grant:(!b.primary_grant&&b.secondary_grant&&b.pet_position()==source))&&
+                m.primary_grant==(primary?false:b.primary_grant)&&m.secondary_grant==(primary?b.secondary_grant:false),
+                "PvE swap changed an unrelated role grant");
+            auto expected=before.checkpoint;auto& a=expected.snapshot.actors;std::swap(a[b.primary_position()],a[*partner]);
+            if(a[b.primary_position()])a[b.primary_position()]->position=b.primary_position();if(a[*partner])a[*partner]->position=*partner;
+            expected.snapshot.revision=next_revision(expected.snapshot.revision);
+            need(expected==after.checkpoint&&before.grant_epoch==after.grant_epoch&&before.members.size()==after.members.size(),"PvE swap altered HP/MP/stats/RNG/round or another member");
+        }
+    }
+    if(after.pending_swap&&!before.pending_swap)need(swapped.has_value(),"PvE pending formation manufactured without actual permutation");
+    if(before.pending_swap&&after.pending_swap)need(before.pending_swap==after.pending_swap,"PvE pending formation identity rewritten");
     structure(before);structure(after);const auto old_text=document(before),new_text=document(after);op.final(current);need(sqlite3_get_autocommit(db_),"PvE replacement needs own transaction");sqlite_detail::Transaction tx(db_);namespaces(db_);
     Statement original(db_,"SELECT incarnation,revision,phase,document FROM main.owned_pve_rooms WHERE id=? AND design_id='CUSTOM-0161'");original.bind_id(1,before.id);need(original.row()&&original.text(0)==before.incarnation&&original.number<std::uint64_t>(1)==before.revision&&original.text(2)==phase(before)&&original.text(3)==old_text&&!original.row(),"PvE whole durable room CAS baseline changed");
     room_mirrors(db_,before);
@@ -285,11 +354,12 @@ SqliteOwnedPveRoomRepository::Commit SqliteOwnedPveRoomRepository::replace(const
     for(const auto& [id,m]:after.members){const auto old=before.members.find(id);
         if(old==before.members.end()){need(m.status==Types::MemberStatus::Entering,"PvE late member not entering");validate_member(m.input);need(!characters_.owned_pending_battle(m.input.identity.account,id),"PvE helper has a diagnostic reservation");insert_claim(db_,after.id,m.input.identity);write_member(db_,after.id,m,true);continue;}
         const auto& b=old->second;need(m.input.identity==b.input.identity,"PvE member identity changed without actual rebind custody");
-        auto expected=b.input;if(!released(m)&&m.status!=Types::MemberStatus::Withdrawn)expected=updated_resources(std::move(expected),after.checkpoint.snapshot,false);
+        need(bool(m.admission_source)==bool(b.admission_source)&&(!m.admission_source||input_json(*m.admission_source)==input_json(*b.admission_source)),"PvE admission lineage changed");
+        auto expected=b.input;if(!released(m)&&m.status!=Types::MemberStatus::Withdrawn)expected=updated_resources(std::move(expected),after.checkpoint.snapshot,false,m.positions());
         need(input_json(expected)==input_json(m.input),"PvE resource delta changed non-resource material/revision");
         if(released(b)){need(m.status==b.status&&m.grant_epoch==b.grant_epoch&&m.primary_grant==b.primary_grant&&
             m.secondary_grant==b.secondary_grant&&m.disconnected==b.disconnected&&m.return_context==b.return_context&&
-            m.return_sequence==b.return_sequence,"PvE immutable released member history rewritten");continue;}
+            m.return_sequence==b.return_sequence&&m.assignment==b.assignment,"PvE immutable released member history rewritten");continue;}
         if(m.input.resources!=b.input.resources){const auto& r=b.input.resources;const auto& n=m.input.resources;
             Statement q(db_,"UPDATE main.character_resources SET hp=?,mp=?,revision=? WHERE character_id=? AND hp=? AND max_hp=? AND mp=? AND max_mp=? AND revision=? AND design_id=?");q.bind_id(1,n.hp);q.bind_id(2,n.mp);q.bind_id(3,n.revision);q.bind_id(4,id);q.bind_id(5,r.hp);q.bind_id(6,r.max_hp);q.bind_id(7,r.mp);q.bind_id(8,r.max_mp);q.bind_id(9,r.revision);q.bind(10,r.design_id);q.done();changed(db_);}
         if(m.input.pet&&pet_json(*m.input.pet)!=pet_json(*b.input.pet)){const auto& p=b.input.pet->saved;const auto& n=m.input.pet->saved;const auto old_stats=pet_stats(p),new_stats=pet_stats(n);const auto metadata=pet_metadata(p);
@@ -326,8 +396,29 @@ SqliteOwnedPveRoomRepository::Commit SqliteOwnedPveRoomRepository::replace(const
     room_mirrors(db_,after);
     Statement verify(db_,"SELECT document FROM main.owned_pve_rooms WHERE id=? AND revision=?");verify.bind_id(1,after.id);verify.bind_id(2,after.revision);need(verify.row()&&verify.text(0)==new_text&&!verify.row(),"PvE full committed candidate readback mismatch");
     op.final(current);need(!sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==final_changes,
-        "PvE source changed during final complete readset/pure fence");op.current();tx.commit();
-    return {true,op.after(current)&&sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==final_changes};
+        "PvE source changed during final complete readset/pure fence");op.current();
+    ticket.data_->commit_uncertain=true;tx.commit();ticket.data_->commit_uncertain=false;
+    if(returned)returned->committed=true;
+    return {true,op.after(current)&&sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==final_changes,
+        returned?std::optional{ReturnContinuation(std::move(returned))}:std::nullopt};
+}
+bool SqliteOwnedPveRoomRepository::return_continuation_current(const ReturnContinuation& token,Types::PureCurrent current){
+    try{
+    // Own all inputs before SQL/provider callbacks; no borrowed public snapshot
+    // can manufacture this token or replace its original admission source.
+    const auto data=token.data_;if(!data||data->issuer!=issuer_||data->owner!=continuation_issuer_||!data->committed)return false;
+    Issuer::Operation op(*issuer_);op.final(current);need(sqlite3_get_autocommit(db_),"PvE return continuation requires read-only own scope");
+    const auto changes=sqlite3_total_changes64(db_);namespaces(db_);
+    validate_member(data->saved.input);member_current(db_,data->room,data->saved);return_current(db_,data->room,data->saved);
+    Statement absent(db_,"SELECT 1 FROM main.owned_pve_character_claims WHERE character=?");absent.bind_id(1,data->saved.input.identity.character);need(!absent.row(),"PvE return continuation character was rebound");
+    Statement room(db_,"SELECT incarnation FROM main.owned_pve_rooms WHERE id=? AND design_id='CUSTOM-0161'");room.bind_id(1,data->room);
+    need(room.row()&&room.text(0)==data->incarnation&&!room.row(),"PvE return continuation room incarnation changed");
+    Statement outputs(db_,"SELECT sequence,status FROM main.owned_pve_outbox WHERE room=? AND character=? AND kind=?");
+    outputs.bind_id(1,data->room);outputs.bind_id(2,data->saved.input.identity.character);outputs.bind(3,int(Types::OutputKind::Return));bool last=false;
+    while(outputs.row()){const auto sequence=outputs.number<std::uint64_t>(0);need(sequence<=data->saved.return_sequence&&outputs.integer(1)==int(Types::OutputStatus::Written),"PvE return continuation aggregate not wholly written");last|=sequence==data->saved.return_sequence;}
+    need(last,"PvE return continuation lost its last fullwrite");op.final(current);
+    return sqlite3_get_autocommit(db_)&&sqlite3_total_changes64(db_)==changes&&!issuer_->reentered;
+    }catch(const DatabaseError&){return false;}
 }
 bool SqliteOwnedPveRoomRepository::character_claimed(std::uint64_t account,std::uint64_t character){Issuer::Operation op(*issuer_);namespaces(db_);Statement q(db_,"SELECT account FROM main.owned_pve_character_claims WHERE character=?");q.bind_id(1,character);const bool exists=q.row();if(exists)need(q.number<std::uint64_t>(0)==account&&!q.row(),"PvE character claim belongs to another account");op.current();return exists;}
 OwnedPveRoomTypes::Snapshot SqliteOwnedPveRoomRepository::read_retained(std::uint64_t id){Issuer::Operation op(*issuer_);namespaces(db_);Statement q(db_,"SELECT incarnation,revision,phase,document FROM main.owned_pve_rooms WHERE id=? AND phase IN ('active','finished','closed') AND design_id='CUSTOM-0161'");q.bind_id(1,id);need(q.row(),"PvE retained history unavailable");const auto incarnation=q.text(0),state_phase=q.text(2),text=q.text(3);const auto revision=q.number<std::uint64_t>(1);auto state=document(text);need(state.id==id&&state.incarnation==incarnation&&state.revision==revision&&phase(state)==state_phase&&!q.row(),"PvE retained state metadata mismatch");op.current();return state;}

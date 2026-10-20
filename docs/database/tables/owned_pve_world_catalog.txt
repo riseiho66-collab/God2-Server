@@ -23,10 +23,19 @@ scenes：各場景的遭遇設定，不放 NPC 或怪物的世界座標。
     physical_attack/magical_attack 為物攻/法攻；
     physical_defense/magical_defense 為物防/法防。此處不能用名稱表推算能力。
     native：完整 identity/appearance/hp/mp 原生材料；敵方不假造 MP 寫入。
-  templates：完整 bulk/grant/attack/support/withdrawal/terminal 原生材料；
+  templates：完整 bulk/grant/attack/support/withdrawal/row_swap/terminal 原生材料；
     entry_context_b 為明示原始 DWORD；animation_group_policy 目前須明選
-    custom_cyclic_byte_epoch。BYTE 標記不是回合授權、房間 ID 或動畫完成證明。
+    custom_contiguous_batch_0_254。實際 room animation_sequence 為每次83或88進度邊界 publication
+      配置0..254連續標記，不從grant_epoch或房間ID截斷，也不是動畫完成證明。
+    cycle_counter_policy 須明選 fixed_complete_profile；bulk 的 DWORD1完整保留，
+      原生條件會比對首次88的cache；固定值也通過已觀測K非0差值gate，
+      不代表其他模式已驗收。不能用FFFFFFFF sentinel或遞增回合數代替。
+      88也作原生接收佇列的批次邊界：先播完83，再套用目前HP/MP；不能略過
+      佇列直接視為立即更新，也不能把socket Written當成動畫完成。
     attack 目前只接受基本攻擊；沒有技能權威時不能用 Type3 技能模板冒充。
+    row_swap 是完整 15-byte 83/action9，success WORD9 須為非零原始來源。
+      source／from／to 依真正操作角色與該人目前配對重綁，保留其他未知位元。
+      目前戰場 assignment 與保存的入場 B4/E8 分開；換位不能覆寫原入場證據。
     terminal 的顯示獎勵必須為零；目前沒有安裝獎勵發放來源。
 character_profiles：各角色完整、已核對的顯示材料，character 是完整角色編號。
   root_profile：完整 40-byte 角色資料；entry_logical：完整 37-byte 2A 材料。
@@ -35,6 +44,12 @@ character_profiles：各角色完整、已核對的顯示材料，character 是�
   active_pet_material：真實 active44 的 kind(Pet1/Pet2)、metadata、stats、
     source_sha256。只排除已證明可更新的目前 HP/MP；其餘原始位元必須一致。
     真正所有權、完整保存列、版本和來源仍由房間交易逐次 CAS 核對。
+  pet_profiles：可省略的完整替代寵物材料陣列。每列都有 pet（完整原生外觀／
+    identity／HP／MP）及 active_pet_material；沿用上面的欄位意義。
+    依真正 active44 的種類、完整 metadata、除目前 HP/MP 外的完整 stats、
+    source_sha256 唯一比對。基礎 pet 也參與比對；重複或缺少材料一律拒絕，
+    不能用寵物名稱、種族、第一筆或舊出戰寵資料推算。HP/MP 上限也須一致。
+    這讓已明列完整材料的寵物可在合法 C28 換寵後再次入戰，不新發寵物。
   world_spawn/world_remove/world_move：完整原生世界外觀、移除及移動材料。
 
 未知原始位元保留為明列原生材料，不賦予未查明的遊戲意義。此來源只掛載

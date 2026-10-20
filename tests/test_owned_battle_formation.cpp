@@ -78,7 +78,7 @@ void formation(){
     const auto swapped=initial.swapped_pair(a);
     require(swapped.revision()==8&&swapped.position(a,F::Role::Primary)==1&&swapped.position(a,F::Role::Pet)==6&&
         initial.position(a,F::Role::Primary)==6,"Staged pair swap changed old authority or lost role identity");
-    refused([&]{(void)initial.swapped_pair(b);});
+    const auto empty_swap=initial.swapped_pair(b); require(empty_swap.position(b,F::Role::Primary)==5&&!empty_swap.position(b,F::Role::Pet)&&empty_swap.reserved_by(0)==b,"Configured empty pair swap manufactured a pet or lost reservation");
     refused([&]{(void)initial.joined(F::Member{{3,3,33,33},0,0,false});});
     refused([&]{auto bad=topology;bad.lanes[1]={6,8};(void)F::make(bad,members,1);});
     refused([&]{(void)F::make(F::Topology{},members,1);});
@@ -114,6 +114,45 @@ void flee(){
             require(!RecoveredBattleFleeCommand::decode(std::span<const std::uint8_t>(b).first(16)),"Flee accepted truncation");
         }
 }
+void row_swap_wire(){
+    for(const auto actor:{0u,13u,14u})for(const auto flag:{0u,1u})for(const auto tail:{0u,0x80000000u,0xffffffffu}){
+        RecoveredBattleRowSwapCommand::Bytes raw{};raw[0]=0x35;raw[1]=std::uint8_t(actor);raw[2]=9;raw[3]=std::uint8_t(flag);raw[4]=0xa7;raw[9]=0x31;raw[12]=0x89;
+        for(unsigned i=0;i<4;++i)raw[13+i]=std::uint8_t(tail>>(8*i));
+        const auto request=RecoveredBattleRowSwapCommand::decode(raw);
+        require(request&&RecoveredBattleRowSwapCommand::encode(*request)==raw&&request->unwritten_tail_bits()==tail,"Native9 lost original opaque/unwritten bits");
+        const auto batch=RecoveredWorldRecords::decode(raw);require(batch&&batch->size()==1&&std::holds_alternative<RecoveredBattleRowSwapCommand::Request>(batch->front()),"Native9 fell into basic/skill grammar");
+        for(const auto offset:{5u,7u}){auto invalid=raw;invalid[offset]=1;require(!RecoveredWorldRecords::decode(invalid),"Native9 accepted client-supplied pair/targetmask");}
+        auto invalid=raw;invalid[1]=15;require(!RecoveredWorldRecords::decode(invalid),"Native9 accepted actor beyond producer domain");
+    }
+    RecoveredBattleRowSwapResult::Bytes raw{};raw[0]=0x83;raw[1]=9;raw[2]=6;raw[3]=9;raw[5]=6;raw[7]=1;raw[9]=0x80;raw[14]=0xa5;
+    const auto prototype=RecoveredBattleRowSwapResult::parse(raw);require(bool(prototype),"Full native9 result template rejected");
+    const auto positioned=RecoveredBattleRowSwapResult::positioned(*prototype,1,6,1);const auto encoded=RecoveredBattleRowSwapResult::encode(positioned);
+    require(encoded[2]==1&&encoded[5]==6&&encoded[7]==1&&encoded[9]==0x80&&encoded[14]==0xa5,"Native9 result lost flat pair/nonboolean success/opaque tail");
+    raw[9]=0;const auto failure=*RecoveredBattleRowSwapResult::parse(raw);refused([&]{(void)RecoveredBattleRowSwapResult::positioned(failure,6,6,1);});
+}
+void row_swap_projection(){
+    Fixture f;auto& m=f.room.members.at(11);m.status=T::MemberStatus::Active;m.primary_grant=false;m.secondary_grant=true;
+    f.room.checkpoint.snapshot.actors[6]->hp=40;const T::Assignment before{6,std::uint8_t{1},1};
+    std::swap(f.room.checkpoint.snapshot.actors[6],f.room.checkpoint.snapshot.actors[1]);
+    f.room.checkpoint.snapshot.actors[6]->position=6;f.room.checkpoint.snapshot.actors[1]->position=1;
+    m.assignment=T::Assignment{1,std::uint8_t{6},2};f.room.pending_swap=T::Snapshot::PendingSwap{m.input.identity,before,6};
+    RecoveredBattleRowSwapResult::Bytes raw{};raw[0]=0x83;raw[1]=9;raw[2]=6;raw[5]=6;raw[7]=1;raw[9]=0x80;raw[14]=0xa5;
+    for(auto& [id,p]:f.profiles){(void)id;std::swap(p.actors.at(6),p.actors.at(1));p.row_swap=RecoveredBattleRowSwapResult::parse(raw);}
+    const T::Change change{T::Change::Kind::RowSwap,11,{},std::uint8_t{6},false,before,std::uint8_t{254}};
+    const auto out=P::prepare(f.room,change,f.profiles);
+    for(const auto who:{11u,22u}){const auto r=records(out,who);require(r.size()==2&&r[0].opcode==0x83&&r[0].bytes[1]==9&&
+        r[0].bytes[3]==254&&r[0].bytes[5]==6&&r[0].bytes[7]==1&&r[0].bytes[9]==0x80&&r[0].bytes[14]==0xa5&&
+        r[1].opcode==0x88&&RecoveredBattleVitalsBatch::parse_logical(r[1].bytes)->counter_bits()==37,
+        "Swap replayed entry/identity/grant or lost flat pair/success/group/fixed native boundarycounter");}
+    auto invalid=change;invalid.animation_group=255;refused([&]{(void)P::prepare(f.room,invalid,f.profiles);});
+    f.room.pending_swap.reset();const auto completed=P::prepare(f.room,{T::Change::Kind::RowSwapComplete,11,{},std::uint8_t{6},false,before},f.profiles);
+    const auto r=records(completed,11);require(r.size()==1&&r[0].opcode==0x86&&r[0].bytes[1]==5&&r[0].bytes[4]==0x61&&
+        (r[0].bytes[3]&3)==2,"Swap progress completion did not re-advertise exact remaining pet role in new slot");
+    T::Change queued{T::Change::Kind::RowSwapComplete,11,{},std::uint8_t{6},false,before};queued.suppress_grants={11};
+    const auto suppressed=P::prepare(f.room,queued,f.profiles);
+    require(records(suppressed,11).empty()&&!records(suppressed,22).empty()&&f.room.members.at(11).secondary_grant,
+        "Queued-command UI suppression changed canonical permission or reopened submitted role controls");
+}
 void projection(){
     Fixture f;
     const auto out=P::prepare(f.room,{T::Change::Kind::Admission,22,{}},f.profiles);
@@ -122,8 +161,8 @@ void projection(){
     std::set<std::uint8_t> old_ids,new_ids;
     bool saw_first_id=false,dead=false,current_enemy=false;
     for(const auto& r:old){
-        require(r.opcode!=0x82&&r.opcode!=0x88&&!(r.opcode==0x86&&r.bytes[1]==5),
-            "Admission reset incumbent entry/counter/grant");
+        require(r.opcode!=0x82&&!(r.opcode==0x86&&r.bytes[1]==5),
+            "Admission reset incumbent entry/grant");
         if(r.opcode==0x1c)old_ids.insert(r.bytes[1]);
     }
     for(const auto& r:joined){
@@ -145,23 +184,23 @@ void projection(){
     for(auto& [id,p]:f.profiles){(void)id;p.attacks={*RecoveredBattleAttackPresentation::parse(attack)};}
     f.room.members.at(11).secondary_grant=false;
     const BattleActionResult hit{1,2,{{14,3,3,false}}};
-    const auto actions=P::prepare(f.room,{T::Change::Kind::Action,11,hit},f.profiles);
+    const auto actions=P::prepare(f.room,{T::Change::Kind::Action,11,hit,{},false,{},std::uint8_t{9}},f.profiles);
     bool actual_hit=false,actual_mp=false;
     for(const auto& r:records(actions,11)){
         if(r.opcode==0x83)actual_hit=r.bytes[2]==1&&r.bytes[3]==9&&r.bytes[7]==1&&r.bytes[9]==0xfd&&r.bytes[10]==0xff;
         if(r.opcode==0x86&&r.bytes[1]==1)actual_mp=r.bytes[2]==1&&RecoveredBattleVitals::parse_logical(r.bytes)->current()==9;
-        require(r.opcode!=0x88&&!(r.opcode==0x86&&r.bytes[1]==0&&r.bytes[2]==14),"Basic deferred HP was eagerly applied twice");
+        require(!(r.opcode==0x86&&r.bytes[1]==0&&r.bytes[2]==14),"Basic deferred HP was eagerly applied twice");
     }
     require(actual_hit&&actual_mp,"Action lost actual secondary source/ordered hit/MP or raw group");
-    // AI damage to a friendly actor must not receive finalHP88 before its
-    // deferred83 event. It writes the same native DE8 HP field twice.
+    // AI deferred83 must precede its complete fixed-counter88 boundary; native
+    // FIFO waits for the group before applying that current HP snapshot.
     auto ai_profiles=f.profiles;auto ai_attack=attack;ai_attack[2]=14;ai_attack[5]=2;ai_attack[7]=0;
-    for(auto& [id,p]:ai_profiles){(void)id;p.attacks={*RecoveredBattleAttackPresentation::parse(ai_attack)};p.bulk.reset();}
+    for(auto& [id,p]:ai_profiles){(void)id;p.attacks={*RecoveredBattleAttackPresentation::parse(ai_attack)};}
     f.room.checkpoint.snapshot.actors[1]->hp=17;
-    const auto ai_out=P::prepare(f.room,{T::Change::Kind::Action,0,BattleActionResult{14,0,{{1,3,3,false}}}},ai_profiles);
+    const auto ai_out=P::prepare(f.room,{T::Change::Kind::Action,0,BattleActionResult{14,0,{{1,3,3,false}}},{},false,{},std::uint8_t{9}},ai_profiles);
     bool ai_deferred=false;
     for(const auto& r:records(ai_out,11)){
-        require(r.opcode!=0x88&&!(r.opcode==0x86&&r.bytes[1]==0&&r.bytes[2]==1),
+        require(!(r.opcode==0x86&&r.bytes[1]==0&&r.bytes[2]==1),
             "AI friendly hit eagerly reset HP before its deferred native delta");
         if(r.opcode==0x83)ai_deferred=r.bytes[2]==14&&r.bytes[5]==2&&r.bytes[9]==0xfd&&r.bytes[10]==0xff;
     }
@@ -169,8 +208,12 @@ void projection(){
     const auto grant_only=P::prepare(f.room,{T::Change::Kind::Grant,0,{}},ai_profiles);
     for(const auto& r:records(grant_only,11))require(r.opcode==0x86&&r.bytes[1]==5,
         "Next grant improperly treated network Written as safe88 cycle completion");
+    const auto passed=P::prepare(f.room,{T::Change::Kind::Pass,11,{},std::uint8_t{1},false,{},std::uint8_t{10}},ai_profiles);
+    const auto pass_records=records(passed,11);require(pass_records.size()==2&&pass_records[0].opcode==0x88&&pass_records[1].opcode==0x86&&
+        RecoveredBattleVitalsBatch::parse_logical(pass_records[0].bytes)->counter_bits()==37,
+        "Action2/target-gone pass failed to reset native0B sent latch with its own fixed boundary");
     const T::Change progressed{T::Change::Kind::Grant,0,{},{},true};
-    refused([&]{(void)P::prepare(f.room,progressed,ai_profiles);}); // True gate still needs full counter/profile.
+    auto missing_bulk=ai_profiles;missing_bulk.at(11).bulk.reset();refused([&]{(void)P::prepare(f.room,progressed,missing_bulk);}); // True gate still needs full counter/profile.
     const auto qualified_cycle=P::prepare(f.room,progressed,f.profiles);
     const auto cycle_records=records(qualified_cycle,11);
     require(cycle_records.size()==2&&cycle_records[0].opcode==0x88&&
@@ -181,34 +224,34 @@ void projection(){
     f.room.checkpoint.snapshot.state=BattleState::Finished;f.room.checkpoint.snapshot.victorious_side=0;
     f.room.checkpoint.snapshot.actors[14]->hp=0;
     const BattleActionResult killed{1,0,{{14,10,10,false}}};
-    refused([&]{(void)P::prepare(f.room,{T::Change::Kind::Terminal,11,killed},f.profiles);});
+    refused([&]{(void)P::prepare(f.room,{T::Change::Kind::Terminal,11,killed,{},false,{},std::uint8_t{9}},f.profiles);});
     RecoveredBattleExperience::LogicalRecord terminal{};terminal[0]=0x89;terminal[49]=4;
     for(auto& [id,p]:f.profiles){(void)id;p.terminal=RecoveredBattleExperience::parse_logical(terminal);}
-    const auto finished=P::prepare(f.room,{T::Change::Kind::Terminal,11,killed},f.profiles);
+    const auto finished=P::prepare(f.room,{T::Change::Kind::Terminal,11,killed,{},false,{},std::uint8_t{9}},f.profiles);
     for(const auto id:{11u,22u}){const auto r=records(finished,id);require(!r.empty()&&r.back().opcode==0x89,
         "Terminal omitted the complete supplied native result profile");
-        for(const auto& record:r)require(record.opcode!=0x88,"Terminal eagerly reset deferred HP/playback with88");}
+        require(std::any_of(r.begin(),r.end(),[](const auto& record){return record.opcode==0x88;}),"Terminal lacks native queued animation boundary88");}
     f.room.checkpoint.snapshot.state=BattleState::Active;f.room.checkpoint.snapshot.victorious_side.reset();
     f.room.checkpoint.snapshot.actors[14]->hp=7;
     f.room.support_enabled=true;
     RecoveredBattleAction08Control::Bytes support{};support[0]=0x83;support[1]=8;support[2]=1;support[5]=2;support[9]=1;
     for(auto& [id,p]:f.profiles){(void)id;p.support=RecoveredBattleAction08Control::parse(support);}
-    const auto secondary=P::prepare(f.room,{T::Change::Kind::Support,11,{},std::uint8_t{1}},f.profiles);
+    const auto secondary=P::prepare(f.room,{T::Change::Kind::Support,11,{},std::uint8_t{1},false,{},std::uint8_t{9}},f.profiles);
     const auto support_records=records(secondary,11);
-    require(support_records.size()==2&&support_records[0].opcode==0x83&&
+    require(support_records.size()==3&&support_records[0].opcode==0x83&&
         support_records[0].bytes[1]==8&&support_records[0].bytes[2]==1&&
-        support_records[1].opcode==0x86&&support_records[1].bytes[1]==5&&
-        (support_records[1].bytes[3]&3)==0&&support_records[1].bytes[4]==0x16,
+        support_records[1].opcode==0x88&&support_records[2].opcode==0x86&&support_records[2].bytes[1]==5&&
+        (support_records[2].bytes[3]&3)==0&&support_records[2].bytes[4]==0x16,
         "Secondary support lost its exact source or manufactured a consumed grant");
     // Primary08 consumes A first; native B remains available for this member's pet.
     f.room.checkpoint.snapshot.actors[6]->hp=40;f.room.members.at(11).secondary_grant=true;
     auto primary_support=f.profiles;
     auto primary_template=support;primary_template[2]=6;primary_template[5]=0x40;
     for(auto& [id,p]:primary_support){(void)id;p.support=RecoveredBattleAction08Control::parse(primary_template);}
-    const auto primary_out=P::prepare(f.room,{T::Change::Kind::Support,11,{},std::uint8_t{6}},primary_support);
+    const auto primary_out=P::prepare(f.room,{T::Change::Kind::Support,11,{},std::uint8_t{6},false,{},std::uint8_t{9}},primary_support);
     const auto primary_records=records(primary_out,11);
-    require(primary_records.size()==2&&primary_records[0].bytes[2]==6&&
-        (primary_records[1].bytes[3]&3)==2&&primary_records[1].bytes[4]==0x16,
+    require(primary_records.size()==3&&primary_records[0].bytes[2]==6&&
+        (primary_records[2].bytes[3]&3)==2&&primary_records[2].bytes[4]==0x16,
         "Primary support stranded the remaining owned pet grant");
     f.room.members.at(11).secondary_grant=false;
     auto dead_support=f.profiles;
@@ -223,4 +266,4 @@ void projection(){
         "Last disconnected member must save/retire without inventing a recipient output");
 }
 }
-int main(){try{formation();flee();projection();return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{formation();flee();row_swap_wire();row_swap_projection();projection();return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

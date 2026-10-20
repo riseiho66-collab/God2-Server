@@ -21,32 +21,54 @@
       "rules": {
         "room": "One canonical Battle checkpoint and RNG, exact full64 private Session bindings, late admission without resetting enemies/resources/grants, complete existing active Pet1/Pet2 slot44 material.",
         "save": "One room/member/outbox/return-ledger transaction and all still-owned actual player/pet resource CAS before output. Released members retain historical tuples and may continue independently. Commit ambiguity retains durable recovery claims.",
-        "turn": "Explicit server primary/secondary grants and one enemy action each per round. All actual output Written and qualified untrusted0B progress gate CUSTOM cycle advancement; no animation ACK, native timeout, client nonce or recovered original scheduling claim.",
-        "return": "Native typed FLEE and original per-connection C1C context. Retained WORLD plus savedE8 and fresh player reconciliation; no inventory/companion/login replay. All split return frames Written before exact per-person WORLD renewal and post-return FIFO catch-up/input release.",
-        "catalog": "Explicit versioned immutable full native material and trusted combat policies required. No default encounter/profile/topology or populated game DB. Explicit CUSTOM animation BYTE grouping and checked DWORD bulk counter; no inferred original counter rule.",
-        "lifecycle": "Bounded original-input deferral, independent disconnect retirement, save-only exact private cleanup, dispatch retirement before NET/GAME drain; stop does not invent save or client acceptance. Actual normal one-channel host only; shared-common-world/three-channel mount refuses."
+        "turn": "Explicit server primary/secondary grants and one enemy action each per round. Serialize native publication boundaries, actual whole-room Written and original qualified untrusted0B per current assignment. Native queued83 then fixed-profile88 starts deferred playback; labels0..254 are separate from grant epochs. Automatic0B names primary B51 even when sideflag1 and consumes a native control; refresh only still-owned same-epoch grants. No animation ACK, authenticated turn nonce or recovered original scheduling claim.",
+        "return": "Native typed FLEE and original per-connection C1C. All split return frames Written and actual resource commit precede private per-person WORLD successor. Preserve exact pre-entry companion/learning lineage into new INIT, including actual Entry or originally absent Entry epoch; historical Written never becomes old Current. Send committed existing Pet1/Pet2 E3/FB incrementally, no S30/3B/login replay. Stop/release/replacement or changed complete material cannot renew eligibility.",
+        "catalog": "Mandatory versioned complete native material and trusted combat policies; no populated game DB or default profiles. Explicit custom_contiguous_batch_0_254 and fixed_complete_profile counter policies. Exact Pet1/Pet2 variants use complete metadata/stats/source, ignoring only known current HP/MP; maxima and family/key/slot remain validated.",
+        "lifecycle": "Bounded original-input deferral and prepared SOS admission wait; requalify actual target/material only at safe boundary and mark Fight only after durable binding. Independent disconnect retirement and individual Returning-only transport exclude later room battle output. A post-Returned continuation failure closes that person alone unless room authority/recovery itself fails. Save-only exact private cleanup and dispatch retirement preserve claims; no invented rollback/client acceptance. Actual normal one-channel host only; shared-common-world/three-channel mount refuses."
       },
-      "native_gap": "Original encounter/reward/admission/formula/round timing, action9 deployment permutation, crash recovery executor, complete native material population, retained post-battle companion/learning continuation and real current-client acceptance remain OPEN.",
-      "document": "docs/research/tw-sos-room-save-return-source-20261020.md",
-      "tests": ["tests/test_owned_pve_room_0161.cpp", "tests/test_session_state.cpp", "tests/test_owned_pve_world_catalog.cpp", "tests/test_recovered_movement_service.cpp"],
+      "native_gap": "Original encounter/reward/admission/formula/round scheduling and counter meaning, complete native material population, crash-recovery executor, shared three-channel mount and actual current-client acceptance remain OPEN. Source wiring and unexecuted regression cases do not establish playable acceptance.",
+      "document": "docs/research/tw-pve-row-swap-cycle-source-20261021.md",
+      "tests": [
+        "tests/test_owned_pve_room_0161.cpp",
+        "tests/test_session_state.cpp",
+        "tests/test_owned_pve_world_catalog.cpp",
+        "tests/test_recovered_movement_service.cpp"
+      ],
       "production_activated": false,
       "native_client_acceptance": false,
       "verification_status": "SOURCE_AND_POST_EDIT_INDEPENDENT_REVIEW_ONLY_REGRESSIONS_NOT_EXECUTED",
-      "replacement_plan": "Recover missing original rules/material, preserve existing save history and claims, then complete separately authorized build/regression/current-native acceptance before activation."
+      "replacement_plan": "Recover missing original rules/material, preserve existing save history and claims, then complete separately authorized build/regression/current-native acceptance before activation.",
+      "continuation_document": "docs/research/tw-pve-return-continuation-source-20261021.md"
     },
     {
       "id": "CUSTOM-0162",
       "name": "Explicit front/back topology and bounded Taiwan room projections",
       "authority": "OWNER_AUTHORIZED_CONFIGURED_TOPOLOGY_NOT_RECOVERED_ORIGINAL_LANE_ALLOCATION",
-      "implementation": ["src/game/OwnedBattleFormation.h", "src/protocol/RecoveredPveRoomProjection.cpp", "src/protocol/RecoveredBattleFleeCommand.h", "src/protocol/RecoveredWorldRecords.h"],
+      "implementation": [
+        "src/game/OwnedBattleFormation.h",
+        "src/protocol/RecoveredPveRoomProjection.cpp",
+        "src/protocol/RecoveredBattleFleeCommand.h",
+        "src/protocol/RecoveredWorldRecords.h",
+        "src/protocol/RecoveredBattleRowSwapCommand.h",
+        "src/protocol/RecoveredBattleRowSwapResult.h",
+        "src/game/OwnedPveRoomState.cpp",
+        "src/db/SqliteOwnedPveRoomRepository.cpp",
+        "src/handlers/OwnedPveRoomHost.cpp"
+      ],
       "rules": {
-        "formation": "Use actually saved B4/E8 row selection and explicit nonoverlapping DB lane pairs. Current native14 positions are triangular5+4+3+2; never front7/back7 or slot+7.",
-        "projection": "Appearance before identity, current living/dead resources, no old actor/enemy reset on late join, no eager88 following ordinary deferred83 damage. Observed CUSTOM progress-gated Grant may refresh88 before86/5.",
-        "flee": "Typed native17-byte action6 request preserves uninitialized native stack fields, validates private room context/masks and actual primary/secondary grant; side flag is role priority, not team."
+        "formation": "Actual saved B4/E8 remains immutable admission provenance; explicit nonoverlapping configured pairs reserve endpoints even without pet. Live primary/pet assignment and revision are separate. Action9 moves whole optional Battle actors and all actor-owned resources/stats/controller, keeps RNG and exact existing grants, and persists one exact permutation CAS. No default+7 or phantom pet; inactive or dead acting role refuses, configured empty/dead partner is allowed.",
+        "projection": "Appearance before identity, actual current resources, no incumbent/enemy1C reset on late join. Corrected actual native5140C0 queue defers88 until83 group playback completes: queued83 followed88 is required and safe for this path; directly invoking the eager consumer does not prove queue behavior. Server-private contiguous labels0..254 avoid native BYTE255 wrap. Fixed complete-profile DWORD88 is independent of grant epochs.",
+        "flee": "Typed native17-byte action6 request preserves uninitialized native stack fields, validates private room context/masks and actual primary/secondary grant; side flag is role priority, not team.",
+        "row_swap": "Exact17-byte action9 preserves opaque stack bytes and requires count0/zero target masks; incoming request supplies no destination. Authorized configured pair produces complete successful15-byte83/9 with flat WORD positions, then queued88. Durable pending_swap blocks further mutations until private qualified publication progress, not Written alone; completion preserves same epoch and remaining actual grants."
       },
-      "native_gap": "Original server lane allocation, action9 full room permutation and delayed completion, exact original cycle counter progression and native multiplayer acceptance remain OPEN.",
-      "document": "docs/research/tw-battle-formation-0162-source-20261020.md",
-      "tests": ["tests/test_owned_battle_formation.cpp"],
+      "native_gap": "Original server lane allocation/pair authorization, original operation ordering policy, true counter semantics, other native mode effects and runtime multiplayer acceptance remain OPEN. Current-source action9 permutation and delayed continuation are implemented CUSTOM policies, not recovered original server rules.",
+      "document": "docs/research/tw-native-row-swap-and-cycle-20261021.md",
+      "tests": [
+        "tests/test_owned_battle_formation.cpp",
+        "tests/test_owned_pve_room_0161.cpp",
+        "tests/test_recovered_world_records.cpp",
+        "tests/test_owned_pve_world_catalog.cpp"
+      ],
       "production_activated": false,
       "native_client_acceptance": false,
       "verification_status": "MATCHED_NATIVE_STATIC_TRACE_AND_POST_EDIT_SOURCE_REVIEW_ONLY",

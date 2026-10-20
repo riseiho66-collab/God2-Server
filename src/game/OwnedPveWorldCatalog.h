@@ -30,6 +30,10 @@ public:
     // An exact native source tuple, not a fallback row. The actual source host
     // rechecks root/position and calls the room's full CAS before entry.
     const nlohmann::json& actor_profile(std::uint64_t character)const;
+    // Select one complete explicitly supplied native pet profile by actual
+    // active44 material. No species/name/default lookup or SQL is performed.
+    RecoveredPveRoomProjection::ActorProfile pet_profile(std::uint64_t character,
+        const StoredPet2Slot&)const;
     bool has_actor_profile(std::uint64_t character)const noexcept{return actors_.contains(character);}
     static bool same_entry_material(const nlohmann::json& prototype,std::span<const std::uint8_t> actual);
     RecoveredPveRoomProjection::Profiles profiles(const Scene&,const Types::Snapshot&,

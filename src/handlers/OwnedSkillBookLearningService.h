@@ -172,6 +172,16 @@ public:
     // witness after a commit or after Entry release/rebootstrap.
     std::optional<MaterialAdmission> prepare_material(Session&,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor);
+    // Actual prepared room entry captures the exact Entry/null-Entry before
+    // combat. Release/rebootstrap retires it; return cannot reconstruct it.
+    std::optional<MaterialAdmission> prepare_pve_return(Session&,const Session::OwnedPveBinding&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor);
+    bool pve_return_admission_current(Session&,const Session::OwnedPveBinding&,const MaterialAdmission&)const noexcept;
+    std::optional<WrittenMaterialSource> reanchor_pve_return(Session&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical_after,
+        std::shared_ptr<SqliteOwnedPveRoomRepository>,const SqliteOwnedPveRoomRepository::ReturnContinuation&,
+        const Session::OwnedPveReturnSource&,const MaterialAdmission&);
     void abandon_material(const MaterialAdmission&) noexcept;
     std::optional<WrittenMaterialSource> reanchor_material(Session&,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
@@ -203,6 +213,8 @@ private:
     static void abandon_unbound(const LearningPublication&)noexcept;
     void owner() const;
     bool ready(Session&,const std::shared_ptr<Entry>&,bool written) const;
+    bool retained_learning_written(Session&,const std::shared_ptr<Entry>&,
+        const std::shared_ptr<LearningPublication::Data>&)const;
     bool qualify_presence(Session&,const std::shared_ptr<Entry>&,const NativeEquipmentSnapshot&) const;
     void retire(Session&,const std::shared_ptr<Entry>&) noexcept;
     SqliteSkillBookLearningRepository& repository_;

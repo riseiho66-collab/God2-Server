@@ -4651,10 +4651,15 @@ struct Session::Impl {
                                std::holds_alternative<RecoveredSkillCommand::Record>(record) ||
                                std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record) ||
                                std::holds_alternative<RecoveredSosBattleCommand::Request>(record) ||
+                               std::holds_alternative<RecoveredBattleRowSwapCommand::Request>(record) ||
                                std::holds_alternative<RecoveredBattleFleeCommand::Request>(record);
                     });
                     if(has_battle_command && self->state()!=SessionState::InBattle)
                         throw std::runtime_error("Recovered attack outside battle state");
+                    if(std::any_of(records.begin(),records.end(),[](const auto& record){
+                           return std::holds_alternative<RecoveredBattleRowSwapCommand::Request>(record);
+                       })&&!s.pve_binding.load())
+                        throw std::runtime_error("Native row swap requires an actual owned PvE binding");
                     if(s.character_handlers.world_records) {
                         WorldRecordsObservationScope observation_scope(*self,records);
                         s.callback_output_active=true;s.callback_output_activity=0;
@@ -7423,6 +7428,34 @@ bool Session::complete_owned_pve_return(const OwnedPveBinding& binding)noexcept 
     // Retain input independently until the host's returned callback has queued
     // its T1 WORLD reconciliation after these actual Return full Writes.
     return true;
+}
+bool Session::OwnedPveReturnSource::current(Session& session)const noexcept {
+    return session.owned_pve_return_current(*this);
+}
+std::optional<Session::OwnedPveReturnSource> Session::owned_pve_return_source(const OwnedPveBinding& binding)const {
+    const auto b=binding.data_;
+    if(!b||b->game_thread!=std::this_thread::get_id()||!b->successor)return {};
+    OwnedPveReturnSource source(binding,NormalWorldInitialization(b->successor));
+    if(!owned_pve_return_current(source))return {};
+    return source;
+}
+bool Session::owned_pve_return_current(const OwnedPveReturnSource& source)const noexcept {
+    try {
+        const auto b=source.binding_.data_;
+        if(!b||b->game_thread!=std::this_thread::get_id()||b->session.lock().get()!=this)return false;
+        if(native_channel_&&(!native_channel_acceptance_||native_channel_acceptance_->session!=this||
+           native_channel_acceptance_->id!=id()||native_channel_->presence_.expired()||
+           !native_channel_->accepts(native_channel_acceptance_->local)))return false;
+        return b&&b->game_thread==std::this_thread::get_id()&&b->session.lock().get()==this&&
+            b->id==id()&&b->account==account_id&&b->character==character_id&&!closing()&&
+            b->phase.load()==OwnedPveBinding::Data::Phase::Returned&&b->return_written&&b->return_context&&
+            b->successor&&source.initialization_.data_==b->successor&&
+            impl_->normal_entry.load()==b->initialization.data_->entry&&
+            impl_->normal_initialization.load()==b->successor&&
+            impl_->world_delivery_identity.load()==b->successor_world&&
+            native_channel_ordinal()==b->native_ordinal&&state()==b->prephase&&
+            battle_generation()==b->prebattle+2&&normal_world_initialization_current_on_game(source.initialization_);
+    }catch(...){return false;}
 }
 void Session::resume_owned_pve_return_input(const OwnedPveBinding& binding) {
     const auto b=binding.data_;

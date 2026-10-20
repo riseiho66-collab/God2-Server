@@ -58,7 +58,7 @@ struct Fixture {
         e.seed=7;e.source_sha256=std::string(64,'a');e.source_record="CUSTOM_TEST_NOT_NATIVE:0161-actual-repository";e.support_enabled=true;return e;}
 };
 T::Project project=[](const T::Snapshot& s,const T::Change& c){std::vector<T::Output> out;
-    for(const auto& [id,m]:s.members)if(m.status!=T::MemberStatus::Returned&&m.status!=T::MemberStatus::Retired&&!m.disconnected)
+    for(const auto& [id,m]:s.members)if(m.status!=T::MemberStatus::Returned&&m.status!=T::MemberStatus::Retired&&!m.disconnected&&!m.return_context)
         out.push_back({id,(c.kind==T::Change::Kind::Entry||(c.kind==T::Change::Kind::Admission&&c.character==id))?T::OutputKind::Entry:T::OutputKind::Grant,{0xe8,0}});
     return out;}; // Structurally complete E8 only: not a native battle acceptance fixture.
 const T::PureCurrent current=[]{return true;};
@@ -138,6 +138,13 @@ void rollback_and_postcommit_truth(){
         commit_changed.characters->load_resources(commit_changed.inputs[0].identity.account,commit_changed.inputs[0].identity.character)->hp==89&&
         commit_changed.repository->read_retained(x.id()).checkpoint.snapshot.actors[0]->hp==90,
         "COMMIT observer DB write pretended rollback/current room instead of retained durable recovery");
+    Fixture uncertain;OwnedPveRoomState uncertain_room(*uncertain.repository);auto uncertain_ticket=uncertain_room.create(uncertain.encounter(),project,current);written_all(uncertain_room,uncertain_ticket);
+    sqlite3_commit_hook(uncertain.db,[](void*){return 1;},nullptr);
+    rejects([&]{uncertain_room.act_ai(uncertain_ticket,{14,{0},false,100,0,0,0,100},damage,project,current);});
+    sqlite3_commit_hook(uncertain.db,nullptr,nullptr);
+    require(uncertain_room.recovery_required(uncertain_ticket)&&uncertain.repository->character_claimed(uncertain.inputs[0].identity.account,uncertain.inputs[0].identity.character)&&
+        uncertain.characters->load_resources(uncertain.inputs[0].identity.account,uncertain.inputs[0].identity.character)->hp==100,
+        "COMMIT failure reopened old gameplay input or falsely claimed after-state durable success");
 }
 void full_choice_and_absent_active_pet_readsets(){
     Fixture f;OwnedPveRoomState room(*f.repository);
@@ -170,7 +177,15 @@ void individual_return_and_no_reset(){
     rejects([&]{room.complete_return(t,input.identity,context,current);});
     room.written(t,pending[2].sequence,input.identity,true,current);
     auto bad=context;bad[3]=1;rejects([&]{room.complete_return(t,input.identity,bad,current);});
-    room.complete_return(t,input.identity,context,current);
+    const auto continuation=room.complete_return(t,input.identity,context,current);
+    require(continuation.identity()==input.identity&&continuation.room()==t.id()&&continuation.incarnation()==t.incarnation()&&
+        continuation.admission().resources==input.resources&&continuation.saved().resources.hp==100&&
+        f.repository->return_continuation_current(continuation,current),"Durable return did not mint exact original-admission/full-saved continuation");
+    require(!f.repository->return_continuation_current(continuation,[]{return false;}),"Return lineage bypassed current actual post-return Session witness");
+    SqliteOwnedPveRoomRepository other_repository(f.db,*f.accounts,*f.characters,*f.auxiliary,*f.pets);
+    // Even another facade on the same connection is not this token's exact
+    // continuation issuer; public values cannot replace retained ownership.
+    require(!other_repository.return_continuation_current(continuation,current),"Foreign repository facade borrowed private continuation authority");
     require(!f.repository->character_claimed(input.identity.account,input.identity.character)&&
         f.repository->character_claimed(f.inputs[1].identity.account,f.inputs[1].identity.character),"Individual return released another participant");
     room.pass(t,f.inputs[1].identity,1,2,project,current);written_all(room,t);room.grant_round(t,project,current);written_all(room,t);
@@ -189,7 +204,7 @@ void both_pet_generations_save_full_blobs(){
         if(n==0){RecoveredPet1Stats::LogicalRecord b{};b[0]=0xe3;b[1]=100;b[3]=100;b[5]=20;b[7]=20;b[0x1d]=0x91;b[0x1e]=0x33;b[0x27]=44;b.back()=0xa5;
             metadata[0]=0x91;metadata[1]=0x33;auto raw=RecoveredPet1Stats::parse_logical(b);require(bool(raw),"Fixture E3 source invalid");
             saved.pet1=RecoveredPet1Lifecycle::Snapshot{{m.identity.account,m.identity.character},metadata,*raw};stats.assign(b.begin(),b.end());
-        }else{RecoveredPet2Stats::LogicalRecord b{};b[0]=0xfb;b[1]=0x61;b[2]=0x6d;b[3]=44;b[4]=1;b.back()=0xa5;
+        }else{metadata[2]=34;RecoveredPet2Stats::LogicalRecord b{};b[0]=0xfb;b[1]=0x61;b[2]=0x6d;b[3]=44;b[4]=1;b.back()=0xa5;
             const std::uint32_t value=100u|(20u<<14)|0x92000000u;
             for(unsigned i=0;i<4;++i){b[5+i]=std::uint8_t(value>>(8*i));b[13+i]=std::uint8_t(value>>(8*i));}
             metadata[0]=0x61;metadata[1]=0x6d;auto raw=RecoveredPet2Stats::parse_logical(b);require(bool(raw),"Fixture FB source invalid");
@@ -211,6 +226,19 @@ void both_pet_generations_save_full_blobs(){
         sqlite_detail::Statement q(f.db,"SELECT stats,revision FROM character_pet2_slots WHERE character_id=? AND slot=44");q.bind_id(1,m.identity.character);require(q.row(),"Actual pet row lost");const auto raw=q.blob(0,1,73);
         require(std::vector<std::uint8_t>(raw.begin(),raw.end())==actual&&q.integer(1)==8,"Pet saved only in shadow room document");
     }
+    written_all(room,ticket);room.act_ai(ticket,{14,{1},false,100,0,0,0,100},damage,project,current);written_all(room,ticket);
+    const auto before_swap=room.inspect(ticket);const auto pet_before=RecoveredPet1Stats::encode_logical(before_swap->members.at(f.inputs[0].identity.character).input.pet->saved.pet1->stats);
+    room.swap_pair(ticket,f.inputs[0].identity,1,1,0,project,current);written_all(room,ticket);room.complete_swap(ticket,project,current);written_all(room,ticket);
+    const auto swapped=room.inspect(ticket);const auto& actor=swapped->members.at(f.inputs[0].identity.character);
+    require(actor.primary_position()==1&&actor.pet_position()==0&&actor.input.primary_slot==0&&actor.input.pet->actor_slot==1&&
+        swapped->checkpoint.snapshot.actors[1]->hp==90&&swapped->checkpoint.snapshot.actors[0]->hp==80&&
+        RecoveredPet1Stats::encode_logical(actor.input.pet->saved.pet1->stats)==pet_before&&actor.input.pet->saved.revision==9&&
+        swapped->checkpoint.random_state==before_swap->checkpoint.random_state&&!actor.primary_grant&&actor.secondary_grant,
+        "Actual pet swap exchanged vitals/rawsource/roles or manufactured another turn");
+    room.act_ai(ticket,{14,{0},false,100,0,0,0,100},damage,project,current);written_all(room,ticket);
+    require(f.characters->load_resources(f.inputs[0].identity.account,f.inputs[0].identity.character)->hp==90&&
+        room.inspect(ticket)->members.at(f.inputs[0].identity.character).input.pet->saved.pet1->stats.vitals().current_hp==70,
+        "Post-swap damage saved into old slot's wrong player/pet record");
     auto dead=*f.inputs[0].pet;dead.actor_slot=5;auto raw=RecoveredPet1Stats::encode_logical(dead.saved.pet1->stats);raw[1]=0;raw[2]=0;
     dead.saved.pet1->stats=*RecoveredPet1Stats::parse_logical(raw);dead.saved.pet1->owner={f.inputs[2].identity.account,f.inputs[2].identity.character};
     sqlite_detail::Statement insert(f.db,"INSERT INTO character_pet2_slots VALUES(?,44,?,?,7,?,'CUSTOM_TEST_NOT_NATIVE','CUSTOM-0161:pet-raw-fixture')");
@@ -246,5 +274,46 @@ void simultaneous_disconnect_is_one_room_commit(){
         f.characters->load_resources(f.inputs[n].identity.account,f.inputs[n].identity.character)->hp==100,
         "Simultaneous disconnect retained wrong claim or wrote combat tombstone into actual HP");
 }
+void configured_empty_swap_is_canonical_and_durable(){
+    Fixture f;f.inputs[0].reserved_partner=1;OwnedPveRoomState room(*f.repository);
+    auto t=room.create(f.encounter(2),project,current);written_all(room,t);const auto before=room.inspect(t);const auto id=f.inputs[0].identity;
+    room.swap_pair(t,id,1,1,0,project,current);auto swapped=room.inspect(t);const auto& m=swapped->members.at(id.character);
+    require(m.primary_position()==1&&!m.pet_position()&&m.partner_position()==0&&m.positions().revision==2&&
+        m.input.primary_slot==0&&m.input.reserved_partner==1&&m.admission_source&&m.admission_source->primary_slot==0&&
+        !swapped->checkpoint.snapshot.actors[0]&&swapped->checkpoint.snapshot.actors[1]->hp==100&&
+        swapped->checkpoint.random_state==before->checkpoint.random_state&&m.input.row_preference==f.inputs[0].row_preference&&
+        swapped->pending_swap&&!m.primary_grant&&swapped->animation_sequence==1,
+        "Empty configured swap invented a pet/death/grant or rewrote saved B4/source/RNG");
+    rejects([&]{room.complete_swap(t,project,current);}); // Exact output has not been Written.
+    rejects([&]{room.admit(t,f.inputs[2],project,current);});
+    rejects([&]{room.pass(t,f.inputs[1].identity,1,2,project,current);});
+    written_all(room,t);require(room.inspect(t)->pending_swap.has_value(),"Written was mistaken for native renderer completion");
+    room.complete_swap(t,project,current);written_all(room,t);require(!room.inspect(t)->pending_swap,"Qualified custom progress did not clear exact pending edge");
+    const auto retained=f.repository->read_retained(t.id());require(retained.members.at(id.character).primary_position()==1&&
+        retained.members.at(id.character).admission_source->primary_slot==0&&retained.animation_sequence==1,"Durable room lost live assignment/original admission/label lineage");
+    room.pass(t,f.inputs[1].identity,1,2,project,current);written_all(room,t);room.grant_round(t,project,current);written_all(room,t);
+    rejects([&]{room.swap_pair(t,id,1,2,1,project,current);});
+    rejects([&]{room.swap_pair(t,id,2,1,1,project,current);});
+    room.swap_pair(t,id,2,2,1,project,current);written_all(room,t);room.complete_swap(t,project,current);written_all(room,t);
+    require(room.inspect(t)->members.at(id.character).primary_position()==0&&room.inspect(t)->members.at(id.character).positions().revision==3,"Repeated pair swap lost monotonic assignment ABA fence");
+    // A failure after any projected swap must preserve the prior whole room.
+    Fixture stale;stale.inputs[0].reserved_partner=1;OwnedPveRoomState other(*stale.repository);auto u=other.create(stale.encounter(2),project,current);written_all(other,u);const auto prior=other.inspect(u);
+    auto provider=[&](const T::Snapshot& s,const T::Change& c){auto output=project(s,c);sqlite_detail::execute(stale.db,"UPDATE character_resources SET revision=revision+1 WHERE character_id="+std::to_string(stale.inputs[1].identity.character));return output;};
+    rejects([&]{other.swap_pair(u,stale.inputs[0].identity,1,1,0,provider,current);});require(other.inspect(u)==prior,"Later member CAS failure partially published pair permutation");
 }
-int main(){try{shared_admission_and_claims();rollback_and_postcommit_truth();individual_return_and_no_reset();both_pet_generations_save_full_blobs();failed_multiframe_entry_and_return();full_choice_and_absent_active_pet_readsets();simultaneous_disconnect_is_one_room_commit();std::cout<<"owned PvE room0161 source cases passed\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+void individual_return_excludes_later_room_cleanup_outputs(){
+    Fixture f;OwnedPveRoomState room(*f.repository);auto t=room.create(f.encounter(2),project,current);written_all(room,t);
+    const auto returning=f.inputs[0].identity;room.withdraw(t,returning,false,project,current);written_all(room,t);
+    const std::array<std::uint8_t,4> context{7,6,5,4};std::vector<std::uint8_t> scene;
+    for(unsigned n=0;n<3000;++n)scene.insert(scene.end(),{0xe8,0});
+    room.prepare_return(t,returning,std::move(scene),context,current);
+    room.retire_disconnected(t,{f.inputs[1].identity},project,current);
+    const auto pending=room.pending(t);require(pending.size()==3&&std::all_of(pending.begin(),pending.end(),[&](const auto& d){return d.recipient==returning&&d.kind==T::OutputKind::Return;}),
+        "Other member cleanup appended battle output into retained individual return transport");
+    written_all(room,t);const auto token=room.complete_return(t,returning,context,current);
+    require(room.inspect(t)->closed&&f.repository->return_continuation_current(token,current)&&!f.repository->character_claimed(returning.account,returning.character),
+        "Concurrent cleanup stopped exact all-written individual claim release/continuation");
+    room.retire_closed(t);
+}
+}
+int main(){try{shared_admission_and_claims();rollback_and_postcommit_truth();individual_return_and_no_reset();both_pet_generations_save_full_blobs();failed_multiframe_entry_and_return();full_choice_and_absent_active_pet_readsets();simultaneous_disconnect_is_one_room_commit();configured_empty_swap_is_canonical_and_durable();individual_return_excludes_later_room_cleanup_outputs();std::cout<<"owned PvE room0161 source cases passed\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

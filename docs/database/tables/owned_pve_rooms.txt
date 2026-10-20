@@ -10,5 +10,11 @@ design_id 固定 CUSTOM-0161。遇敵、加入、回合順序、退出是明示�
 members.input.row_preference 保存完整原始 B4／E8 選擇及來源、版本、共同角色根。讀回時比對實際同連線資料列；其中舊 position 只保留歷史來源，不授權當前世界座標。
 members.input.empty_active_pet 為 null 表示確實未觀測到 slot44；有值表示已配置的空 slot44 完整 revision／provenance。加入與保存均再比對，不能漏掉新增中的戰寵。
 members.input.pet 保存實際使用中的 slot44 原始 E3 或 FB、完整 metadata、revision 與 provenance。HP／MP 更新在同交易改真正 character_pet2_slots，其他 byte 保留。
+members.input.reserved_partner 保存明確 topology 配置的另一端位置；空格不代表有寵或新授權。
+members.admission_source 保存入戰當時完整來源，與後續已更新 HP/MP 的 input 分開，不能重建登入權限。
+members.assignment 的 primary／pet／revision 是目前主角／寵物位置及形成版本；pet 可為 null。
+  action9 交換的是目前位置，連同 canonical Actor 保存，不覆寫原 B4/E8 證據；空格也不造假 Actor。
+animation_sequence 是服務端每次83或88進度邊界 publication 的連續標記來源，配置0..254後保存下一序號，不是回合或原生授權。
+pending_swap 保存尚在處理中的換位讀集／形成版本；寫出不是動畫完成，仍須本輪 CUSTOM 進度閘門。
 
 不自動建表、不補預設角色／怪物屬性、不安裝資料、不把 retained document 當登入續戰授權。本輪僅源碼；沒有執行 SQL、測試、部署或遊戲驗收。

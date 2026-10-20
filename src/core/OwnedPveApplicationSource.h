@@ -10,9 +10,19 @@ namespace god2 {
 // the shared-common-world/paired PK host. Explicit complete catalog required.
 class OwnedPveApplicationSource {
 public:
+    class ReturnHandoff {
+    public:
+        virtual ~ReturnHandoff()=default;
+        virtual bool retained_current(Session&,const Session::OwnedPveBinding&)const noexcept=0;
+        virtual void returned(Session&,const Session::OwnedPveBinding&,
+            std::shared_ptr<SqliteOwnedPveRoomRepository>,const SqliteOwnedPveRoomRepository::ReturnContinuation&,
+            const Session::OwnedPveReturnSource&)=0;
+    };
+    using PrepareReturnHandoff=std::function<std::shared_ptr<ReturnHandoff>(Session&,const Session::OwnedPveBinding&)>;
     OwnedPveApplicationSource(SqliteDatabase&,LuaEngine&,RecoveredMovementService&,
         RecoveredVisibility&,std::function<void(std::vector<RecoveredVisibility::Delivery>)>);
     ~OwnedPveApplicationSource();
+    void install_return_handoff(PrepareReturnHandoff);
     bool bound(const Session&)const noexcept;
     void observe_world(Session&); // Actual ready callback, full current native material only.
     void committed_movement(Session&,const RecoveredMovementService::CommittedMove&);
@@ -26,7 +36,7 @@ public:
 private:
     using T=OwnedPveRoomTypes;using Binding=Session::OwnedPveBinding;
     struct WorldBefore {Binding binding;RecoveredPosition position;std::vector<RecoveredVisibility::Presence> actors;
-        std::optional<std::vector<RecoveredVisibility::Presence>> return_actors;};
+        std::optional<std::vector<RecoveredVisibility::Presence>> return_actors;std::shared_ptr<ReturnHandoff> handoff;};
     struct Pending {std::weak_ptr<Session> session;Session::NormalWorldInitialization initialization;
         Session::WorldResponseWrite written;RecoveredPosition position;};
     std::shared_ptr<const OwnedPveRoomHost::Sources> sources(const OwnedPveWorldCatalog::Scene&);
@@ -41,11 +51,12 @@ private:
     SqliteDatabase& db_;LuaEngine& lua_;RecoveredMovementService& movement_;RecoveredVisibility& visibility_;
     std::function<void(std::vector<RecoveredVisibility::Delivery>)> deliver_;
     std::shared_ptr<const OwnedPveWorldCatalog> catalog_;
-    std::unique_ptr<SqliteOwnedPveRoomRepository> repository_;
+    std::shared_ptr<SqliteOwnedPveRoomRepository> repository_;
     std::shared_ptr<OwnedPveRoomHost> host_;
     std::map<std::uint64_t,WorldBefore> worlds_;
     std::map<std::uint64_t,Pending> pending_;
     std::map<std::uint64_t,std::uint64_t> steps_;
     bool stopped_=false,retiring_=false,busy_=false;
+    PrepareReturnHandoff prepare_return_handoff_;
 };
 }

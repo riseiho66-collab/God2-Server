@@ -1,6 +1,7 @@
 #pragma once
 #include "db/SqliteCompanionRepository.h"
 #include "db/SqliteSkillBookLearningRepository.h"
+#include "db/SqliteOwnedPveRoomRepository.h"
 #include "protocol/RecoveredDeitySelection.h"
 #include "protocol/RecoveredDeityActivation.h"
 #include "protocol/RecoveredWorldFrame.h"
@@ -54,6 +55,12 @@ public:
     Restoration restore_deities_with_source(std::uint64_t account,std::uint64_t character,
         SqliteSkillBookLearningRepository&);
     bool restoration_current(const Restoration&);
+    // Exact private room Return commit plus unchanged deity/learning material.
+    // Retains the original Written batches as history; never restores/replays
+    // S30 or claims that historical pet bytes are a new pet cache snapshot.
+    std::optional<Restoration> pve_return_successor(const Restoration&,
+        SqliteOwnedPveRoomRepository&,const SqliteOwnedPveRoomRepository::ReturnContinuation&,
+        const OwnedPveRoomTypes::PureCurrent&);
     std::optional<Restoration> material_successor_from_committed(const Restoration&,
         SqliteOwnedEquipmentTransaction&,const SqliteOwnedEquipmentTransaction::Committed&);
     std::optional<Restoration> material_successor_from_committed_chain(const Restoration&,
@@ -115,13 +122,13 @@ public:
         std::uint64_t account,std::uint64_t character,const RecoveredDeitySelection::Request& request);
     std::optional<std::vector<std::uint8_t>> select_pet2(
         std::uint64_t account,std::uint64_t character,const RecoveredSelectionItemRequest::Request& request);
-private:
-    friend class OwnedTaiwanPkCompanionSource;
     // Actual committed fullafter plus genuine immutable wire history only.
     // No fresh restore/reset, original stale Current or public raw constructor.
     std::optional<Restoration> learning_successor_from_committed(const Restoration&,
         const SqliteSkillBookLearningRepository::Committed&,
         std::vector<std::vector<std::uint8_t>> actual_history);
+private:
+    friend class OwnedTaiwanPkCompanionSource;
     struct PrefixRead;
     std::optional<TaiwanNativeDeityRosterPrefix> normal_entry_prefix_impl(
         const Restoration&,const NativeSkillCatalog&);

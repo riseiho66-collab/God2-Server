@@ -6,6 +6,7 @@
 #include "protocol/RecoveredSosSupportRequest.h"
 #include "protocol/RecoveredSosBattleCommand.h"
 #include "protocol/RecoveredBattleFleeCommand.h"
+#include "protocol/RecoveredBattleRowSwapCommand.h"
 #include "protocol/RecoveredTeamRequest57.h"
 #include "protocol/RecoveredPartyExitRequest5A.h"
 #include "protocol/TaiwanNativeSkillCommand.h"
@@ -135,7 +136,7 @@ struct RecoveredWorldRecords {
                                 RecoveredSpectatorClose::Request,TaiwanNativeSkillCommand::WireRecord,TaiwanNativeBlacklist::Request,TaiwanNativePartyMenu::Request,TaiwanNativeClientOptions::Control,RecoveredWorldSkillRequest::Request,RecoveredPrebornChoiceRequest::Mask,RecoveredPrebornChoiceRequest::Words,
                                 RecoveredSkillSelectionRequest::Request,RecoveredBattleRowPreference::Request,
                                 RecoveredSosSupportRequest::Request,RecoveredSosBattleCommand::Request,RecoveredBattleFleeCommand::Request,
-                                RecoveredTeamRequest57::Request,RecoveredPartyExitRequest5A::Request>;
+                                RecoveredTeamRequest57::Request,RecoveredPartyExitRequest5A::Request,RecoveredBattleRowSwapCommand::Request>;
     static constexpr std::size_t max_logical_size = RecoveredWorldFrame::max_logical_size;
 
     // C2S 9A is a client diagnostic/log record, not a gameplay action. Keep
@@ -589,6 +590,11 @@ struct RecoveredWorldRecords {
                     const auto sos=RecoveredSosBattleCommand::decode(remaining.first(size));
                     if(!sos)return {};
                     records.emplace_back(*sos);offset+=size;break;
+                }
+                if(remaining[2]==9) {
+                    const auto swap=RecoveredBattleRowSwapCommand::decode(remaining.first(size));
+                    if(!swap)return {};
+                    records.emplace_back(*swap);offset+=size;break;
                 }
                 if(native_skill_commands && (remaining[2]==3 || remaining[2]==0x83)) {
                     const auto skill=TaiwanNativeSkillCommand::parse_wire(remaining.first(size));

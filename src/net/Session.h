@@ -279,6 +279,25 @@ public:
         virtual void owned_pve_written(Session&,const OwnedPveBinding&,
             std::uint64_t sequence,bool written)=0;
     };
+    // Exact private successful Return lineage. Only the actual final Return
+    // whole Write + WORLD renewal can issue it; it does not replay Entry or
+    // certify pet/inventory/database material by itself.
+    class OwnedPveReturnSource {
+    public:
+        OwnedPveReturnSource(const OwnedPveReturnSource&)=default;
+        OwnedPveReturnSource& operator=(const OwnedPveReturnSource&)=default;
+        const OwnedPveBinding& binding()const noexcept{return binding_;}
+        const NormalWorldInitialization& initialization()const noexcept{return initialization_;}
+        NormalWorldInitialization predecessor_initialization()const{return binding_.initialization();}
+        bool current(Session&)const noexcept;
+        bool same_source(const OwnedPveReturnSource& other)const noexcept{return binding_.same_binding(other.binding_);}
+    private:
+        friend class Session;
+        OwnedPveReturnSource(OwnedPveBinding binding,NormalWorldInitialization initialization)
+            :binding_(std::move(binding)),initialization_(std::move(initialization)){}
+        OwnedPveBinding binding_;
+        NormalWorldInitialization initialization_;
+    };
     // Pure GAME observation of a quiet actual normal owner; no reservation,
     // transition, grant or durable retry. A false result must be awaited.
     bool owned_pve_entry_available_on_game() const noexcept;
@@ -301,6 +320,8 @@ public:
     void prepare_owned_pve_return(const OwnedPveBinding&,
         const RecoveredWorldRecords::ContextNotification&);
     bool complete_owned_pve_return(const OwnedPveBinding&) noexcept;
+    std::optional<OwnedPveReturnSource> owned_pve_return_source(const OwnedPveBinding&)const;
+    bool owned_pve_return_current(const OwnedPveReturnSource&)const noexcept;
     // Called only after the actual returned source queued its fresh ordinary
     // WORLD reconciliation. That queue handoff is not terminal Written.
     void resume_owned_pve_return_input(const OwnedPveBinding&);

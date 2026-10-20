@@ -10,3 +10,8 @@ context 只有實際 Session 收到的原始 Record occurrence 可以交給 prep
 返回內容由當前真正 WORLD 來源新觀測，允許完整有界 aggregate，依原生 record 邊界分 frame；不重播最初2A／CF／30來冒充回到世界。
 釋放前同交易核完整 room／member／return ledger 與所有 Return Written。其他參與者的 claim、HP、RNG、返回權不一併清除。
 正常返回後才呼應用程式 returned callback 接回 movement／title／visibility。傳輸失敗與真斷線另走 Retired，不冒稱 completed=1。
+completed 不表示後續所有應用程式回呼都成功。私有 ReturnContinuation、Session 前後 INIT
+及入戰前捕獲的資料來源要共同核對，才可一次接回原寵物／技能資料；不能靠數值或改舊 token。
+應用程式接續若在提交後失敗，關閉本人並保留真正 durable 完成紀錄，不假稱 rollback。
+
+return_context 已保留期間只允許同人的 Return 輸出；其他成員斷線不會在返回框之後追加83／86。真正 Returned 之後續接失敗只關閉該人；房間本身來源或保存不確定時才整房隔離。

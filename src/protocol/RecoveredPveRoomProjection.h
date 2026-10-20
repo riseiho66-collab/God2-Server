@@ -5,6 +5,7 @@
 #include "protocol/RecoveredBattleAction08Control.h"
 #include "protocol/RecoveredBattleExperience.h"
 #include "protocol/RecoveredBattlePlayerAppearance.h"
+#include "protocol/RecoveredBattleRowSwapResult.h"
 #include <map>
 #include <stdexcept>
 
@@ -42,6 +43,7 @@ struct RecoveredPveRoomProjection {
         // Actual complete native89 result. No awards/default padding inferred.
         // Client0B/context and return-WORLD barriers belong to the actual host.
         std::optional<RecoveredBattleExperience::Record> terminal;
+        std::optional<RecoveredBattleRowSwapResult::Record> row_swap;
     };
     using Profiles=std::map<std::uint64_t,RecipientProfile>;
     // Each output contains whole records and is bounded by the native logical

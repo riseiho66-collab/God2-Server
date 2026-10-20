@@ -38,7 +38,13 @@ void add_member(T::Snapshot& state,T::MemberInput input,bool initial){
             "PvE duplicate Session/native actor incarnation");
         require(other.input.identity.channel==i.channel&&other.input.return_position.area==input.return_position.area&&
             other.input.return_position.scene==input.return_position.scene,"PvE admission crosses channel/scene");
+        if(input.reserved_partner)require(other.primary_position()!=*input.reserved_partner&&
+            other.partner_position()!=input.reserved_partner,"PvE configured reserved pair overlaps another member");
+        require(!other.partner_position()||*other.partner_position()!=input.primary_slot,"PvE primary enters another member's reserved pair");
     }
+    if(input.reserved_partner)require(*input.reserved_partner<14&&*input.reserved_partner!=input.primary_slot&&
+        (!input.pet||input.pet->actor_slot==*input.reserved_partner)&&!state.checkpoint.snapshot.actors[*input.reserved_partner],
+        "PvE configured pair is not a distinct free actual topology endpoint");
     require(!state.checkpoint.snapshot.actors[input.primary_slot],"PvE primary slot already occupied");
     state.checkpoint.snapshot.actors[input.primary_slot]=player(input);
     if(input.pet){require(input.pet->actor_slot<14&&input.pet->actor_slot!=input.primary_slot&&
@@ -48,6 +54,7 @@ void add_member(T::Snapshot& state,T::MemberInput input,bool initial){
         state.checkpoint.snapshot.actors[input.pet->actor_slot]=actor;
     }
     T::Member member;member.input=std::move(input);member.grant_epoch=state.grant_epoch;
+    member.assignment=member.positions();member.admission_source=member.input;
     // CUSTOM-0161: initial entry carries the first grants. A late member waits
     // for the next explicit grant_round, never resets already-consumed turns.
     member.primary_grant=initial;member.secondary_grant=initial&&member.input.pet&&
@@ -58,8 +65,8 @@ void revoke_dead(T::Snapshot& state){
     for(auto& [id,m]:state.members){(void)id;
         const bool usable=m.status!=T::MemberStatus::Withdrawn&&m.status!=T::MemberStatus::Returned&&!m.disconnected&&!m.return_context&&
             state.checkpoint.snapshot.state==BattleState::Active;
-        if(!usable||!state.checkpoint.snapshot.actors[m.input.primary_slot]->hp)m.primary_grant=false;
-        if(!usable||!m.input.pet||!state.checkpoint.snapshot.actors[m.input.pet->actor_slot]->hp)m.secondary_grant=false;
+        if(!usable||!state.checkpoint.snapshot.actors[m.primary_position()]->hp)m.primary_grant=false;
+        if(!usable||!m.input.pet||!state.checkpoint.snapshot.actors[*m.pet_position()]->hp)m.secondary_grant=false;
     }
 }
 }
@@ -96,6 +103,7 @@ void OwnedPveRoomState::append(State& s,std::vector<Types::Output> outputs,bool 
     for(auto& output:outputs){const auto at=s.members.find(output.character);
         require(at!=s.members.end()&&at->second.status!=Types::MemberStatus::Returned&&!at->second.disconnected,
             "PvE output names no retained live recipient");
+        require(!at->second.return_context||output.kind==Types::OutputKind::Return,"PvE battle publication would trespass an individual's retained return transport");
         require(!output.logical.empty()&&output.logical.size()<=RecoveredWorldFrame::max_logical_size,
             "PvE actual projection is empty/too large");
         require(bool(RecoveredTaiwanServerRecords::read(output.logical)),"PvE projection is not a complete native server record sequence");
@@ -105,13 +113,18 @@ void OwnedPveRoomState::append(State& s,std::vector<Types::Output> outputs,bool 
         s.outbox.push_back({s.next_sequence++,at->second.input.identity,output.kind,std::move(output.logical),Types::OutputStatus::Pending});
         recipients.insert(output.character);
     }
-    if(every)for(const auto& [id,m]:s.members)if(m.status!=Types::MemberStatus::Returned&&!m.disconnected)
+    if(every)for(const auto& [id,m]:s.members)if(m.status!=Types::MemberStatus::Returned&&!m.disconnected&&!m.return_context)
         require(recipients.contains(id),"PvE whole-room publication omitted a current recipient");
 }
-void OwnedPveRoomState::project(Operation& op,State& next,const Types::Change& change,const Types::Project& encode){
-    require(bool(encode),"PvE actual projection provider missing");op.current();auto outputs=encode(next,change);op.current();append(next,std::move(outputs),true);
+void OwnedPveRoomState::project(Operation& op,State& next,const Types::Change& change,const Types::Project& encode,bool every){
+    require(bool(encode),"PvE actual projection provider missing");auto qualified=change;
+    if(change.result||change.kind==Types::Change::Kind::Support||change.kind==Types::Change::Kind::Withdrawal||change.kind==Types::Change::Kind::RowSwap||change.kind==Types::Change::Kind::Pass||change.kind==Types::Change::Kind::Admission){
+        require(next.animation_sequence<std::uint64_t(INT64_MAX),"PvE animation label sequence exhausted");
+        qualified.animation_group=std::uint8_t(next.animation_sequence%255);++next.animation_sequence;
+    }
+    op.current();auto outputs=encode(next,qualified);op.current();append(next,std::move(outputs),every);
 }
-void OwnedPveRoomState::publish(Operation& op,std::shared_ptr<State> next,const Types::PureCurrent& current){
+std::optional<SqliteOwnedPveRoomRepository::ReturnContinuation> OwnedPveRoomState::publish(Operation& op,std::shared_ptr<State> next,const Types::PureCurrent& current){
     op.current();check_current(current);op.current();
     next->revision=advance(op.room->state->revision);
     // Full historical bytes stay in the durable outbox table. Runtime retains
@@ -122,15 +135,17 @@ void OwnedPveRoomState::publish(Operation& op,std::shared_ptr<State> next,const 
         return std::any_of(op.room->state->outbox.begin(),op.room->state->outbox.end(),[&](const auto& old){return old.sequence==d.sequence&&old.status==Types::OutputStatus::Failed;});
     });
     for(auto& [id,m]:next->members){(void)id;
-        if(m.status!=Types::MemberStatus::Returned&&m.status!=Types::MemberStatus::Retired)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,m.status==Types::MemberStatus::Withdrawn);
+        if(m.status!=Types::MemberStatus::Returned&&m.status!=Types::MemberStatus::Retired)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,m.status==Types::MemberStatus::Withdrawn,m.positions());
     }
     const auto before=op.room->state;op.persisting=true;
-    const auto committed=repository_.replace(op.room->ticket,*before,*next,[&]{return !stopped_&&!op.room->invalidated&&current&&current();});
+    const auto committed=[&]{try{return repository_.replace(op.room->ticket,*before,*next,[&]{return !stopped_&&!op.room->invalidated&&current&&current();});}
+        catch(...){if(repository_.commit_uncertain(op.room->ticket))op.room->recovery=true;throw;}}();
     require(committed.durable,"PvE repository returned without durable commit");
     // Durable after-state always replaces memory, even if COMMIT observers
     // retired the caller. Never retry the old resources/RNG/model as rollback.
     op.room->state=std::move(next);
     if(!committed.current||op.room->invalidated||stopped_)op.room->recovery=true;
+    return committed.current&&!op.room->recovery?committed.returned:std::nullopt;
 }
 OwnedPveRoomState::Ticket OwnedPveRoomState::create(Types::Encounter input,Types::Project encode,Types::PureCurrent current){
     require(thread_==std::this_thread::get_id()&&!stopped_,"PvE creation GAME owner unavailable");
@@ -156,11 +171,11 @@ OwnedPveRoomState::Ticket OwnedPveRoomState::create(Types::Encounter input,Types
         std::map<std::uint64_t,std::shared_ptr<Room>> staged;staged.emplace(ticket.id(),room);auto node=staged.extract(ticket.id());
         const auto committed=repository_.activate(ticket,*next,guard);require(committed.durable,"PvE activation not durable");
         room->recovery=!committed.current||stopped_||creation_reentered_;rooms_.insert(std::move(node));return ticket;
-    }catch(...){repository_.abandon(ticket);throw;}
+    }catch(...){if(!repository_.commit_uncertain(ticket))repository_.abandon(ticket);throw;}
 }
 void OwnedPveRoomState::admit(const Ticket& ticket,Types::MemberInput input,Types::Project encode,Types::PureCurrent current){
     Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);
-    auto next=std::make_shared<State>(*op.room->state);require(next->support_enabled&&next->checkpoint.snapshot.state==BattleState::Active,"PvE support is not currently open");
+    auto next=std::make_shared<State>(*op.room->state);require(!next->pending_swap&&next->support_enabled&&next->checkpoint.snapshot.state==BattleState::Active,"PvE support is not currently open or formation progress is pending");
     const auto id=input.identity.character;add_member(*next,std::move(input),false);
     next->checkpoint.snapshot.revision=advance(next->checkpoint.snapshot.revision);(void)Battle::restore(next->checkpoint);
     project(op,*next,{Types::Change::Kind::Admission,id,{}},encode);
@@ -169,9 +184,9 @@ void OwnedPveRoomState::admit(const Ticket& ticket,Types::MemberInput input,Type
 }
 void OwnedPveRoomState::toggle_support(const Ticket& ticket,Types::Identity identity,std::uint64_t epoch,std::uint8_t slot,bool enabled,Types::Project encode,Types::PureCurrent current){
     Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);auto next=std::make_shared<State>(*op.room->state);
-    auto& m=member(*next,identity);require(m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&
+    auto& m=member(*next,identity);require(!next->pending_swap&&m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&
         m.grant_epoch==epoch&&next->checkpoint.snapshot.state==BattleState::Active,"PvE support control has no current owned grant");
-    const bool primary=slot==m.input.primary_slot,secondary=m.input.pet&&slot==m.input.pet->actor_slot;
+    const bool primary=slot==m.primary_position(),secondary=m.input.pet&&slot==*m.pet_position();
     require(((primary&&m.primary_grant)||(secondary&&m.secondary_grant))&&
         next->checkpoint.snapshot.actors[slot]&&next->checkpoint.snapshot.actors[slot]->hp,
         "PvE support control does not own this living granted actor");
@@ -182,64 +197,121 @@ void OwnedPveRoomState::toggle_support(const Ticket& ticket,Types::Identity iden
 }
 void OwnedPveRoomState::act(const Ticket& ticket,Types::Identity identity,std::uint64_t epoch,BattleAction action,Battle::Rule rule,Types::Project encode,Types::PureCurrent current){
     Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);auto next=std::make_shared<State>(*op.room->state);
-    auto& m=member(*next,identity);require(m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&m.grant_epoch==epoch,"PvE command has no current actual member/grant epoch");
-    const bool primary=action.source==m.input.primary_slot,secondary=m.input.pet&&action.source==m.input.pet->actor_slot;
+    auto& m=member(*next,identity);require(!next->pending_swap&&m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&m.grant_epoch==epoch,"PvE command has no current actual member/grant epoch");
+    const bool primary=action.source==m.primary_position(),secondary=m.input.pet&&action.source==*m.pet_position();
     require((primary&&m.primary_grant)||(secondary&&m.secondary_grant),"PvE command does not own this living granted actor");
     require(bool(rule),"PvE trusted action rule missing");auto battle=Battle::restore(next->checkpoint);std::optional<BattleActionResult> result;
     (void)battle.act(identity.character,next->checkpoint.snapshot.revision,action,[&](const auto& r){op.current();check_current(current);auto value=rule(r);op.current();check_current(current);return value;},
         [&](const auto&,const auto& r){result=r;return std::vector<std::uint8_t>{1};}); // Internal computation marker, NEVER native output.
     next->checkpoint=battle.checkpoint();if(primary)m.primary_grant=false;else m.secondary_grant=false;revoke_dead(*next);
-    for(auto& [id,peer]:next->members){(void)id;if(peer.status!=Types::MemberStatus::Returned&&peer.status!=Types::MemberStatus::Retired)peer.input=repository_.updated_resources(std::move(peer.input),next->checkpoint.snapshot,peer.status==Types::MemberStatus::Withdrawn);}
+    for(auto& [id,peer]:next->members){(void)id;if(peer.status!=Types::MemberStatus::Returned&&peer.status!=Types::MemberStatus::Retired)peer.input=repository_.updated_resources(std::move(peer.input),next->checkpoint.snapshot,peer.status==Types::MemberStatus::Withdrawn,peer.positions());}
     project(op,*next,{next->checkpoint.snapshot.state==BattleState::Finished?Types::Change::Kind::Terminal:Types::Change::Kind::Action,identity.character,std::move(result)},encode);publish(op,std::move(next),current);
 }
 void OwnedPveRoomState::act_ai(const Ticket& ticket,BattleAction action,Battle::Rule rule,Types::Project encode,Types::PureCurrent current){
     Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);auto next=std::make_shared<State>(*op.room->state);
-    require(action.source<28&&next->checkpoint.snapshot.actors[action.source]&&next->checkpoint.snapshot.actors[action.source]->controller==0,"PvE AI command lacks actual encounter actor");
+    require(!next->pending_swap&&action.source<28&&next->checkpoint.snapshot.actors[action.source]&&next->checkpoint.snapshot.actors[action.source]->controller==0,"PvE AI command lacks actual encounter actor");
     require(bool(rule),"PvE AI trusted rule missing");auto battle=Battle::restore(next->checkpoint);std::optional<BattleActionResult> result;
     (void)battle.act(0,next->checkpoint.snapshot.revision,action,[&](const auto& r){op.current();check_current(current);auto value=rule(r);op.current();check_current(current);return value;},
         [&](const auto&,const auto& r){result=r;return std::vector<std::uint8_t>{1};});
     next->checkpoint=battle.checkpoint();revoke_dead(*next);
-    for(auto& [id,m]:next->members){(void)id;if(m.status!=Types::MemberStatus::Returned&&m.status!=Types::MemberStatus::Retired)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,m.status==Types::MemberStatus::Withdrawn);}
+    for(auto& [id,m]:next->members){(void)id;if(m.status!=Types::MemberStatus::Returned&&m.status!=Types::MemberStatus::Retired)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,m.status==Types::MemberStatus::Withdrawn,m.positions());}
     project(op,*next,{next->checkpoint.snapshot.state==BattleState::Finished?Types::Change::Kind::Terminal:Types::Change::Kind::Action,0,std::move(result)},encode);publish(op,std::move(next),current);
 }
 void OwnedPveRoomState::grant_round(const Ticket& ticket,Types::Project encode,Types::PureCurrent current,bool observed){
     Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);auto next=std::make_shared<State>(*op.room->state);
-    require(next->checkpoint.snapshot.state==BattleState::Active,"PvE finished room cannot issue grants");
+    require(!next->pending_swap&&next->checkpoint.snapshot.state==BattleState::Active,"PvE finished/pending-formation room cannot issue grants");
     for(const auto& [id,m]:next->members){(void)id;require(!m.primary_grant&&!m.secondary_grant,"PvE previous actor grants remain unconsumed");}
     next->grant_epoch=advance(next->grant_epoch);
     for(auto& [id,m]:next->members){(void)id;if(m.status==Types::MemberStatus::Returned||m.status==Types::MemberStatus::Retired)continue;
         m.grant_epoch=next->grant_epoch;if(m.status!=Types::MemberStatus::Active||m.disconnected||m.return_context)continue;
-        m.primary_grant=next->checkpoint.snapshot.actors[m.input.primary_slot]->hp!=0;
-        m.secondary_grant=m.input.pet&&next->checkpoint.snapshot.actors[m.input.pet->actor_slot]->hp!=0;
+        m.primary_grant=next->checkpoint.snapshot.actors[m.primary_position()]->hp!=0;
+        m.secondary_grant=m.input.pet&&next->checkpoint.snapshot.actors[*m.pet_position()]->hp!=0;
     }
     project(op,*next,{Types::Change::Kind::Grant,0,{},{},observed},encode);publish(op,std::move(next),current);
 }
 void OwnedPveRoomState::pass(const Ticket& ticket,Types::Identity identity,std::uint64_t epoch,std::uint8_t slot,Types::Project encode,Types::PureCurrent current){
     Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);
     auto next=std::make_shared<State>(*op.room->state);auto& m=member(*next,identity);
-    require(m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&
+    require(!next->pending_swap&&m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&
         next->checkpoint.snapshot.state==BattleState::Active&&m.grant_epoch==epoch,
         "PvE CUSTOM pass has no current actual member/grant");
-    const bool primary=slot==m.input.primary_slot,secondary=m.input.pet&&slot==m.input.pet->actor_slot;
+    const bool primary=slot==m.primary_position(),secondary=m.input.pet&&slot==*m.pet_position();
     require(((primary&&m.primary_grant)||(secondary&&m.secondary_grant))&&
         next->checkpoint.snapshot.actors[slot]&&next->checkpoint.snapshot.actors[slot]->hp,
         "PvE CUSTOM pass does not own this living grant");
     if(primary)m.primary_grant=false;else m.secondary_grant=false;
-    project(op,*next,{Types::Change::Kind::Grant,identity.character,{},slot},encode);
+    project(op,*next,{Types::Change::Kind::Pass,identity.character,{},slot},encode);
     publish(op,std::move(next),current);
+}
+void OwnedPveRoomState::swap_pair(const Ticket& ticket,Types::Identity identity,std::uint64_t epoch,
+        std::uint64_t assignment_revision,std::uint8_t slot,Types::Project encode,Types::PureCurrent current){
+    Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);
+    auto next=std::make_shared<State>(*op.room->state);auto& m=member(*next,identity);
+    const auto before=m.positions();const auto partner=m.partner_position();
+    require(!next->pending_swap&&m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&
+        next->checkpoint.snapshot.state==BattleState::Active&&m.grant_epoch==epoch&&before.revision==assignment_revision&&
+        partner&&*partner<14&&*partner!=before.primary,"PvE row swap has no current configured pair/epoch");
+    const bool primary=slot==before.primary,secondary=before.pet&&slot==*before.pet;
+    require(((primary&&m.primary_grant)||(!m.primary_grant&&secondary&&m.secondary_grant))&&slot<14&&
+        next->checkpoint.snapshot.actors[slot]&&next->checkpoint.snapshot.actors[slot]->hp,
+        "PvE row swap has no current living actual role grant");
+    // CUSTOM-0162 authorizes this explicit server pair, including a reserved
+    // empty endpoint. Move whole actors, not HP/stat values or pet raw sources.
+    auto& actors=next->checkpoint.snapshot.actors;
+    require(actors[before.primary]&&actors[before.primary]->controller==identity.character&&
+        (before.pet?(actors[*partner]&&actors[*partner]->controller==identity.character):!actors[*partner]),
+        "PvE row swap pair occupancy does not match exact role ownership");
+    std::swap(actors[before.primary],actors[*partner]);
+    if(actors[before.primary])actors[before.primary]->position=before.primary;
+    if(actors[*partner])actors[*partner]->position=*partner;
+    m.assignment=Types::Assignment{*partner,before.pet?std::optional{before.primary}:std::nullopt,advance(before.revision)};
+    if(primary)m.primary_grant=false;else m.secondary_grant=false;
+    next->checkpoint.snapshot.revision=advance(next->checkpoint.snapshot.revision);(void)Battle::restore(next->checkpoint);
+    next->pending_swap=State::PendingSwap{identity,before,slot};
+    project(op,*next,{Types::Change::Kind::RowSwap,identity.character,{},slot,false,before},encode);
+    publish(op,std::move(next),current);
+}
+void OwnedPveRoomState::complete_swap(const Ticket& ticket,Types::Project encode,Types::PureCurrent current){
+    Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);
+    auto next=std::make_shared<State>(*op.room->state);require(bool(next->pending_swap),"PvE formation has no pending progress edge");
+    const auto pending=*next->pending_swap;next->pending_swap.reset();
+    // Host's qualified new-stage client progress is CUSTOM, never a native
+    // animation ACK. No fresh turn/RNG/HP/reset is minted by this completion.
+    if(next->checkpoint.snapshot.state==BattleState::Active)
+        project(op,*next,{Types::Change::Kind::RowSwapComplete,pending.identity.character,{},pending.actor_position,false,pending.before},encode,false);
+    publish(op,std::move(next),current);
+}
+void OwnedPveRoomState::refresh_grants(const Ticket& ticket,Types::Identity identity,Types::Project encode,Types::PureCurrent current){
+    refresh_grants(ticket,std::vector{identity},std::move(encode),std::move(current));
+}
+void OwnedPveRoomState::refresh_grants(const Ticket& ticket,std::vector<Types::Identity> identities,Types::Project encode,Types::PureCurrent current){
+    Operation op(*this,find(ticket));check_current(current);require_drained(*op.room->state);
+    auto next=std::make_shared<State>(*op.room->state);std::set<std::uint64_t> recipients;
+    require(!identities.empty(),"PvE grant refresh has no actual reporting recipients");
+    for(const auto& identity:identities){const auto& m=member(*next,identity);
+    require(recipients.insert(identity.character).second&&!next->pending_swap&&m.status==Types::MemberStatus::Active&&!m.disconnected&&!m.return_context&&
+        next->checkpoint.snapshot.state==BattleState::Active&&(m.primary_grant||m.secondary_grant),"PvE refresh has no same-epoch retained role grant");
+    }
+    // Native0B common cleanup can consume A/B even though the server-owned
+    // command grant is not consumed. Re-advertise only exact remaining roles.
+    require(bool(encode),"PvE grant refresh projection missing");op.current();
+    auto outputs=encode(*next,{Types::Change::Kind::Grant,0,{}});op.current();
+    std::erase_if(outputs,[&](const auto& output){return !recipients.contains(output.character);});
+    for(const auto id:recipients)require(std::any_of(outputs.begin(),outputs.end(),[&](const auto& o){return o.character==id;}),"PvE grant refresh omitted exact reporting recipient");
+    append(*next,std::move(outputs),false);publish(op,std::move(next),current);
 }
 void OwnedPveRoomState::withdraw(const Ticket& ticket,Types::Identity identity,bool disconnected,Types::Project encode,Types::PureCurrent current){
     if(disconnected){retire_disconnected(ticket,{identity},std::move(encode),std::move(current));return;}
     Operation op(*this,find(ticket));check_current(current);auto next=std::make_shared<State>(*op.room->state);auto& m=member(*next,identity);
     require(disconnected||!m.return_context,"PvE return already owns this member");
     // Capture actual pre-withdraw HP/MP in the SAME future resource transaction.
-    if(m.status!=Types::MemberStatus::Withdrawn)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,false);
+    if(m.status!=Types::MemberStatus::Withdrawn)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,false,m.positions());
     m.status=disconnected?Types::MemberStatus::Retired:Types::MemberStatus::Withdrawn;m.disconnected=disconnected;m.primary_grant=false;m.secondary_grant=false;
     // An already finished result/RNG is immutable. Zeroing its last victorious
     // actor after both sides' death would invent an impossible second outcome.
     if(next->checkpoint.snapshot.state==BattleState::Active){
-        next->checkpoint.snapshot.actors[m.input.primary_slot]->hp=0;
-        if(m.input.pet)next->checkpoint.snapshot.actors[m.input.pet->actor_slot]->hp=0;
+        next->checkpoint.snapshot.actors[m.primary_position()]->hp=0;
+        if(m.input.pet)next->checkpoint.snapshot.actors[*m.pet_position()]->hp=0;
         std::array<bool,2> living{};for(const auto& a:next->checkpoint.snapshot.actors)if(a&&a->hp)living[a->position/14]=true;
         if(!living[0]||!living[1]){next->checkpoint.snapshot.state=BattleState::Finished;next->checkpoint.snapshot.victorious_side=living[0]?0:1;}
     }
@@ -253,16 +325,18 @@ void OwnedPveRoomState::retire_disconnected(const Ticket& ticket,std::vector<Typ
     auto next=std::make_shared<State>(*op.room->state);std::set<std::uint64_t> unique;
     const bool active=next->checkpoint.snapshot.state==BattleState::Active;
     for(const auto& identity:identities){require(unique.insert(identity.character).second,"PvE duplicate cleanup member");auto& m=member(*next,identity);
-        if(m.status!=Types::MemberStatus::Withdrawn)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,false);
+        if(m.status!=Types::MemberStatus::Withdrawn)m.input=repository_.updated_resources(std::move(m.input),next->checkpoint.snapshot,false,m.positions());
         m.status=Types::MemberStatus::Retired;m.disconnected=true;m.primary_grant=false;m.secondary_grant=false;
-        if(active){next->checkpoint.snapshot.actors[m.input.primary_slot]->hp=0;if(m.input.pet)next->checkpoint.snapshot.actors[m.input.pet->actor_slot]->hp=0;}
+        if(active){next->checkpoint.snapshot.actors[m.primary_position()]->hp=0;if(m.input.pet)next->checkpoint.snapshot.actors[*m.pet_position()]->hp=0;}
         for(auto& d:next->outbox)if(d.recipient==identity&&d.status==Types::OutputStatus::Pending)d.status=Types::OutputStatus::Failed;
     }
     if(active){std::array<bool,2> living{};for(const auto& a:next->checkpoint.snapshot.actors)if(a&&a->hp)living[a->position/14]=true;
         if(!living[0]||!living[1]){next->checkpoint.snapshot.state=BattleState::Finished;next->checkpoint.snapshot.victorious_side=living[0]?0:1;}}
     next->checkpoint.snapshot.revision=advance(next->checkpoint.snapshot.revision);(void)Battle::restore(next->checkpoint);revoke_dead(*next);
     next->closed=std::all_of(next->members.begin(),next->members.end(),[](const auto& p){return p.second.status==Types::MemberStatus::Returned||p.second.status==Types::MemberStatus::Retired;});
-    for(const auto& identity:identities)project(op,*next,{Types::Change::Kind::Withdrawal,identity.character,{}},encode);
+    // A finished room has already published its terminal presentation. Private
+    // disconnect saving cannot append new83/86 after89 or reopen the UI.
+    if(active)for(const auto& identity:identities)project(op,*next,{Types::Change::Kind::Withdrawal,identity.character,{}},encode);
     publish(op,std::move(next),current);
 }
 std::vector<OwnedPveRoomTypes::Delivery> OwnedPveRoomState::pending(const Ticket& ticket)const{
@@ -298,7 +372,7 @@ void OwnedPveRoomState::prepare_return(const Ticket& ticket,Types::Identity iden
     append(*next,std::move(outputs),false);m.return_sequence=next->next_sequence-1;
     publish(op,std::move(next),current);
 }
-void OwnedPveRoomState::complete_return(const Ticket& ticket,Types::Identity identity,std::array<std::uint8_t,4> context,Types::PureCurrent current){
+SqliteOwnedPveRoomRepository::ReturnContinuation OwnedPveRoomState::complete_return(const Ticket& ticket,Types::Identity identity,std::array<std::uint8_t,4> context,Types::PureCurrent current){
     Operation op(*this,find(ticket));check_current(current);auto next=std::make_shared<State>(*op.room->state);auto& m=member(*next,identity);
     require(m.return_context&&*m.return_context==context,"PvE terminal context differs from actual retained return");
     const auto at=std::find_if(next->outbox.begin(),next->outbox.end(),[&](const auto& d){return d.sequence==m.return_sequence;});
@@ -307,7 +381,8 @@ void OwnedPveRoomState::complete_return(const Ticket& ticket,Types::Identity ide
         return d.recipient!=identity||d.kind!=Types::OutputKind::Return||
             (d.sequence<=m.return_sequence&&d.status==Types::OutputStatus::Written);}),
         "PvE return has an earlier pending/failed aggregate frame");
-    m.status=Types::MemberStatus::Returned;next->closed=std::all_of(next->members.begin(),next->members.end(),[](const auto& p){return p.second.status==Types::MemberStatus::Returned||p.second.status==Types::MemberStatus::Retired;});publish(op,std::move(next),current);
+    m.status=Types::MemberStatus::Returned;next->closed=std::all_of(next->members.begin(),next->members.end(),[](const auto& p){return p.second.status==Types::MemberStatus::Returned||p.second.status==Types::MemberStatus::Retired;});
+    auto continuation=publish(op,std::move(next),current);require(bool(continuation),"PvE durable return has no current private continuation");return *continuation;
 }
 std::shared_ptr<const OwnedPveRoomTypes::Snapshot> OwnedPveRoomState::inspect(const Ticket& ticket)const{const auto room=find(ticket);require(!room->recovery,"PvE durable state needs recovery");return room->state;}
 bool OwnedPveRoomState::recovery_required(const Ticket& ticket)const noexcept{const auto at=rooms_.find(ticket.id());return at==rooms_.end()||!at->second->ticket.same_incarnation(ticket)||at->second->recovery;}
