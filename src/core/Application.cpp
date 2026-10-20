@@ -1855,8 +1855,11 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             std::map<std::uint64_t,std::map<std::uint64_t,std::vector<std::uint8_t>>> streamer_sent;
             const bool player_presence_enabled=config.diagnostic_player_visibility ||
                 config.diagnostic_town_player_visibility;
-            const auto deliver_visibility=[&](std::vector<RecoveredVisibility::Delivery> deliveries) {
+            const auto deliver_visibility=[&](std::vector<RecoveredVisibility::Delivery> deliveries,const std::function<bool()>& source_current={}) {
+                const auto source_cut=[&]{if(source_current&&!source_current())
+                    throw DatabaseError("Visibility operation lost its original publication source");};
                 for(auto& delivery:deliveries) {
+                    source_cut();
                     const auto found=visibility_sessions.find(delivery.recipient);
                     if(found!=visibility_sessions.end())
                         if(auto peer=found->second.lock()) {
@@ -1867,16 +1870,60 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                             std::optional<RecoveredCharacterPose::LogicalRecord> pose_after_spawn;
                             if(const auto spawn=RecoveredRemoteActor::parse_logical(delivery.logical)) {
                                 pose_after_spawn=player_visibility.pose_after_spawn(*spawn);
-                                const auto source=player_visibility.snapshot_character(spawn->identity());
-                                if(source)if(const auto saved=database.role_text().load(source->account,source->character)) {
-                                    const auto projected=RecoveredPeerRoleText::per_recipient(*spawn,saved,
-                                        peer->recovered_client_language()==1?936:950);
+                                const auto source=player_visibility.snapshot_spawn(*spawn);
+                                if(!source)throw DatabaseError("Visibility spawn lost its actual full owner source");
+                                const auto sender_at=visibility_sessions.find(source->session);
+                                const auto sender=sender_at==visibility_sessions.end()?std::shared_ptr<Session>{}:sender_at->second.lock();
+                                const auto recipient=player_visibility.snapshot(peer->id());
+                                if(!sender||sender->closing()||sender->account_id!=source->account||sender->character_id!=source->character||
+                                   !recipient||recipient->account!=peer->account_id||recipient->character!=peer->character_id||
+                                   recipient->location!=source->location)
+                                    throw DatabaseError("Visibility spawn lacks its actual source/recipient scene owners");
+                                const auto movement=recovered_movement.get();
+                                const auto sender_movement=movement?movement->observe_world_location(source->session,source->account,source->character):
+                                    std::optional<RecoveredMovementService::WorldLocationObservation>{};
+                                const auto recipient_movement=movement?movement->observe_world_location(peer->id(),peer->account_id,peer->character_id):
+                                    std::optional<RecoveredMovementService::WorldLocationObservation>{};
+                                const auto pve=pve_application.get();
+                                if(pve&&(!sender_movement||!recipient_movement||
+                                   source->location!=RecoveredVisibility::Scene{sender_movement->position().area,sender_movement->position().scene}||
+                                   recipient->location!=RecoveredVisibility::Scene{recipient_movement->position().area,recipient_movement->position().scene}))
+                                    throw DatabaseError("Visibility spawn lost actual PvE WORLD movement owners");
+                                const auto account=peer->account_id,character=peer->character_id,battle=peer->battle_generation();
+                                const auto phase=peer->state();const auto language=peer->recovered_client_language();
+                                const auto sender_phase=sender->state();const auto sender_battle=sender->battle_generation();
+                                const auto saved=database.role_text().load(source->account,source->character);
+                                source_cut();
+                                const auto after=player_visibility.snapshot_spawn(*spawn);
+                                const auto recipient_after=player_visibility.snapshot(peer->id());
+                                const auto sender_now=visibility_sessions.find(source->session);
+                                const auto recipient_now=visibility_sessions.find(peer->id());
+                                if(!after||after->session!=source->session||after->account!=source->account||
+                                   sender_now==visibility_sessions.end()||sender_now->second.lock()!=sender||
+                                   recipient_now==visibility_sessions.end()||recipient_now->second.lock()!=peer||
+                                   after->character!=source->character||after->location!=source->location||after->pose!=source->pose||
+                                   RecoveredRemoteActorRemove::encode_logical(after->departure)!=RecoveredRemoteActorRemove::encode_logical(source->departure)||
+                                   !recipient_after||recipient_after->account!=recipient->account||recipient_after->character!=recipient->character||
+                                   recipient_after->location!=recipient->location||recipient_after->pose!=recipient->pose||
+                                   RecoveredRemoteActor::encode_logical(recipient_after->spawn)!=RecoveredRemoteActor::encode_logical(recipient->spawn)||
+                                   RecoveredRemoteActorRemove::encode_logical(recipient_after->departure)!=RecoveredRemoteActorRemove::encode_logical(recipient->departure)||
+                                   sender->closing()||sender->account_id!=source->account||sender->character_id!=source->character||
+                                   sender->state()!=sender_phase||sender->battle_generation()!=sender_battle||pve_application.get()!=pve||
+                                   recovered_movement.get()!=movement||(sender_movement&&!movement->world_location_current(*sender_movement))||
+                                   (recipient_movement&&!movement->world_location_current(*recipient_movement))||
+                                   peer->closing()||peer->account_id!=account||peer->character_id!=character||peer->battle_generation()!=battle||
+                                   peer->state()!=phase||peer->recovered_client_language()!=language||
+                                   (pve_application&&pve_application->bound(*peer)))
+                                    throw DatabaseError("Visibility spawn source or recipient retired during role text observation");
+                                if(saved) {
+                                    const auto projected=RecoveredPeerRoleText::per_recipient(*spawn,saved,language==1?936:950);
                                     const auto logical=RecoveredRemoteActor::encode_logical(projected.spawn);
                                     delivery.logical.assign(logical.begin(),logical.end());
                                 }
                             }
-                            peer->send_world_records(std::move(delivery.logical));
+                            source_cut();peer->send_world_records(std::move(delivery.logical));
                             if(pose_after_spawn) {
+                                source_cut();
                                 peer->send_world_records(std::vector<std::uint8_t>(pose_after_spawn->begin(),pose_after_spawn->end()));
                                 spdlog::debug("NATIVE_POSE_REPLAY actor_id={} recipient_session={} mode={} direction={}",
                                     (*pose_after_spawn)[1]+256u*(*pose_after_spawn)[2],delivery.recipient,

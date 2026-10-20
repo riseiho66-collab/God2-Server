@@ -41,6 +41,13 @@ character_profiles：各角色完整、已核對的顯示材料，character 是�
   root_profile：完整 40-byte 角色資料；entry_logical：完整 37-byte 2A 材料。
     比對僅排除已證明的 actor handle、地圖及 X/Y；保留世界 kind、外觀及未知位元。
   primary/pet：完整戰鬥 identity、appearance、hp、mp 材料；沒有材料不得補零。
+    普通 primary 的 identity BYTE9..24 與 BYTE25..40 各須有 NUL，防止目前原生
+    renderer 無界文字讀取／複製。這是既有 Catalog 安全來源限制，Projection
+    入口亦會核對；不截斷／補零，不代表原服命名上限或原生 receiver 拒絕規則。
+    enemy 參數與 pet 的不同欄位不能一律套此兩欄限制。
+    pet 的 identity BYTE9..40 為另一個32-byte來源欄，須在其範圍內有 NUL；
+    敵方 variant400／無普通 appearance／無 MP writer 亦會在 Projection 核對，
+    不能改放敵方位置繞過既有 Catalog 類型資格。
     primary 的已知等級及 HP/MP 由真正角色、資源與 canonical checkpoint
     完整核對後投影，僅替換 identity BYTE2、vitals DWORD5/9；其餘位元保留。
     超過原生 HP DWORD 可表示範圍會拒絕，不截斷。這不是成長或能力公式。

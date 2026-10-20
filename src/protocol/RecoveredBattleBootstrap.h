@@ -20,6 +20,20 @@ struct RecoveredBattleIdentity {
         std::uint16_t identity_word() const noexcept { return word(3); }
         std::uint16_t variant() const noexcept { return word(5); }
         std::uint16_t ordinal() const noexcept { return word(7); }
+        // Call only for the qualified ordinary player branch, never enemy or
+        // pet payloads. Native52CCD0 sends these two16-byte fields to unbounded
+        // strlen/copy renderers5097D0/509E70; no bytes are repaired here.
+        bool player_texts_terminated() const noexcept {
+            const auto nul=[&](std::size_t first,std::size_t last) {
+                return std::find(bytes_.begin()+first,bytes_.begin()+last,std::uint8_t(0))!=bytes_.begin()+last;
+            };
+            return nul(9,25)&&nul(25,41);
+        }
+        // Qualified pet wire9..40 is one string. Native515C90 scans it with
+        // unbounded SCASB before copying; enemy parameters are not this field.
+        bool pet_text_terminated() const noexcept {
+            return std::find(bytes_.begin()+9,bytes_.begin()+41,std::uint8_t(0))!=bytes_.begin()+41;
+        }
         // These accessors apply to the qualified normal EnyName variant only.
         std::optional<std::uint8_t> enemy_area() const noexcept {
             if (variant() != 0x400) return std::nullopt;

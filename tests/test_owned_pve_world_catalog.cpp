@@ -188,6 +188,83 @@ void primary_saved_material(){
     room.checkpoint.snapshot.actors[0]->hp=room.checkpoint.snapshot.actors[0]->max_hp=UINT32_MAX;
     require(catalog.profiles(*scene,room,T::Change{}).at(11).actors.at(0).hp.maximum()==UINT32_MAX);
 }
+void projection_source_boundaries(){
+    using T=god2::OwnedPveRoomTypes;using P=god2::RecoveredPveRoomProjection;
+    god2::StoredPet2Slot one{},two{};const auto source=catalog(one,two);const god2::OwnedPveWorldCatalog immutable(source);
+    const auto* scene=immutable.scene(2,15);require(scene!=nullptr);
+    T::Snapshot room{};room.id=1;room.revision=1;
+    room.checkpoint.snapshot.id=1;room.checkpoint.snapshot.revision=1;
+    T::Member member{};member.status=T::MemberStatus::Active;
+    member.input.identity.character=11;member.input.identity.actor_handle=0x123;
+    member.input.primary_slot=0;member.input.reserved_partner=5;
+    member.assignment=T::Assignment{0,std::nullopt,1};
+    member.input.resources={100,100,10,50,1,"CUSTOM_TEST_NOT_NATIVE"};
+    auto role=bytes(25,0x22);role[1]=1;put(role,17,100);put(role,21,50);
+    std::copy(role.begin(),role.end(),member.input.role.logical.begin());
+    room.members.emplace(11,member);
+    room.checkpoint.snapshot.actors[0]=god2::BattleActor{0,11,100,100,10,50,1,1,1,1};
+    room.checkpoint.snapshot.actors[14]=scene->enemies.front();
+    const T::Change entry{T::Change::Kind::Entry};
+    const auto profiles=immutable.profiles(*scene,room,entry);
+    require(!P::prepare(room,entry,profiles).empty()); // A reserved empty partner is not a pet.
+    const auto refused=[&](const auto& candidate,const auto& materials){
+        bool exact=false;try{(void)P::prepare(candidate,entry,materials);}
+        catch(const P::ProfileRequired&){exact=true;}require(exact);
+    };
+    // Public snapshot carriers must be rejected before optional dereference or
+    // actor-array indexing. Actual Room repository already rejects these.
+    auto drift=room;drift.members.at(11).input.pet=T::PetInput{5,one};refused(drift,profiles);
+    drift=room;drift.members.at(11).assignment->pet=5;refused(drift,profiles);
+    drift=room;drift.members.at(11).input.pet=T::PetInput{5,one};
+    drift.members.at(11).assignment->pet=28;refused(drift,profiles);
+    drift=room;drift.members.at(11).assignment->primary=28;refused(drift,profiles);
+    // The codec remains lossless. Only the qualified primary-output consumer
+    // requires a NUL inside each proven16-byte renderer input field.
+    for(const auto first:{9u,25u}){
+        auto malformed=profiles;
+        auto raw=god2::RecoveredBattleIdentity::encode_logical(malformed.at(11).actors.at(0).identity);
+        std::fill(raw.begin()+first,raw.begin()+first+16,std::uint8_t('A'));
+        const auto parsed=god2::RecoveredBattleIdentity::parse_logical(raw);require(parsed.has_value());
+        require(!parsed->player_texts_terminated()&&god2::RecoveredBattleIdentity::encode_logical(*parsed)==raw);
+        malformed.at(11).actors.at(0).identity=*parsed;refused(room,malformed);
+    }
+    auto terminated=profiles;
+    auto raw=god2::RecoveredBattleIdentity::encode_logical(terminated.at(11).actors.at(0).identity);
+    std::fill(raw.begin()+9,raw.begin()+41,std::uint8_t('B'));raw[24]=raw[40]=0;
+    terminated.at(11).actors.at(0).identity=*god2::RecoveredBattleIdentity::parse_logical(raw);
+    require(terminated.at(11).actors.at(0).identity.player_texts_terminated());
+    auto pet_room=room;pet_room.members.at(11).input.pet=T::PetInput{5,one};
+    pet_room.members.at(11).assignment->pet=5;
+    pet_room.checkpoint.snapshot.actors[5]=god2::BattleActor{5,11,20,100,10,50,1,1,1,1};
+    auto pet_profiles=immutable.profiles(*scene,pet_room,entry);
+    require(!P::prepare(pet_room,entry,pet_profiles).empty());
+    auto pet_raw=god2::RecoveredBattleIdentity::encode_logical(pet_profiles.at(11).actors.at(5).identity);
+    std::fill(pet_raw.begin()+9,pet_raw.begin()+41,std::uint8_t('P'));
+    const auto pet_parsed=god2::RecoveredBattleIdentity::parse_logical(pet_raw);require(pet_parsed.has_value());
+    require(!pet_parsed->pet_text_terminated()&&god2::RecoveredBattleIdentity::encode_logical(*pet_parsed)==pet_raw);
+    pet_profiles.at(11).actors.at(5).identity=*pet_parsed;refused(pet_room,pet_profiles);
+    pet_raw[40]=0;pet_profiles.at(11).actors.at(5).identity=*god2::RecoveredBattleIdentity::parse_logical(pet_raw);
+    require(pet_profiles.at(11).actors.at(5).identity.pet_text_terminated());
+    require(!P::prepare(pet_room,entry,pet_profiles).empty());
+    auto pet_appearance=pet_profiles;
+    pet_appearance.at(11).actors.at(5).appearance=pet_profiles.at(11).actors.at(0).appearance;
+    refused(pet_room,pet_appearance); // Secondary construction never takes player86/4.
+    // Enemy wire9..40 are parameters, not player or pet strings.
+    auto enemy=god2::RecoveredBattleIdentity::encode_logical(terminated.at(11).actors.at(14).identity);
+    std::fill(enemy.begin()+9,enemy.begin()+41,std::uint8_t(0xff));
+    terminated.at(11).actors.at(14).identity=*god2::RecoveredBattleIdentity::parse_logical(enemy);
+    require(!P::prepare(room,entry,terminated).empty());
+    require(god2::RecoveredBattleIdentity::encode_logical(terminated.at(11).actors.at(14).identity)==enemy);
+    for(const auto variant:{0x2000u,0x4000u}){
+        auto foreign=terminated;auto invalid_enemy=enemy;
+        invalid_enemy[5]=std::uint8_t(variant);invalid_enemy[6]=std::uint8_t(variant>>8);
+        foreign.at(11).actors.at(14).identity=*god2::RecoveredBattleIdentity::parse_logical(invalid_enemy);
+        refused(room,foreign); // Enemy slot cannot bypass player/pet text qualification.
+    }
+    auto foreign=terminated;foreign.at(11).actors.at(14).mp=terminated.at(11).actors.at(0).mp;
+    refused(room,foreign);foreign=terminated;
+    foreign.at(11).actors.at(14).appearance=terminated.at(11).actors.at(0).appearance;refused(room,foreign);
+}
 void malformed_complete_profiles(){
     god2::StoredPet2Slot one{},two{};const auto source=catalog(one,two);
     const auto bad=[&](auto edit){auto j=source;edit(j);rejected([&]{god2::OwnedPveWorldCatalog invalid(j);});};
@@ -209,7 +286,7 @@ void malformed_complete_profiles(){
 }
 int main() {
     variants();
-    saved_value_projection();primary_saved_material();malformed_complete_profiles();
+    saved_value_projection();primary_saved_material();projection_source_boundaries();malformed_complete_profiles();
     std::vector<std::uint8_t> source(37,0);source[0]=0x2a;
     source[2]=0x80;source[13]=0x56;source[27]=0xa5;source[29]=2;
     const nlohmann::json prototype=source;

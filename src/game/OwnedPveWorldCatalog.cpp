@@ -43,12 +43,10 @@ void validate_friendly(const P::ActorProfile& p,bool pet) {
         p.hp.maximum()&&p.hp.current()<=p.hp.maximum()&&p.mp->current()<=p.mp->maximum()&&
         (!p.appearance||p.appearance->position()==slot),
         "PvE friendly native variant/appearance/resource topology invalid");
-    const auto bytes=RecoveredBattleIdentity::encode_logical(p.identity);
-    const auto nul=[&](std::size_t first,std::size_t last){
-        return std::find(bytes.begin()+first,bytes.begin()+last,std::uint8_t(0))!=bytes.begin()+last;};
-    // The native player branch copies two16-byte strings, the pet branch one
-    //32-byte string. This is a complete-prototype safety check, not a name issuer.
-    need(pet?nul(9,41):(nul(9,25)&&nul(25,41)),"PvE native identity string lacks its bounded terminator");
+    // Native ordinary-player and pet branches scan their distinct source
+    // fields without a bound. This safety restriction is not a name issuer.
+    need(pet?p.identity.pet_text_terminated():p.identity.player_texts_terminated(),
+        "PvE native identity string lacks its bounded terminator");
 }
 P::ActorProfile saved_values(P::ActorProfile p,std::uint8_t level,std::uint64_t hp,
         std::uint64_t max_hp,std::uint32_t mp,std::uint32_t max_mp) {

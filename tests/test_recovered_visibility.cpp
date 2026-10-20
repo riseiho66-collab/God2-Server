@@ -22,6 +22,29 @@ template<class Function> void rejects(Function&& function) {
 int main() {
     try {
         {
+            // Native handles and complete saved owners are distinct domains.
+            // A different character may numerically equal another actor handle.
+            Registry owners;
+            auto actual=actor(91,7);actual.account=(std::uint64_t{1}<<40)+11;
+            actual.character=(std::uint64_t{1}<<48)+17;
+            auto collision=actor(92,8);collision.character=7;
+            owners.enter(actual);owners.enter(collision);
+            const auto source=owners.snapshot_spawn(actual.spawn);
+            check(source&&source->session==91&&source->account==actual.account&&source->character==actual.character);
+            const auto other=owners.snapshot_spawn(collision.spawn);
+            check(other&&other->session==92&&other->character==7);
+            const auto changed=god2::RecoveredRemoteActor::with_position(actual.spawn,actual.spawn.x()+1,actual.spawn.y());
+            check(changed&&!owners.snapshot_spawn(*changed)); // Same handle is not the original complete record.
+            owners.set_pose(91,actual.account,actual.character,{2,15},{0,8,0});
+            const auto posed=owners.snapshot_spawn(actual.spawn);check(posed&&posed->pose.has_value());
+            owners.set_fight_title(91,actual.account,actual.character,{2,15},true);
+            check(!owners.snapshot_spawn(actual.spawn));
+            const auto current=owners.snapshot(91);
+            check(current.has_value());const auto selected=owners.snapshot_spawn(current->spawn);
+            check(selected&&selected->character==actual.character);
+            owners.leave(91);check(!owners.snapshot_spawn(current->spawn));
+        }
+        {
             Registry poses;
             poses.enter(actor(1,1));poses.enter(actor(2,2));
             poses.enter(actor(3,3,{2,4}));poses.enter(actor(4,4,{3,15}));

@@ -70,9 +70,12 @@ public:
         const auto found=members_.find(session);
         return found==members_.end()?std::nullopt:std::optional<Presence>{found->second};
     }
-    std::optional<Presence> snapshot_character(std::uint64_t character) const {
+    // A wire actor handle is not a full database character ID. Resolve the
+    // exact original spawn through its actual visibility owner before SQL.
+    std::optional<Presence> snapshot_spawn(const RecoveredRemoteActor::Record& spawn) const {
+        const auto bytes=RecoveredRemoteActor::encode_logical(spawn);
         for(const auto& [session,member]:members_)
-            if(member.character==character)return member;
+            if(RecoveredRemoteActor::encode_logical(member.spawn)==bytes)return member;
         return std::nullopt;
     }
 

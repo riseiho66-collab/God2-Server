@@ -35,6 +35,8 @@ Roster roster(const T::Snapshot& room){
     Roster result;
     for(const auto& [id,m]:room.members){
         const auto& input=m.input;
+        need(bool(input.pet)==m.pet_position().has_value(),
+             "profile_required: saved pet and actual formation assignment differ");
         need(id==input.identity.character&&id&&input.identity.actor_handle&&m.primary_position()<14,
              "profile_required: member slot/identity missing");
         const auto bind=[&](std::uint8_t slot,bool pet){
@@ -65,12 +67,14 @@ const P::ActorProfile& actor_profile(const P::RecipientProfile& p,std::uint8_t s
         need(a.mp&&a.mp->resource()==RecoveredBattleVitals::Resource::Mp&&a.mp->maximum()==actual.max_mp,
              "profile_required: friendly MP template differs from current actor maximum");
         const auto& owner=*r.owners[slot];const auto native=owner.input.identity.actor_handle;
-        if(r.pets[slot])need(native<0x4000&&(a.identity.variant()&0x6000)==0x4000&&
-            a.identity.identity_word()==static_cast<std::uint16_t>(native|0x4000),
+        if(r.pets[slot])need(native<0x4000&&!a.appearance&&(a.identity.variant()&0x6000)==0x4000&&
+            a.identity.identity_word()==static_cast<std::uint16_t>(native|0x4000)&&a.identity.pet_text_terminated(),
             "profile_required: pet identity is not this actual member's secondary actor");
-        else need((a.identity.variant()&0x6000)==0x2000&&a.identity.identity_word()==native&&a.appearance,
+        else need((a.identity.variant()&0x6000)==0x2000&&a.identity.identity_word()==native&&a.appearance&&
+             a.identity.player_texts_terminated(),
              "profile_required: player identity/appearance is not this actual native WORLD owner");
-    }
+    }else need(a.identity.variant()==0x400&&!a.appearance&&!a.mp,
+        "profile_required: opponent native profile is not the qualified encounter variant");
     return a;
 }
 RecoveredBattleVitals::Bytes vital(const RecoveredBattleVitals::Record& prototype,std::uint8_t slot,std::uint64_t current){

@@ -3,6 +3,7 @@
 #include "handlers/OwnedPveRoomHost.h"
 #include "handlers/RecoveredVisibility.h"
 #include "handlers/RecoveredMovementService.h"
+#include "handlers/RecoveredNormalCompanionCurrent.h"
 #include "db/SqliteDatabase.h"
 #include "scripting/LuaEngine.h"
 namespace god2 {
@@ -19,8 +20,12 @@ public:
             const Session::OwnedPveReturnSource&)=0;
     };
     using PrepareReturnHandoff=std::function<std::shared_ptr<ReturnHandoff>(Session&,const Session::OwnedPveBinding&)>;
+    using DeliveryCurrent=std::function<bool()>;
+    // Synchronous actual delivery only: the retained pure source surrounds
+    // recipient text SQL and each send; it is not a transferable output grant.
+    using Deliver=std::function<void(std::vector<RecoveredVisibility::Delivery>,const DeliveryCurrent&)>;
     OwnedPveApplicationSource(SqliteDatabase&,LuaEngine&,RecoveredMovementService&,
-        RecoveredVisibility&,std::function<void(std::vector<RecoveredVisibility::Delivery>)>);
+        RecoveredVisibility&,Deliver);
     ~OwnedPveApplicationSource();
     void install_return_handoff(PrepareReturnHandoff);
     bool bound(const Session&)const noexcept;
@@ -39,7 +44,7 @@ private:
         std::optional<std::vector<RecoveredVisibility::Presence>> return_actors;std::shared_ptr<ReturnHandoff> handoff;
         std::optional<RecoveredMovementService::WorldLocationObservation> movement;};
     struct Pending {std::weak_ptr<Session> session;Session::NormalWorldInitialization initialization;
-        Session::WorldResponseWrite written;RecoveredPosition position;};
+        Session::WorldResponseWrite written;RecoveredPosition position;RecoveredNormalCompanionCurrent current;};
     std::shared_ptr<const OwnedPveRoomHost::Sources> sources(const OwnedPveWorldCatalog::Scene&);
     T::MemberInput member(const OwnedPveWorldCatalog::Scene&,const std::shared_ptr<Session>&,
         const Binding&,std::shared_ptr<const T::Snapshot>);
@@ -50,7 +55,7 @@ private:
         const std::vector<RecoveredVisibility::Presence>& previous,
         const std::vector<RecoveredVisibility::Presence>& current);
     SqliteDatabase& db_;LuaEngine& lua_;RecoveredMovementService& movement_;RecoveredVisibility& visibility_;
-    std::function<void(std::vector<RecoveredVisibility::Delivery>)> deliver_;
+    Deliver deliver_;
     std::shared_ptr<const OwnedPveWorldCatalog> catalog_;
     std::shared_ptr<SqliteOwnedPveRoomRepository> repository_;
     std::shared_ptr<OwnedPveRoomHost> host_;

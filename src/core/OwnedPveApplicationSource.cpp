@@ -34,7 +34,7 @@ bool same_pet(const StoredPet2Slot& a,const StoredPet2Slot& b) {
 }
 OwnedPveApplicationSource::OwnedPveApplicationSource(SqliteDatabase& db,LuaEngine& lua,
         RecoveredMovementService& movement,RecoveredVisibility& visibility,
-        std::function<void(std::vector<RecoveredVisibility::Delivery>)> deliver)
+        Deliver deliver)
     :db_(db),lua_(lua),movement_(movement),visibility_(visibility),deliver_(std::move(deliver)),
      catalog_(db.load_owned_pve_world_catalog()),repository_(db.make_owned_pve_room_repository()),
      host_(std::make_shared<OwnedPveRoomHost>(*repository_)) {
@@ -51,10 +51,17 @@ void OwnedPveApplicationSource::observe_world(Session& s) {
     if(stopped_||retiring_||bound(s)||s.closing()||!s.recovered_world_ready()||
        (s.state()!=SessionState::CharacterSelected&&s.state()!=SessionState::InWorld))return;
     const auto initialization=s.normal_world_initialization();if(!initialization||!initialization->entry_written())return;
+    const auto normal=RecoveredNormalCompanionCurrent::capture(s,movement_,[this]{return !stopped_&&!retiring_;});
+    if(!normal)return;
+    const DeliveryCurrent current=[this,normal,weak=s.weak_from_this()]{
+        const auto peer=weak.lock();return peer&&normal->current()&&!bound(*peer);
+    };
     const auto position=movement_.current_location(s.id(),s.account_id,s.character_id);
+    need(current(),"PvE world identity source retired during location observation");
     if(!position||!catalog_->scene(position->area,position->scene)||!catalog_->has_actor_profile(s.character_id))return;
     const auto& native=catalog_->actor_profile(s.character_id);
     const auto roots=db_.recovered_characters().list_for_account(s.account_id);
+    need(current(),"PvE world identity source retired during saved root observation");
     const auto root=std::find_if(roots.begin(),roots.end(),[&](const auto& r){return r.id==s.character_id;});
     need(root!=roots.end()&&native.at("root_profile")==nlohmann::json(root->profile)&&
         OwnedPveWorldCatalog::same_entry_material(native.at("entry_logical"),initialization->entry_logical()),
@@ -72,8 +79,9 @@ void OwnedPveApplicationSource::observe_world(Session& s) {
     const auto placed=RecoveredRemoteActor::with_position(actor.spawn,position->x,position->y);
     need(placed.has_value(),"PvE current world actor position unrepresentable");actor.spawn=*placed;
     const auto before=visibility_.snapshot(s.id());
-    if(!before)deliver_(visibility_.enter(actor));
-    else if(before->location!=actor.location)deliver_(visibility_.transfer(actor));
+    need(current(),"PvE world identity source retired before visibility publication");
+    if(!before)deliver_(visibility_.enter(actor),current);
+    else if(before->location!=actor.location)deliver_(visibility_.transfer(actor),current);
     // Existing same-scene movement/appearance owners retain their complete
     // actual row. A second scalar overwrite would discard their pose queue.
 }
@@ -82,7 +90,20 @@ void OwnedPveApplicationSource::title(Session& s,bool active) {
     const auto position=movement_.current_world_location(s.id(),s.account_id,s.character_id);
     need(position&&before->account==s.account_id&&before->character==s.character_id&&
         before->location==RecoveredVisibility::Scene{position->area,position->scene},"PvE world marker source drift");
-    deliver_(visibility_.set_fight_title(s.id(),s.account_id,s.character_id,before->location,active));
+    const auto source=worlds_.find(s.id());
+    need(source!=worlds_.end()&&source->second.movement,"PvE world marker lacks retained movement source");
+    const auto binding=source->second.binding;const auto movement=source->second.movement;
+    const auto normal=active?std::optional<RecoveredNormalCompanionCurrent>{}:
+        RecoveredNormalCompanionCurrent::capture(s,movement_,[this]{return !stopped_;},position);
+    const DeliveryCurrent current=[this,binding,movement,normal,active,weak=s.weak_from_this()] {
+        const auto peer=weak.lock();if(stopped_||!peer||peer->closing())return false;
+        const auto world=worlds_.find(peer->id());
+        return world!=worlds_.end()&&world->second.binding.same_binding(binding)&&
+            movement_.world_location_current(*movement)&&
+            (active?peer->owned_pve_current(binding):(normal&&normal->current()));
+    };
+    need(current(),"PvE world marker source retired before publication");
+    deliver_(visibility_.set_fight_title(s.id(),s.account_id,s.character_id,before->location,active),current);
 }
 void OwnedPveApplicationSource::committed_movement(Session& session,const RecoveredMovementService::CommittedMove& committed) {
     const auto before=visibility_.snapshot(session.id());if(!before)return;
@@ -90,6 +111,8 @@ void OwnedPveApplicationSource::committed_movement(Session& session,const Recove
         before->location==RecoveredVisibility::Scene{committed.after.area,committed.after.scene}&&
         movement_.current_world_location(session.id(),session.account_id,session.character_id)==std::optional{committed.after},
         "PvE world movement lacks its actual committed current source");
+    const auto normal=RecoveredNormalCompanionCurrent::capture(session,movement_,[this]{return !stopped_;},committed.after);
+    need(normal.has_value(),"PvE world movement lost its actual normal source");
     const auto& material=catalog_->actor_profile(session.character_id);
     const auto raw=material.at("world_move").get<std::vector<std::uint8_t>>();
     const auto prototype=RecoveredRemoteActorMove::parse_logical(raw);
@@ -99,7 +122,8 @@ void OwnedPveApplicationSource::committed_movement(Session& session,const Recove
     std::vector<RecoveredRemoteActorMove::Record> path;
     for(const auto& step:committed.path){const auto positioned=RecoveredRemoteActorMove::with_position(*named,step.x,step.y);
         need(positioned.has_value(),"PvE actual world path unrepresentable");path.push_back(*positioned);}
-    deliver_(visibility_.move_batch(session.id(),session.account_id,session.character_id,before->location,path));
+    const DeliveryCurrent current=[normal]{return normal->current();};
+    deliver_(visibility_.move_batch(session.id(),session.account_id,session.character_id,before->location,path),current);
 }
 OwnedPveRoomTypes::MemberInput OwnedPveApplicationSource::member(const OwnedPveWorldCatalog::Scene& scene,
         const std::shared_ptr<Session>& session,const Binding& binding,std::shared_ptr<const T::Snapshot> room) {
@@ -352,6 +376,8 @@ void OwnedPveApplicationSource::observe_movement(Session& s,std::span<const Reco
     if(!count)return;
     const auto init=s.normal_world_initialization();const auto position=movement_.current_world_location(s.id(),s.account_id,s.character_id);
     if(!init||!init->entry_written()||!position)return;
+    const auto normal=RecoveredNormalCompanionCurrent::capture(s,movement_,[this]{return !stopped_&&!retiring_;},position);
+    if(!normal)return;
     const auto* policy=catalog_->scene(position->area,position->scene);if(!policy)return;
     if(!catalog_->has_actor_profile(s.character_id)||!visibility_.contains(s.id()))return;
     auto& steps=steps_[s.id()];need(std::uint64_t(count)<=UINT64_MAX-steps,"PvE movement source count exhausted");steps+=std::uint64_t(count);
@@ -359,14 +385,15 @@ void OwnedPveApplicationSource::observe_movement(Session& s,std::span<const Reco
     auto capture=s.current_world_response_capture_on_game();if(!capture)capture=s.observe_world_response(response);
     need(capture->wire()==std::vector<std::uint8_t>(response.begin(),response.end()),"PvE encounter lost original complete movement reply");
     s.hold_world_input_until_response_written(*capture);
-    pending_.insert_or_assign(s.id(),Pending{s.shared_from_this(),*init,*capture,*position});
+    need(normal->current(),"PvE movement reply lost its original normal source");
+    pending_.insert_or_assign(s.id(),Pending{s.shared_from_this(),*init,*capture,*position,*normal});
 }
 void OwnedPveApplicationSource::poll() {
     if(stopped_||retiring_)return;
     for(auto it=pending_.begin();it!=pending_.end();) {
         const auto source=it->second;const auto peer=source.session.lock();
         if(peer&&(host_->bound(*peer)||host_->pending(*peer))){it=pending_.erase(it);continue;}
-        if(!peer||peer->closing()||source.written.status()==Session::WorldResponseWriteStatus::Failed||
+        if(!peer||peer->closing()||!source.current.current()||source.written.status()==Session::WorldResponseWriteStatus::Failed||
            !peer->normal_world_initialization_current_on_game(source.initialization)||
            movement_.current_world_location(peer->id(),peer->account_id,peer->character_id)!=std::optional{source.position}){
             it=pending_.erase(it);continue;}
