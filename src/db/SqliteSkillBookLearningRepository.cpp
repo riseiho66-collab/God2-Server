@@ -371,6 +371,43 @@ bool SqliteSkillBookLearningRepository::restoration_current(const Restoration& v
     const bool same=state_current(*value.state_);read.finish();return same;
 }
 std::optional<SqliteSkillBookLearningRepository::Restoration>
+SqliteSkillBookLearningRepository::material_successor(const Restoration& before,
+    SqliteOwnedEquipmentTransaction& joint,const SqliteOwnedEquipmentTransaction::Committed& committed) {
+    const std::array<const SqliteOwnedEquipmentTransaction::Committed*,1> chain{&committed};
+    return material_successor_chain(before,joint,chain);
+}
+std::optional<SqliteSkillBookLearningRepository::Restoration>
+SqliteSkillBookLearningRepository::material_successor_chain(const Restoration& before,
+    SqliteOwnedEquipmentTransaction& joint,std::span<const SqliteOwnedEquipmentTransaction::Committed* const> commits) {
+    Operation operation(*this);
+    const auto source=before.state_;
+    if(!source || source->repository!=this || source->identity.lock()!=identity_ ||
+       !joint.owns_writers(inventory_,equipment_) || commits.empty() || commits.size()>8192)return {};
+    auto next=std::make_shared<State>(*source);
+    for(const auto* committed:commits) {
+        if(!committed || !joint.committed_predecessor_matches(*committed,next->inventory,next->equipment))return {};
+        const auto& after_inventory=committed->inventory().snapshot();
+        const auto& after_equipment=committed->equipment().snapshot();
+        if(!OwnedInventorySnapshot::same_root(source->inventory.root,after_inventory.root) ||
+           !NativeEquipmentSnapshot::same_root(source->equipment.root,after_equipment.root) ||
+           source->equipment.actor_handle!=after_equipment.actor_handle ||
+           source->equipment.client_sha256!=after_equipment.client_sha256 || source->equipment.record_kind!=after_equipment.record_kind ||
+           source->equipment.record.size()!=NativeEquipmentSnapshot::record_bytes ||
+           after_equipment.record.size()!=NativeEquipmentSnapshot::record_bytes ||
+           !std::equal(source->equipment.record.begin()+NativeEquipmentSnapshot::inventory_bytes,
+               source->equipment.record.end(),after_equipment.record.begin()+NativeEquipmentSnapshot::inventory_bytes) ||
+           !coherent_bank(after_inventory,after_equipment))return {};
+        // Retain roster, immutable headers/events, catalog declarations and private
+        // repository identity from the actual predecessor. Never call restore/read_state.
+        next->inventory=after_inventory;next->equipment=after_equipment;
+    }
+    // Intermediate aftertuples were consumed by the next actual private edge.
+    // Check all untouched roster/header/catalog state only at the final cut.
+    ReadScope read(inventory_.db_);
+    if(!state_current(*next))return {};
+    read.finish();return Restoration(std::move(next));
+}
+std::optional<SqliteSkillBookLearningRepository::Restoration>
 SqliteSkillBookLearningRepository::selection_successor(const Restoration& before,
         std::span<const SqliteCompanionRepository::CommittedDeitySelection* const> commits) {
     Operation operation(*this);

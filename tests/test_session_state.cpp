@@ -574,7 +574,7 @@ void recovered_callback_output_transport() {
 // declares a synthetic acquisition and obtains actual learning events through
 // repository issuers. Neither mode proves a native grant or gameplay formula.
 // The actual Session writes the original restoration and learning responses.
-void recovered_legacy_selection_learning_reanchor(bool with_book=false) {
+void recovered_legacy_selection_learning_reanchor(bool with_book=false,unsigned material_case=0) {
     using Source=LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource;
     using Restoration=RecoveredOwnedCompanions::Restoration;
     struct Close {void operator()(sqlite3* value)const {sqlite3_close_v2(value);}};
@@ -691,6 +691,16 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false) {
     std::optional<OwnedSkillBookLearningService::LearningPublication> latest_learning;
     std::optional<OwnedSkillBookLearningService::WrittenLearningSource> last_learning_source;
     bool pending_registry_refused=false,bootstrapped=false;
+    // Actual private no-Entry -> material COMMIT -> original Written reply ->
+    // first-bootstrap source path. No private Session receipt is fabricated.
+    const auto material_joint=std::make_shared<SqliteOwnedEquipmentTransaction>(inventory,equipment);
+    std::optional<OwnedSkillBookLearningService::MaterialAdmission> material_admission;
+    std::optional<SqliteOwnedEquipmentTransaction::Committed> material_commit;
+    std::optional<Session::WorldResponseWrite> material_response;
+    std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> material_source;
+    unsigned material_supplier_calls=0;
+    bool material_nested_attempted=false,material_nested_rejected=false,material_bootstrap_rejected=false;
+    const auto material_wire=RecoveredWorldFrame::encode(*RecoveredInventory::clear_slot(0));
     RecoveredSessionPeer peer(false,[&](Session& session,auto records)->std::optional<std::vector<std::uint8_t>> {
         if(with_book&&records.size()==1)if(const auto* request=std::get_if<RecoveredInventoryItemRequest::Request>(&records.front())) {
             require(bootstrapped&&applied&&applied->current(session),"Book use lost the actual prior Written legacy selection");
@@ -714,6 +724,70 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false) {
             if(idle_stage++==0) {
                 initialization=session.normal_world_initialization();require(initialization.has_value(),"Legacy restoration INIT absent");
                 for(const auto& batch:original->batches())restoration_writes.push_back(session.send_world_records_observed(batch));
+            }else if(material_case && !bootstrapped) {
+                if(!material_commit) {
+                    material_admission=learning.prepare_material(session,canonical);
+                    require(material_admission.has_value(),"No-Entry material predecessor admission missing");
+                    const auto before=material_joint->observe_before(RecoveredSessionPeer::account,character);
+                    require(before && before->inventory && before->equipment,"No-Entry joint before missing");
+                    SqliteOwnedEquipmentTransaction::State next{*before->inventory,*before->equipment};
+                    ++next.inventory.revision;++next.equipment.revision;
+                    next.inventory.source_record+=";CUSTOM_TEST:material-continuation";
+                    next.equipment.source_record+=";CUSTOM_TEST:material-continuation";
+                    material_commit=material_joint->replace_from_issuer(*before,next,
+                        [](const auto&,const auto& actual,auto){return std::optional{actual};});
+                    require(material_commit.has_value(),"Synthetic material fixture did not obtain a real joint commit");
+                    material_response=session.observe_world_response(material_wire);
+                    session.hold_world_input_until_response_written(*material_response);
+                    return material_wire; // Exact original fixture response, not a native acquisition claim.
+                }
+                require(initialization && material_response && material_admission &&
+                    material_response->status()==Session::WorldResponseWriteStatus::Written,"Material must join only after actual Written");
+                const auto next=helper.material_successor_from_committed(*canonical,*material_joint,*material_commit);
+                require(next.has_value(),"Written no-Entry material successor missing");
+                auto after=std::make_shared<const Restoration>(*next);
+                material_source=learning.reanchor_material(session,canonical,after,material_joint,*material_commit,
+                    *initialization,*material_response,*material_admission);
+                require(material_source && material_source->current(session),"Private no-Entry material source not Current");
+                canonical=std::move(after);
+                struct NestedRead {
+                    OwnedSkillBookLearningService::WrittenMaterialSource* source;
+                    Session* session;bool* attempted;bool* rejected;
+                } nested{&*material_source,&session,&material_nested_attempted,&material_nested_rejected};
+                const auto trace=[](unsigned event,void* context,void*,void*) noexcept ->int {
+                    auto& nested=*static_cast<NestedRead*>(context);
+                    if(event!=SQLITE_TRACE_STMT || *nested.attempted)return 0;
+                    *nested.attempted=true;
+                    try{(void)nested.source->current(*nested.session);}catch(const std::logic_error&){*nested.rejected=true;}catch(...){}
+                    return 0;
+                };
+                bool trace_installed=false;
+                struct TraceEnd {
+                    sqlite3* database;bool& installed;
+                    ~TraceEnd(){if(installed)sqlite3_trace_v2(database,0,nullptr,nullptr);}
+                } trace_end{raw,trace_installed};
+                const auto supplied=[&](Session& actual)->std::shared_ptr<const Restoration> {
+                    ++material_supplier_calls;
+                    if(material_case==2 && !trace_installed) {
+                        sqlite3_trace_v2(raw,SQLITE_TRACE_STMT,trace,&nested);trace_installed=true;
+                    }
+                    if(!material_source->current(actual))return {};
+                    return canonical;
+                };
+                try {
+                    const auto reply=learning.bootstrap(session,{},supplied);
+                    require(material_case==1 && reply && reply->empty(),"No-Entry first bootstrap failed or invented native output");
+                } catch(const std::logic_error&) {
+                    if(material_case!=2)throw;
+                    material_bootstrap_rejected=true;
+                }
+                if(trace_installed){sqlite3_trace_v2(raw,0,nullptr,nullptr);trace_installed=false;}
+                if(material_case==1)require(material_supplier_calls==3 && material_source->current(session),
+                    "All three exact passive supplier reads, including new Entry, must be supported");
+                else require(material_nested_attempted && material_nested_rejected && material_bootstrap_rejected &&
+                    !material_source->current(session) && !learning.prepare_material(session,canonical),
+                    "Nested SQL read must poison bootstrap, retire source and block same-INIT No-Entry ABA");
+                bootstrapped=true;
             }else if(!bootstrapped) {
                 const auto supplied=[&](Session& actual)->std::shared_ptr<const Restoration> {
                     if(!initialization||!actual.normal_world_initialization_current_on_game(*initialization)||
@@ -768,6 +842,17 @@ void recovered_legacy_selection_learning_reanchor(bool with_book=false) {
     peer.send(tick);
     for(const auto& batch:original->batches())peer.expect(RecoveredWorldFrame::encode(batch));
     peer.silent();peer.send(tick);
+    if(material_case) {
+        peer.expect(material_wire);peer.silent();
+        require(material_response && material_response->status()==Session::WorldResponseWriteStatus::Written,
+            "Material fixture final original response did not become Written");
+        peer.send(tick);peer.silent();
+        require(bootstrapped && material_commit && material_joint->committed_current(*material_commit) &&
+            !peer.session->closing(),"Material bootstrap fixture lost actual durable truth or transport");
+        require(material_case==1?(!material_bootstrap_rejected && material_supplier_calls==3):material_bootstrap_rejected,
+            "Material supplier window outcome mismatch");
+        return;
+    }
     if(with_book) {
         std::vector<std::uint8_t> logical(book_record->begin(),book_record->end());
         const auto absolute=RecoveredInventory::encode_slot_update({6501,0,2});require(absolute.has_value(),"Fixture absolute book count invalid");
@@ -2106,6 +2191,8 @@ void test_session_state() {
     recovered_causal_deity_reply_transport();
     recovered_legacy_selection_learning_reanchor();
     recovered_legacy_selection_learning_reanchor(true);
+    recovered_legacy_selection_learning_reanchor(false,1);
+    recovered_legacy_selection_learning_reanchor(false,2);
     recovered_written_deity_selection_transport();
     recovered_logout_cleanup_barrier();
     for(std::uint8_t reason:{0,1,2}) {

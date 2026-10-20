@@ -117,6 +117,14 @@ Bytes reconstruct(const std::vector<World::Record>& records) {
                 append(result,god2::RecoveredInventoryDiscard::encode(value));
             } else if constexpr (std::is_same_v<T, god2::RecoveredParty::Request>) {
                 append(result,god2::RecoveredParty::encode(value));
+            } else if constexpr (std::is_same_v<T, god2::RecoveredSosSupportRequest::Request>) {
+                append(result,god2::RecoveredSosSupportRequest::encode(value));
+            } else if constexpr (std::is_same_v<T, god2::RecoveredSosBattleCommand::Request>) {
+                append(result,god2::RecoveredSosBattleCommand::encode(value));
+            } else if constexpr (std::is_same_v<T, god2::RecoveredTeamRequest57::Request>) {
+                append(result,god2::RecoveredTeamRequest57::encode(value));
+            } else if constexpr (std::is_same_v<T, god2::RecoveredPartyExitRequest5A::Request>) {
+                append(result,god2::RecoveredPartyExitRequest5A::encode(value));
             } else if constexpr (std::is_same_v<T, god2::RecoveredPartyPositionQuery::Request>) {
                 append(result,god2::RecoveredPartyPositionQuery::encode(value));
             } else if constexpr (std::is_same_v<T, god2::RecoveredTrade::Request>) {

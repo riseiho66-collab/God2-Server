@@ -32,3 +32,11 @@ quantity | SQLite 宣告型別：INTEGER | 來源宣告：1
 限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
 本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
 原始客戶端封包、快照、編碼與原列位元組不改寫。
+
+2026-10-20 完整物品銀行來源補充（CUSTOM 保管位置規約）：
+- location_kind='bag'，location_index 為已明示存在的背包格。
+- location_kind='bank'，location_index=page*50+local；page 為0..5，local 為0..49。這是共用儲存索引，不可截成封包的一個BYTE。
+- 目前開倉投影必須已有完整300個明示來源格；讀取到不存在的格不代表空格或解鎖權限。沒有新增容量、初始物品或原服解鎖規則。
+- 目前一般整疊存取只接page0..2/local2..49及bag0..29；63/64數量必須等於整個實例數量，65的1是整格移動標記。其他頁／保留格、拆疊及合併仍待資格。
+- 入出倉沿用同一instance_id與acquisition來源，不另寫舊character_bank_item_slots副本；inventory與native equipment witness由同一交易提交。
+- 此為源碼契約，未讀取或變更實際遊戲資料庫，未驗收遊戲內行為。

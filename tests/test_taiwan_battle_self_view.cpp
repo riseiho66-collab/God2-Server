@@ -64,6 +64,37 @@ void ordered_writer_boundaries(){
     auto last_primary=primary(1);append(last_primary,primary(2));
     require(inspect(last_primary).primary_slot==2,"The first primary won over a later setter");
     require(!inspect(primary(2,2)).changes_view,"Secondary-only notification was treated as a primary setter");
+    // Native action9 has a deferred six-layer swap. Sender custody must not
+    // retain either the old primary or infer a replacement from its operands.
+    for(const std::uint16_t success_operand:{0,1,0x7fff,0x8000,0xffff}){
+        auto swap=record(0x83,15);swap[1]=9;swap[2]=27;swap[5]=0;swap[7]=27;
+        swap[9]=static_cast<std::uint8_t>(success_operand);
+        swap[10]=static_cast<std::uint8_t>(success_operand>>8);
+        const auto raw=Fence::inspect_logical(swap),framed=inspect(swap);
+        require(raw.changes_view && !raw.primary_slot && framed.changes_view && !framed.primary_slot,
+            "Deferred swap/failure preserved old primary custody or invented a slot");
+        auto before=primary(13);append(before,swap);
+        require(!inspect(before).primary_slot,"Deferred later swap preserved an earlier primary setter");
+        auto after=swap;append(after,primary(1));
+        require(!inspect(after).primary_slot,"Same-Write grant incorrectly proved deferred swap completion");
+        auto separate=RecoveredWorldFrame::encode(swap);append(separate,RecoveredWorldFrame::encode(primary(1)));
+        require(!Fence::inspect(separate).primary_slot,"Envelope boundary hid deferred same-Write swap");
+    }
+    // Flee is a separate conditional delayed removal, never a row change.
+    // No raw actor/result value is trusted to preserve self/secondary custody.
+    for(const std::uint8_t source:{0,7,27})for(const std::uint8_t result:{0,1,2,255}){
+        auto flee=record(0x83,15);flee[1]=6;flee[2]=source;flee[12]=result;
+        require(Fence::inspect_logical(flee).changes_view && !inspect(flee).primary_slot,
+            "Conditional flee retained an old view or inferred replacement slot");
+        auto before=primary(13);append(before,flee);
+        require(!inspect(before).primary_slot,"Later flee preserved the earlier primary");
+        auto after=flee;append(after,primary(1));
+        require(!inspect(after).primary_slot,"Same-Write grant falsely proved flee completion");
+        auto separate=RecoveredWorldFrame::encode(flee);append(separate,RecoveredWorldFrame::encode(primary(1)));
+        require(!Fence::inspect(separate).primary_slot,"Envelope boundary hid deferred flee in the whole Write");
+    }
+    auto non_swap=record(0x83,15);non_swap[1]=2;non_swap[5]=9;non_swap[9]=9;non_swap[12]=6;
+    require(!inspect(non_swap).changes_view,"Opaque bytes/action2 were mistaken for swap/flee");
     for(const auto alias:{record(0x2a,37),record(0xcf,177),primary(14),primary(15)}){
         require(inspect(alias).changes_view&&!inspect(alias).primary_slot,"Ambiguous/invalid setter became a view");
         auto before=alias;append(before,primary());

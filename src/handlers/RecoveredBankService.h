@@ -56,7 +56,10 @@ public:
     // No context or bank provision unless the caller's authoritative NPC access
     // predicate accepts. Unknown NPC37 continues to its existing route.
     std::optional<std::vector<std::uint8_t>> open(std::uint64_t session,std::uint16_t target,Clock::time_point now);
-    Result handle(std::uint64_t session,std::span<const RecoveredBank::Request> requests,Clock::time_point now);
+    // Optional actual owner-held pure lifetime dependency, used by full-item
+    // normal banking for its opening INIT/phase/battle/pose. No SQL/provider.
+    using PureCurrent=std::function<bool()>;
+    Result handle(std::uint64_t session,std::span<const RecoveredBank::Request> requests,Clock::time_point now,PureCurrent={});
     // CUSTOM-0065 composes the already qualified money lease for item banking.
     // Access query grants no money or NPC role. A callback failure retires the lease.
     bool permits_items(std::uint64_t session,std::uint16_t target,Clock::time_point now);

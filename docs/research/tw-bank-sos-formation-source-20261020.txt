@@ -1,0 +1,51 @@
+台服完整物品銀行、SOS與前後排來源接線（2026-10-20）
+
+本輪限定 PHASE1 源碼／靜態。未建置、未執行測試、遊戲、codec、遊戲DB SQL、遷移或部署。新增回歸檔只是待執行源碼，不是通過紀錄。完整功能仍未完成，未提高整體完成百分比。
+
+完整物品銀行 CUSTOM-0160
+- 實際 Application normal-entry WholeBag owner 掛載 SharedTaiwanOwnedBankSource；不借 legacy owned_bag_projected 或14位角色ID作完整物品銀行權限。
+- 沿同一真正 money-bank NPC role／placement／distance access和LeaseSource。先取得完整銀行投影才輸出開窗；不進舊 character_bank_item_slots 分支。
+- 現有完整實例整疊63存入、64取出、65整格移動／交換，保留同一instance ID、definition、acquisition、full20及full25，只在取出時改已確認的背包slot欄位。incoming count與opaque不冒充canonical quantity，最終41回覆使用真正實例數量。
+- 六頁各50格以page-specific profile分離；local維持BYTE，完整儲存索引不截位。只能從已存在的明示格取得容量，開倉必須有完整300格來源；沒有新增物品、容量或解鎖權限。普通mutation目前只接page0..2/local2..49、bag0..29，其他保留格及拆疊／合併仍OPEN。
+- inventory與native equipment witness同一joint transaction/full expected CAS。最後SQL observer後還有pure lease／INIT／memory-pose fence；COMMIT後失效保留真實Committed且抑制舊回覆，絕不重試或謊報rollback。
+- 同一最新joint receipt供後續C24／movement／銀行接續；原始回覆以真實normal callback component登記，可與E8串接。最後App再檢共同tuple與純銀行來源，避免outer callback退休後仍交舊回覆。
+- 關窗、其他NPC、相關消耗／同伴／戰鬥wrapper、重新ready、disconnect、stop都退休舊source。schema安裝路徑在完整物品模式不再建立legacy item bank表。
+- 只從源碼追查到沒有initial0092／bank capacity producer，不等於查看過實際DB空表。schema-only CLI不授容量。真正逐格capacity manifest仍需可證明的離線／跨進程擁有者，沒有加自動300格或未掛載factory充數。
+- 羽毛測試資料是明標synthetic conservation fixture。歷史4422名稱不是目前BIN物品／可存規則資格，沒有假造羽毛grant。
+
+相關物品／技能書／神將連續流程
+- 另查到銀行、C24、普通移動更新joint tuple後，舊restoration仍握舊inventory/equipment，會讓下一技能書失效；normal C67還可能實際切換成功、卻把learning留在unjoined。不能只修單一入倉回覆。
+- 新增只由真正joint mutation產生的private完整before edge；readonly observe_committed沒有edge。技能／神將來源只依同writer實際完整邊推進，保留原roster、activation、catalog和已Written歷史，不fresh restore、不重播S30，也不重授PK player/pet。
+- final原始callback在所有E8／directory觀察後，保留同一次NormalWorldResponseAttempt的每筆actual joint commit鏈；normal Queued只代表入FIFO，另用真正WorldResponseWrite Written作繼承條件。合法Move/B4/Move不丟中間edge，也不誤查中間尚非目前的tuple。
+- 變動前保留實際learning Entry或null的private admission，release／retire／stop／重新bootstrap不能在COMMIT後被誤認為從未bootstrap。完整final回覆沿既有input continuation等Written，才處理下一個依賴此來源的動作；不是靠Tick／同ID重建權限。
+- 補查首次bootstrap閉環：尚無learning Entry但已有Written材料繼承時，只在該bootstrap持有的exact Source／Session／Entry-or-null被動視窗內允許current查詢；獨立read guard拒絕SQL callback重入，不能全面放寬busy。另以現成真Session測試fixture補未執行的接續／重入案例源碼。
+- material canonical與最終回覆除repository current外，也核對實際movement owner的pure pose；transfer_pending或binding退休不能借舊DB位置續用來源。
+- 正常原版tail完成後仍可為CharacterSelected+ready；銀行已改接受兩個真正合法world phase，並綁定開倉當下phase／battle／INIT／pose，沒有放寬成只看state。
+- 銀錢mutation也接同一純開窗來源，最後SQL讀回後、COMMIT前和outer最終回覆前均核對。回歸源碼涵蓋提前拒絕／postwrite rollback／COMMIT後失效保留committed並清空舊回覆，未執行任何SQLite或測試。
+
+前後排 CUSTOM-0142
+- 原版B4只產生0/1 choice；E8設定角色CE／UI顯示。現有保存沿原表獨立record_kind，不新增初始值，不以歷史position作目前授權。
+- 原normal owner保留真實Written INIT／normal response component；新增真正SharedWorldPresence ready Lease／Session delivery模式及final whole-response custody。
+- common模式有B4時整個batch必須全B4；混Tick或經濟／移動先拒，避免先保存才撞其他完整回覆capture。無B4只在真idle Tick、沒有已捕獲的完整回覆時重播。normal維持原始span／movement與callback offset，並修復inner whole-vector capture與outer E8衝突。
+- cache包含battle generation，戰鬥來回同phase／同INIT不能誤當已重播。Session原有battle邊界會增世代，不是單靠狀態值。
+- REA確認S83/action9延後交換六層；action6另有等待動畫後六層移除。所有送出入口共用self-view fence，現保守退舊位置憑據，不猜新slot／pet／grant；任何失敗operand也保守退權，不宣稱原版必然改位。同一Write稍後86不能證明延遲動畫已結束。
+- 原服B4→初場player/pet slot、官方換排成功／權限／戰後default仍OPEN。實際PK仍固定0/14，沒有把換bootstrap當完整部署。
+
+SOS與隊伍的原生方向分離
+- current aaf0：support.ani cursor6→4835A0 selection5→481F70 action-11→465FA0→497140，C6A logical9，保留self/target兩DWORD。原party Join歸因已撤回，6E是觀戰。
+- team.ani cursor5→selection4→action-10→497170，C57 logical5只帶target DWORD。實際App由authenticated Session補self，接現有明示CUSTOM-0062 consent Join，不能當踢人封包。
+- 4971B0從自己PlayerData送C5A/body18；4EA530選roster WORD/name→modal11→483C80→4EA510也送同C5A。獨立typed target WORD/name16原樣保存，self走離隊、nonself只能走真正leader／current group removal，名字不授權。
+- C35/action8經512790→5156E0→518E50，logical17保留actor、secondary flag、opaque、self masks、context、尾DWORD=(B+488==0)。518E50原生gate限制actor參數<=14；沒有從舊BasicAttack grammar猜出此限制。typed parsing不授turn／actor／room。
+- S6A logical5是獨立UI訊息分支；FFFF/FFFF不建立battle／roster，不製造加入ACK。
+- 進一步實際來源追查：普通native movement目前沒有正式PvE encounter issuer；現有只有單Session診斷觸發與條件式兩人PK。不能把兩個Session各綁一份Battle副本當共用房間。
+- 新current-aaf REA追515C90／52CCD0／526430／517230／5173A0／5177C0／517590：1C依WORD身分決定主副slot，友方HP/MP與max先寫成1；player renderer須先有86/4，late join須依目前快照補血魔與dead status9，不能重播初始怪物／重置其他成員。這些是client consumer，非原服加入、費用或獎勵規則。
+- 現有CUSTOM party model仍限定SelectedCharacter共同編號域。獨立QualifiedSceneHandle在membership前明確拒絕，不把raw actor DWORD當DB ID；full64 discovery不受此限制，真正scene exposure→owner adapter仍OPEN。
+- 真正SOS多人房間、current dead/HP/pet roster、late admission／primary-secondary grants、全member原子保存及逐人返回尚未接通。現有單Session BattleService/checkpoint限制與兩人PK ReturnPair不能偽裝多人。解析、拒絕、空handler或未掛載factory都不算完成。
+- 下一條實作鏈須有唯一共用BattleCheckpoint/RNG房間、目前成員及actor slots／grant epochs、同一交易的全員資源與outbox、真正Session admission/Written/current/return與實際遭遇入口，不能重播初始怪物或把leader離開變成整房間刪除。
+
+證據與限制
+- 本輪current target SHA256：aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48。
+- REA analyst copies只加synthetic CALL seed，13個原section逐位元相同；synthetic caller不是原生caller，沒有執行映像。原版EXE／ROM未改。
+- 舊packet static index目標149c1b4510a2dee85eb988d3f6c05785a69cbf50bb8fb751af7d9814a5a6e763，不能與aaf0整體等同；tw149c alias名稱是既有儲存規約，非整個build資格。
+- evidence archive：C:/Users/risei/.codex/artifact-archives/god2-server/20261020/discord-bank-sos-formation-pass3。保存author與root審查、原REA輸出、原section provenance、close收據及單次正式盤點。
+- 未刷新Discord；最新已保留的回報依既有inventory，不宣稱本輪重新讀完整歷史。NPC／怪物world placement未變更。完整goal與4-discord維持既有paused，這份限定源碼工作不代表恢復或完成完整目標。

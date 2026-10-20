@@ -36,3 +36,11 @@ source_sha256 | SQLite 宣告型別：TEXT | 來源宣告：1
 限制：型別為來源文字的已辨識宣告；CHECK、FK、索引、collation、trigger 等完整語意仍依來源，
 本檔未執行 SQL，也不翻譯或刪減約束；欄位說明缺省不代表允許匯出。
 原始客戶端封包、快照、編碼與原列位元組不改寫。
+
+2026-10-20 完整物品銀行別名補充（CUSTOM 保管位置規約）：
+- 背包中的tw149c-item20與tw149c-item3b25-material，在銀行改用tw149c-bankN-item20及tw149c-bankN-item3b25-material；N為0..5頁。
+- native_slot在銀行只存該頁local0..49；頁號由profile分隔，不能把完整bank索引150..299截成BYTE。
+- 20位元組identity與原有25位元組3B material成對保留。入倉、倉內移格不改25位元組中的原始背包slot；取出只改已確認的slot BYTE，再以41回覆設定最終實例數量。
+- 保留opaque WORD、incoming count、其餘full20與acquisition來源，這不表示未知helper或綁定／可存類別規則已還原。
+- tw149c名稱是既有儲存規約；並非整個149c與目前aaf0客戶端等價的宣告。只可沿已資格的來源欄位保留原位元組。
+- revision跟隨同一實例版本，source_record保留原來源並加有界、不重複的CUSTOM-0160標記；不得以換profile新增物品或權限。

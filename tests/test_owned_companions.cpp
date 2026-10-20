@@ -313,6 +313,62 @@ void status_activation_lineage_regression() {
     }
 }
 
+void joint_material_successor_regression() {
+    LearningSelectionFixture f;
+    const auto before=f.helper.restore_with_source(1,f.character,f.learning);
+    const auto activation=f.activation_storage();
+    SqliteOwnedEquipmentTransaction joint(f.inventory,f.equipment);
+    const auto observed=joint.observe_before(1,f.character);require(observed && observed->inventory && observed->equipment,"Actual joint fixture before");
+    SqliteOwnedEquipmentTransaction::State next{*observed->inventory,*observed->equipment};
+    std::swap(next.inventory.cells[0].instance,next.inventory.cells[1].instance);
+    auto& moved=*next.inventory.cells[1].instance;++moved.revision;
+    moved.aliases[0].native_slot=1;moved.aliases[0].revision=moved.revision;
+    next.equipment.record[0]=next.equipment.record[4]=next.equipment.record[5]=0;
+    next.equipment.record[24]=static_cast<std::uint8_t>(moved.quantity);
+    std::copy(moved.aliases[0].record.begin(),moved.aliases[0].record.end(),next.equipment.record.begin()+28);
+    ++next.inventory.revision;++next.equipment.revision;
+    // Synthetic source-only issuer exercises custody-edge continuation. It is
+    // not a real native bank/capacity/acquisition or Written Session fixture.
+    const auto saved=joint.replace_from_issuer(*observed,next,
+        [](const auto&,const auto& proposed,auto){return std::optional{proposed};});
+    require(saved && !f.helper.restoration_current(before),"Joint material mutation must retire old complete restoration");
+    require(joint.committed_predecessor_matches(*saved,before.learning_source()->inventory(),before.learning_source()->equipment()),
+        "Actual mutation must retain its exact complete predecessor");
+    const auto read_only=joint.observe_committed(1,f.character);
+    require(read_only && !joint.committed_predecessor_matches(*read_only,before.learning_source()->inventory(),before.learning_source()->equipment()) &&
+        !f.helper.material_successor_from_committed(before,joint,*read_only),"Observation cannot be relabeled a mutation successor");
+    SqliteOwnedEquipmentTransaction foreign(f.inventory,f.equipment);
+    require(!f.helper.material_successor_from_committed(before,foreign,*saved),"Same writers do not supply another joint identity's mutation edge");
+    const auto fresh=f.helper.restore_with_source(1,f.character,f.learning);
+    require(!f.helper.material_successor_from_committed(fresh,joint,*saved),"Fresh after observation cannot replace exact committed before");
+    const auto after=f.helper.material_successor_from_committed(before,joint,*saved);
+    require(after && after->learning_source() && f.helper.restoration_current(*after) &&
+        after->learning_source()->inventory()==next.inventory && after->learning_source()->equipment()==next.equipment &&
+        after->batches()==before.batches() && after->deity_roster().selection()==before.deity_roster().selection() &&
+        after->learning_source()->activations()==before.learning_source()->activations() && f.activation_storage()==activation,
+        "Material successor must retain actual deity/activation/history bytes without restoration replay");
+    const auto selected=f.helper.select_deity_with_source(1,f.character,{2});require(selected.has_value(),"Real selection after material continuation");
+    const std::array publications{selected->publication()};
+    const auto selection_after=f.helper.selection_successor_from_committed(*after,publications);
+    require(selection_after && f.helper.restoration_current(*selection_after),"Material continuation must permit subsequent genuine C67 successor");
+    const auto movement_before=joint.observe_before(1,f.character);require(movement_before.has_value(),"Current actual movement material");
+    const auto walk=joint.move_position_from_current(*movement_before,next.equipment.actor_handle,19,14,[]{return true;});
+    require(walk.has_value(),"Isolated permitted ordinary movement");
+    const auto second_move_before=joint.observe_before(1,f.character);require(second_move_before.has_value(),"Second move exact predecessor");
+    const auto walk2=joint.move_position_from_current(*second_move_before,next.equipment.actor_handle,20,14,[]{return true;});
+    require(walk2.has_value(),"Second actual material mutation in one callback-style chain");
+    const std::array<const SqliteOwnedEquipmentTransaction::Committed*,2> moves{&*walk,&*walk2},reversed{&*walk2,&*walk};
+    const std::array<const SqliteOwnedEquipmentTransaction::Committed*,1> skipped{&*walk2};
+    require(!f.helper.material_successor_from_committed(*selection_after,joint,*walk) &&
+        !f.helper.material_successor_from_committed_chain(*selection_after,joint,reversed) &&
+        !f.helper.material_successor_from_committed_chain(*selection_after,joint,skipped),
+        "Consumed intermediate, reversed or skipped private edge cannot be a current material successor");
+    const auto walked=f.helper.material_successor_from_committed_chain(*selection_after,joint,moves);
+    require(walked && f.helper.restoration_current(*walked) && walked->learning_source()->equipment().position.x==20 &&
+        walked->batches()==selection_after->batches() && f.activation_storage()==activation,
+        "Real ordinary movement edge may advance saved pose without replaying/deleting companion history");
+    require(!f.helper.material_successor_from_committed_chain(before,joint,moves),"Cannot skip the actual material/selection predecessor");
+}
 void learning_selection_source_regression() {
     // Each after-state fault owns an isolated source; none is repaired in order
     // to revive a stale token. No test-only constructor mints private receipts.
@@ -477,6 +533,7 @@ int main() {
     try {
         selection_source_regression();
         learning_selection_source_regression();
+        joint_material_successor_regression();
         status_activation_lineage_regression();
         Fixture f;auto repo=f.repo();RecoveredOwnedCompanions service(repo);const auto c=f.character;
         require(service.restore(1,c).empty(),"Absent ownership emitted packets");

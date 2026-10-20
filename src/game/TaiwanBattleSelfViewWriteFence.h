@@ -44,7 +44,7 @@ public:
     }
     // Complete ordered frames/records only. A final known primary setter can
     // follow1C/82 in the same whole Write; a later ambiguous writer clears it.
-    // World2A/CF or an unsupported primary slot poison the WHOLE Write: a
+    // World2A/CF, deferred S83/actions6/9 or an unsupported primary slot poison the WHOLE Write: a
     // later grant does not prove reachability across those receiver boundaries.
     // Other parsed records have no writer identified by this bounded classifier,
     // not a claim that every native consumer is harmless in every phase.
@@ -80,6 +80,23 @@ private:
         if(!records)return false;
         for(const auto& record:*records){
             if(record.opcode==0x2a||record.opcode==0xcf){
+                result.changes_view=true;result.primary_slot.reset();poisoned=true;
+            }else if(record.opcode==0x83&&record.bytes[1]==6){
+                // Current TW aaf0:52C520 action6 -> 52A8D0 state7.
+                // Logical BYTE12==2 explicitly selects flee substate4;
+                // 529020 -> 526ED0 waits for animation, then 520000
+                // removes all six layers and clears the presence bit.
+                // Other result flags need not remove an actor. Conservatively
+                // retire all retained primary/secondary sender assumptions,
+                // never reinterpret flee as a row swap or issue a new grant.
+                result.changes_view=true;result.primary_slot.reset();poisoned=true;
+            }else if(record.opcode==0x83&&record.bytes[1]==9){
+                // Current TW aaf0:52C520 -> state97 -> 525B90 exchanges all
+                // six layers and later rewrites primary/secondary slots.
+                // Failure may leave them unchanged; conservatively revoke
+                // sender custody anyway, without inventing a new slot/grant.
+                // A later setter in this same Write does not prove ordering
+                // after the deferred native animation/swap completes.
                 result.changes_view=true;result.primary_slot.reset();poisoned=true;
             }else if(record.opcode==0x1c||record.opcode==0x82){
                 result.changes_view=true;result.primary_slot.reset();

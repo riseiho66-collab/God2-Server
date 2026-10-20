@@ -8,8 +8,15 @@
 #include <stdexcept>
 #include <vector>
 namespace god2 {
-// Native497140/497170/497230/4971B0 producers. Direction-qualified:
+// Native497230 answer producer. Direction-qualified:
 // C2S58 is the party preview answer; unrelated S2C58 carries saved vitals.
+// C6A/497140 is cursor6 SUPPORT, not native party Join. It has a separate
+// RecoveredSosSupportRequest type/owner. Existing Join below is INTERNAL
+// CUSTOM-0062 consenting membership only; it has no native wire encoder.
+// Cursor5 C57 team request likewise has its separate raw type. Kick below
+// remains an INTERNAL custom party operation, not a qualified native command.
+// C5A has distinct self/selected-member producers; its own raw exit type
+// preserves that distinction. Join/Kick/Leave here are trusted INTERNAL input.
 struct RecoveredParty {
     enum class Kind {Join,Answer,Kick,Leave};
     using Name=std::array<std::uint8_t,16>;
@@ -18,31 +25,24 @@ struct RecoveredParty {
         bool operator==(const Request&) const=default;
     };
     static constexpr std::size_t size(std::uint8_t opcode) noexcept {
-        switch(opcode){case 0x6a:return 9;case 0x57:case 0x58:return 5;case 0x5a:return 19;default:return 0;}
+        return opcode==0x58?5:0;
     }
     static std::optional<Request> decode(std::span<const std::uint8_t> b) {
         if(b.empty() || !size(b[0]) || b.size()!=size(b[0]))return {};
-        const auto dword=[&](unsigned at){return std::uint32_t{b[at]}|(std::uint32_t{b[at+1]}<<8)|
-            (std::uint32_t{b[at+2]}<<16)|(std::uint32_t{b[at+3]}<<24);};
-        if(b[0]==0x6a)return Request{Kind::Join,dword(1),dword(5)};
-        if(b[0]==0x57)return Request{Kind::Kick,0,dword(1)};
         if(b[0]==0x58)return Request{Kind::Answer,0,std::uint32_t{b[1]}|(std::uint32_t{b[2]}<<8),b[3],b[4]};
-        Request r{Kind::Leave,std::uint32_t{b[1]}|(std::uint32_t{b[2]}<<8)};
-        std::copy_n(b.begin()+3,16,r.name.begin());return r;
+        return {};
     }
     static void word(std::vector<std::uint8_t>& b,std::uint16_t n){b.push_back(static_cast<std::uint8_t>(n));b.push_back(static_cast<std::uint8_t>(n>>8));}
     static void dword(std::vector<std::uint8_t>& b,std::uint32_t n){for(unsigned i=0;i<4;++i)b.push_back(static_cast<std::uint8_t>(n>>(8*i)));}
     static std::vector<std::uint8_t> encode(const Request& r) {
         std::vector<std::uint8_t> b;
         switch(r.kind) {
-        case Kind::Join:b.push_back(0x6a);dword(b,r.self);dword(b,r.target);break;
-        case Kind::Kick:b.push_back(0x57);dword(b,r.target);break;
+        case Kind::Join:throw std::invalid_argument("Internal CUSTOM party join has no qualified native wire encoder");
+        case Kind::Kick:throw std::invalid_argument("Internal CUSTOM party kick has no qualified native wire encoder");
         case Kind::Answer:
             if(r.target>0xffffu)throw std::invalid_argument("party answer ID exceeds native WORD");
             b.push_back(0x58);word(b,static_cast<std::uint16_t>(r.target));b.push_back(r.answer);b.push_back(r.opaque);break;
-        case Kind::Leave:
-            if(r.self>0xffffu)throw std::invalid_argument("party leave ID exceeds native WORD");
-            b.push_back(0x5a);word(b,static_cast<std::uint16_t>(r.self));b.insert(b.end(),r.name.begin(),r.name.end());break;
+        case Kind::Leave:throw std::invalid_argument("Internal CUSTOM leave has a separate self/member native exit type");
         }
         return b;
     }

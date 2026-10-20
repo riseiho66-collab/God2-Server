@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <thread>
 #include <variant>
 #include <vector>
@@ -29,8 +30,33 @@ class OwnedSkillBookLearningService final {
     struct Entry;
     struct Operation;
     struct Lifetime;
+    struct MaterialEpoch;
 public:
     class WrittenLearningSource;
+    class MaterialAdmission {
+        struct Data;
+        friend class OwnedSkillBookLearningService;
+    public:
+        MaterialAdmission(const MaterialAdmission&)=default;
+        MaterialAdmission& operator=(const MaterialAdmission&)=default;
+    private:
+        explicit MaterialAdmission(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
+    class WrittenMaterialSource {
+        struct Data;
+        friend class OwnedSkillBookLearningService;
+    public:
+        WrittenMaterialSource(const WrittenMaterialSource&)=default;
+        WrittenMaterialSource& operator=(const WrittenMaterialSource&)=default;
+        bool current(Session&) const;
+        const Session::NormalWorldInitialization& initialization() const noexcept;
+        const std::shared_ptr<const RecoveredOwnedCompanions::Restoration>& material() const noexcept;
+        bool same_source(const WrittenMaterialSource& value) const noexcept{return data_==value.data_;}
+    private:
+        explicit WrittenMaterialSource(std::shared_ptr<Data> data):data_(std::move(data)){}
+        std::shared_ptr<Data> data_;
+    };
     OwnedSkillBookLearningService(SqliteSkillBookLearningRepository&,LuaEngine&,std::size_t actual_session_capacity);
     ~OwnedSkillBookLearningService();
     // Game-owned immutable provenance; only this actual service publishes it.
@@ -140,9 +166,28 @@ public:
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
         std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical_after,
         LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource);
+    // Written exact final original reply + private actual mutation edge only.
+    // Preserve original deity/learning history; no restore/replay or new Entry.
+    // Capture BEFORE actual original mutation dispatch; never reconstruct this
+    // witness after a commit or after Entry release/rebootstrap.
+    std::optional<MaterialAdmission> prepare_material(Session&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor);
+    void abandon_material(const MaterialAdmission&) noexcept;
+    std::optional<WrittenMaterialSource> reanchor_material(Session&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical_after,
+        std::shared_ptr<SqliteOwnedEquipmentTransaction>,const SqliteOwnedEquipmentTransaction::Committed&,
+        const Session::NormalWorldInitialization&,const Session::WorldResponseWrite&,const MaterialAdmission&);
+    std::optional<WrittenMaterialSource> reanchor_material_chain(Session&,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> predecessor,
+        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> canonical_after,
+        std::shared_ptr<SqliteOwnedEquipmentTransaction>,std::span<const SqliteOwnedEquipmentTransaction::Committed* const>,
+        const Session::NormalWorldInitialization&,const Session::WorldResponseWrite&,const MaterialAdmission&);
     void release(Session&);
     void stop();
 private:
+    bool material_current(Session&,const std::shared_ptr<WrittenMaterialSource::Data>&);
+    bool admit_material_epoch(Session&,const Session::NormalWorldInitialization&);
     using SelectionSource=std::variant<SharedTaiwanOwnedDeitySkillSource::WrittenSelectionSource,
         LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource>;
     bool reanchor_selection_impl(Session&,
@@ -165,6 +210,14 @@ private:
     const std::size_t capacity_;
     const std::thread::id thread_=std::this_thread::get_id();
     std::map<std::uint64_t,std::shared_ptr<Entry>> entries_;
+    std::map<std::uint64_t,std::shared_ptr<WrittenMaterialSource::Data>> material_sources_;
+    std::map<std::uint64_t,std::shared_ptr<MaterialAdmission::Data>> material_admissions_;
+    std::map<std::uint64_t,std::shared_ptr<MaterialEpoch>> material_epochs_;
+    // Only bootstrap's owned supplier call may borrow this exact passive
+    // source read; SQL callbacks cannot recursively enter material_current.
+    std::shared_ptr<WrittenMaterialSource::Data> passive_material_window_;
+    std::shared_ptr<Entry> passive_material_entry_;
+    bool material_reading_=false;
     bool live_=true,busy_=false,poisoned_=false;
     std::shared_ptr<Lifetime> lifetime_;
     std::weak_ptr<LearningPublication::Data> active_publication_;

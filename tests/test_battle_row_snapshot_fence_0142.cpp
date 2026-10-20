@@ -49,6 +49,28 @@ int trace(unsigned event,void* context,void* statement,void*) noexcept {
 }
 int main()try {
     using Repo=god2::SqliteNativeWorldEntrySnapshotRepository;
+    // Real, isolated repositories and presence owners; no fabricated Session
+    // initialization/callback/lease receipt or claim of a live ready handshake.
+    Fixture ownership;
+    god2::SharedWorldPresence actual_presence(*ownership.characters);
+    god2::OwnedBattleRowPreference common_host(*ownership.repository,*ownership.accounts,
+        *ownership.characters,actual_presence,2);
+    require(!ownership.load(),"Constructing common owner must not create a default saved row");
+    require(!common_host.current() && common_host.begin() && common_host.current(),"Common host admission failed");
+    require(!common_host.begin() && !common_host.current(),"Nested callback must poison current admission");
+    common_host.end();
+    require(common_host.begin() && common_host.current(),"Retired callback may admit a distinct later callback");
+    common_host.stop();common_host.end();
+    require(!common_host.current() && !common_host.begin(),"Stopped host must never regain callback authority");
+    require(!ownership.load(),"Lifecycle-only admission must not persist a row");
+    Fixture foreign;
+    god2::SharedWorldPresence foreign_presence(*foreign.characters);
+    bool foreign_rejected=false;
+    try {god2::OwnedBattleRowPreference wrong(*ownership.repository,*ownership.accounts,
+        *ownership.characters,foreign_presence,2);}
+    catch(const std::invalid_argument&){foreign_rejected=true;}
+    require(foreign_rejected,"A different presence repository must never supply common row authority");
+
     Fixture final_read;
     Observation before_commit;
     sqlite3_trace_v2(final_read.db.get(),SQLITE_TRACE_STMT,trace,&before_commit);

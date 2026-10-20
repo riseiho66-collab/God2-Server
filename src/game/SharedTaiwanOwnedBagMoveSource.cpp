@@ -100,7 +100,7 @@ std::optional<State> plan(const Transaction::Before& before,Request request,bool
     // an operation log; actual fulltuple/instance revisions advance each time.
     const auto tag=[material_mode](std::string& record) {
         const std::string_view marker=material_mode?";CUSTOM-0094:C24-full25-retention":";CUSTOM-0093:C24-whole-instance";
-        if(record.ends_with(marker))return true;
+        if(record.find(marker)!=std::string::npos)return true;
         if(record.size()+marker.size()>2048)return false;
         record.append(marker);return true;
     };

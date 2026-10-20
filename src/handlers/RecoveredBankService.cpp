@@ -68,7 +68,7 @@ std::optional<std::vector<std::uint8_t>> RecoveredBankService::open(std::uint64_
     }catch(...){retire_context(session);throw;}
 }
 RecoveredBankService::Result RecoveredBankService::handle(std::uint64_t session,
-    std::span<const RecoveredBank::Request> requests,Clock::time_point now) {
+    std::span<const RecoveredBank::Request> requests,Clock::time_point now,PureCurrent pure_current) {
     auto operation=callbacks_.enter();Result result;
     std::optional<Peer> live;std::optional<Context> opened;
     const auto reject=[&]() {
@@ -86,6 +86,7 @@ RecoveredBankService::Result RecoveredBankService::handle(std::uint64_t session,
         return result;
     };
     try {
+        if(pure_current)callbacks_.depend_on(std::move(pure_current));
         if(const auto found=contexts_.find(session);found!=contexts_.end())opened=found->second;
         require(requests.size()==1,"Bank batch invalid");const auto r=requests.front();
         live=invoke_adapter(lookup_,session);

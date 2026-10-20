@@ -2223,11 +2223,13 @@ struct Session::Impl {
             throw std::invalid_argument("Normal movement custody requires exclusive actual normal world owner");
         if(character_handlers.movement && character_handlers.world_records)
             throw std::invalid_argument("Recovered world handlers are mutually exclusive");
-        if(character_handlers.owned_battle_row_preference &&
-           (!character_handlers.owned_normal_movement_response_custody ||
-            !character_handlers.world_entry || !character_handlers.world_ready || !character_handlers.world_records ||
-            character_handlers.common_world_lifecycle || character_handlers.common_world_lifecycle_factory))
-            throw std::invalid_argument("B4 preference requires the actual exclusive normal-entry owner");
+        if(character_handlers.owned_battle_row_preference) {
+            const bool common=bool(character_handlers.common_world_lifecycle) || bool(character_handlers.common_world_lifecycle_factory);
+            const bool normal=character_handlers.owned_normal_movement_response_custody && !common;
+            if(mode!=ProtocolMode::God2CharacterConnection || (!normal && !common) ||
+               !character_handlers.world_entry || !character_handlers.world_ready || !character_handlers.world_records)
+                throw std::invalid_argument("B4 preference requires its actual normal or common world owner");
+        }
         if((character_handlers.world_ready || has_world_handler()) &&
            (!character_handlers.world_entry || !character_handlers.world_ready || !has_world_handler()))
             throw std::invalid_argument("Recovered world routing requires world entry and complete handlers");
@@ -5986,6 +5988,17 @@ Session::WorldResponseWrite Session::observe_world_response(std::span<const std:
     observed_response_status=&data->status;
     return WorldResponseWrite(std::move(data));
 }
+std::optional<Session::WorldResponseWrite> Session::current_world_response_capture_on_game() const {
+    if(observed_world_callback!=this || !observed_response_poison || *observed_response_poison)
+        throw std::logic_error("Original response view requires its actual unpoisoned callback");
+    const auto capture=impl_->world_response_callback_capture;
+    if(!capture)return {};
+    const WorldResponseWrite result(capture->receipt);
+    if(result.status()!=WorldResponseWriteStatus::Pending || !world_response_write_current_on_game(result))
+        throw std::logic_error("Existing original response capture retired");
+    return result;
+}
+
 bool Session::world_response_write_current(const WorldResponseWrite& observation) const {
     if(observed_world_callback!=this)
         throw std::logic_error("World response current requires actual world-records game callback");

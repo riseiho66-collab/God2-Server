@@ -8,6 +8,9 @@
 namespace god2 {
 // CUSTOM-0062: consenting transient parties, maximum5 from native four-peer
 // roster. No shared movement, combat/XP/drop rules or persistent party guessed.
+// Kind::Join is an internal CUSTOM membership operation. Original cursor6
+// C6A support must never arrive here through the native party decoder.
+// Kind::Kick is also internal; cursor5 C57 is a raw team request instead.
 class NativeParty {
 public:
     using Time=std::chrono::steady_clock::time_point;

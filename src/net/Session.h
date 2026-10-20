@@ -814,6 +814,9 @@ public:
     // No sending/reframing; existing complete-frame validation applies.
     // Double capture/reentry poisons the first token even if caught.
     WorldResponseWrite observe_world_response(std::span<const std::uint8_t> wire);
+    // Read-only view of THIS actual callback's existing original capture.
+    // Never mints, changes, rebases or accepts a second capture.
+    std::optional<WorldResponseWrite> current_world_response_capture_on_game() const;
     bool world_response_write_current(const WorldResponseWrite&) const;
     bool world_response_write_current_on_game(const WorldResponseWrite&) const;
     std::optional<BattleSelfView> battle_self_view() const;

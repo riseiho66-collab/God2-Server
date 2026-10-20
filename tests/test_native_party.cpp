@@ -1,6 +1,8 @@
 #include "game/NativeParty.h"
+#include "game/OwnedPartyPublicationGuard.h"
 #include "protocol/RecoveredWorldRecords.h"
 #include <iostream>
+#include <type_traits>
 using namespace god2;
 void require(bool n,const char* message){if(!n)throw std::runtime_error(message);}
 NativeParty::Member member(unsigned n) {
@@ -8,6 +10,48 @@ NativeParty::Member member(unsigned n) {
     m.name="Player"+std::to_string(n);m.profession=1;m.level=1;m.resources={50,100,20,80};m.ready=true;return m;
 }
 int main(){try{
+    // Source-only regression cases. These exercise the actual publication
+    // helper used by every Application party writer; they are not run in PHASE1.
+    {
+        OwnedPartyPublicationGuard guard;NativeParty state;state.observe(member(1));
+        {
+            OwnedPartyPublicationGuard::Scope outer(guard);auto stale=state;
+            {
+                OwnedPartyPublicationGuard::Scope inner(guard);
+                // Even an equal-value nested publication is an intervening write.
+                require(inner.publish(state,NativeParty(state)),"Nested current party publish failed");
+            }
+            require(!outer.publish(state,std::move(stale)),"Same-value ABA overwrote nested party publication");
+        }
+        {
+            OwnedPartyPublicationGuard::Scope outer(guard);
+            {OwnedPartyPublicationGuard::Scope nested(guard);}
+            require(!outer.current(),"Caught no-write nested entry did not poison party dispatch");
+        }
+        {
+            OwnedPartyPublicationGuard::Scope publication(guard);bool first=true,last=true,paired=false;
+            guard.observe([&]{return first;});guard.observe([&]{return last;});
+            first=false; // The last successful observer cannot replace the first witness.
+            require(!publication.publish_if(state,NativeParty(state),[&]() noexcept {paired=true;return true;}),"Stale early party peer published");
+            require(!paired,"Paired directory changed before party source fence");
+        }
+        {
+            OwnedPartyPublicationGuard::Scope publication(guard);auto next=state;next.observe(member(2));
+            const auto source=guard.source_epoch();
+            require(!publication.publish_if(state,NativeParty(next),[]() noexcept {return false;}),"Failed directory CAS published party model");
+            require(!state.member(2),"Directory rejection partially published party model");
+            require(publication.publish_if(state,std::move(next),[]() noexcept {return true;}),"Valid paired publication failed");
+            require(guard.source_current(source)&&publication.current(),"Own party publish retired valid delivery source");
+        }
+        {
+            OwnedPartyPublicationGuard::Scope stale(guard);const auto source=guard.source_epoch();guard.invalidate();
+            require(!stale.current(),"Rebinding did not invalidate earlier party scope");
+            require(!guard.source_current(source),"Scope-free observer retained a rebound party source");
+        }
+        {OwnedPartyPublicationGuard::Scope cleanup(guard);require(cleanup.publish(state,NativeParty{}),"Invalidation blocked later disconnect cleanup");}
+        guard.stop();
+        {OwnedPartyPublicationGuard::Scope stopped(guard);require(!stopped.publish(state,NativeParty{}),"Stopped guard accepted publication");}
+    }
     NativeParty p;for(unsigned n=1;n<=7;++n)p.observe(member(n));
     auto now=std::chrono::steady_clock::now();
     using K=RecoveredParty::Kind;
@@ -99,16 +143,73 @@ int main(){try{
         "Scene return did not rehydrate current positions");
     recovery.handle(3,{K::Join,3,1},now);require(!recovery.handle(1,{K::Answer,0,3,1},now).empty(),"Qualified member cannot join after recovery");
     require(recovery.participants(1).size()==3 && recovery.participants(4)==std::vector<std::uint64_t>{4},"Relevant party snapshot scope");
-    for(const auto r:{RecoveredParty::Request{K::Join,0xffffffff,0x12345678},
-        {K::Answer,0,0x1234,2,0xa5},{K::Kick,0,0xffffffff},{K::Leave,0x1234}}) {
+    for(const auto r:{RecoveredParty::Request{K::Answer,0,0x1234,2,0xa5}}) {
         auto wire=RecoveredParty::encode(r);require(RecoveredParty::decode(wire)==std::optional{r},"Request raw roundtrip");
         const auto parsed=RecoveredWorldRecords::decode(wire);require(parsed && parsed->size()==1,"Party world parser");
         for(std::size_t n=1;n<wire.size();++n)require(!RecoveredWorldRecords::decode(std::span(wire).first(n)),"Party truncation accepted");
     }
-    for(const auto r:{RecoveredParty::Request{K::Answer,0,0x10000,1},
+    for(const auto r:{RecoveredParty::Request{K::Join,0xffffffff,0x12345678},
+        RecoveredParty::Request{K::Kick,0,0xffffffff},
+        RecoveredParty::Request{K::Answer,0,0x10000,1},
         RecoveredParty::Request{K::Leave,0x10000}}) {
         bool rejected=false;try{RecoveredParty::encode(r);}catch(const std::invalid_argument&){rejected=true;}
-        require(rejected,"Native WORD overflow silently truncated");
+        require(rejected,"Unsupported internal party wire or native WORD overflow accepted");
+    }
+    // Source/static regression only: original cursor6 support.ani is C6A;
+    // never reinterpret it as transient consenting CUSTOM party membership.
+    using Sos=RecoveredSosSupportRequest;
+    static_assert(!std::is_convertible_v<Sos::Request,RecoveredParty::Request>);
+    require(RecoveredParty::size(0x6a)==0,"SOS wire still exposed by party codec");
+    require(RecoveredParty::size(0x57)==0,"Team request still exposed as party Kick");
+    require(RecoveredParty::size(0x5a)==0,"Dual self/member exit still exposed as self-only Leave");
+    using Exit=RecoveredPartyExitRequest5A;
+    for(const auto target:{0u,1u,65535u}) {
+        Exit::Request request{static_cast<std::uint16_t>(target),{}};request.name.fill(0xa5);request.name[0]=0;
+        const auto wire=Exit::encode(request);
+        require(Exit::decode(wire)==std::optional{request} && !RecoveredParty::decode(wire),"Self/member target or name tail lost");
+        const auto parsed=RecoveredWorldRecords::decode(wire);
+        require(parsed && parsed->size()==1 && std::get<Exit::Request>(parsed->front())==request,"C5A didn't preserve raw member target");
+    }
+    using Team=RecoveredTeamRequest57;
+    static_assert(!std::is_convertible_v<Team::Request,RecoveredParty::Request>);
+    for(const auto target:{0u,0x12345678u,0xffffffffu}) {
+        const auto wire=Team::encode({target});
+        require(Team::decode(wire)==std::optional{Team::Request{target}} && !RecoveredParty::decode(wire),"Raw C57 team target lost or became Kick");
+        const auto parsed=RecoveredWorldRecords::decode(wire);
+        require(parsed && parsed->size()==1 && std::get<Team::Request>(parsed->front()).target==target,"World C57 did not retain independent team type");
+    }
+    for(const auto raw:{Sos::Request{0,0},Sos::Request{0xffffffffu,0x12345678u},
+        Sos::Request{0x87654321u,0xffffffffu}}) {
+        const auto wire=Sos::encode(raw);
+        require(Sos::decode(wire)==std::optional{raw},"Full support DWORDs changed");
+        require(!RecoveredParty::decode(wire),"Support request decoded into party Join");
+        const auto parsed=RecoveredWorldRecords::decode(wire);
+        require(parsed && parsed->size()==1 && std::get<Sos::Request>(parsed->front())==raw,"World C6A is not independent support type");
+        for(std::size_t n=0;n<wire.size();++n)require(!Sos::decode(std::span(wire).first(n)),"Support truncation escaped");
+        auto extra=std::vector<std::uint8_t>(wire.begin(),wire.end());extra.push_back(0);
+        require(!Sos::decode(extra),"Support codec swallowed a suffix");
+        require(!RecoveredWorldRecords::decode(extra),"Whole world batch leaked support before malformed suffix");
+        extra.back()=0x30;extra.push_back(0);
+        const auto mixed=RecoveredWorldRecords::decode(extra);
+        require(mixed && mixed->size()==2 && std::holds_alternative<Sos::Request>((*mixed)[0]) &&
+            std::holds_alternative<RecoveredWorldRecords::Tick>((*mixed)[1]),"Support/tick ordered flush changed");
+    }
+    using SosCommand=RecoveredSosBattleCommand;
+    for(std::uint8_t actor=0;actor<=14;++actor)for(std::uint8_t secondary=0;secondary<2;++secondary)
+        for(std::uint8_t requested=0;requested<2;++requested) {
+        SosCommand::Bytes wire{0x35,actor,8,secondary,0xa5};
+        const auto bit=static_cast<std::uint16_t>(1u<<(actor%14));
+        const auto mask=actor<14?5u:7u;wire[mask]=static_cast<std::uint8_t>(bit);wire[mask+1]=static_cast<std::uint8_t>(bit>>8);
+        wire[9]=0x78;wire[10]=0x56;wire[11]=0x34;wire[12]=0x12;wire[13]=requested;
+        const auto command=SosCommand::decode(wire);
+        require(command && SosCommand::encode(*command)==wire && command->actor_position()==actor &&
+            command->side_flag()==secondary && command->opaque4()==0xa5 && command->context()==0x12345678u &&
+            command->requested_flag()==requested,"SOS action8 exact producer bytes changed");
+        const auto parsed=RecoveredWorldRecords::decode(wire);
+        require(parsed && parsed->size()==1 && std::holds_alternative<SosCommand::Request>(parsed->front()),"C35 action8 still falls into attack/skill parser");
+        for(std::size_t n=0;n<wire.size();++n)require(!SosCommand::decode(std::span(wire).first(n)),"SOS command truncation escaped");
+        auto bad=wire;bad[13]=2;require(!SosCommand::decode(bad),"SOS request invented another flag");
+        bad=wire;bad[mask]^=1;require(!SosCommand::decode(bad),"SOS target no longer the actual producer actor");
     }
     RecoveredParty::Name name{};name[0]='P';std::array<std::uint8_t,4> hud{0,0,1,0};
     require(RecoveredParty::preview(1,name,1,0,hud,1).size()==29 && RecoveredParty::member(1,name,true,hud).size()==25 &&

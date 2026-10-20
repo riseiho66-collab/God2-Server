@@ -4,6 +4,36 @@
   "inventory_complete": false,
   "designs": [
     {
+      "id": "CUSTOM-0160",
+      "name": "Whole-instance Taiwan bank custody using one joint inventory/equipment owner",
+      "authority": "OWNER_AUTHORIZED_CUSTOM_CUSTODY_POLICY_WITH_QUALIFIED_NATIVE_WIRE_SUBSET",
+      "implementation": [
+        "src/game/SharedTaiwanOwnedBankSource.h",
+        "src/game/SharedTaiwanOwnedBankSource.cpp",
+        "src/game/TaiwanOwnedBankItemMaterial.h",
+        "src/db/SqliteOwnedEquipmentTransaction.cpp",
+        "src/core/Application.cpp"
+      ],
+      "rules": {
+        "custody": "Move the existing complete instance, ID/acquisition/quantity/immutable definition and paired full20/full25 aliases under one existing joint CAS. Never mirror into legacy item-bank tables.",
+        "capacity": "Opening requires 300 explicitly present source cells. No cell population, unlock right, new item or absent-as-empty capacity is granted.",
+        "namespace": "bank location_index=page*50+local; page-specific aliases preserve native local BYTE. Ordinary mutation currently page0..2/local2..49 and bag0..29 only.",
+        "quantity": "Deposit/withdraw only the complete existing stack into an empty destination. C65 marker1 moves/swaps whole instances. No splitting/merging/new acquisition.",
+        "lifecycle": "Same NPC role/distance-authorized money LeaseSource, actual Written normal INIT, full64 owner, exact retained movement pose, actual original callback response components and same latest joint committed receipt. Final pure lifetime fence after SQL observers; postcommit retirement never claims rollback.",
+        "material_continuation": "Actual private before/after joint commit chains, pre-mutation Entry-or-null admission and exact final WorldResponseWrite Written advance existing learning/companion material only. Preserve every same-callback movement edge around B4, roster/activation/catalog/learning history; never fresh restore, replay, grant or treat normal Queued as Written.",
+        "provenance": "Retain original source and add bounded nonduplicating CUSTOM-0160 marker. Acquisition source is unchanged."
+      },
+      "native_gap": "Official storability/binding/unlock/split/merge rules, native opaque helper and current-client acceptance remain OPEN. No source initial owned inventory/bank capacity producer was found; no game DB was inspected.",
+      "document": "docs/research/tw-bank-sos-formation-source-20261020.txt",
+      "tests": [
+        "tests/test_owned_whole_bank_material.cpp"
+      ],
+      "production_activated": false,
+      "native_client_acceptance": false,
+      "verification_status": "SOURCE_AND_POST_EDIT_REVIEW_ONLY_TEST_SOURCE_NOT_EXECUTED",
+      "replacement_plan": "Recover build-matched original rules and complete real population/offline authority before activation; preserve existing instances and perform concentrated later build/native acceptance."
+    },
+    {
       "id": "CUSTOM-0150",
       "name": "Owned ordinary Taiwan movement admission and phase reacquisition",
       "authority": "OWNER_AUTHORIZED_CUSTOM_SERVER_POLICY_WITH_QUALIFIED_NATIVE_GEOMETRY_AND_WIRE",

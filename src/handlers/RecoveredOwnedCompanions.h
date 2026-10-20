@@ -54,6 +54,10 @@ public:
     Restoration restore_deities_with_source(std::uint64_t account,std::uint64_t character,
         SqliteSkillBookLearningRepository&);
     bool restoration_current(const Restoration&);
+    std::optional<Restoration> material_successor_from_committed(const Restoration&,
+        SqliteOwnedEquipmentTransaction&,const SqliteOwnedEquipmentTransaction::Committed&);
+    std::optional<Restoration> material_successor_from_committed_chain(const Restoration&,
+        SqliteOwnedEquipmentTransaction&,std::span<const SqliteOwnedEquipmentTransaction::Committed* const>);
     // Learning-present original restoration only. The caller separately checks
     // the original closed roster/room cut; no source is restored or issued here.
     bool restoration_learning_current_in_transaction(const Restoration&,sqlite3* actual_connection);

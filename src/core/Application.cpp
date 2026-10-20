@@ -31,6 +31,7 @@
 #include "handlers/OwnedPartyDirectoryService.h"
 #include "game/OwnedPartyPreviewTransport.h"
 #include "game/OwnedClientOptions.h"
+#include "game/OwnedPartyPublicationGuard.h"
 #include "game/OwnedBattleRowPreference.h"
 #include "protocol/RecoveredBattleRowPreferenceRuns.h"
 #include "protocol/RecoveredWorldEntryView.h"
@@ -49,6 +50,7 @@
 #include "protocol/RecoveredTaiwanServerRecords.h"
 #include "handlers/InventoryMoveService.h"
 #include "game/SharedTaiwanOwnedBagMoveSource.h"
+#include "game/SharedTaiwanOwnedBankSource.h"
 #include "handlers/InventoryDiscardService.h"
 #include "handlers/OwnedInstanceDiscardService.h"
 #include "handlers/RecoveredTradeService.h"
@@ -814,12 +816,15 @@ struct WholeBagMoveHost {
     std::shared_ptr<SqliteOwnedEquipmentTransaction> transaction;
     RecoveredMovementService* movement=nullptr; // Actual game-owned service; cleared before borrowed owner destruction.
     std::optional<SharedTaiwanOwnedBagMoveSource::MutationBinding> binding;
+    std::shared_ptr<SharedTaiwanOwnedBankSource> bank;
     std::shared_ptr<RecoveredWorldService> service;
     struct MutationDraft {
         std::weak_ptr<Session> session;
         Session::NormalWorldInitialization initialization;
         std::optional<SqliteOwnedEquipmentTransaction::Committed> after;
         bool invalid=false;
+        bool bank_component=false;
+        bool material_mutated=true;
         MutationDraft(std::weak_ptr<Session> actual,Session::NormalWorldInitialization entry)
             :session(std::move(actual)),initialization(std::move(entry)) {}
     };
@@ -827,7 +832,10 @@ struct WholeBagMoveHost {
         std::weak_ptr<Session> session;
         SqliteOwnedEquipmentTransaction::Committed after;
         Session::NormalWorldInitialization initialization;
-        Session::WorldResponseWrite write;
+        Session::NormalWorldResponseAttempt write;
+        bool bank_component=false;
+        bool material_mutated=true;
+        std::shared_ptr<const MutationResponse> previous_in_callback;
     };
     std::shared_ptr<MutationDraft> active;
     std::map<std::uint64_t,std::shared_ptr<const MutationResponse>> mutations;
@@ -838,9 +846,10 @@ struct WholeBagMoveHost {
         if(active)active->invalid=true;
         mutations.clear();
         try {if(binding)binding->invalidate_active();}catch(...) {}
+        try {if(bank)bank->stop();}catch(...) {}
     }
     void revoke() noexcept {
-        live=false;stop_dispatch();service.reset();binding.reset();movement=nullptr;transaction.reset();
+        live=false;stop_dispatch();service.reset();bank.reset();binding.reset();movement=nullptr;transaction.reset();
     }
 };
 struct WholeBagMoveHostGuard {
@@ -1065,7 +1074,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             const bool fixture_mode=config.protocol_mode==ProtocolMode::Fixture;
             if(!fixture_mode)database.trades().install_schema();
             if(!fixture_mode){database.banks().install_schema();database.bank_access().install_schema();}
-            if(!fixture_mode)database.bank_items().install_schema();
+            if(!fixture_mode && !config.owned_whole_bag_moves_enabled)database.bank_items().install_schema();
             if(!fixture_mode && config.owned_beast_panel_enabled && config.owned_mixed_bank_enabled)database.install_beast_bank_schema();
             RecoveredAccountLogin recovered_accounts(database.accounts(),config.local_account_registration);
             asio::thread_pool authentication_workers(4); // Joins before destroying its account owner.
@@ -1347,6 +1356,16 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 std::optional<OwnedSkillBookLearningService::LearningPublication> latest_learning;
                 std::shared_ptr<const LearnedPkSources> paired;
                 std::optional<LegacyTaiwanOwnedDeitySelectionRegistry::WrittenSelectionSource> legacy_selection;
+                std::optional<OwnedSkillBookLearningService::WrittenMaterialSource> material_source;
+                std::weak_ptr<WholeBagMoveHost> material_host;
+            };
+            struct PendingCompanionMaterial {
+                std::shared_ptr<const CanonicalCompanionSource> previous;
+                std::shared_ptr<const RecoveredOwnedCompanions::Restoration> material;
+                std::weak_ptr<WholeBagMoveHost> host;
+                std::shared_ptr<const WholeBagMoveHost::MutationResponse> mutation;
+                Session::WorldResponseWrite response;
+                OwnedSkillBookLearningService::MaterialAdmission admission;
             };
             struct PendingCompanionSelection {
                 std::shared_ptr<const CanonicalCompanionSource> previous;
@@ -1397,6 +1416,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 // Retire admission history before legacy SQL. Only the exact
                 // pending private cohort may establish its canonical successor.
                 bool selection_unjoined=false;
+                std::shared_ptr<const PendingCompanionMaterial> pending_material;
             };
             std::map<std::uint64_t,std::shared_ptr<OwnedCompanionRestorationSource>> owned_companion_restoration_sources;
             // CUSTOM-0148: first physical CommonWorld entry only. A later
@@ -1543,16 +1563,25 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 };
                 source->last_observed_write=CompanionWriteObservation::Pending;
                 source->expected_receiving_prefix.reset();
-                if(source->pending_selection)return; // Never query the consumed predecessor during C67.
+                if(source->pending_selection || source->pending_material)return; // Never query a consumed predecessor before its Written successor.
                 if(source->selection_unjoined){source->last_observed_write=CompanionWriteObservation::Stale;return;}
                 if(const auto canonical=source->canonical_source){
+                    const auto material_current=[&]{
+                        const auto host=canonical->material_host.lock();
+                        const auto pure=[&]{return host && host->live && host->accepting && host->movement &&
+                            canonical->material->learning_source() &&
+                            host->movement->current_world_location(session.id(),source->account,source->character)==
+                                std::optional{canonical->material->learning_source()->equipment().position};};
+                        return canonical->material_source && pure() && canonical->material_source->current(session) && pure();
+                    };
                     const auto current=[&]{
                         return local() && source->canonical_source==canonical && source->session.lock().get()==&session &&
                             !session.closing() && source->normal_initialization &&
                             session.normal_world_initialization_current_on_game(*source->normal_initialization) &&
                             ((canonical->learning && canonical->learning->current(session)) ||
                              (canonical->selection && canonical->selection->current(session)) ||
-                             (canonical->legacy_selection && canonical->legacy_selection->current(session)));
+                             (canonical->legacy_selection && canonical->legacy_selection->current(session)) ||
+                             material_current());
                     };
                     if(!current() || !owned_companions.restoration_current(*canonical->material) || !current()){
                         source->last_observed_write=CompanionWriteObservation::Stale;return;
@@ -1954,6 +1983,8 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                         fixture_text?&*fixture_text:nullptr}; dispatcher.dispatch(ctx,packet);
                 };
             NativeParty native_parties;
+            OwnedPartyPublicationGuard native_party_publication;
+            bool party_sources_live=true;
             std::unique_ptr<OwnedPartyDirectory> owned_party_directory; // CUSTOM-0097, independent of membership.
             std::function<void(Session&)> owned_party_directory_retire; // Actual ready/disconnect watcher path, game owner only.
             if(config.owned_party_directory_enabled)owned_party_directory=std::make_unique<OwnedPartyDirectory>();
@@ -2063,15 +2094,33 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                         peer->send_world_records(std::move(logical));
                     }
             };
-            std::optional<ChineseText> party_text;
-            RecoveredBankService native_banks(database.banks(),
-                [&](std::uint64_t id)->std::optional<RecoveredBankService::Peer> {
+            // Full-instance custody has its own actual normal-entry readiness.
+            // Legacy trade readiness requires an unrelated scalar projection and
+            // narrows character IDs; neither is authority for this bank owner.
+            const auto bank_peer=[&](std::uint64_t id)->std::optional<RecoveredBankService::Peer> {
+                if(!whole_bag_moves) {
                     const auto peer=trade_peer(id);if(!peer || !recovered_movement)return {};
                     const auto where=recovered_movement->current_location(id,peer->account,peer->character);if(!where)return {};
                     return RecoveredBankService::Peer{id,peer->account,peer->character,
                         static_cast<std::uint16_t>(where->area),static_cast<std::uint16_t>(where->scene),
                         static_cast<std::uint16_t>(where->x),static_cast<std::uint16_t>(where->y),peer->ready && !trade_active(id)};
-                },[&](const RecoveredBankService::Peer& peer,std::uint16_t target) {
+                }
+                if(!whole_bag_moves->live || !whole_bag_moves->accepting || !recovered_movement)return {};
+                const auto at=trade_sessions.find(id);if(at==trade_sessions.end())return {};
+                const auto peer=at->second.lock();if(!peer || peer->closing() || !peer->account_id || !peer->character_id)return {};
+                const auto init=peer->normal_world_initialization();
+                if(!init || !init->entry_written() || !peer->normal_world_initialization_current(*init) ||
+                   !peer->recovered_world_ready() ||
+                   (peer->state()!=SessionState::CharacterSelected && peer->state()!=SessionState::InWorld) || trade_active(id))return {};
+                const auto where=recovered_movement->current_location(id,peer->account_id,peer->character_id);
+                if(!where || !peer->normal_world_initialization_current(*init))return {};
+                return RecoveredBankService::Peer{id,peer->account_id,peer->character_id,
+                    static_cast<std::uint16_t>(where->area),static_cast<std::uint16_t>(where->scene),
+                    static_cast<std::uint16_t>(where->x),static_cast<std::uint16_t>(where->y),true};
+            };
+            std::optional<ChineseText> party_text;
+            RecoveredBankService native_banks(database.banks(),
+                bank_peer,[&](const RecoveredBankService::Peer& peer,std::uint16_t target) {
                     // CUSTOM-0064: bank role and native placement are independently
                     // required. Names, catalog entries or guessed coordinates never
                     // authorize an NPC. Test placements stay in the guarded lab.
@@ -2242,20 +2291,60 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     },bag_slot_projection,[&](std::uint64_t id) {bank_items_disconnect(id);native_banks.disconnect(id);});
                 spdlog::info("OWNED_INSTANCE_DISCARD_ENABLED CUSTOM-0071 full_instance no_grants no_formula no_ground_drop");
             }
+            // Capture before any SQL observer. A final source fence never calls
+            // a repository, and retains this exact Session incarnation/pose.
+            const auto party_source=[&](const std::shared_ptr<Session>& peer,bool native_member=true)->std::function<bool()> {
+                if(!party_sources_live || !peer || !recovered_movement)return {};
+                // CUSTOM-0062 still uses the selected-character wire namespace.
+                // Independent scene actors need their real exposure/owner adapter;
+                // equal numbers never make raw scene handles DB character IDs.
+                if(native_member && taiwan_entry_identity!=TaiwanWorldEntryIdentity::SelectedCharacter)return {};
+                const auto id=peer->id(),account=peer->account_id,character=peer->character_id;
+                if(!account || !character || (native_member && character>0x3fff))return {};
+                const auto phase=peer->state();const auto battle=peer->battle_generation();
+                const auto ready=peer->recovered_world_ready();const auto language=peer->recovered_client_language();
+                const bool town=diagnostic_town_scene_pending.contains(id),island=diagnostic_island_return_pending.contains(id);
+                const auto at=party_sessions.find(id);
+                if(at==party_sessions.end() || at->second.lock()!=peer)return {};
+                const auto pose=recovered_movement->current_world_location(id,account,character);if(!pose)return {};
+                const auto initialization=peer->normal_world_initialization_on_game();
+                if(native_member && initialization && initialization->qualified_scene_identity())return {};
+                const auto source_epoch=native_party_publication.source_epoch();
+                return [&,peer,id,account,character,phase,battle,ready,language,town,island,pose,initialization,source_epoch] {
+                    const auto at=party_sessions.find(id);
+                    return party_sources_live && native_party_publication.source_current(source_epoch) &&
+                        !peer->closing() && at!=party_sessions.end() && at->second.lock()==peer &&
+                        peer->id()==id && peer->account_id==account && peer->character_id==character &&
+                        peer->state()==phase && peer->battle_generation()==battle && peer->recovered_world_ready()==ready &&
+                        peer->recovered_client_language()==language && diagnostic_town_scene_pending.contains(id)==town &&
+                        diagnostic_island_return_pending.contains(id)==island && recovered_movement &&
+                        recovered_movement->current_world_location(id,account,character)==pose &&
+                        (initialization?peer->normal_world_initialization_current_on_game(*initialization):
+                            !peer->normal_world_initialization_on_game());
+                };
+            };
             const auto party_member=[&](Session& session)->std::optional<NativeParty::Member> {
-                if(!recovered_movement || !session.character_id || session.character_id>0x3fff)return {};
-                const auto location=recovered_movement->current_location(session.id(),session.account_id,session.character_id);
-                if(!location)return {};
-                const auto owned=database.recovered_characters().list_for_account(session.account_id);
-                const auto role=std::find_if(owned.begin(),owned.end(),[&](const auto& r){return r.id==session.character_id;});
-                const auto snapshot=database.recovered_characters().load_role(session.account_id,session.character_id);
-                const auto resources=database.recovered_characters().load_resources(session.account_id,session.character_id);
+                const auto held=session.shared_from_this();const auto current=party_source(held);
+                if(!current || !current())return {};
+                native_party_publication.observe(current);
+                const auto id=held->id(),account=held->account_id,character=held->character_id;
+                const auto pose=recovered_movement->current_world_location(id,account,character);
+                const auto saved=database.recovered_characters().load_position(account,character);
+                if(!current() || !pose || (pose->revision?saved!=pose:saved.has_value()))return {};
+                const auto location=pose; // An unsaved initial spawn keeps its existing revision-zero semantics.
+                const auto owned=database.recovered_characters().list_for_account(account);
+                if(!current())return {};
+                const auto role=std::find_if(owned.begin(),owned.end(),[&](const auto& r){return r.id==character;});
+                const auto snapshot=database.recovered_characters().load_role(account,character);
+                if(!current())return {};
+                const auto resources=database.recovered_characters().load_resources(account,character);
+                if(!current())return {};
                 if(role==owned.end() || !snapshot || !resources)return {};
                 const auto level=RecoveredRoleLevel::parse(snapshot->logical);
                 const auto end=std::find(role->profile.begin(),role->profile.begin()+15,0);
                 if(!level || !level->level() || end==role->profile.begin() || end==role->profile.begin()+15 ||
                    (role->name_codepage!=950 && role->name_codepage!=936) || role->profile[29]<1 || role->profile[29]>8)return {};
-                NativeParty::Member m{session.id(),session.account_id,static_cast<std::uint16_t>(session.character_id),
+                NativeParty::Member m{id,account,static_cast<std::uint16_t>(character),
                     location->area,location->scene,location->x,location->y};
                 m.name=LegacyChineseCodec::decode(std::string_view(reinterpret_cast<const char*>(role->profile.data()),end-role->profile.begin()),role->name_codepage==936);
                 // Native68370 world body20..23 is the HUD4 also used by55.
@@ -2278,6 +2367,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             OwnedPartyChatService party_chat([&](std::uint64_t id)->std::optional<OwnedPartyChatService::Peer> {
                 const auto at=party_sessions.find(id);if(at==party_sessions.end())return {};
                 const auto peer=at->second.lock();if(!peer)return {};
+                const auto current=party_source(peer);if(!current || !current())return {};
                 auto member=party_member(*peer);if(!member)return {};
                 // Chat carries no coordinates/vitals. Its live lease can also
                 // be in battle; preserve the existing party HUD readiness rule.
@@ -2285,8 +2375,9 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                     (peer->state()==SessionState::CharacterSelected || peer->state()==SessionState::InWorld ||
                      peer->state()==SessionState::InBattle) &&
                     !diagnostic_town_scene_pending.contains(id) && !diagnostic_island_return_pending.contains(id);
-                const auto owned=database.recovered_characters().list_for_account(peer->account_id);
-                const auto role=std::find_if(owned.begin(),owned.end(),[&](const auto& r){return r.id==peer->character_id;});
+                const auto owned=database.recovered_characters().list_for_account(member->account);
+                if(!current())return {};
+                const auto role=std::find_if(owned.begin(),owned.end(),[&](const auto& r){return r.id==member->character;});
                 if(role==owned.end())return {};
                 return OwnedPartyChatService::Peer{*member,peer->recovered_client_language()==1,role->streamer_privilege};
             },[&](const auto& source,const auto& recipient,const RecoveredPartyChat::Request& request) {
@@ -2304,9 +2395,11 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             const auto private_chat_peer=[&](std::uint64_t id)->std::optional<OwnedPrivateChatService::Peer> {
                 const auto at=native_chat_sessions.find(id);if(at==native_chat_sessions.end())return {};
                 const auto peer=at->second.lock();if(!peer)return {};
+                const auto current=party_source(peer);if(!current || !current())return {};
                 const auto member=party_member(*peer);if(!member)return {};
-                const auto owned=database.recovered_characters().list_for_account(peer->account_id);
-                const auto role=std::find_if(owned.begin(),owned.end(),[&](const auto& r){return r.id==peer->character_id;});
+                const auto owned=database.recovered_characters().list_for_account(member->account);
+                if(!current())return {};
+                const auto role=std::find_if(owned.begin(),owned.end(),[&](const auto& r){return r.id==member->character;});
                 if(role==owned.end())return {};
                 const bool ready=peer->recovered_world_ready() &&
                     (peer->state()==SessionState::CharacterSelected || peer->state()==SessionState::InWorld ||
@@ -2880,6 +2973,8 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 for(const auto& d:deliveries) {
                     const auto at=party_sessions.find(d.recipient);if(at==party_sessions.end())continue;
                     auto recipient=at->second.lock();if(!recipient || !recipient->recovered_world_ready())continue;
+                    const auto current=party_source(recipient);if(!current || !current())continue;
+                    native_party_publication.observe(current);
                     if(!party_text)party_text.emplace(config.chinese_dictionary_root);
                     const bool simplified=recipient->recovered_client_language()==1;
                     // Native55/57 recognize self by the actor's exact name.
@@ -2910,8 +3005,11 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 return batches;
             };
             const auto deliver_parties=[&](std::map<std::uint64_t,std::vector<std::uint8_t>> batches) {
-                for(auto& [id,logical]:batches)if(const auto at=party_sessions.find(id);at!=party_sessions.end())
-                    if(auto peer=at->second.lock())peer->send_world_records(std::move(logical));
+                for(auto& [id,logical]:batches) {
+                    if(!native_party_publication.current())break;
+                    if(const auto at=party_sessions.find(id);at!=party_sessions.end())
+                        if(auto peer=at->second.lock())peer->send_world_records(std::move(logical));
+                }
             };
             const auto refresh_party_members=[&](NativeParty& next,std::vector<std::uint64_t> ids) {
                 std::sort(ids.begin(),ids.end());ids.erase(std::unique(ids.begin(),ids.end()),ids.end());
@@ -2922,6 +3020,9 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     const auto before=next.member(id);if(before)previous.emplace(id,*before);
                     const auto at=party_sessions.find(id);
                     const auto peer=at==party_sessions.end()?std::shared_ptr<Session>{}:at->second.lock();
+                    if(!peer)native_party_publication.observe([&,id] {
+                        const auto at=party_sessions.find(id);return at==party_sessions.end() || at->second.expired();
+                    });
                     const auto observed=peer?party_member(*peer):std::optional<NativeParty::Member>{};
                     if(observed)next.observe(*observed);
                     else if(before){auto unavailable=*before;unavailable.ready=false;next.observe(std::move(unavailable));}
@@ -3123,6 +3224,62 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                 const auto found=owned_companion_restoration_sources.find(session.id());
                 if(found==owned_companion_restoration_sources.end())return;
                 const auto holder=found->second;const auto previous=holder->canonical_source;
+                if(const auto pending=holder->pending_material) {
+                    const auto peer=session.weak_from_this().lock();
+                    const auto host=pending->host.lock();const auto learning=skill_book_learning_service;
+                    const auto transaction=host?host->transaction:std::shared_ptr<SqliteOwnedEquipmentTransaction>{};
+                    const auto movement=host?host->movement:nullptr;
+                    const auto material=previous?previous->material:holder->material;
+                    const auto local=[&]{
+                        const auto now=owned_companion_restoration_sources.find(session.id());
+                        if(companion_reentered || !peer || !host || !transaction || !learning ||
+                           now==owned_companion_restoration_sources.end() || now->second!=holder ||
+                           holder->session.lock()!=peer || holder->canonical_source!=previous || holder->pending_material!=pending ||
+                           holder->pending_selection || holder->selection_unjoined || pending->previous!=previous || pending->material!=material ||
+                           !host->live || !host->accepting || host->transaction!=transaction || !movement || host->movement!=movement || !pending->mutation ||
+                           pending->mutation->session.lock()!=peer || !pending->mutation->material_mutated ||
+                           movement->current_world_location(session.id(),holder->account,holder->character)!=
+                               std::optional{pending->mutation->after.equipment().snapshot().position} ||
+                           !holder->normal_initialization || !holder->normal_initialization->same_initialization(pending->mutation->initialization) ||
+                           !holder->all_submission_calls_returned || session.closing() || !session.recovered_world_ready() ||
+                           session.account_id!=holder->account || session.character_id!=holder->character ||
+                           session.state()!=holder->phase_at_restore || session.battle_generation()!=holder->battle_generation_at_restore ||
+                           !pending->mutation->initialization.entry_written() ||
+                           !session.normal_world_initialization_current_on_game(pending->mutation->initialization) ||
+                           !session.normal_world_response_current_on_game(pending->mutation->write) ||
+                           !session.world_response_write_current_on_game(pending->response))return false;
+                        const auto at=host->mutations.find(session.id());
+                        return at!=host->mutations.end() && at->second==pending->mutation;
+                    };
+                    const auto fail=[&]{if(learning)learning->release(session);session.close();
+                        throw std::runtime_error("Committed material successor lost its original Written source; no retry");};
+                    if(!local() || pending->response.status()==Session::WorldResponseWriteStatus::Failed ||
+                       pending->mutation->write.status()==Session::NormalWorldResponseStatus::Failed)fail();
+                    if(pending->response.status()!=Session::WorldResponseWriteStatus::Written)return;
+                    if(pending->mutation->write.status()!=Session::NormalWorldResponseStatus::Queued)fail();
+                    // B4 may separate multiple actual movement runs. Retain every
+                    // private joint edge in original callback order; the last edge
+                    // alone cannot certify the callback's original predecessor.
+                    std::vector<const SqliteOwnedEquipmentTransaction::Committed*> commits;
+                    for(auto node=pending->mutation;node;node=node->previous_in_callback) {
+                        if(!node->material_mutated || node->session.lock()!=peer ||
+                           node->write!=pending->mutation->write ||
+                           !node->initialization.same_initialization(pending->mutation->initialization))fail();
+                        commits.push_back(&node->after);
+                    }
+                    std::reverse(commits.begin(),commits.end());
+                    auto value=owned_companions.material_successor_from_committed_chain(*material,*transaction,commits);
+                    if(!value || !local())fail();
+                    auto after=std::make_shared<const RecoveredOwnedCompanions::Restoration>(std::move(*value));
+                    auto source=learning->reanchor_material_chain(session,material,after,transaction,commits,
+                        pending->mutation->initialization,pending->response,pending->admission);
+                    if(!source || !local())fail();
+                    auto next=std::make_shared<const CanonicalCompanionSource>(CanonicalCompanionSource{
+                        after,after,{},{},previous?previous->latest_learning:holder->learning_publication,{},{},*source,host});
+                    if(!source->current(session) || !local())fail();
+                    holder->canonical_source=std::move(next);holder->pending_material.reset();
+                    return; // No restoration/replay, second mutation or replacement INIT.
+                }
                 const auto original_material=holder->material;const auto original_whole=holder->whole_response;
                 const auto original_wire=holder->whole_response_wire;
                 const auto pending=holder->pending_selection;const auto publication=holder->learning_publication;
@@ -3827,21 +3984,28 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                     });
                     // Party leases are transient and independent of frozen chat.
                     attempt([&] {
+                        OwnedPartyPublicationGuard::Scope publication(native_party_publication);
+                        const auto registered=party_sessions.find(session->id());
+                        if(registered==party_sessions.end() || registered->second.lock()!=session)return;
                         auto next=native_parties;
                         const auto departures=next.disconnect(session->id());
+                        // Retire before projection observers. Nested disconnect
+                        // can no longer be overwritten by this older candidate.
+                        if(!publication.publish(native_parties,std::move(next)))return;
                         std::optional<decltype(party_projection(departures))> projected;
                         try {projected.emplace(party_projection(departures));}
                         catch(const std::exception& error){remember();try{spdlog::warn("NATIVE_PARTY_DISCONNECT_PROJECTION_FAILED reason={}",error.what());}catch(...){}}
                         catch(...){remember();}
-                        // Publish this departure exactly once, even if its
-                        // projection failed. Delivery never moves next again.
-                        native_parties=std::move(next);
+                        // A projection failure never rolls back this retirement.
                         if(projected)try{deliver_parties(std::move(*projected));}
                         catch(const std::exception& error){remember();try{spdlog::warn("NATIVE_PARTY_DISCONNECT_DELIVERY_FAILED reason={}",error.what());}catch(...){}}
                         catch(...){remember();}
                     });
                     attempt([&] {
-                    party_sessions.erase(session->id());
+                    const auto at=party_sessions.find(session->id());
+                    if(at!=party_sessions.end() && at->second.lock()==session) {
+                        native_party_publication.invalidate();party_sessions.erase(at);
+                    }
                     });
                     attempt([&] {
                     pending_visibility.erase(session->id());
@@ -4115,6 +4279,7 @@ if(config.owned_guild_officers_enabled && migrations.back().version!=52 && migra
                                 session.bind_world_delivery_identity({session.account_id,session.character_id,guild_world_generation.at(session.id()),session.battle_generation()});
                             }
                             recovered_movement->bind(session.id(),session.account_id,session.character_id);
+                            native_party_publication.invalidate();
                             party_sessions.insert_or_assign(session.id(),session.weak_from_this());
                             trade_sessions.insert_or_assign(session.id(),session.weak_from_this());
                             database.trades().provision_wallet(session.account_id,session.character_id);
@@ -5492,9 +5657,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                 if(has_move) {
                                     reply=recovered_world->handle(session,guild_moves);if(!reply)return reply;
                                     try {
+                                        OwnedPartyPublicationGuard::Scope publication(native_party_publication);
                                         auto next=native_parties;
                                         const auto changes=refresh_party_members(next,next.participants(session.id()));
-                                        auto projected=party_projection(changes);native_parties=std::move(next);
+                                        auto projected=party_projection(changes);
+                                        if(!publication.publish(native_parties,std::move(next)))throw std::runtime_error("Party refresh source changed");
                                         deliver_parties(std::move(projected));
                                     }catch(const std::exception& error) {
                                         spdlog::warn("NATIVE_GUILD_CHAT_MOVEMENT_REFRESH_FAILED reason={}",error.what());
@@ -5542,9 +5709,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                 if(has_move) {
                                     reply=recovered_world->handle(session,private_moves);if(!reply)return reply;
                                     try {
+                                        OwnedPartyPublicationGuard::Scope publication(native_party_publication);
                                         auto next=native_parties;
                                         const auto changes=refresh_party_members(next,next.participants(session.id()));
-                                        auto projected=party_projection(changes);native_parties=std::move(next);
+                                        auto projected=party_projection(changes);
+                                        if(!publication.publish(native_parties,std::move(next)))throw std::runtime_error("Party refresh source changed");
                                         deliver_parties(std::move(projected));
                                     }catch(const std::exception& error) {
                                         spdlog::warn("NATIVE_PRIVATE_CHAT_MOVEMENT_REFRESH_FAILED reason={}",error.what());
@@ -5578,8 +5747,10 @@ if(guild_officer_runtime && player_guild(session) &&
                                 else party_chat_batch=false;
                             }
                             if(!party_messages.empty()) {
+                                auto audience=std::make_unique<OwnedPartyPublicationGuard::Scope>(native_party_publication);
                                 auto deliveries=party_chat_batch?party_chat.prepare(native_parties,session.id(),party_messages):
                                     std::optional<std::vector<OwnedPartyChatService::Delivery>>{};
+                                if(!audience->current())deliveries.reset();
                                 if(!deliveries) {
                                     spdlog::info("NATIVE_PARTY_CHAT_REQUEST session_id={} character_id={} messages={} delivered=0 accepted=false CUSTOM-0073",
                                         session.id(),session.character_id,party_messages.size());
@@ -5590,22 +5761,28 @@ if(guild_officer_runtime && player_guild(session) &&
                                     return std::holds_alternative<RecoveredMovement::Request>(r);
                                 });
                                 if(has_move) {
+                                    audience.reset(); // The accepted movement legitimately publishes a new model.
                                     reply=recovered_world->handle(session,party_chat_moves);if(!reply)return reply;
                                     // The separate early return must retain the
                                     // existing accepted movement observer. Publish
                                     // native56 positions before the party text.
                                     try {
+                                        OwnedPartyPublicationGuard::Scope publication(native_party_publication);
                                         auto next=native_parties;
                                         const auto changes=refresh_party_members(next,next.participants(session.id()));
-                                        auto projected=party_projection(changes);native_parties=std::move(next);
+                                        auto projected=party_projection(changes);
+                                        if(!publication.publish(native_parties,std::move(next)))throw std::runtime_error("Party refresh source changed");
                                         deliver_parties(std::move(projected));
                                     }catch(const std::exception& error){
                                         spdlog::warn("NATIVE_PARTY_CHAT_MOVEMENT_REFRESH_FAILED reason={}",error.what());
                                     }
+                                    audience=std::make_unique<OwnedPartyPublicationGuard::Scope>(native_party_publication);
                                     deliveries=party_chat.prepare(native_parties,session.id(),party_messages);
+                                    if(!audience->current())deliveries.reset();
                                 }
                                 std::size_t delivered=0;
                                 if(deliveries)for(auto& delivery:*deliveries) {
+                                    if(!audience->current())break;
                                     const auto at=party_sessions.find(delivery.recipient);if(at==party_sessions.end())continue;
                                     if(auto peer=at->second.lock()) {
                                         if(has_move && peer->id()==session.id()) {
@@ -5725,10 +5902,13 @@ if(guild_officer_runtime && player_guild(session) &&
                             }
                             if(has_query) {
                                 if(!query_batch)return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});
-                                const auto logical=party_position_queries.query(native_parties,session.id(),*position_query);
-                                if(logical)session.send_world_records(*logical);
+                                OwnedPartyPublicationGuard::Scope publication(native_party_publication);
+                                const auto request=*position_query;
+                                const auto logical=party_position_queries.query(native_parties,session.id(),request);
+                                const bool delivered=logical && publication.current();
+                                if(delivered)session.send_world_records(*logical);
                                 spdlog::info("NATIVE_PARTY_POSITION_QUERY session_id={} character_id={} target={} delivered={} CUSTOM-0072",
-                                    session.id(),session.character_id,position_query->target,logical.has_value());
+                                    session.id(),session.character_id,request.target,delivered);
                                 if(!std::any_of(query_remainder.begin(),query_remainder.end(),[](const auto& record) {
                                     return std::holds_alternative<RecoveredChat::Request>(record);
                                 }))return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});
@@ -5762,18 +5942,42 @@ if(guild_officer_runtime && player_guild(session) &&
                             // CUSTOM-0062: native consenting party request/answer,
                             // kick and leave. Prepare all native projections before
                             // publishing the ephemeral membership state.
-                            const RecoveredParty::Request* party_request=nullptr;
+                            std::optional<RecoveredParty::Request> party_request;
                             bool party_batch=true,has_party=false;
                             std::vector<RecoveredWorldRecords::Record> party_remainder;
                             for(const auto& record:records) {
                                 if(const auto* request=std::get_if<RecoveredParty::Request>(&record)) {
-                                    has_party=true;if(party_request)party_batch=false;party_request=request;
+                                    has_party=true;if(party_request)party_batch=false;party_request=*request;
+                                } else if(const auto* team=std::get_if<RecoveredTeamRequest57::Request>(&record)) {
+                                    has_party=true;if(party_request)party_batch=false;
+                                    // Native C57 carries only the target DWORD. The
+                                    // actual authenticated sender supplies self to
+                                    // the existing CUSTOM-0062 consent policy. C6A
+                                    // support and C57 never become a kick request.
+                                    if(!session.character_id || session.character_id>0x3fff)party_batch=false;
+                                    else party_request=RecoveredParty::Request{RecoveredParty::Kind::Join,
+                                        static_cast<std::uint32_t>(session.character_id),team->target};
+                                } else if(const auto* exit=std::get_if<RecoveredPartyExitRequest5A::Request>(&record)) {
+                                    has_party=true;if(party_request)party_batch=false;
+                                    if(!session.character_id || session.character_id>0x3fff)party_batch=false;
+                                    else {
+                                        // The same native C5A producer serves self
+                                        // leave and confirmed roster removal. Only
+                                        // the actual leader/current group policy
+                                        // can authorize removal of another owner.
+                                        const bool self=exit->target==session.character_id;
+                                        party_request=RecoveredParty::Request{self?RecoveredParty::Kind::Leave:RecoveredParty::Kind::Kick,
+                                            static_cast<std::uint32_t>(session.character_id),exit->target,0,0,exit->name};
+                                    }
                                 } else if(!std::holds_alternative<RecoveredWorldRecords::Tick>(record) &&
                                           !std::holds_alternative<RecoveredChat::Request>(record))party_batch=false;
                             }
-                            if(has_party && !party_batch)return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});
+                            if(has_party && (!party_batch || taiwan_entry_identity!=TaiwanWorldEntryIdentity::SelectedCharacter))
+                                return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});
                             if(has_party) {
+                                OwnedPartyPublicationGuard::Scope publication(native_party_publication);
                                 auto next=native_parties;
+                                bool party_published=false;
                                 try {
                                     auto relevant=next.participants(session.id());
                                     if(party_request)for(const auto& [id,weak]:party_sessions)if(auto peer=weak.lock())
@@ -5787,15 +5991,19 @@ if(guild_officer_runtime && player_guild(session) &&
                                         refresh.insert(refresh.end(),action.begin(),action.end());
                                         action_events=action.size();
                                     }
-                                    auto projections=party_projection(refresh);native_parties=std::move(next);deliver_parties(std::move(projections));
+                                    auto projections=party_projection(refresh);
+                                    if(!publication.publish(native_parties,std::move(next)))throw std::runtime_error("Party request source changed");
+                                    party_published=true;
+                                    deliver_parties(std::move(projections));
                                     if(party_request)spdlog::info("NATIVE_PARTY_REQUEST session_id={} character_id={} kind={} events={} CUSTOM-0062",
                                         session.id(),session.character_id,static_cast<unsigned>(party_request->kind),action_events);
-                                }catch(const std::exception& error){spdlog::warn("NATIVE_PARTY_REJECTED reason={} no_commit",error.what());}
+                                }catch(const std::exception& error){spdlog::warn("NATIVE_PARTY_FAILED reason={} published={}",error.what(),party_published);}
                                 // Native queues coalesce records. Preserve common
                                 // chat in the same flush by passing it to the
                                 // existing frozen handler unchanged.
-                                for(const auto& record:records)if(!std::holds_alternative<RecoveredParty::Request>(record))
-                                    party_remainder.push_back(record);
+                                for(const auto& record:records)if(!std::holds_alternative<RecoveredParty::Request>(record) &&
+                                    !std::holds_alternative<RecoveredTeamRequest57::Request>(record) &&
+                                    !std::holds_alternative<RecoveredPartyExitRequest5A::Request>(record))party_remainder.push_back(record);
                                 if(!std::any_of(party_remainder.begin(),party_remainder.end(),[](const auto& record) {
                                     return std::holds_alternative<RecoveredChat::Request>(record);
                                 }))return std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>{});
@@ -8457,9 +8665,11 @@ if(guild_officer_runtime && player_guild(session) &&
                             // tick. This independent observer never alters the
                             // existing reply or the frozen chat/auth handlers.
                             if(reply && native_parties.party_size(session.id()))try {
+                                OwnedPartyPublicationGuard::Scope publication(native_party_publication);
                                 auto next=native_parties;
                                 const auto changes=refresh_party_members(next,next.participants(session.id()));
-                                auto projected=party_projection(changes);native_parties=std::move(next);
+                                auto projected=party_projection(changes);
+                                if(!publication.publish(native_parties,std::move(next)))throw std::runtime_error("Party refresh source changed");
                                 deliver_parties(std::move(projected));
                             }catch(const std::exception& error){spdlog::warn("NATIVE_PARTY_REFRESH_FAILED reason={}",error.what());}
                             if(reply && owned_bag_projected.contains(session.id()) && !trade_wallet_sent.contains(session.id())) {
@@ -9042,10 +9252,15 @@ if(guild_officer_runtime && player_guild(session) &&
                             // Guard the genuine receipt's recorded game owner BEFORE
                             // reading another Session's game-owned identity fields.
                             if(!init || !init->entry_written() || !peer->normal_world_initialization_current_on_game(*init))return {};
+                            // Discovery retains full common IDs; only actual
+                            // CUSTOM membership narrows its native actor handle.
+                            const auto source_current=party_source(peer,false);
+                            if(!source_current || !source_current())return {};
+                            native_party_publication.observe(source_current);
                             const auto account=peer->account_id,character=peer->character_id,battle=peer->battle_generation();
                             const auto phase=peer->state();
                             const auto local=[&] {
-                                return !dispatch->reentered && !peer->closing() && peer->recovered_world_ready() && account && character &&
+                                return source_current() && !dispatch->reentered && !peer->closing() && peer->recovered_world_ready() && account && character &&
                                     peer->account_id==account && peer->character_id==character && peer->battle_generation()==battle && peer->state()==phase &&
                                     (phase==SessionState::CharacterSelected || phase==SessionState::InWorld);
                             };
@@ -9054,8 +9269,9 @@ if(guild_officer_runtime && player_guild(session) &&
                             // Peers reuse their originally captured exact transcript.
                             if(!peer->normal_world_initialization_current_on_game(*init) || !local())return {};
                             const auto entry=RecoveredWorldEntryView::read(init->entry_frame());if(!entry)return {};
-                            const auto location=recovered_movement->current_location(peer->id(),account,character);
-                            if(!local() || !location)return {};
+                            const auto location=recovered_movement->current_world_location(peer->id(),account,character);
+                            const auto saved=database.recovered_characters().load_position(account,character);
+                            if(!local() || !location || (location->revision?saved!=location:saved.has_value()))return {};
                             const auto roots=database.recovered_characters().list_for_account(account);if(!local())return {};
                             const RecoveredCharacter* root=nullptr;
                             for(const auto& row:roots)if(row.id==character){if(root)return {};root=&row;}
@@ -9067,7 +9283,7 @@ if(guild_officer_runtime && player_guild(session) &&
                             const auto role=database.recovered_characters().load_role(account,character);if(!role || !local())return {};
                             const auto level=RecoveredRoleLevel::parse(role->logical);if(!level || !level->level())return {};
                             if(!peer->normal_world_initialization_current_on_game(*init) || !local() ||
-                               recovered_movement->current_location(peer->id(),account,character)!=location || !local())return {};
+                               recovered_movement->current_world_location(peer->id(),account,character)!=location)return {};
                             // Full common IDs remain separate from the actual native
                             // actor handle. No truncation or artificial HP/common-ID cap.
                             return OwnedPartyDirectory::Actor{peer,peer->id(),account,character,battle,phase,*root,*role,*location,*init,
@@ -9076,6 +9292,7 @@ if(guild_officer_runtime && player_guild(session) &&
                     const auto publish_watchers=[&,dispatch,observe_source](const OwnedPartyDirectory::Snapshot& before,
                         const OwnedPartyDirectoryService::WatchPlan& plan,const std::vector<OwnedPartyDirectory::Actor>& live,
                         const NativeParty& party_before,Session* caller,std::vector<std::uint8_t>* caller_wire)->bool {
+                        OwnedPartyPublicationGuard::Scope publication(native_party_publication);
                         std::map<std::uint64_t,std::shared_ptr<Session>> recipients;
                         auto merged=caller_wire?*caller_wire:std::vector<std::uint8_t>{};
                         if(config.max_sessions>std::numeric_limits<std::size_t>::max()/(RecoveredWorldFrame::max_logical_size+16))return false;
@@ -9121,10 +9338,11 @@ if(guild_officer_runtime && player_guild(session) &&
                                !OwnedPartyDirectoryService::captured_entry_current(p.target))return false;
                             for(const auto& member:p.members)if(!OwnedPartyDirectoryService::captured_entry_current(member))return false;
                         }
-                        if(dispatch->reentered || !native_parties.same_state(party_before) ||
+                        if(dispatch->reentered || !publication.current() || !native_parties.same_state(party_before) ||
                            !owned_party_directory->publish(before,plan.state))return false;
                         if(caller_wire)*caller_wire=std::move(merged);
                         for(const auto& delivery:plan.deliveries) {
+                            if(!publication.current())break; // Published prefixes remain committed.
                             const auto peer=recipients.at(delivery.recipient.session_id);
                             if(caller_wire && peer.get()==caller)continue;
                             try {peer->send_world_records(delivery.logical);}
@@ -9262,6 +9480,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 }
                                 if(dispatch->reentered || owned_party_directory->snapshot()!=before)continue;
                                 if(request.opcode()==0x90 || request.opcode()==0x91) {
+                                    OwnedPartyPublicationGuard::Scope publication(native_party_publication);
                                     const auto query=before->queries.find(session.id());
                                     if(query==before->queries.end() || !query->second.actor.same_owner(*owner) ||
                                        std::find(query->second.visible.begin(),query->second.visible.end(),request.target())==query->second.visible.end())continue;
@@ -9430,7 +9649,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                         if(!prepared)continue;
                                         preview.emplace(std::move(*prepared));
                                     }
-                                    if(!qualified || dispatch->reentered || !native_parties.same_state(*party_before) ||
+                                    if(!qualified || dispatch->reentered || !publication.current() || !native_parties.same_state(*party_before) ||
                                        owned_party_directory->snapshot()!=before || (preview && !preview->current()))continue;
                                     if(response) {
                                         if(!session.normal_world_response_callback_current(*response) ||
@@ -9440,11 +9659,14 @@ if(guild_officer_runtime && player_guild(session) &&
                                         session.expect_normal_world_response(*response,framed);
                                         if(dispatch->reentered || !session.normal_world_response_callback_current(*response) ||
                                            !OwnedPartyDirectoryService::captured_entry_current(*owner) ||
-                                           !native_parties.same_state(*party_before) || owned_party_directory->snapshot()!=before)continue;
+                                           !publication.current() || !native_parties.same_state(*party_before) || owned_party_directory->snapshot()!=before)continue;
                                     }
-                                    if(!owned_party_directory->publish(before,std::move(next_directory)))continue;
+                                    if(next_party) {
+                                        if(!publication.publish_if(native_parties,std::move(*next_party),[&]() noexcept {
+                                            return owned_party_directory->publish(before,std::move(next_directory));
+                                        }))continue;
+                                    }else if(!publication.current() || !owned_party_directory->publish(before,std::move(next_directory)))continue;
                                     if(preview) {preview->mark_committed();dispatch->committed_preview=true;} // No allocation, immediately after actual CAS.
-                                    if(next_party)native_parties=std::move(*next_party); // No callback between the two ephemeral commits.
                                     wire=std::move(merged);
                                     // Own registry waits for the COMPLETE actual callback
                                     // admission before any peer write. No fake empty FIFO.
@@ -9643,8 +9865,20 @@ if(guild_officer_runtime && player_guild(session) &&
                     whole_bag_moves->transaction=std::make_shared<SqliteOwnedEquipmentTransaction>(
                         database.owned_inventory_writer(),database.native_equipment_snapshot_writer());
                     whole_bag_moves->movement=recovered_movement.get();
+                    whole_bag_moves->bank=SharedTaiwanOwnedBankSource::create(whole_bag_moves->transaction,
+                        database.accounts(),database.recovered_characters(),*recovered_movement,native_banks,config.max_sessions);
                     whole_bag_moves->binding=SharedTaiwanOwnedBagMoveSource::create_for_normal_entry_with_item_material_and_receipt(
                         whole_bag_moves->transaction,database.accounts(),database.recovered_characters(),*recovered_movement);
+                    const auto old_ready=game_handlers.world_ready;
+                    const std::weak_ptr<WholeBagMoveHost> bank_ready_host=whole_bag_moves;
+                    game_handlers.world_ready=[old_ready,bank_ready_host,&native_banks](Session& session) {
+                        const auto host=bank_ready_host.lock();
+                        if(!host || !host->live || !host->accepting)throw std::logic_error("Whole bank ready owner retired");
+                        if(host->active){host->active->invalid=true;if(host->bank)host->bank->invalidate_active();}
+                        if(host->bank)host->bank->release(session);
+                        native_banks.disconnect(session.id());host->mutations.erase(session.id());
+                        old_ready(session); // New INIT will be published only by its actual Session source.
+                    };
                     const auto& binding=*whole_bag_moves->binding;
                     if(!binding.dispatch || !binding.release || !binding.invalidate_active)
                         throw std::invalid_argument("Whole bag moves require a complete actual inventory binding");
@@ -9694,20 +9928,45 @@ if(guild_officer_runtime && player_guild(session) &&
                             return std::move(*reply).take_wire(); // Original prebuilt wire, no repack.
                         });
                     const auto original=game_handlers.world_records;
-                    game_handlers.world_records=[weak,original](Session& session,
+                    game_handlers.world_records=[weak,original,&native_banks,&database,&recovered_movement,native_records_lab](Session& session,
                             std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
                         const auto host=weak.lock();
                         if(!host || !host->live || !host->accepting)return {};
                         if(host->active) {
                             host->active->invalid=true;
                             if(host->binding)host->binding->invalidate_active();
+                            if(host->bank)host->bank->invalidate_active();
                             throw std::logic_error("Owned mutation response facade reentered");
+                        }
+                        // Classify the whole original batch before any write. An
+                        // item/money request or qualified NPC open is one bank
+                        // operation, with Tick only; no prefix mutation on a mixed frame.
+                        std::optional<RecoveredBankItems::Request> bank_item;
+                        std::optional<RecoveredBank::Request> bank_money;
+                        std::optional<RecoveredNpcInteraction::Request> bank_npc;
+                        std::size_t bank_operations=0;bool bank_only=true;
+                        for(const auto& record:records) {
+                            if(const auto* request=std::get_if<RecoveredBankItems::Request>(&record)){bank_item=*request;++bank_operations;}
+                            else if(const auto* request=std::get_if<RecoveredBank::Request>(&record)){bank_money=*request;++bank_operations;}
+                            else if(const auto* request=std::get_if<RecoveredNpcInteraction::Request>(&record)){bank_npc=*request;++bank_operations;}
+                            else if(!std::holds_alternative<RecoveredWorldRecords::Tick>(record))bank_only=false;
+                        }
+                        bool bank_open=false;
+                        if(bank_npc && bank_npc->raw_target && bank_npc->raw_target<=0xffff && recovered_movement) {
+                            const auto where=recovered_movement->current_location(session.id(),session.account_id,session.character_id);
+                            bank_open=where && database.bank_access().lookup(where->area,where->scene,
+                                static_cast<std::uint16_t>(bank_npc->raw_target),native_records_lab).has_value();
+                        }
+                        const bool bank_operation=bank_item.has_value() || bank_money.has_value() || bank_open;
+                        if(bank_operation && (!bank_only || bank_operations!=1)) {
+                            if(host->bank)host->bank->release(session);native_banks.disconnect(session.id());
+                            return std::vector<std::uint8_t>{};
                         }
                         // Entire original batch before typed consumers/observers.
                         // Admit movements plus ticks OR one C24 plus ticks through
                         // the existing service. A mixed C24/move batch rejects
                         // before either source can mutate its complete banks.
-                        if(std::any_of(records.begin(),records.end(),[](const auto& record){
+                        if(bank_operation || std::any_of(records.begin(),records.end(),[](const auto& record){
                             return std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record) ||
                                 std::holds_alternative<RecoveredMovement::Request>(record);
                         })) {
@@ -9739,19 +9998,63 @@ if(guild_officer_runtime && player_guild(session) &&
                                 // Pending is allowed: this passive token neither
                                 // imposes a wait/Tick barrier nor grants authority.
                                 if(previous->session.lock().get()!=&session ||
-                                   previous->write.status()==Session::WorldResponseWriteStatus::Failed ||
-                                   !session.world_response_write_current(previous->write) ||
+                                   previous->write.status()==Session::NormalWorldResponseStatus::Failed ||
+                                   !session.normal_world_response_current_on_game(previous->write) ||
                                    !session.normal_world_initialization_current(previous->initialization) ||
                                    !previous->initialization.entry_written() || !transaction->committed_current(previous->after) || !local())
                                     return {};
                                 const auto at=host->mutations.find(session.id());
                                 if(at==host->mutations.end() || at->second!=previous ||
-                                   previous->write.status()==Session::WorldResponseWriteStatus::Failed)
+                                   previous->write.status()==Session::NormalWorldResponseStatus::Failed)
                                     throw std::runtime_error("Owned mutation response source changed during preparation");
                             }
                             if(!local())return {};
-                            const auto service=host->service;
-                            auto response=service?service->handle(session,records):std::nullopt;
+                            std::optional<std::vector<std::uint8_t>> response;
+                            if(bank_operation) {
+                                const auto bank=host->bank;if(!bank)return {};
+                                if(bank_money) {
+                                    const auto request=*bank_money; // Own input before callbacks.
+                                    const bool closing=request.kind==RecoveredBank::Kind::Close;
+                                    if(!closing && !bank->current(session)) {
+                                        bank->release(session);native_banks.disconnect(session.id());response=std::vector<std::uint8_t>{};
+                                    } else {
+                                        auto result=native_banks.handle(session.id(),std::span<const RecoveredBank::Request>(&request,1),
+                                            std::chrono::steady_clock::now(),closing?RecoveredBankService::PureCurrent{}:
+                                                RecoveredBankService::PureCurrent([bank,&session]{return bank->current(session);}));
+                                        if(result.committed && (result.logical.empty() || !bank->current(session)))
+                                            throw std::runtime_error("Whole bank money committed but delivery source retired");
+                                        if(result.rejected || closing)bank->release(session);
+                                        response=result.logical.empty()?std::vector<std::uint8_t>{}:RecoveredWorldFrame::encode(result.logical);
+                                    }
+                                } else {
+                                    std::optional<SharedTaiwanOwnedBankSource::Result> result;
+                                    std::vector<std::uint8_t> opening;
+                                    if(bank_open) {
+                                        bank->release(session);
+                                        auto money=native_banks.open(session.id(),static_cast<std::uint16_t>(bank_npc->raw_target),
+                                            std::chrono::steady_clock::now());
+                                        if(money) {opening=RecoveredWorldFrame::encode(*money);result=bank->open(session,static_cast<std::uint16_t>(bank_npc->raw_target));}
+                                    } else result=bank->dispatch(session,*bank_item);
+                                    if(result) {
+                                        // Actual common tuple, including a durable write
+                                        // whose source retired after COMMIT. Never retry.
+                                        draft->after.emplace(result->committed());
+                                        draft->bank_component=true;
+                                        draft->material_mutated=result->mutated();
+                                        if(!result->delivery_current())
+                                            throw std::runtime_error("Whole bank committed/observed but delivery source retired");
+                                        response=std::move(*result).take_wire();
+                                        if(!opening.empty())response->insert(response->begin(),opening.begin(),opening.end());
+                                    } else {bank->release(session);native_banks.disconnect(session.id());response=std::vector<std::uint8_t>{};}
+                                }
+                            } else {
+                                // Any movement/bag mutation retires the old window
+                                // before its source can change; reopening requalifies
+                                // current placement and projects the actual new tuple.
+                                if(host->bank)host->bank->release(session);native_banks.disconnect(session.id());
+                                const auto service=host->service;
+                                response=service?service->handle(session,records):std::nullopt;
+                            }
                             if(!local())throw std::runtime_error("Owned mutation response facade retired during callback");
                             if(!draft->after)return response; // Admission rejection never invents a receipt.
                             if(!response || response->empty() || !local() || !transaction->committed_current(*draft->after) || !local())
@@ -9760,10 +10063,18 @@ if(guild_officer_runtime && player_guild(session) &&
                             // including each native ACK5B frame unchanged.
                             // Allocation/validation failure after COMMIT throws;
                             // no retry/rollback or native adoption is implied.
-                            const auto observation=session.observe_world_response(*response);
+                            // Register this exact original component on the actual
+                            // normal callback. The final row wrapper may append its
+                            // own E8 component; an inner whole-vector capture would
+                            // wrongly reject that legitimate final reply.
+                            const auto observation=session.capture_normal_world_response(draft->initialization);
+                            if(!observation)throw std::runtime_error("Owned mutation lost its actual normal response owner");
+                            session.expect_normal_world_response(*observation,*response);
                             const auto candidate=std::make_shared<const WholeBagMoveHost::MutationResponse>(
-                                WholeBagMoveHost::MutationResponse{actual,*draft->after,draft->initialization,observation});
-                            if(!local() || observation.status()==Session::WorldResponseWriteStatus::Failed)
+                                WholeBagMoveHost::MutationResponse{actual,*draft->after,draft->initialization,*observation,draft->bank_component,draft->material_mutated,
+                                    previous && previous->write==*observation && previous->material_mutated && draft->material_mutated?
+                                        previous:std::shared_ptr<const WholeBagMoveHost::MutationResponse>{}});
+                            if(!local() || observation->status()==Session::NormalWorldResponseStatus::Failed)
                                 throw std::runtime_error("Owned mutation response capture became stale");
                             host->mutations.insert_or_assign(session.id(),candidate);
                             return response; // Session consumes this exact raw vector through its old FIFO.
@@ -9786,6 +10097,7 @@ if(guild_officer_runtime && player_guild(session) &&
                                 std::holds_alternative<RecoveredSkillCommand::Record>(record) ||
                                 std::holds_alternative<TaiwanNativeSkillCommand::WireRecord>(record);
                         }))return {};
+                        if(bank_npc) {if(host->bank)host->bank->release(session);native_banks.disconnect(session.id());}
                         return original(session,records); // Other normal chat/ready Tick behavior.
                     };
                     const auto previous=on_disconnect;
@@ -9798,7 +10110,8 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(host->active && host->active->session.lock().get()==session.get())host->active->invalid=true;
                         host->mutations.erase(session->id());
                         std::exception_ptr failure;
-                        try {if(host->binding)host->binding->release(*session);}catch(...) {failure=std::current_exception();}
+                        try {if(host->bank)host->bank->release(*session);}catch(...) {failure=std::current_exception();}
+                        try {if(host->binding)host->binding->release(*session);}catch(...) {if(!failure)failure=std::current_exception();}
                         try {if(previous)previous(std::move(session));}catch(...) {if(!failure)failure=std::current_exception();}
                         if(failure)std::rethrow_exception(failure);
                     };
@@ -10319,10 +10632,14 @@ if(guild_officer_runtime && player_guild(session) &&
                 // B4 mixed batch before any inner callback can mutate storage.
                 // Requires the real normal-entry/ready/response owner; fixed
                 // analysis pin is not a peer-provided executable identity.
-                if(whole_bag_moves && game_handlers.owned_normal_movement_response_custody &&
-                   !game_handlers.common_world_lifecycle && !game_handlers.common_world_lifecycle_factory &&
-                   game_handlers.world_entry && game_handlers.world_ready && game_handlers.world_records) {
-                    battle_row_preferences=std::make_unique<OwnedBattleRowPreference>(
+                const auto row_presence=common_world?common_world->presence():std::shared_ptr<SharedWorldPresence>{};
+                const bool common_rows=row_presence && (game_handlers.common_world_lifecycle || game_handlers.common_world_lifecycle_factory);
+                const bool normal_rows=whole_bag_moves && game_handlers.owned_normal_movement_response_custody &&
+                    !game_handlers.common_world_lifecycle && !game_handlers.common_world_lifecycle_factory;
+                if((normal_rows || common_rows) && game_handlers.world_entry && game_handlers.world_ready && game_handlers.world_records) {
+                    if(common_rows)battle_row_preferences=std::make_unique<OwnedBattleRowPreference>(
+                        database.native_world_entry_writer(),database.accounts(),database.recovered_characters(),*row_presence,config.max_sessions);
+                    else battle_row_preferences=std::make_unique<OwnedBattleRowPreference>(
                         database.native_world_entry_writer(),database.accounts(),database.recovered_characters(),config.max_sessions);
                     game_handlers.owned_battle_row_preference=true;
                     const auto ready=game_handlers.world_ready;
@@ -10337,7 +10654,7 @@ if(guild_officer_runtime && player_guild(session) &&
                         if(previous_disconnect)previous_disconnect(std::move(session));
                     };
                     const auto original=game_handlers.world_records;
-                    game_handlers.world_records=[&,original](Session& session,
+                    game_handlers.world_records=[&,original,common_rows,row_presence](Session& session,
                             std::span<const RecoveredWorldRecords::Record> borrowed)->std::optional<std::vector<std::uint8_t>> {
                         if(!battle_row_preferences->begin())return {};
                         struct End {OwnedBattleRowPreference& host;~End(){host.end();}} end{*battle_row_preferences};
@@ -10347,6 +10664,15 @@ if(guild_officer_runtime && player_guild(session) &&
                         // exact record addresses; own only our B4 values/plan.
                         const auto plan=RecoveredBattleRowPreferenceRuns::prepare(borrowed);
                         if(!plan)return {};
+                        // Common mode currently owns one final whole response.
+                        // Preflight pure B4 batches before any save; mixed common
+                        // runs require their separate component custody bridge.
+                        if(common_rows && plan->has_row() && std::any_of(borrowed.begin(),borrowed.end(),[](const auto& record){
+                            return !std::holds_alternative<RecoveredBattleRowPreference::Request>(record);
+                        }))return {};
+                        const bool idle=!borrowed.empty() && std::all_of(borrowed.begin(),borrowed.end(),[](const auto& record){
+                            return std::holds_alternative<RecoveredWorldRecords::Tick>(record);
+                        });
                         std::vector<std::uint8_t> wire;
                         const bool dispatched=plan->dispatch([&](std::span<const RecoveredWorldRecords::Record> actual_run) {
                             const auto reply=[&] {
@@ -10365,15 +10691,148 @@ if(guild_officer_runtime && player_guild(session) &&
                         // the explicit snapshot extension is not installed.
                         // Such a read failure is not 'no saved choice'; no empty
                         // default is cached, and the real B4 never uses this catch.
-                        if(!plan->has_row() && !borrowed.empty())try {
+                        if(!plan->has_row() && idle && !session.current_world_response_capture_on_game())try {
                             if(!battle_row_preferences->synchronize(session,{},wire))return {};
                         } catch(const DatabaseError& error) {
                             if(!battle_row_preferences->current())return {};
                             battle_row_preferences->defer_unavailable_replay(session);
                             spdlog::warn("BATTLE_ROW_REPLAY_SOURCE_UNAVAILABLE reason={}",error.what());
                         }
-                        if(!battle_row_preferences->current())return {};
+                        if(!battle_row_preferences->current() || !battle_row_preferences->seal_common_response(session,wire))return {};
                         return wire;
+                    };
+                }
+                // Bank custody must retire even when a later learning/companion/
+                // battle wrapper consumes the request before WholeBag dispatch.
+                // This final source wrapper never changes the original input span
+                // or captures/repackages an inner response.
+                if(whole_bag_moves && game_handlers.world_records) {
+                    const std::weak_ptr<WholeBagMoveHost> weak=whole_bag_moves;
+                    const auto original=game_handlers.world_records;
+                    game_handlers.world_records=[&,weak,original](Session& session,
+                            std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
+                        const auto host=weak.lock();if(!host || !host->live || !host->accepting)return {};
+                        const bool unrelated=std::any_of(records.begin(),records.end(),[](const auto& record){
+                            return !std::holds_alternative<RecoveredWorldRecords::Tick>(record) &&
+                                !std::holds_alternative<RecoveredBankItems::Request>(record) &&
+                                !std::holds_alternative<RecoveredBank::Request>(record) &&
+                                !std::holds_alternative<RecoveredNpcInteraction::Request>(record);
+                        });
+                        if(unrelated) {if(host->bank)host->bank->release(session);native_banks.disconnect(session.id());}
+                        // Capture the genuine predecessor before a joint mutation.
+                        // Original roster/learning history must already be Written;
+                        // never restore it from the newer SQL tuple after COMMIT.
+                        const bool material_request=std::any_of(records.begin(),records.end(),[](const auto& record){
+                            return std::holds_alternative<RecoveredMovement::Request>(record) ||
+                                std::holds_alternative<RecoveredInventoryMoveRequest::Request>(record) ||
+                                std::holds_alternative<RecoveredBankItems::Request>(record);
+                        });
+                        std::shared_ptr<OwnedCompanionRestorationSource> restoration;
+                        std::shared_ptr<const CanonicalCompanionSource> canonical;
+                        std::shared_ptr<const RecoveredOwnedCompanions::Restoration> material;
+                        std::optional<OwnedSkillBookLearningService::MaterialAdmission> material_admission;
+                        if(material_request && skill_book_learning_service) {
+                            observe_companion_restoration_write(session);
+                            const auto at=owned_companion_restoration_sources.find(session.id());
+                            if(at!=owned_companion_restoration_sources.end() && at->second->session.lock().get()==&session) {
+                                const auto source=at->second;const auto current=source->canonical_source?source->canonical_source->material:source->material;
+                                if(current && current->learning_source()) {
+                                    if(source->pending_material || source->pending_selection || source->selection_unjoined ||
+                                       (source->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityPrefixCurrent &&
+                                        source->last_observed_write!=CompanionWriteObservation::WrittenSavedDeityCurrent &&
+                                        source->last_observed_write!=CompanionWriteObservation::NoRecords))return std::nullopt;
+                                    restoration=source;canonical=source->canonical_source;material=current;
+                                    material_admission=skill_book_learning_service->prepare_material(session,material);
+                                    if(!material_admission)return std::nullopt;
+                                }
+                            }
+                        }
+                        const auto prior=[&] {const auto at=host->mutations.find(session.id());return at==host->mutations.end()?
+                            std::shared_ptr<const WholeBagMoveHost::MutationResponse>{}:at->second;}();
+                        auto response=original(session,records);
+                        const auto after=[&] {const auto at=host->mutations.find(session.id());return at==host->mutations.end()?
+                            std::shared_ptr<const WholeBagMoveHost::MutationResponse>{}:at->second;}();
+                        if(after && after!=prior) {
+                            // The final SQL read may itself retire a source.
+                            // Recheck exact pure callback/INIT/host custody AFTER
+                            // it, including bank opening when this is its reply.
+                            const auto transaction=host->transaction;const auto bank=host->bank;
+                            if(!response || response->empty() || !transaction ||
+                               !transaction->committed_current(after->after) || !host->live || !host->accepting ||
+                               host->transaction!=transaction || host->bank!=bank ||
+                               after->session.lock().get()!=&session || !after->initialization.entry_written() || !host->movement ||
+                               host->movement->current_world_location(session.id(),session.account_id,session.character_id)!=
+                                   std::optional{after->after.equipment().snapshot().position} ||
+                               !session.normal_world_initialization_current_on_game(after->initialization) ||
+                               !session.normal_world_response_callback_current(after->write) ||
+                               (after->bank_component && (!bank || !bank->current(session))))
+                                throw std::runtime_error("Owned mutation final original response source retired");
+                            const auto at=host->mutations.find(session.id());
+                            if(at==host->mutations.end() || at->second!=after)
+                                throw std::runtime_error("Owned mutation final response lineage changed");
+                        }
+                        // Money has no item-tuple MutationResponse. Later row/directory
+                        // observers still must not deliver a retired opening's balance.
+                        if(response && !response->empty() && std::any_of(records.begin(),records.end(),[](const auto& record){
+                            return std::holds_alternative<RecoveredBank::Request>(record);
+                        }) && (!host->live || !host->accepting || !host->bank || !host->bank->current(session)))
+                            throw std::runtime_error("Whole bank final money response source retired");
+                        if(after && after!=prior && after->material_mutated && restoration) {
+                            const auto current=[&]{
+                                const auto at=owned_companion_restoration_sources.find(session.id());
+                                const auto mutation=host->mutations.find(session.id());
+                                return host->live && host->accepting && mutation!=host->mutations.end() && mutation->second==after &&
+                                    at!=owned_companion_restoration_sources.end() && at->second==restoration &&
+                                    restoration->session.lock().get()==&session && restoration->canonical_source==canonical &&
+                                    !restoration->pending_material && !restoration->pending_selection && !restoration->selection_unjoined &&
+                                    (canonical?canonical->material:restoration->material)==material &&
+                                    restoration->normal_initialization && restoration->normal_initialization->same_initialization(after->initialization) &&
+                                    after->initialization.entry_written() && session.normal_world_initialization_current_on_game(after->initialization) &&
+                                    after->session.lock().get()==&session && host->movement &&
+                                    host->movement->current_world_location(session.id(),restoration->account,restoration->character)==
+                                        std::optional{after->after.equipment().snapshot().position} &&
+                                    !session.closing() && session.recovered_world_ready() &&
+                                    session.account_id==restoration->account && session.character_id==restoration->character &&
+                                    session.state()==restoration->phase_at_restore && session.battle_generation()==restoration->battle_generation_at_restore;
+                            };
+                            const auto transaction=host->transaction;
+                            if(!response || response->empty() || !transaction || !material_admission || !current() ||
+                               !transaction->committed_current(after->after) || host->transaction!=transaction || !current() ||
+                               (after->bank_component && (!host->bank || !host->bank->current(session))))
+                                throw std::runtime_error("Joint material committed without its exact companion predecessor");
+                            // ONE final aggregate, after E8/directory observers. Hold
+                            // the existing input continuation until this actual write
+                            // finishes, so no later mutation can skip this predecessor.
+                            const auto written=session.observe_world_response(*response);
+                            auto pending=std::make_shared<const PendingCompanionMaterial>(PendingCompanionMaterial{
+                                canonical,material,host,after,written,*material_admission});
+                            session.hold_world_input_until_response_written(written);
+                            if(!current() || written.status()==Session::WorldResponseWriteStatus::Failed)
+                                throw std::runtime_error("Joint material final response capture retired; no retry");
+                            restoration->pending_material=std::move(pending);
+                        } else if(material_admission && skill_book_learning_service) {
+                            skill_book_learning_service->abandon_material(*material_admission); // No commit edge to retain.
+                        }
+                        return response;
+                    };
+                }
+                if(game_handlers.world_records) {
+                    const auto original=game_handlers.world_records;
+                    game_handlers.world_records=[original](Session& session,
+                            std::span<const RecoveredWorldRecords::Record> records)->std::optional<std::vector<std::uint8_t>> {
+                        // Native SOS is a separate typed source. No real shared
+                        // PvE admission/save/return owner is mounted yet. Reject
+                        // the WHOLE input before any unrelated prefix can commit;
+                        // never cast support into party or invent an empty ACK.
+                        if(std::any_of(records.begin(),records.end(),[](const auto& record){
+                            return std::holds_alternative<RecoveredSosSupportRequest::Request>(record) ||
+                                std::holds_alternative<RecoveredSosBattleCommand::Request>(record);
+                        })) {
+                            spdlog::warn("NATIVE_SOS_OWNER_UNAVAILABLE session_id={} character_id={} no_admission_no_success_reply",
+                                session.id(),session.character_id);
+                            return std::nullopt;
+                        }
+                        return original(session,records);
                     };
                 }
                 game_character_sources.emplace(std::move(game_handlers));
@@ -10579,6 +11038,7 @@ if(guild_officer_runtime && player_guild(session) &&
             auto stop=[&] {
                 if(stopping) return;
                 stopping=true; // Fence reentry before retiring any actual gameplay source.
+                party_sources_live=false;native_party_publication.invalidate();
                 std::exception_ptr retirement_failure;
                 for(std::size_t k=0;k<channel_count;++k)try{channel_sources[k]->retire();}catch(...){if(!retirement_failure)retirement_failure=std::current_exception();}
                 if(retirement_failure)std::rethrow_exception(retirement_failure);

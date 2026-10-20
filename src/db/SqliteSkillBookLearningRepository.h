@@ -1,4 +1,5 @@
 #pragma once
+#include "db/SqliteOwnedEquipmentTransaction.h"
 #include "db/NativeSkillBookCatalog.h"
 #include "db/SharedSkillDefinition.h"
 #include "db/SqliteCompanionRepository.h"
@@ -107,6 +108,13 @@ public:
     std::optional<Committed> commit(const Plan&,Current);
     Restoration restore(std::uint64_t account,std::uint64_t character);
     bool restoration_current(const Restoration&);
+    // Actual bank/C24/ordinary-move material continuation, not fresh restore.
+    // Exact private mutation predecessor, same real two writers; preserve all
+    // roster/selection/activation headers/events and original catalog sources.
+    std::optional<Restoration> material_successor(const Restoration&,
+        SqliteOwnedEquipmentTransaction&,const SqliteOwnedEquipmentTransaction::Committed&);
+    std::optional<Restoration> material_successor_chain(const Restoration&,
+        SqliteOwnedEquipmentTransaction&,std::span<const SqliteOwnedEquipmentTransaction::Committed* const>);
     // Selection-only source continuation. Preserve inventory/equipment and
     // every activation header/event; qualify the final full State once after
     // the private commit chain. This never learns, writes or restores records.

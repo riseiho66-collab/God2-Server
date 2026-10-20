@@ -34,7 +34,7 @@ bool SqliteOwnedEquipmentTransaction::stored_current(const Before& wanted,const 
         !inventory_.reentered_ && !equipment_.reentered_;
 }
 std::optional<SqliteOwnedEquipmentTransaction::Committed> SqliteOwnedEquipmentTransaction::replace_from_issuer(
-    Before expected,State next,Issuer issuer) {
+    Before expected,State next,Issuer issuer,PureCurrent pure_current) {
     owner();
     if(inventory_.writing_||equipment_.writing_) {
         inventory_.reentered_=equipment_.reentered_=true;
@@ -75,6 +75,16 @@ std::optional<SqliteOwnedEquipmentTransaction::Committed> SqliteOwnedEquipmentTr
             throw DatabaseError("Joint equipment issuer reentered or changed transaction/storage");
         return supplied&&*supplied==next;
     };
+    const auto pure=[&] {
+        if(!pure_current)return true;
+        const auto changes=sqlite3_total_changes64(db);
+        inventory_.issuer_active_=equipment_.issuer_active_=true;
+        struct Leave {bool& a;bool& b;~Leave(){a=b=false;}} leave{inventory_.issuer_active_,equipment_.issuer_active_};
+        const bool allowed=pure_current();
+        if(inventory_.reentered_||equipment_.reentered_||sqlite3_get_autocommit(db)||sqlite3_total_changes64(db)!=changes)
+            throw DatabaseError("Joint equipment PureCurrent changed transaction/storage or reentered");
+        return allowed;
+    };
     check(expected);if(!issue(Check::Prepared))return std::nullopt;check(expected);
     if(!issue(Check::BeforeWrite))return std::nullopt;check(expected);
     inventory_.stage_replace(expected.inventory,next.inventory);
@@ -85,7 +95,9 @@ std::optional<SqliteOwnedEquipmentTransaction::Committed> SqliteOwnedEquipmentTr
     // until the one outer COMMIT has succeeded. Allocation failure rolls back.
     std::optional<Committed> result{Committed(identity_,
         SqliteOwnedInventoryRepository::Committed(inventory_.identity_,std::make_shared<const OwnedInventorySnapshot>(next.inventory)),
-        SqliteNativeEquipmentSnapshotRepository::Committed(equipment_.identity_,std::make_shared<const NativeEquipmentSnapshot>(next.equipment)))};
+        SqliteNativeEquipmentSnapshotRepository::Committed(equipment_.identity_,std::make_shared<const NativeEquipmentSnapshot>(next.equipment)),
+        std::make_shared<const Before>(expected))};
+    if(!pure())return std::nullopt;
     tx.commit();return result; // No post-COMMIT issuer/read/retry/allocation.
 }
 std::optional<SqliteOwnedEquipmentTransaction::Committed> SqliteOwnedEquipmentTransaction::move_position_from_current(
@@ -186,7 +198,8 @@ std::optional<SqliteOwnedEquipmentTransaction::Committed> SqliteOwnedEquipmentTr
     // provenance remain exact. Both immutable receipts allocate BEFORE COMMIT.
     std::optional<Committed> result{Committed(identity_,
         SqliteOwnedInventoryRepository::Committed(inventory_.identity_,std::make_shared<const OwnedInventorySnapshot>(next.inventory)),
-        SqliteNativeEquipmentSnapshotRepository::Committed(equipment_.identity_,std::make_shared<const NativeEquipmentSnapshot>(next.equipment)))};
+        SqliteNativeEquipmentSnapshotRepository::Committed(equipment_.identity_,std::make_shared<const NativeEquipmentSnapshot>(next.equipment)),
+        std::make_shared<const Before>(expected))};
     tx.commit();return result; // No callback/read/retry/allocation after COMMIT.
 }
 std::optional<SqliteOwnedEquipmentTransaction::Before> SqliteOwnedEquipmentTransaction::observe_before(
@@ -215,6 +228,11 @@ std::optional<SqliteOwnedEquipmentTransaction::Before> SqliteOwnedEquipmentTrans
     if(inventory_.reentered_||equipment_.reentered_||sqlite3_get_autocommit(db))
         throw DatabaseError("Joint bag observation reentered or lost read scope");
     sqlite_detail::execute(db,"COMMIT");read.finished=true;return result;
+}
+bool SqliteOwnedEquipmentTransaction::committed_predecessor_matches(const Committed& value,
+    const OwnedInventorySnapshot& inventory,const NativeEquipmentSnapshot& equipment) const noexcept {
+    return value.identity_==identity_ && value.before_ && value.before_->inventory && value.before_->equipment &&
+        *value.before_->inventory==inventory && *value.before_->equipment==equipment;
 }
 std::optional<SqliteOwnedEquipmentTransaction::Committed> SqliteOwnedEquipmentTransaction::observe_committed(
     std::uint64_t account,std::uint64_t character) {

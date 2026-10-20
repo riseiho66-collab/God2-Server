@@ -34,20 +34,22 @@ public:
         Committed(const Committed&)=default;
         Committed& operator=(const Committed&)=default;
         Committed(Committed&& v) noexcept
-            :identity_(v.identity_),inventory_(v.inventory_),equipment_(v.equipment_) {}
+            :identity_(v.identity_),inventory_(v.inventory_),equipment_(v.equipment_),before_(v.before_) {}
         Committed& operator=(Committed&& v) noexcept {
-            identity_=v.identity_;inventory_=v.inventory_;equipment_=v.equipment_;return *this;
+            identity_=v.identity_;inventory_=v.inventory_;equipment_=v.equipment_;before_=v.before_;return *this;
         }
         const SqliteOwnedInventoryRepository::Committed& inventory() const noexcept{return inventory_;}
         const SqliteNativeEquipmentSnapshotRepository::Committed& equipment() const noexcept{return equipment_;}
     private:
         friend class SqliteOwnedEquipmentTransaction;
         Committed(std::shared_ptr<const Identity> identity,SqliteOwnedInventoryRepository::Committed inventory,
-            SqliteNativeEquipmentSnapshotRepository::Committed equipment) noexcept
-            :identity_(std::move(identity)),inventory_(std::move(inventory)),equipment_(std::move(equipment)) {}
+            SqliteNativeEquipmentSnapshotRepository::Committed equipment,std::shared_ptr<const Before> before={}) noexcept
+            :identity_(std::move(identity)),inventory_(std::move(inventory)),equipment_(std::move(equipment)),before_(std::move(before)) {}
         std::shared_ptr<const Identity> identity_;
         SqliteOwnedInventoryRepository::Committed inventory_;
         SqliteNativeEquipmentSnapshotRepository::Committed equipment_;
+        // Actual mutation edge only; readonly observations cannot provide it.
+        std::shared_ptr<const Before> before_;
     };
     // CUSTOM-0092: explicit appearance-only synchronization of an EXISTING
     // full entry witness with complete inventory/equipment after-state.
@@ -90,7 +92,12 @@ public:
     // Own one IMMEDIATE transaction, full expected CAS for both stores. Every
     // failure rolls back both; no borrowed transaction/savepoint/public staged
     // tokens. Allocate the joint immutable receipt BEFORE the only COMMIT.
-    std::optional<Committed> replace_from_issuer(Before,State,Issuer);
+    // Optional additional pure lifetime fence, after every SQL observer and
+    // immediately before COMMIT. It must not invoke providers, SQL, sends or
+    // pumping. False rolls back both staged populations, including after the
+    // last stored-current observer retired a Session/lease.
+    using PureCurrent=std::function<bool()>;
+    std::optional<Committed> replace_from_issuer(Before,State,Issuer,PureCurrent={});
     // One outer IMMEDIATE transaction over all THREE full tuples. Complete
     // expected material/entry required; no first entry creation. Same actor,
     // current root/pose and native149c kind. Freeze every decoded entry byte
@@ -116,6 +123,11 @@ public:
     // Single consistent read scope over BOTH current tuples and actual common
     // root/position/battle state. Never compose two independently current reads.
     bool committed_current(const Committed&);
+    // Pure writer-owned exact predecessor qualification. Only successful
+    // actual two-store mutation receipts retain this edge; observation tokens
+    // have none. No rebase, SQL, grant or assertion that after is still current.
+    bool committed_predecessor_matches(const Committed&,const OwnedInventorySnapshot&,
+        const NativeEquipmentSnapshot&) const noexcept;
     // Borrow the actual caller-owned transaction. Private joint/writer identity
     // and the complete stored/common tuple are checked without live callbacks,
     // BEGIN, COMMIT, rollback or clearing another operation's issuer flags.

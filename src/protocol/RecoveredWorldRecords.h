@@ -3,6 +3,10 @@
 #include "protocol/TaiwanNativePartyMenu.h"
 #include "protocol/TaiwanNativeClientOptions.h"
 #include "protocol/RecoveredBattleRowPreference.h"
+#include "protocol/RecoveredSosSupportRequest.h"
+#include "protocol/RecoveredSosBattleCommand.h"
+#include "protocol/RecoveredTeamRequest57.h"
+#include "protocol/RecoveredPartyExitRequest5A.h"
 #include "protocol/TaiwanNativeSkillCommand.h"
 #include "protocol/RecoveredWorldSkillRequest.h"
 #include "protocol/RecoveredSkillSelectionRequest.h"
@@ -128,7 +132,9 @@ struct RecoveredWorldRecords {
                                 RecoveredC2Control::Request,
                                 RecoveredSpectator6E::Request,RecoveredMapPanelControl68::Request,
                                 RecoveredSpectatorClose::Request,TaiwanNativeSkillCommand::WireRecord,TaiwanNativeBlacklist::Request,TaiwanNativePartyMenu::Request,TaiwanNativeClientOptions::Control,RecoveredWorldSkillRequest::Request,RecoveredPrebornChoiceRequest::Mask,RecoveredPrebornChoiceRequest::Words,
-                                RecoveredSkillSelectionRequest::Request,RecoveredBattleRowPreference::Request>;
+                                RecoveredSkillSelectionRequest::Request,RecoveredBattleRowPreference::Request,
+                                RecoveredSosSupportRequest::Request,RecoveredSosBattleCommand::Request,
+                                RecoveredTeamRequest57::Request,RecoveredPartyExitRequest5A::Request>;
     static constexpr std::size_t max_logical_size = RecoveredWorldFrame::max_logical_size;
 
     // C2S 9A is a client diagnostic/log record, not a gameplay action. Keep
@@ -338,10 +344,25 @@ struct RecoveredWorldRecords {
                 if(!request)return std::nullopt;
                 records.emplace_back(*request);offset+=size;break;
             }
-            case 0x6a:
-            case 0x57:
-            case 0x58:
-            case 0x5a: {
+            case RecoveredSosSupportRequest::opcode: {
+                constexpr auto size=RecoveredSosSupportRequest::logical_size;
+                if(remaining.size()<size)return {};
+                const auto request=RecoveredSosSupportRequest::decode(remaining.first(size));if(!request)return {};
+                records.emplace_back(*request);offset+=size;break;
+            }
+            case RecoveredTeamRequest57::opcode: {
+                constexpr auto size=RecoveredTeamRequest57::logical_size;
+                if(remaining.size()<size)return {};
+                const auto request=RecoveredTeamRequest57::decode(remaining.first(size));if(!request)return {};
+                records.emplace_back(*request);offset+=size;break;
+            }
+            case RecoveredPartyExitRequest5A::opcode: {
+                constexpr auto size=RecoveredPartyExitRequest5A::logical_size;
+                if(remaining.size()<size)return {};
+                const auto request=RecoveredPartyExitRequest5A::decode(remaining.first(size));if(!request)return {};
+                records.emplace_back(*request);offset+=size;break;
+            }
+            case 0x58: {
                 const auto size=RecoveredParty::size(remaining[0]);
                 if(remaining.size()<size)return std::nullopt;
                 const auto request=RecoveredParty::decode(remaining.first(size));
@@ -558,6 +579,11 @@ struct RecoveredWorldRecords {
                 // Explicit actual native skill owner only. Preserve all17
                 // bytes; game-owner definition/turn qualification follows.
                 // Existing CUSTOM PK/diagnostic grammar remains the default.
+                if(remaining[2]==8) {
+                    const auto sos=RecoveredSosBattleCommand::decode(remaining.first(size));
+                    if(!sos)return {};
+                    records.emplace_back(*sos);offset+=size;break;
+                }
                 if(native_skill_commands && (remaining[2]==3 || remaining[2]==0x83)) {
                     const auto skill=TaiwanNativeSkillCommand::parse_wire(remaining.first(size));
                     if(!skill)return std::nullopt;

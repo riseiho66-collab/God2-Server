@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string_view>
+#include <cstring>
 #include "BankCallbackRegression.h"
 using namespace god2;
 void require(bool ok,const char* text){if(!ok)throw std::runtime_error(text);}
@@ -127,6 +128,70 @@ int main(){try {
         service.renew_items(7,now);require(!fresh.current()&&!service.permits_items(7,531,now),"Renew resurrected expired bank source");
         service.open(7,531,now);const auto denied_source=service.capture_lease(7,531,now);
         require(!service.permits_items(7,999,now)&&!denied_source.current(),"Rejected access observation retained source");
+    }
+    // PHASE1 source only: exercise the actual optional pure owner dependency.
+    // Each observer only retires a local fixture owner; it does not reenter the
+    // service or run nested SQL. The existing money lease stays a real source.
+    // Stage0 denies before providers/SQL; stage1 retires after writes at receipt
+    // readback; stage2 retires after a successful SQLite COMMIT has completed.
+    for(unsigned stage=0;stage<3;++stage) {
+        bool owner_live=true;unsigned lookups=0,accesses=0,receipt_calls=0;
+        RecoveredBankService dependent(bank,[&](std::uint64_t id)->std::optional<RecoveredBankService::Peer>{
+            ++lookups;return id==7?std::optional{peer}:std::nullopt;
+        },[&](const auto& source,std::uint16_t target){
+            ++accesses;return source.area==4 && source.scene==3 && access.lookup(source.area,source.scene,target,true).has_value();
+        },[&]{++receipt_calls;return std::string(64,static_cast<char>('1'+stage));});
+        require(dependent.open(7,531,now).has_value(),"Pure owner fixture did not open actual money lease");
+        const auto money_source=dependent.capture_lease(7,531,now);
+        const auto before=bank.load(1,role.id),other_before=bank.load(2,other.id);
+        const auto planned=SqliteBankRepository::plan({before,SqliteBankRepository::Operation::Deposit,deposit.amount});
+        lookups=accesses=receipt_calls=0;if(stage==0)owner_live=false;
+        struct OwnerTrace {
+            sqlite3* db;bool* live;unsigned stage;unsigned statements=0;bool hit=false,postcommit=false;
+        } trace{raw,&owner_live,stage};
+        RecoveredBankService::Result outcome;
+        {
+            require(sqlite3_trace_v2(raw,SQLITE_TRACE_STMT|SQLITE_TRACE_PROFILE,
+                [](unsigned event,void* context,void* statement,void* sql)->int {
+                    auto& state=*static_cast<OwnerTrace*>(context);
+                    if(event==SQLITE_TRACE_STMT) {
+                        ++state.statements;
+                        if(state.stage==1 && !state.hit && sql &&
+                           std::strstr(static_cast<const char*>(sql),"SELECT account_id,character_id,operation")) {
+                            state.hit=true;*state.live=false;
+                        }
+                    } else if(event==SQLITE_TRACE_PROFILE && state.stage==2 && !state.hit) {
+                        const auto text=sqlite3_sql(static_cast<sqlite3_stmt*>(statement));
+                        if(text && std::strcmp(text,"COMMIT")==0) {
+                            state.hit=true;state.postcommit=sqlite3_get_autocommit(state.db)!=0;*state.live=false;
+                        }
+                    }
+                    return 0;
+                },&trace)==SQLITE_OK,"Pure owner SQL observer registration failed");
+            struct Clear {sqlite3* db;~Clear(){sqlite3_trace_v2(db,0,nullptr,nullptr);}} clear{raw};
+            outcome=dependent.handle(7,std::span(&deposit,1),now,[&]{return owner_live;});
+        }
+        require(!money_source.current(),"Retired pure owner left its money lease current");
+        require(bank.load(2,other.id)==other_before,"Pure owner regression changed unrelated owner");
+        if(stage==0) {
+            require(outcome.rejected && !outcome.committed && outcome.logical.empty() &&
+                !lookups && !accesses && !receipt_calls && !trace.statements && bank.load(1,role.id)==before,
+                "False pure owner reached a provider/SQL or emitted recovery/success");
+        } else if(stage==1) {
+            require(trace.hit && receipt_calls==1 && outcome.rejected && !outcome.committed &&
+                outcome.logical.empty() && bank.load(1,role.id)==before,
+                "Owner retirement at postwrite receipt read escaped exact rollback");
+        } else {
+            require(trace.hit && trace.postcommit && receipt_calls==1 && outcome.committed && !outcome.rejected &&
+                outcome.logical.empty() && bank.load(1,role.id)==planned,
+                "Post-COMMIT owner retirement lost durable commit or emitted stale response");
+        }
+        // Even restored fixture readiness cannot renew the predecessor lease.
+        // No automatic retry may debit a second time after durable retirement.
+        owner_live=true;const auto durable=bank.load(1,role.id);
+        const auto replay=dependent.handle(7,std::span(&deposit,1),now,[&]{return owner_live;});
+        require(replay.rejected && !replay.committed && replay.logical.empty() && bank.load(1,role.id)==durable,
+            "Restored pure owner revived a retired money lease or retried a durable debit");
     }
     std::cout<<"Bank typed native framing, lease/access, test isolation, cancel and canonical sync passed\n";
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

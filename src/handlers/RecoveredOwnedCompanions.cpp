@@ -2,6 +2,7 @@
 #include "protocol/RecoveredInventory.h"
 #include "db/DbTypes.h"
 #include <spdlog/spdlog.h>
+#include <array>
 #include <stdexcept>
 namespace god2 {
 struct RecoveredOwnedCompanions::PrefixRead {
@@ -81,6 +82,24 @@ bool RecoveredOwnedCompanions::restoration_current(const Restoration& restoratio
             restoration.learning_repository_->restoration_current(*restoration.learning_source());
     }
     return repository_.deity_roster_current(restoration.deity_roster());
+}
+std::optional<RecoveredOwnedCompanions::Restoration>
+RecoveredOwnedCompanions::material_successor_from_committed(const Restoration& before,
+    SqliteOwnedEquipmentTransaction& joint,const SqliteOwnedEquipmentTransaction::Committed& committed) {
+    const std::array<const SqliteOwnedEquipmentTransaction::Committed*,1> chain{&committed};
+    return material_successor_from_committed_chain(before,joint,chain);
+}
+std::optional<RecoveredOwnedCompanions::Restoration>
+RecoveredOwnedCompanions::material_successor_from_committed_chain(const Restoration& before,
+    SqliteOwnedEquipmentTransaction& joint,std::span<const SqliteOwnedEquipmentTransaction::Committed* const> commits) {
+    PrefixRead read(*this);const auto owned=before;
+    auto* const learning=owned.learning_repository_;
+    if(!owned.learning_source_ || !learning || !learning->owns_companions(repository_))return {};
+    auto next=learning->material_successor_chain(*owned.learning_source_,joint,commits);
+    if(!next || prefix_reentered_)return {};
+    // Identical actual restoration history: material relocation emits no new
+    // deity/reset/learning record and cannot renew native adoption authority.
+    return Restoration(owned.deity_roster_,owned.batches_,std::move(*next),*learning);
 }
 bool RecoveredOwnedCompanions::restoration_learning_current_in_transaction(
         const Restoration& restoration,sqlite3* actual_connection) {
