@@ -96,3 +96,17 @@ schema／migration／codec或部署。有效啟動仍沿原有DB初始化生命�
 目前仍沒有可確認可用的L/G URL；local bind後的port/catalog只由未來真正啟動
 取得，不能以path或source案例宣稱已登入。持久save／recovery／target admission、
 六向切換、公開WSS／部署及集中台服聯合驗收仍OPEN。
+
+## 2026-10-21 pass2：Main 供應者與同一L來源
+
+繼續逐項核對Main來源後，沒有發現完整native07／2A issuer、Entered aggregate與
+Live／Authority的可掛載實作者；現有sourcefactory仍要求這些真正材料，不能把JSON
+或空場景當成完成。Main本輪未新增虛構三世界provider，沒有新的啟動方式或可用URL。
+[供應者矩陣與修正](WEB_LOGIN_GATEWAY_CONTRACT_20261021.md)末節明列實際缺口。
+
+已補真正shared-handoff來源接線：專用工廠封存同一handoff的canonical名單callbacks，
+HostPlan保留原owner guard後再封，Application三分流還原並核對這份私有來源，
+不只檢查非空callbacks或可偽拼接的標記。精確既有149c版本要求亦移到DB前拒絕。
+前端仍用上一節version1 manifest與原生L→唯一destination→G流程，schema與封包
+不變；沒有新增可由browser兌換的權限。每項修改後再次獨立檢查代碼；未編譯、
+執行測試、開服務、gameDB／schema／migration、codec或部署。

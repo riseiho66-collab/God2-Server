@@ -1209,15 +1209,8 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
         if(native_characters) {
             if(!context.accounts || !context.native_character_summaries)
                 throw std::invalid_argument("TW stored native list lacks its exact common account/summary readers");
-            if(actual.characters->handoff) {
-                if(actual.characters->publish || actual.characters->link ||
-                   !actual.characters->handoff->matches_sources(*context.accounts,context.characters,
-                        *context.native_character_summaries,client,actual.actual_session_capacity))
-                    throw std::invalid_argument("TW list handoff differs from actual host readers/build/capacity");
-                auto handoff=actual.characters->handoff->binding();
-                actual.characters->publish=std::move(handoff.publish);
-                actual.characters->link=std::move(handoff.link);
-            }
+            if(actual.characters->handoff && (actual.characters->publish || actual.characters->link))
+                throw std::invalid_argument("TW list handoff cannot mix independent Publish or Link callbacks");
             SharedTaiwanNativeCharacterListSource::Prepare prepare;
             if(actual.characters->offer) {
                 if(!context.native_character_summary_writer ||
@@ -1226,7 +1219,11 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
                 prepare=SharedTaiwanNativeCharacterOfferSource::create(*context.native_character_summary_writer,
                     *context.accounts,context.characters,client,std::move(actual.characters->offer));
             }
-            characters=SharedTaiwanNativeCharacterListSource::create(*context.accounts,context.characters,
+            if(actual.characters->handoff)
+                characters=SharedTaiwanNativeCharacterListSource::create_with_handoff(*context.accounts,context.characters,
+                    *context.native_character_summaries,client,std::move(actual.characters->target),std::move(actual.characters->qualify),
+                    actual.actual_session_capacity,std::move(actual.characters->handoff),std::move(prepare));
+            else characters=SharedTaiwanNativeCharacterListSource::create(*context.accounts,context.characters,
                 *context.native_character_summaries,client,std::move(actual.characters->target),std::move(actual.characters->qualify),
                 actual.actual_session_capacity,std::move(actual.characters->publish),std::move(actual.characters->link),std::move(prepare));
         }
@@ -1285,27 +1282,36 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create(SourceFactory source
         if(!owner->characters_source || std::exchange(owner->characters_taken,true)) {
             owner->invalidate();throw std::logic_error("TW native list/selection owner was already taken or missing");
         }
-        return SharedTaiwanNativeCharacterListSource::Binding{
-            [owner,invoke=owner->characters_source->list](Session& session) {
+        auto source=*owner->characters_source;
+        const auto handoff=source.handoff_owner_.lock();
+        if(handoff) {
+            const auto canonical=source.for_handoff(handoff);
+            if(!canonical)throw std::logic_error("TW native host lost canonical handoff callbacks");
+            source=*canonical;
+        }
+        auto result=SharedTaiwanNativeCharacterListSource::Binding{
+            [owner,invoke=source.list](Session& session) {
                 owner->check();return invoke(session);
             },
-            [owner,invoke=owner->characters_source->select](Session& session,const RecoveredPostCreateSelect::Selection& input,std::optional<std::uint64_t> created) {
+            [owner,invoke=source.select](Session& session,const RecoveredPostCreateSelect::Selection& input,std::optional<std::uint64_t> created) {
                 owner->check();return invoke(session,input,created);
             },
-            [owner,invoke=owner->characters_source->invalidate_active] {owner->check();invoke();},
-            [owner,invoke=owner->characters_source->current](Session& session,const Session::NativeCharacterList& delivery) {
+            [owner,invoke=source.invalidate_active] {owner->check();invoke();},
+            [owner,invoke=source.current](Session& session,const Session::NativeCharacterList& delivery) {
                 owner->check();return invoke(session,delivery);
             },
-            [owner,invoke=owner->characters_source->complete](Session& session,const Session::NativeCharacterList& delivery,bool written) {
+            [owner,invoke=source.complete](Session& session,const Session::NativeCharacterList& delivery,bool written) {
                 owner->check();return invoke(session,delivery,written);
             },
-            [owner,invoke=owner->characters_source->selected](std::uint64_t session,std::uint64_t account,std::uint64_t character) {
+            [owner,invoke=source.selected](std::uint64_t session,std::uint64_t account,std::uint64_t character) {
                 owner->check();return invoke(session,account,character);
             },
-            [owner,invoke=owner->characters_source->invalidate_selection](std::uint64_t session) {
+            [owner,invoke=source.invalidate_selection](std::uint64_t session) {
                 owner->check();invoke(session);
             }
         };
+        if(handoff)return SharedTaiwanNativeCharacterListSource::Binding::reseal_host_handoff(std::move(result),source);
+        return result;
     };
     plan.make_taiwan_actor_status_incarnations=[factory](const Context& context) {
         auto owner=factory->get(context);owner->check();return owner->actor_status_incarnations;

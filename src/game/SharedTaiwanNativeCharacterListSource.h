@@ -7,8 +7,11 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <thread>
 
 namespace god2 {
+class SharedTaiwanCharacterListHandoff;
+class SharedTaiwanNativeWorldHostPlan;
 // Exact stored TW07 delivery and native issued-token selection. This is not
 // the historical zero-filled list or a create40/selected40 projection.
 class SharedTaiwanNativeCharacterListSource {
@@ -119,6 +122,26 @@ public:
         // Revoke this exact pre-use selection even between Current calls. A
         // caught outer Entry rejection must be visible before issuer COMMIT.
         std::function<void(std::uint64_t session)> invalidate_selection;
+        Binding()=default;
+        // Generic facade compatibility only. This constructor mints no handoff proof.
+        Binding(decltype(list) l,decltype(select) s,decltype(invalidate_active) i,
+                decltype(current) c,decltype(complete) f,SelectedSource selected_source,
+                decltype(invalidate_selection) invalidate_source)
+            :list(std::move(l)),select(std::move(s)),invalidate_active(std::move(i)),
+             current(std::move(c)),complete(std::move(f)),selected(std::move(selected_source)),
+             invalidate_selection(std::move(invalidate_source)) {}
+        // GAME-only pure extraction of the original callbacks, not these public
+        // mutable facade fields. Same live shared owner is necessary, not rights.
+        std::optional<Binding> for_handoff(const std::shared_ptr<SharedTaiwanCharacterListHandoff>&) const;
+    private:
+        friend class SharedTaiwanNativeCharacterListSource;
+        friend class SharedTaiwanNativeWorldHostPlan;
+        std::weak_ptr<SharedTaiwanCharacterListHandoff> handoff_owner_;
+        std::shared_ptr<const Binding> canonical_handoff_binding_;
+        std::thread::id handoff_thread_{};
+        // Only the trusted host composition may reseal its owner-check wrappers.
+        // It must first take every invocation from the original canonical source.
+        static Binding reseal_host_handoff(Binding,const Binding& original);
     };
     // Borrowed exact same-Database sources until game-owner facade drain.
     // Real target and full native visibility/token/route/resource/source/phase
@@ -127,6 +150,11 @@ public:
     static Binding create(AccountRepository&,RecoveredCharacterRepository&,
         NativeCharacterSummarySnapshotRepository&,std::string client_sha256,TargetSource,Qualify,
         std::size_t actual_pending_capacity,Publish,LinkSource,Prepare actual_issuer={});
+    // Same actual shared owner supplies Publish and Link together. Generic create
+    // remains unproven even if callers copy those two public callback values.
+    static Binding create_with_handoff(AccountRepository&,RecoveredCharacterRepository&,
+        NativeCharacterSummarySnapshotRepository&,std::string client_sha256,TargetSource,Qualify,
+        std::size_t actual_pending_capacity,std::shared_ptr<SharedTaiwanCharacterListHandoff>,Prepare actual_issuer={});
     // Current bridges held queue release and actual write completion on game.
     // Cross-socket links need the actual supplied owner; no complete2A authority
     // or native token/local-backing variant is inferred from a ticket.

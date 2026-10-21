@@ -155,3 +155,13 @@ archives; they are not active dependencies or runtime capabilities.
   route catalogs and mock fixtures are not actual login/world acceptance.
 - This scoped source resume does not resume the separately paused full goal
   or4-discord heartbeat, and does not authorize changes in the client tree.
+
+## Owner direct web-login source continuation (2026-10-21)
+
+- The human directly requested continued completion of Main three-channel sources,
+  trustworthy L-to-G wiring and the client contract in this chat. Keep work
+  source/static only: no service, game database, build/tests, codec or deploy.
+- Audit concrete required native suppliers and correct proven composition gaps;
+  never label a callback registry, empty scene, guessed packet or true qualifier
+  as a complete Main provider. Modified code requires another source review.
+- This continuation does not resume the broader full goal or4-discord heartbeat.

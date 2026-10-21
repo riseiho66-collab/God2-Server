@@ -1,4 +1,5 @@
 #include "game/SharedTaiwanNativeCharacterListSource.h"
+#include "game/SharedTaiwanCharacterListHandoff.h"
 #include "db/NativeWorldEntrySnapshotRepository.h"
 #include "protocol/RecoveredWorldFrame.h"
 #include "text/OwnedCharacterNameText.h"
@@ -183,6 +184,47 @@ struct State {
         return result;
     }
 };
+}
+std::optional<SharedTaiwanNativeCharacterListSource::Binding>
+SharedTaiwanNativeCharacterListSource::Binding::for_handoff(
+        const std::shared_ptr<SharedTaiwanCharacterListHandoff>& expected) const {
+    // Do not lock an affine owner on a forbidden thread, including after expiry.
+    if(!expected || handoff_thread_!=std::this_thread::get_id() || !canonical_handoff_binding_)return {};
+    const auto actual=handoff_owner_.lock();
+    if(!actual || actual.get()!=expected.get() || actual.owner_before(expected) || expected.owner_before(actual))return {};
+    auto result=*canonical_handoff_binding_;
+    result.handoff_owner_=handoff_owner_;
+    result.canonical_handoff_binding_=canonical_handoff_binding_;
+    result.handoff_thread_=handoff_thread_;
+    return result;
+}
+SharedTaiwanNativeCharacterListSource::Binding
+SharedTaiwanNativeCharacterListSource::Binding::reseal_host_handoff(Binding wrapped,const Binding& original) {
+    if(original.handoff_thread_!=std::this_thread::get_id())
+        throw std::logic_error("TW handoff host seal requires original GAME owner");
+    const auto owner=original.handoff_owner_.lock();
+    if(!owner || !original.for_handoff(owner))
+        throw std::invalid_argument("TW handoff host seal lacks its canonical source");
+    // Snapshot has no proof -> no canonical->self cycle. Its callbacks may own
+    // HostOwner, which owns only the earlier original source, never this seal.
+    wrapped.handoff_owner_.reset();wrapped.canonical_handoff_binding_.reset();wrapped.handoff_thread_={};
+    const auto canonical=std::make_shared<const Binding>(wrapped);
+    wrapped.handoff_owner_=owner;wrapped.canonical_handoff_binding_=canonical;
+    wrapped.handoff_thread_=std::this_thread::get_id();return wrapped;
+}
+SharedTaiwanNativeCharacterListSource::Binding
+SharedTaiwanNativeCharacterListSource::create_with_handoff(
+        AccountRepository& accounts,RecoveredCharacterRepository& characters,
+        NativeCharacterSummarySnapshotRepository& snapshots,std::string client,TargetSource target,Qualify qualify,
+        std::size_t capacity,std::shared_ptr<SharedTaiwanCharacterListHandoff> owner,Prepare prepare) {
+    if(!owner || !owner->matches_sources(accounts,characters,snapshots,client,capacity))
+        throw std::invalid_argument("TW native list requires the exact actual shared handoff sources");
+    auto handoff=owner->binding();
+    auto result=create(accounts,characters,snapshots,std::move(client),std::move(target),std::move(qualify),
+        capacity,std::move(handoff.publish),std::move(handoff.link),std::move(prepare));
+    const auto canonical=std::make_shared<const Binding>(result); // proof still empty
+    result.handoff_owner_=owner;result.canonical_handoff_binding_=canonical;
+    result.handoff_thread_=std::this_thread::get_id();return result;
 }
 SharedTaiwanNativeCharacterListSource::Target::Target(std::uint16_t g,std::uint16_t s,
         std::function<bool(Session&,const Scope&)> check):group(g),server(s),current(std::move(check)) {

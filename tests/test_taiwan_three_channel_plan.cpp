@@ -52,7 +52,8 @@ struct Arguments {
         {{127,0,0,1},0,0x82,{0x83,0xa2,0xb2,0xc2}},
         {{127,0,0,1},0,0x93,{0xfe,0xa3,0xb3,0xc3}}
     }};
-    // The plan checks spelling, not binary provenance or callback authority.
+    // Exact existing configuration/handoff identity, not binary attestation
+    // or callback authority. No current-build alias is accepted by the plan.
     std::string client_sha256{TaiwanNativeClientGroupConfiguration::client_sha256};
     std::size_t capacity=4;
     Handoff::Live live;
@@ -106,7 +107,7 @@ void actual_configuration_and_passive_validation(){
     untouched(calls);
 }
 
-void missing_sources_and_hash_spelling(){
+void missing_sources_and_hash_identity(){
     ConfigurationFiles files;const auto calls=std::make_shared<Calls>();Arguments input(files.read({3}),calls);
     auto bad=input;bad.capacity=0;
     require(refuses([&]{(void)bad.make();}),"Plan accepted zero handoff capacity");
@@ -123,6 +124,17 @@ void missing_sources_and_hash_spelling(){
     for(const char byte:{'A','g',' ', '\0'}){
         bad=input;bad.client_sha256[31]=byte;
         require(refuses([&]{(void)bad.make();}),"Plan accepted a non-lowercase-hex SHA256 byte");
+    }
+    // These spell valid SHA256 values. Old spelling-only validation passed
+    // them, then actual Handoff::create rejected only after Application DB
+    // initialization/migrations. No callback should run to discover mismatch.
+    for(const auto& hash:std::array<std::string,2>{std::string(64,'0'),
+        "aaf0fae66e89c4547244304ecd8f4c2755746ffa6c9b9dfe68a0ff3fd2b4cd48"}) {
+        bad=input;bad.client_sha256=hash;
+        require(refuses([&]{(void)bad.make();}),"Plan accepted a different valid-hex native build");
+        auto changed=input.make();changed.client_sha256=hash;
+        require(refuses([&]{changed.validate();}),"Plan revalidation accepted a replaced native build");
+        untouched(calls);
     }
     auto revalidated=input.make();revalidated.live={};
     require(refuses([&]{revalidated.validate();}),"Revalidation accepted a removed live predicate");
@@ -164,5 +176,5 @@ void endpoint_identity_and_loopback(){
 } // namespace
 
 void test_taiwan_three_channel_plan(){
-    actual_configuration_and_passive_validation();missing_sources_and_hash_spelling();endpoint_identity_and_loopback();
+    actual_configuration_and_passive_validation();missing_sources_and_hash_identity();endpoint_identity_and_loopback();
 }

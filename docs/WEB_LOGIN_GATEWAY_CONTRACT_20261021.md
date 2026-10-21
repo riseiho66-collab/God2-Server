@@ -115,3 +115,57 @@ configuration、Live／Authority、三份真正 world plans 等來源；Main 尚
 未知 native 契約保留既有 current-TW REA 追查要求，沒有新增未證 native 規則。
 唯一正式靜態報告、精確 SHA、授權及審查收據保存在：
 `C:/Users/risei/.codex/artifact-archives/god2-server/20261021/web-login-source-integration-pass1`。
+
+## 2026-10-21 pass2：來源供應者逐項核對與實際封口
+
+本節回應使用者直接要求繼續 Main 三分流供應者與可信 L→G 源碼整合。
+本輪不編譯、測試、開服務、讀寫遊戲DB、codec、schema／migration或部署。
+
+實際追到的必要材料如下；表格中的「仍缺」不是可用 JSON 開關代替的權威：
+
+| 來源 | 已有實作 | Main 仍缺少的真正輸入 |
+| --- | --- | --- |
+| 三個世界與G端點 | SharedTaiwanChannelWorlds、獨立完整GAME frame、TaiwanChannelServers與私有listener binding | 真正三份可構造的完整native world plan；不能把一份已綁owner快取複用三次 |
+| L名單 | 完整75-byte07／角色順序與root snapshot reader、真正Written／Issued及offer交易adapter | Target／Qualify與完整07 issuer，含可見角色順序、token、route及未解位元；profile40不是07生成規則 |
+| 跨socket交接 | 真正選擇／實寫advertisement／Issued／獨立G authentication及完整destination重核 | 真正Live／Authority來源；不能把JSON group／subgroup或true lambda當授權 |
+| 初次2A | 原完整snapshot reader及條件式writer／Selected pre-use fence | 完整40-byte wire（37-byte logical記錄）、root／位置／身份／不透明位元來源及entry qualifier；不能以幾何或codec自動補齊 |
+| Entered／場景 | 完整initial publication、精確6F對應與資源readset adapter、私有lease／失敗cleanup | 真正Source的原始aggregate、incoming／outward全集、Current、Install／Cleanup；空場景或true回呼不是一般地圖完成 |
+| 移動 | CAN／HMD與原件資源owner、Written2A pose、明示CUSTOM ordinary movement adapter | 與同一初次scene／lease一致的Input／Authority；資源存在本身不准移動或發5D |
+
+這次沒有新增「Main provider registry」或只有std::function欄位的空方案來冒充供應者。
+以上缺失源在現有src只到 mandatory supplier 介面，沒有可直接掛Main的實作者。
+沒有因這份調查開啟DB去找或生成資料，也沒有改存檔／放置NPC怪物。
+
+實際補了兩個可由現有來源證實的接線問題：
+
+1. `TaiwanThreeChannelPlan::validate` 原本只核SHA字面格式；不同的合法64位hex會
+   通過，直到Application完成DB初始化後，handoff才因既有149c pin拒絕。
+   現在沿用後段已存在的精確版本要求，在啟動前同樣拒絕。這不證原件檔案真實性，
+   也不把當前aaf0 EXE換成149c的資料來源；原件資格缺口仍保留。
+2. 原來三個world plan只需交出非空名單callbacks；沒有核這些callbacks是否來自
+   Application剛建立的同一個shared L handoff。現在專用source工廠從同一handoff
+   取得真正publish/link，核同一accounts／characters／summary reader、build與capacity，
+   並封存私有的canonical callback bundle。HostPlan先還原該bundle，再包回既有
+   host-owner／生命週期檢查；Application只接受同一shared handoff的canonical版本。
+   公開可改的facade不能把另一套callbacks和合法身份標記拼在一起冒充通過。
+   該私有來源確認只在GAME使用，不建立Session／ticket，也不呼叫供應者或查SQL。
+
+generic callback API仍可供原來非三分流來源使用，但不能因此取得三分流來源資格。
+此修正關閉的是「三份來源必須用真shared handoff」的接線缺口，不是發明缺少的
+Live／Authority、名單可見規則或完整場景生成者。角色full64獨占、錯G拒絕、
+失敗quarantine、原native位元組與固定WS路徑／manifest schema繼續保持原樣。
+
+REA界線亦逐項核對：當前aaf0的40B490→4147D0、40BA00→414C50與412310
+路由consumer已有保留的反編譯／組語證據。重跑同一consumer不能因此取得
+原服07／2A issuer、伺服端可見性及場景授權；因此本輪沒有造一輪REA
+來冒充找到producer。後續若定位新的未分析shipped函數，仍直接依REA追查。
+純來源身份、版本pin與callback生命周期問題由完整源碼直接修正。
+
+客戶端契約不改：讀version1清單，先完成真正L選擇，再以完整native destination
+及提供的group／subgroup找唯一固定G path，獨立完成G登入與入場；缺失／歧義拒絕。
+不得把本節的canonical server binding送到瀏覽器、造JSON token、跳過native認證，
+或把nativeTCP Written提升為瀏覽器／動畫ACK。前端Main／actor／EntryPort、真正
+Main三世界supplier、持久復原／target admission與部署URL仍沒有本輪完成證據。
+
+作者／修改後獨立讀碼、未執行SOURCE案例、唯一正式靜態報告與精確SHA收據保存於：
+`C:/Users/risei/.codex/artifact-archives/god2-server/20261021/web-login-source-integration-pass2`。

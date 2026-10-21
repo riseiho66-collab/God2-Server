@@ -1271,6 +1271,15 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
                 }
                 if(world_plan->make_taiwan_native_characters) {
                     taiwan_native_characters=world_plan->make_taiwan_native_characters(context);
+                    if(channels) {
+                        // Three worlds must use the exact shared L handoff,
+                        // including its canonical source/host-owner callbacks.
+                        // Mutable public facades cannot substitute another issuer.
+                        auto canonical=taiwan_native_characters.for_handoff(channel_handoff);
+                        if(!canonical)
+                            throw std::invalid_argument("Native channel list source must retain the actual shared L handoff");
+                        taiwan_native_characters=std::move(*canonical);
+                    }
                     if(!taiwan_native_characters.list || !taiwan_native_characters.select || !taiwan_native_characters.invalidate_active ||
                        !taiwan_native_characters.current || !taiwan_native_characters.complete)
                         throw std::invalid_argument("Shared world host requires complete actual Taiwan list/token sources");

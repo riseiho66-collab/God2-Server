@@ -59,6 +59,11 @@ struct TaiwanThreeChannelPlan final {
         validate();
     }
     void validate() const {
+        // This is the existing handoff/configuration build requirement, checked
+        // before Application opens its DB. It is not an EXE-file attestation or
+        // permission to relabel current-client resources as the pinned corpus.
+        if(client_sha256!=TaiwanNativeClientGroupConfiguration::client_sha256)
+            throw std::invalid_argument("Three-channel host requires the exact recovered handoff/configuration build");
         if(!configuration||group>=10||configuration->configured_slots(group)!=std::optional<std::uint8_t>{3}||
            !handoff_capacity||!live||!authority||!make_world_plans||client_sha256.size()!=64||
            client_sha256.find_first_not_of("0123456789abcdef")!=std::string::npos)
