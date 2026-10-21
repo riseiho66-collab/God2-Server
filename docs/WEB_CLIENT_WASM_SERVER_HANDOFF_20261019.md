@@ -110,3 +110,21 @@ HostPlan保留原owner guard後再封，Application三分流還原並核對這�
 前端仍用上一節version1 manifest與原生L→唯一destination→G流程，schema與封包
 不變；沒有新增可由browser兌換的權限。每項修改後再次獨立檢查代碼；未編譯、
 執行測試、開服務、gameDB／schema／migration、codec或部署。
+
+### 2026-10-21 server pass3 source handoff
+
+`TaiwanMainNativeAuthority` now implements explicit CUSTOM-0159 host-owned
+Target/Qualify/Live/Authority/Prepare over a private successful full07 publication.
+Actual full native Supply remains mandatory; old DB snapshots cannot mint it.
+`ListSources::with_owned_authority` joins same Application readers/writer and
+actual shared L handoff. A GAME StartupFactory now constructs these real owners
+before Handoff, then passes that Handoff into three fresh world factories.
+This source-order connection does not provide the missing full07/full2A/initial
+scene/movement producer or a default three-world Main recipe. External producer
+lifecycle changes require explicit revoke; immutable publication is not ongoing
+external resource proof or one-use admission. Current-aaf REA refined 07 renderer
+and2A consume-tail boundaries without changing the existing149c provider pin.
+Client version1 routing/native authentication contract remains unchanged. No
+build/tests/service/gameDB/codec/deployment ran; full acceptance is still open.
+See WEB_LOGIN_GATEWAY_CONTRACT_20261021.md pass3 and the external archive
+C:/Users/risei/.codex/artifact-archives/god2-server/20261021/web-login-source-integration-pass3.

@@ -31,6 +31,25 @@ struct TaiwanThreeChannelPlan final {
     // do not retain Context/borrowed locals or share one cached plan Owner.
     using WorldPlans=std::array<SharedWorldHostPlan,3>;
     using Factory=std::function<WorldPlans(const Context&)>;
+    // CUSTOM-0159 startup on GAME: real DB/source owners must exist before
+    // Handoff is constructed. This avoids main-thread affine owners and
+    // late-mutable Live/Authority delegates. The world factory then receives
+    // the actual Application handoff and retains that same policy owner.
+    struct StartupContext {
+        SqliteDatabase& database;
+        asio::any_io_executor game;
+        const SharedTaiwanChannelWorlds& worlds;
+    };
+    struct StartupSources {
+        SharedTaiwanCharacterListHandoff::Live live;
+        SharedTaiwanCharacterListHandoff::Authority authority;
+        Factory make_world_plans;
+        void validate() const {
+            if(!live || !authority || !make_world_plans)
+                throw std::invalid_argument("Three-channel startup requires complete actual authority and world sources");
+        }
+    };
+    using StartupFactory=std::function<StartupSources(const StartupContext&)>;
     std::shared_ptr<const TaiwanNativeClientGroupConfiguration> configuration;
     std::uint8_t group,group_byte_1;
     std::array<TaiwanChannelServers::EndpointPolicy,3> endpoints;
@@ -39,6 +58,7 @@ struct TaiwanThreeChannelPlan final {
     SharedTaiwanCharacterListHandoff::Live live;
     SharedTaiwanCharacterListHandoff::Authority authority;
     Factory make_world_plans;
+    StartupFactory startup_sources; // Exclusive alternative to the three direct callbacks.
     // Explicit same authenticated Session cipher/framing source, mandatory
     // for schema53 Application guild chat. No default lab encoder is selected.
     // Qualify its actual peer/profile; return complete native envelopes only.
@@ -58,6 +78,19 @@ struct TaiwanThreeChannelPlan final {
          live(std::move(actual_live)),authority(std::move(actual_authority)),make_world_plans(std::move(factory)) {
         validate();
     }
+    TaiwanThreeChannelPlan(std::shared_ptr<const TaiwanNativeClientGroupConfiguration> configured,
+        std::uint8_t actual_group,std::uint8_t byte_1,
+        std::array<TaiwanChannelServers::EndpointPolicy,3> actual_endpoints,
+        std::string actual_client,std::size_t capacity,StartupFactory startup)
+        :configuration(std::move(configured)),group(actual_group),group_byte_1(byte_1),
+         endpoints(actual_endpoints),client_sha256(std::move(actual_client)),handoff_capacity(capacity),
+         startup_sources(std::move(startup)) {validate();}
+    StartupSources prepare_sources(const StartupContext& context) const {
+        validate();
+        auto result=startup_sources?startup_sources(context):StartupSources{live,authority,make_world_plans};
+        result.validate();
+        return result;
+    }
     void validate() const {
         // This is the existing handoff/configuration build requirement, checked
         // before Application opens its DB. It is not an EXE-file attestation or
@@ -65,7 +98,9 @@ struct TaiwanThreeChannelPlan final {
         if(client_sha256!=TaiwanNativeClientGroupConfiguration::client_sha256)
             throw std::invalid_argument("Three-channel host requires the exact recovered handoff/configuration build");
         if(!configuration||group>=10||configuration->configured_slots(group)!=std::optional<std::uint8_t>{3}||
-           !handoff_capacity||!live||!authority||!make_world_plans||client_sha256.size()!=64||
+           !handoff_capacity||
+           (startup_sources?bool(live)||bool(authority)||bool(make_world_plans):!live||!authority||!make_world_plans)||
+           client_sha256.size()!=64||
            client_sha256.find_first_not_of("0123456789abcdef")!=std::string::npos)
             throw std::invalid_argument("Three-channel host requires actual three slots, full native handoff sources and fresh world-plan factory");
         for(std::size_t k=0;k<3;++k) {

@@ -1098,6 +1098,7 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             // its frame has finished/destroyed; never return reference-captured
             // handlers from a temporary builder. This is the actual Main path.
             std::unique_ptr<SharedTaiwanChannelWorlds> channel_worlds;
+            std::optional<TaiwanThreeChannelPlan::StartupSources> channel_startup_sources;
             std::shared_ptr<SharedTaiwanCharacterListHandoff> channel_handoff;
             std::optional<TaiwanThreeChannelPlan::WorldPlans> channel_plans;
             std::shared_ptr<SharedGuildChannelDirectory53> shared_guild_directory53;
@@ -1125,11 +1126,16 @@ static int run_server_impl(const Config& config,const WebServerPlan* web_plan,un
             }
             if(channels) {
                 channel_worlds=std::make_unique<SharedTaiwanChannelWorlds>(database.recovered_characters());
+                // Real GAME-affine policy sources precede the handoff; their
+                // returned world factory then receives this exact shared owner.
+                // No main-thread DB owner or mutable late authority delegate.
+                channel_startup_sources.emplace(channels->prepare_sources(
+                    {database,game.get_executor(),*channel_worlds}));
                 channel_handoff=SharedTaiwanCharacterListHandoff::create(database.accounts(),database.recovered_characters(),
                     database.native_character_summaries(),channels->client_sha256,channels->handoff_capacity,
-                    channels->configuration,channels->live,channels->authority);
+                    channels->configuration,channel_startup_sources->live,channel_startup_sources->authority);
                 const TaiwanThreeChannelPlan::Context context{database,game.get_executor(),*channel_worlds,channel_handoff};
-                channel_plans.emplace(channels->make_world_plans(context));
+                channel_plans.emplace(channel_startup_sources->make_world_plans(context));
                 for(const auto& selected:*channel_plans) {
                     validate_application_world_plan(config,&selected);
                     if(!selected.make_taiwan_native_characters||!selected.make_taiwan_world_entry||

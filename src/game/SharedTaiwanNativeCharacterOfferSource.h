@@ -21,6 +21,7 @@ public:
         Offer& operator=(Offer&&)=delete;
     private:
         friend class SharedTaiwanNativeCharacterOfferSource;
+        friend class TaiwanMainNativeAuthority;
         Offer(Snapshot next,Issuer current):next_(std::move(next)),current_(std::move(current)) {}
         Snapshot next_;
         Issuer current_;

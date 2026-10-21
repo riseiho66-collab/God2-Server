@@ -169,3 +169,56 @@ Main三世界supplier、持久復原／target admission與部署URL仍沒有本�
 
 作者／修改後獨立讀碼、未執行SOURCE案例、唯一正式靜態報告與精確SHA收據保存於：
 `C:/Users/risei/.codex/artifact-archives/god2-server/20261021/web-login-source-integration-pass2`。
+
+## 2026-10-21 pass3：具體自訂權威來源與 GAME 啟動時序
+
+沿用已授權的 native-first／明示 CUSTOM fallback（見 IMPLEMENTATION_PROVENANCE.md），
+本輪新增 `TaiwanMainNativeAuthority`，屬 CUSTOM-0159 的本服務端權利規則，並非原服規則復原。
+它不是傳入四個空回呼的 registry，也不能生成尚未取得的完整原生07／2A位元。
+
+- 主機明示一個 native group、恰三個 subgroup 與三個不混用的 storage scope。
+  自訂可見性為同帳號全部 common roots、最多兩位；順序沿完整原生 producer，
+  只支援 common identity／primary routing／token0..3，其他 backing variant 不放行。
+- 同一 GAME owner 供應 Target、Qualify、Live、Authority、Prepare。
+  實際完整07 Supply仍必填；Prepare包住既有 issuer／writer CAS，成功後再核對
+  完整實際readback、完整roots、帳號、Session與parent Current，才私有發布新epoch。
+  DB內既有snapshot、公開revision／source字串或帳號ID本身都不能建立此發布資格。
+- List、Issued與G接續比對同一發布、原L selection／auth與完整tuple；G仍經原本獨立
+  登入、實際listener／destination、private handoff和角色占用檢查。Published不等於
+  socket Written、一次性admission CAS、瀏覽器ACK或入場完成。
+- 發布內容是immutable；外部producer的資源／規則生命週期必須主動呼叫revoke。
+  此類別不會因舊source hash仍相同而自行證明外部資源current，也不恢復原服撤銷規則。
+  publication容量按(account,subgroup)計，不冒充Session／ticket容量；不新增猜測timeout。
+
+`StoredSources::ListSources::with_owned_authority`核相同Application readers／writer，
+把此來源的Target／Qualify／Prepare接回真正shared L handoff；拒絕另混一份offer。
+供應者缺席仍拒絕，沒有將完整07改由profile40／slot／零填充生成。
+
+同時修正實際可構造性的時序缺口：原plan先要求Live／Authority，建立其真實來源卻需要
+GAME上的Database readers。現在可選 `TaiwanThreeChannelPlan::StartupFactory`：
+GAME建立真實權威owner → 回傳Live／Authority與捕捉同owner的world factory →
+Application建立實際shared handoff → world factory取得此handoff並建立三份fresh plan。
+舊直接suppliers路徑保留，兩種模式不可混；pre-DB validate只驗形狀，不呼叫factory。
+StartupSources與其回呼在GAME scope保留到plans／handoff及既有NET drain結束。
+這不是default Main配置，也沒有自動建立完整三個世界或開啟服務。
+
+本輪直接使用REA的新增觀察（current-aaf；不改149c既有來源pin）：
+
+| 原版位置 | 新確認 | 仍不能推得 |
+| --- | --- | --- |
+| 408310..4086DF | raw07 W24..31四組2-byte外觀全部bits有用途；component1還依component2資源查詢結果計算ordinal | create profile40不能唯一反推完整07；未知欄位不能補零 |
+| 413670→415B20→412CF0 | consume尾第一子函數為return0 stub，另一路用global handle進入CRT stream flush | 不是入場ACK或原服2A producer |
+| 54723B／54726A／547298／54E73D | stream自身ptr/base/count，條件式descriptor→FlushFileBuffers；該argument flow不接當次完整2A body | 不證全域無alias，也不證B8..11／B26..27可任填 |
+
+原件aaf0的13個原sections／headers逐byte核對；分析seed是synthetic caller，非原始caller。
+07首次未辨識的REA失敗原件保留，改用明示入口後才成功；所有分析session均已關閉。
+完整Evidence與逐欄矩陣在本輪外部pass3/native07、pass3/native2a封存。
+
+**仍未完成**：完整75-byte07發值來源，完整40-byte wire／37-byte logical2A issuer，
+初始scene的完整有序aggregate／incoming／outward／Install／Cleanup，movement Input，
+以及將這些具體來源放進src/main.cpp的實際三world recipe。目前也沒有完整native149c→
+current-aaf相關code/data lineage證明。新CUSTOM權威與啟動接線不能掩蓋這些缺口。
+
+客戶端契約仍是version1 routes清單＋原生L選擇＋唯一實際G路徑＋獨立G登入／入場。
+本輪不增加JSON權限token，不把TCP Written當瀏覽器／動畫ACK，不提供可遊玩URL。
+只做源碼與靜態／修改後獨立讀碼；新增測試來源未執行，未開服務或碰遊戲DB。

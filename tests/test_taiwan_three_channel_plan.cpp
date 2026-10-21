@@ -173,8 +173,33 @@ void endpoint_identity_and_loopback(){
     require(refuses([&]{revalidated.validate();}),"Revalidation accepted a changed nonloopback endpoint");
     untouched(calls);
 }
+
+void game_owned_startup_recipe(){
+    ConfigurationFiles files;const auto calls=std::make_shared<Calls>();Arguments input(files.read({3}),calls);
+    Plan::StartupFactory startup=[calls](const Plan::StartupContext&)->Plan::StartupSources {
+        ++calls->factory;unprovided();
+    };
+    Plan plan(input.configuration,input.group,input.group_byte_1,input.endpoints,input.client_sha256,input.capacity,startup);
+    plan.validate();untouched(calls);
+    auto mixed=plan;mixed.live=input.live;
+    require(refuses([&]{mixed.validate();}),"Startup recipe mixed with direct live callback");
+    mixed=plan;mixed.authority=input.authority;
+    require(refuses([&]{mixed.validate();}),"Startup recipe mixed with direct authority callback");
+    mixed=plan;mixed.make_world_plans=input.factory;
+    require(refuses([&]{mixed.validate();}),"Startup recipe mixed with direct world factory");
+    auto absent=plan;absent.startup_sources={};
+    require(refuses([&]{absent.validate();}),"Removed startup factory accepted without direct sources");
+    require(refuses([&]{Plan::StartupSources{}.validate();}),"Empty runtime startup accepted");
+    Plan::StartupSources complete{input.live,input.authority,input.factory};complete.validate();
+    complete.live={};require(refuses([&]{complete.validate();}),"Incomplete runtime authority accepted");
+    complete={input.live,input.authority,input.factory};complete.authority={};
+    require(refuses([&]{complete.validate();}),"Incomplete runtime destination source accepted");
+    complete={input.live,input.authority,input.factory};complete.make_world_plans={};
+    require(refuses([&]{complete.validate();}),"Incomplete runtime worlds accepted");
+    untouched(calls); // No startup DB/executor or gameplay factory was accessed.
+}
 } // namespace
 
 void test_taiwan_three_channel_plan(){
-    actual_configuration_and_passive_validation();missing_sources_and_hash_identity();endpoint_identity_and_loopback();
+    actual_configuration_and_passive_validation();missing_sources_and_hash_identity();endpoint_identity_and_loopback();game_owned_startup_recipe();
 }

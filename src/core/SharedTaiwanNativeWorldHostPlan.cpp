@@ -3,6 +3,7 @@
 #include "game/TaiwanActorStatusIncarnationSource.h"
 #include "game/OwnedTaiwanInitialActorSceneSource.h"
 #include "game/OwnedTaiwanInitialNpcDisplaySource.h"
+#include "game/TaiwanMainNativeAuthority.h"
 #include "db/SqliteWorldDisplayRepository.h"
 #include "game/OwnedOrdinaryMovementPolicies.h"
 #include "game/SharedTaiwanNativeRecordHandlerSource.h"
@@ -598,6 +599,20 @@ SharedTaiwanNativeWorldHostPlan::StoredSources::ListSources::with_handoff(
         SharedTaiwanNativeCharacterListSource::Qualify qualify,std::shared_ptr<SharedTaiwanCharacterListHandoff> owner) {
     if(!target || !qualify || !owner)throw std::invalid_argument("TW list handoff requires complete actual sources");
     return ListSources{std::move(target),std::move(qualify),{},{},std::move(owner)};
+}
+SharedTaiwanNativeWorldHostPlan::StoredSources::ListSources
+SharedTaiwanNativeWorldHostPlan::StoredSources::ListSources::with_owned_authority(
+        const Context& context,std::shared_ptr<TaiwanMainNativeAuthority> authority,
+        std::shared_ptr<SharedTaiwanCharacterListHandoff> handoff) {
+    if(!authority || !handoff || !context.accounts || !context.native_character_summaries ||
+       !context.native_character_summary_writer ||
+       static_cast<NativeCharacterSummarySnapshotRepository*>(context.native_character_summary_writer)!=context.native_character_summaries ||
+       !authority->matches_sources(*context.accounts,context.characters,*context.native_character_summary_writer))
+        throw std::invalid_argument("TW owned login policy requires its exact Application readers/writer and shared handoff");
+    auto bound=authority->binding();
+    auto sources=with_handoff(std::move(bound.target),std::move(bound.qualify),std::move(handoff));
+    sources.prepare=std::move(bound.prepare);
+    return sources;
 }
 SharedTaiwanNativeWorldHostPlan::StoredSources::ListSources
 SharedTaiwanNativeWorldHostPlan::StoredSources::ListSources::with_configured_handoff(
@@ -1211,7 +1226,9 @@ SharedWorldHostPlan SharedTaiwanNativeWorldHostPlan::create_from_stored_entry(
                 throw std::invalid_argument("TW stored native list lacks its exact common account/summary readers");
             if(actual.characters->handoff && (actual.characters->publish || actual.characters->link))
                 throw std::invalid_argument("TW list handoff cannot mix independent Publish or Link callbacks");
-            SharedTaiwanNativeCharacterListSource::Prepare prepare;
+            if(actual.characters->prepare && actual.characters->offer)
+                throw std::invalid_argument("TW list cannot mix owned Prepare and an independent offer producer");
+            auto prepare=std::move(actual.characters->prepare);
             if(actual.characters->offer) {
                 if(!context.native_character_summary_writer ||
                    static_cast<NativeCharacterSummarySnapshotRepository*>(context.native_character_summary_writer)!=context.native_character_summaries)

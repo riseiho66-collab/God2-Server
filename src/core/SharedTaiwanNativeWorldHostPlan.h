@@ -24,6 +24,7 @@
 #include <string>
 
 namespace god2 {
+class TaiwanMainNativeAuthority;
 // Assemble the existing Application entry, initial publication and movement
 // callers from one actual common-world Context. No native input is defaulted.
 class SharedTaiwanNativeWorldHostPlan final {
@@ -168,6 +169,12 @@ public:
             SharedTaiwanNativeCharacterListSource::LinkSource link;
             std::shared_ptr<SharedTaiwanCharacterListHandoff> handoff;
             SharedTaiwanNativeCharacterOfferSource::Supply offer;
+            // CUSTOM-0159 complete owner Prepare; mutually exclusive with offer.
+            SharedTaiwanNativeCharacterListSource::Prepare prepare;
+            // The same actual Context readers/writer and shared L handoff.
+            // Full07 producer remains mandatory inside the owned policy source.
+            static ListSources with_owned_authority(const SharedWorldHostPlan::Context&,
+                std::shared_ptr<TaiwanMainNativeAuthority>,std::shared_ptr<SharedTaiwanCharacterListHandoff>);
             static ListSources with_handoff(SharedTaiwanNativeCharacterListSource::TargetSource,
                 SharedTaiwanNativeCharacterListSource::Qualify,std::shared_ptr<SharedTaiwanCharacterListHandoff>);
             // Construct the config owner inside the actual game Context
