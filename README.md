@@ -1,4 +1,4 @@
-# 封神2仙界傳 Server Rebuild
+# 封神2仙界傳 Server
 
 目前只開發台服原生 PC 與其網頁入口 `/tw/native`、`/tw/native-game`。台服繁簡顯示與存檔保留；目前仍為來源整合階段，尚未完成全遊戲驗收。最新範圍見 [AGENTS.md](AGENTS.md)。
 
